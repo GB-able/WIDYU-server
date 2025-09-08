@@ -9,9 +9,10 @@ oauth:
   kakao:
     client-id: ${OAUTH_KAKAO_CLIENT_ID}
     redirect-uri: ${OAUTH_KAKAO_REDIRECT_URI}
+    admin-key: ${OAUTH_KAKAO_ADMIN_KEY}
   apple:
-    client-id: com.gbable.care
-    team-id: YSS86HBJ52
-    key-id: Z9C52ZU852
+    client-id: ${OAUTH_APPLE_CLIENT_ID}
+    team-id: ${OAUTH_APPLE_TEAM_ID}
+    key-id: ${OAUTH_APPLE_KEY_ID}
     private-key: ${OAUTH_APPLE_PRIVATE_KEY}
-    redirect-uri: http://localhost:8080/api/v1/oauth/apple/callback
+    redirect-uri: ${OAUTH_APPLE_REDIRECT_URI}
