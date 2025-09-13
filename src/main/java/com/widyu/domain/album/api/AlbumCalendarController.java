@@ -1,6 +1,8 @@
 package com.widyu.domain.album.api;
 
 import com.widyu.domain.album.application.AlbumCalendarService;
+import com.widyu.domain.album.dto.FamilyAlbumPageResponse;
+import com.widyu.domain.album.dto.FamilyAlbumResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -26,5 +29,17 @@ public class AlbumCalendarController {
                 .code("200")
                 .message("OK")
                 .body(albumCalendarService.getDaysWithEvents(year, month));
+    }
+
+    @GetMapping("/family")
+    public ApiResponseTemplate<FamilyAlbumPageResponse> getFamilyAlbumsByDate(
+            @RequestParam String date,
+            @RequestParam(required = false) Long cursor
+    ) {
+        LocalDate localDate = LocalDate.parse(date);
+        return ApiResponseTemplate.ok()
+                .code("200")
+                .message("OK")
+                .body(albumCalendarService.getFamilyAlbumsByDateWithCursor(localDate, cursor));
     }
 }
