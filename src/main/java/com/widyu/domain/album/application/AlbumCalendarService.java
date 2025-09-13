@@ -4,6 +4,7 @@ import com.widyu.domain.album.dto.FamilyAlbumPageResponse;
 import com.widyu.domain.album.dto.FamilyAlbumResponse;
 import com.widyu.domain.album.entity.Album;
 import com.widyu.domain.album.repository.AlbumCalendarRepository;
+import com.widyu.domain.album.repository.AlbumViewRepository;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.global.domain.Status;
 import com.widyu.global.util.MemberUtil;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AlbumCalendarService {
 
     private final AlbumCalendarRepository albumRepository;
+    private final AlbumViewRepository albumViewRepository;
     private final MemberUtil memberUtil;
 
     public List<Integer> getDaysWithEvents(int year, int month) {
@@ -59,7 +61,10 @@ public class AlbumCalendarService {
         List<Album> pageAlbums = hasNext ? albums.subList(0, pageSize) : albums;
 
         List<FamilyAlbumResponse> albumResponses = pageAlbums.stream()
-                .map(FamilyAlbumResponse::from)
+                .map(album -> {
+                    List<Member> viewers = albumViewRepository.findMembersByAlbumId(album.getId());
+                    return FamilyAlbumResponse.from(album, viewers);
+                })
                 .collect(Collectors.toList());
 
         Long nextCursor = hasNext ? pageAlbums.get(pageSize - 1).getId() : null;

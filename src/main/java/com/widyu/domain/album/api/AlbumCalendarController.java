@@ -1,5 +1,6 @@
 package com.widyu.domain.album.api;
 
+import com.widyu.domain.album.api.docs.AlbumCalendarDocs;
 import com.widyu.domain.album.application.AlbumCalendarService;
 import com.widyu.domain.album.dto.FamilyAlbumPageResponse;
 import com.widyu.domain.album.dto.FamilyAlbumResponse;
@@ -16,7 +17,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/album/calendar")
-public class AlbumCalendarController {
+public class AlbumCalendarController implements AlbumCalendarDocs {
 
     private final AlbumCalendarService albumCalendarService;
 
