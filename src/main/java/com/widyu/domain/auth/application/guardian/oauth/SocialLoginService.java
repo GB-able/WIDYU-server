@@ -3,8 +3,6 @@ package com.widyu.domain.auth.application.guardian.oauth;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategy;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategyFactory;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.UserInfo;
-import com.widyu.domain.auth.entity.OAuthProvider;
-import com.widyu.domain.auth.entity.TemporaryMember;
 import com.widyu.domain.auth.dto.request.AppleSignUpRequest;
 import com.widyu.domain.auth.dto.request.SocialIntegrationRequest;
 import com.widyu.domain.auth.dto.request.SocialLoginRequest;
@@ -13,16 +11,19 @@ import com.widyu.domain.auth.dto.response.SocialClientResponse;
 import com.widyu.domain.auth.dto.response.SocialLoginResponse;
 import com.widyu.domain.auth.dto.response.TokenPairResponse;
 import com.widyu.domain.auth.dto.response.UserProfile;
-import com.widyu.global.error.BusinessException;
-import com.widyu.global.error.ErrorCode;
-import com.widyu.global.security.JwtTokenProvider;
-import com.widyu.global.util.TemporaryMemberUtil;
+import com.widyu.domain.auth.entity.OAuthProvider;
+import com.widyu.domain.auth.entity.TemporaryMember;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.MemberRole;
 import com.widyu.domain.member.entity.MemberType;
 import com.widyu.domain.member.entity.SocialAccount;
 import com.widyu.domain.member.repository.MemberRepository;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.global.util.TemporaryMemberUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -227,7 +228,7 @@ public class SocialLoginService {
         TokenPairResponse tokenPair = generateTokenPair(member, currentProvider);
         UserProfile profile = createUserProfile(member);
 
-        log.info("소셜 로그인 성공: memberId={}, 최초로그인={}, provider={}", 
+        log.info("소셜 로그인 성공: memberId={}, 최초로그인={}, provider={}",
                 member.getId(), isFirstLogin, currentProvider);
         return SocialLoginResponse.of(isFirstLogin, tokenPair.accessToken(), tokenPair.refreshToken(), profile);
     }
@@ -237,11 +238,19 @@ public class SocialLoginService {
     }
 
     private UserProfile createUserProfile(Member member) {
-        List<String> providers = member.getSocialAccounts().stream()
-                .map(SocialAccount::getProvider)
-                .toList();
+        Member fullMember = memberRepository.findById(member.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
-        String email = member.getSocialAccounts().stream()
+        List<String> providers = new ArrayList<>(fullMember.getSocialAccounts().stream()
+                .map(SocialAccount::getProvider)
+                .toList());
+
+        // 로컬 계정이 있으면 LOCAL 추가
+        if (fullMember.getLocalAccount() != null) {
+            providers.add("LOCAL");
+        }
+
+        String email = fullMember.getSocialAccounts().stream()
                 .map(SocialAccount::getEmail)
                 .filter(e -> e != null && !e.isBlank())
                 .findFirst()
