@@ -8,15 +8,15 @@ public record SocialLoginResponse(
         String accessToken,
         String refreshToken,
         UserProfile profile,
-        NewSocialAccountInfo newSocialAccountInfo
+        String socialTemporaryToken
 ) {
     public static SocialLoginResponse of(boolean isFirst, String accessToken, String refreshToken,
                                          UserProfile profile) {
         return new SocialLoginResponse(isFirst, accessToken, refreshToken, profile, null);
     }
 
-    public static SocialLoginResponse ofWithNewAccount(boolean isFirst, String accessToken, String refreshToken,
-                                                       UserProfile profile, NewSocialAccountInfo newSocialAccount) {
-        return new SocialLoginResponse(isFirst, accessToken, refreshToken, profile, newSocialAccount);
+    public static SocialLoginResponse ofWithSocialToken(boolean isFirst, String accessToken, String refreshToken,
+                                                        UserProfile profile, String socialTemporaryToken) {
+        return new SocialLoginResponse(isFirst, accessToken, refreshToken, profile, socialTemporaryToken);
     }
 }

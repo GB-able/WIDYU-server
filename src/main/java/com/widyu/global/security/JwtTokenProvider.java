@@ -6,6 +6,7 @@ import com.widyu.domain.auth.entity.RefreshToken;
 import com.widyu.domain.auth.entity.TemporaryMember;
 import com.widyu.domain.auth.dto.AccessTokenDto;
 import com.widyu.domain.auth.dto.RefreshTokenDto;
+import com.widyu.domain.auth.dto.SocialTemporaryTokenDto;
 import com.widyu.domain.auth.dto.TemporaryTokenDto;
 import com.widyu.domain.auth.dto.response.TemporaryTokenResponse;
 import com.widyu.domain.auth.dto.response.TokenPairResponse;
@@ -39,6 +40,10 @@ public class JwtTokenProvider {
         return TemporaryTokenResponse.from(temporaryToken);
     }
 
+    public String generateSocialTemporaryToken(Long memberId, String provider, String oauthId, String email) {
+        return jwtUtil.generateSocialTemporaryToken(memberId, provider, oauthId, email);
+    }
+
     public String generateAccessToken(Long memberId, MemberRole memberRole, String loginType) {
         return jwtUtil.generateAccessToken(memberId, memberRole, loginType);
     }
@@ -70,6 +75,17 @@ public class JwtTokenProvider {
         } catch (Exception e) {
             log.debug("Temporary Token 파싱 실패: {}", e.getMessage());
             return null;
+        }
+    }
+
+    public SocialTemporaryTokenDto retrieveSocialTemporaryToken(String socialTemporaryTokenValue) {
+        try {
+            return jwtUtil.parseSocialTemporaryToken(socialTemporaryTokenValue);
+        } catch (ExpiredJwtException e) {
+            throw new BusinessException(ErrorCode.TEMPORARY_TOKEN_EXPIRED);
+        } catch (Exception e) {
+            log.debug("Social Temporary Token 파싱 실패: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.INVALID_TEMPORARY_TOKEN);
         }
     }
 
