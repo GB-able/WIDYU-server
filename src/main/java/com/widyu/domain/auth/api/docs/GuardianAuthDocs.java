@@ -7,7 +7,6 @@ import com.widyu.domain.auth.dto.request.LocalGuardianSignInRequest;
 import com.widyu.domain.auth.dto.request.LocalGuardianSignupRequest;
 import com.widyu.domain.auth.dto.request.MemberWithdrawRequest;
 import com.widyu.domain.auth.dto.request.SmsVerificationRequest;
-import com.widyu.domain.auth.dto.request.SocialIntegrationRequest;
 import com.widyu.domain.auth.dto.request.SocialLoginRequest;
 import com.widyu.domain.auth.dto.response.CurrentMemberResponse;
 import com.widyu.domain.auth.dto.response.LocalSignupResponse;
@@ -549,9 +548,10 @@ public interface GuardianAuthDocs {
     @Operation(
             summary = "소셜 계정 연동",
             description = """
-                    현재 인증된 사용자에게 새로운 소셜 계정을 연동하고 토큰을 발급합니다.
-                    JWT 토큰이 필요하며, 소셜 로그인 시 다른 계정이 있어서 연동하기 버튼을 눌렀을 때 사용됩니다.
-                    이미 연동된 제공자나 다른 사용자가 사용 중인 소셜 계정은 연동할 수 없습니다.
+                    소셜 임시 토큰을 사용하여 기존 계정에 새로운 소셜 계정을 연동합니다.
+                    소셜 로그인 시 기존 계정이 있는 경우 socialTemporaryToken이 발급되며,
+                    이 토큰을 X-Social-Temporary-Token 헤더에 포함하여 연동을 완료할 수 있습니다.
+                    연동 성공 시 새로운 액세스/리프레시 토큰 쌍을 반환합니다.
                     """
     )
     @ApiResponse(
@@ -621,26 +621,14 @@ public interface GuardianAuthDocs {
             )
     )
     ApiResponseTemplate<TokenPairResponse> integrateSocialAccount(
-            @Valid @RequestBody
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            @Parameter(
+                    name = "X-Social-Temporary-Token",
+                    description = "소셜 로그인 시 받은 임시 토큰 (socialTemporaryToken)",
+                    in = ParameterIn.HEADER,
                     required = true,
-                    description = "연동할 새로운 소셜 계정 정보 (소셜 로그인에서 받은 정보)",
-                    content = @Content(
-                            schema = @Schema(implementation = SocialIntegrationRequest.class),
-                            examples = @ExampleObject(
-                                    name = "요청 예시",
-                                    value = """
-                                            {
-                                              "name": "홍길동",
-                                              "phoneNumber": "01012345678",
-                                              "email": "user@naver.com",
-                                              "provider": "naver",
-                                              "oauthId": "1234567890"
-                                            }
-                                            """
-                            )
-                    )
-            ) final SocialIntegrationRequest request
+                    example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            )
+            HttpServletRequest httpServletRequest
     );
 
     @Operation(

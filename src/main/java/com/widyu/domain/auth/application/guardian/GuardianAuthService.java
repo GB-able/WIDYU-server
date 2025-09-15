@@ -16,7 +16,6 @@ import com.widyu.domain.auth.dto.request.RefreshTokenRequest;
 import com.widyu.domain.auth.dto.request.SmsCodeRequest;
 import com.widyu.domain.auth.dto.request.MemberWithdrawRequest;
 import com.widyu.domain.auth.dto.request.SmsVerificationRequest;
-import com.widyu.domain.auth.dto.request.SocialIntegrationRequest;
 import com.widyu.domain.auth.dto.request.SocialLoginRequest;
 import com.widyu.domain.auth.dto.response.LocalSignupResponse;
 import com.widyu.domain.auth.dto.response.MemberInfoResponse;
@@ -118,8 +117,8 @@ public class GuardianAuthService {
     }
 
     @Transactional
-    public TokenPairResponse integrateSocialAccount(SocialIntegrationRequest request) {
-        return socialLoginService.integrateSocialAccount(request);
+    public TokenPairResponse integrateSocialAccount(HttpServletRequest httpServletRequest) {
+        return socialLoginService.integrateSocialAccount(httpServletRequest);
     }
 
     @Transactional(readOnly = true)

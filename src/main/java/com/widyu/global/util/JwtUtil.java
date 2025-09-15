@@ -6,6 +6,7 @@ import static com.widyu.global.constant.SecurityConstant.TOKEN_ROLE_NAME;
 import com.widyu.domain.auth.entity.TokenType;
 import com.widyu.domain.auth.dto.AccessTokenDto;
 import com.widyu.domain.auth.dto.RefreshTokenDto;
+import com.widyu.domain.auth.dto.SocialTemporaryTokenDto;
 import com.widyu.domain.auth.dto.TemporaryTokenDto;
 import com.widyu.global.properties.JwtProperties;
 import com.widyu.domain.member.entity.MemberRole;
@@ -31,6 +32,9 @@ public class JwtUtil {
 
     private static final String TOKEN_TYPE_KEY_NAME = "type";
     private static final String LOGIN_TYPE_KEY_NAME = "loginType";
+    private static final String PROVIDER_KEY_NAME = "provider";
+    private static final String OAUTH_ID_KEY_NAME = "oauthId";
+    private static final String EMAIL_KEY_NAME = "email";
     private static final String HEADER_TYP = "typ";
     private static final String HEADER_ALG = "alg";
     private static final String HEADER_REG_DATE = "regDate";
@@ -70,6 +74,22 @@ public class JwtUtil {
                 TokenType.TEMPORARY,
                 temporaryMemberId,
                 Map.of(TOKEN_ROLE_NAME, MemberRole.TEMPORARY.name()),
+                timeInfo,
+                getTemporaryTokenKey()
+        );
+    }
+
+    public String generateSocialTemporaryToken(Long memberId, String provider, String oauthId, String email) {
+        TokenTimeInfo timeInfo = createTokenTimeInfo(jwtProperties.temporaryTokenExpirationTime());
+        return buildJwtToken(
+                TokenType.TEMPORARY,
+                memberId.toString(),
+                Map.of(
+                        TOKEN_ROLE_NAME, MemberRole.USER.name(),
+                        PROVIDER_KEY_NAME, provider,
+                        OAUTH_ID_KEY_NAME, oauthId,
+                        EMAIL_KEY_NAME, email
+                ),
                 timeInfo,
                 getTemporaryTokenKey()
         );
@@ -120,6 +140,24 @@ public class JwtUtil {
                     MemberRole.valueOf(body.get(TOKEN_ROLE_NAME, String.class)),
                     token,
                     jwtProperties.temporaryTokenExpirationTime()
+            );
+        } catch (ExpiredJwtException e) {
+            throw e;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public SocialTemporaryTokenDto parseSocialTemporaryToken(String token) throws ExpiredJwtException {
+        try {
+            Jws<Claims> claims = parseTokenClaims(token, getTemporaryTokenKey());
+            Claims body = claims.getBody();
+
+            return new SocialTemporaryTokenDto(
+                    Long.valueOf(body.getSubject()),
+                    body.get(PROVIDER_KEY_NAME, String.class),
+                    body.get(OAUTH_ID_KEY_NAME, String.class),
+                    body.get(EMAIL_KEY_NAME, String.class)
             );
         } catch (ExpiredJwtException e) {
             throw e;

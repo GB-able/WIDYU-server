@@ -9,7 +9,6 @@ import com.widyu.domain.auth.dto.request.LocalGuardianSignInRequest;
 import com.widyu.domain.auth.dto.request.LocalGuardianSignupRequest;
 import com.widyu.domain.auth.dto.request.MemberWithdrawRequest;
 import com.widyu.domain.auth.dto.request.SmsVerificationRequest;
-import com.widyu.domain.auth.dto.request.SocialIntegrationRequest;
 import com.widyu.domain.auth.dto.request.SocialLoginRequest;
 import com.widyu.domain.auth.dto.response.CurrentMemberResponse;
 import com.widyu.domain.auth.dto.response.LocalSignupResponse;
@@ -131,9 +130,9 @@ public class GuardianAuthController implements GuardianAuthDocs {
 
     @PostMapping("/social/integration")
     public ApiResponseTemplate<TokenPairResponse> integrateSocialAccount(
-            @RequestBody @Valid final SocialIntegrationRequest request
+            HttpServletRequest httpServletRequest
     ) {
-        TokenPairResponse tokenPair = guardianAuthService.integrateSocialAccount(request);
+        TokenPairResponse tokenPair = guardianAuthService.integrateSocialAccount(httpServletRequest);
         return ApiResponseTemplate.ok()
                 .code("AUTH_2010")
                 .message("소셜 계정 연동 성공")

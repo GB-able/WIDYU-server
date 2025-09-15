@@ -28,4 +28,30 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom {
 
         return Optional.ofNullable(result);
     }
+
+    @Override
+    public Optional<Long> findMemberIdByProviderAndOauthId(String provider, String oauthId) {
+        Long id = queryFactory
+                .select(member.id)
+                .from(member)
+                .join(member.socialAccounts, socialAccount)
+                .where(
+                        socialAccount.provider.eq(provider),
+                        socialAccount.oauthId.eq(oauthId)
+                )
+                .fetchOne();
+        return Optional.ofNullable(id);
+    }
+
+    @Override
+    public Optional<Member> findWithAllAccountsById(Long id) {
+        Member result = queryFactory
+                .selectFrom(member)
+                .leftJoin(member.socialAccounts, socialAccount).fetchJoin()
+                .where(member.id.eq(id))
+                .distinct()
+                .fetchOne();
+        return Optional.ofNullable(result);
+    }
+
 }

@@ -1,17 +1,17 @@
 package com.widyu.domain.auth.application.guardian.oauth;
 
+import com.widyu.domain.auth.application.SocialTemporaryTokenService;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategy;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategyFactory;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.UserInfo;
 import com.widyu.domain.auth.dto.request.AppleSignUpRequest;
-import com.widyu.domain.auth.dto.request.SocialIntegrationRequest;
 import com.widyu.domain.auth.dto.request.SocialLoginRequest;
-import com.widyu.domain.auth.dto.response.NewSocialAccountInfo;
 import com.widyu.domain.auth.dto.response.SocialClientResponse;
 import com.widyu.domain.auth.dto.response.SocialLoginResponse;
 import com.widyu.domain.auth.dto.response.TokenPairResponse;
 import com.widyu.domain.auth.dto.response.UserProfile;
 import com.widyu.domain.auth.entity.OAuthProvider;
+import com.widyu.domain.auth.dto.SocialTemporaryTokenDto;
 import com.widyu.domain.auth.entity.TemporaryMember;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.MemberRole;
@@ -21,6 +21,7 @@ import com.widyu.domain.member.repository.MemberRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.global.util.JwtUtil;
 import com.widyu.global.util.TemporaryMemberUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -29,17 +30,21 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // ★ 추가
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SocialLoginService {
+    public static final String PROVIDER_LOCAL = "local";
 
     private final SocialLoginStrategyFactory strategyFactory;
     private final MemberRepository memberRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final TemporaryMemberUtil temporaryMemberUtil;
+    private final SocialTemporaryTokenService socialTemporaryTokenService;
 
+    @Transactional
     public SocialLoginResponse socialLogin(String providerName, SocialLoginRequest request) {
         log.info("소셜 로그인 시도: provider={}", providerName);
 
@@ -61,7 +66,7 @@ public class SocialLoginService {
         // 4. 사용자 정보 검증
         strategy.validateUserInfo(userInfo);
 
-        // 5. 기존 회원 확인
+        // 5. 기존 회원 확인 (★ 옵션 A 적용된 메서드 사용)
         Optional<Member> existingMember = findMemberByProvider(provider, socialResponse.oauthId());
 
         return existingMember
@@ -77,37 +82,43 @@ public class SocialLoginService {
         log.info("애플 사용자 전화번호 업데이트 완료: memberId={}, email={}", member.getId(), request.email());
     }
 
-    public TokenPairResponse integrateSocialAccount(SocialIntegrationRequest request) {
-        // 현재 인증된 사용자 조회 (기존 회원)
-        Member member = memberRepository.findByPhoneNumberAndName(request.phoneNumber(), request.name())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-
-        // 요청한 제공자 검증
-        OAuthProvider provider = OAuthProvider.from(request.provider());
-
-        // 현재 사용자가 이미 해당 제공자 계정을 가지고 있는지 확인
-        boolean alreadyLinked = member.getSocialAccounts().stream()
-                .anyMatch(account -> account.getProvider().equals(provider.getValue()));
-
-        if (alreadyLinked) {
-            throw new BusinessException(ErrorCode.SOCIAL_PROVIDER_ALREADY_LINKED);
+    public TokenPairResponse integrateSocialAccount(HttpServletRequest httpServletRequest) {
+        String socialTemporaryToken = JwtUtil.extractTokenFromAuthorizationHeader(httpServletRequest);
+        if (socialTemporaryToken == null || socialTemporaryToken.trim().isEmpty()) {
+            log.warn("소셜 임시 토큰 헤더가 누락됨");
+            throw new BusinessException(ErrorCode.MISSING_SOCIAL_TEMPORARY_TOKEN);
         }
 
-        // 다른 회원이 이미 해당 소셜 계정(새로운 소셜 로그인 정보)을 사용하고 있는지 확인
-        Optional<Member> conflictMember = memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider(
-                request.email(), provider.getValue());
+        SocialTemporaryTokenDto socialToken;
+        try {
+            socialToken = socialTemporaryTokenService.validateAndRetrieve(socialTemporaryToken);
+        } catch (BusinessException e) {
+            log.warn("소셜 임시 토큰 검증 실패: token={}, error={}", socialTemporaryToken.substring(0, Math.min(20, socialTemporaryToken.length())), e.getMessage());
+            throw e;
+        }
 
+        Member member = memberRepository.findById(socialToken.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        OAuthProvider provider = OAuthProvider.from(socialToken.provider());
+
+        boolean alreadyLinked = member.getSocialAccounts().stream()
+                .anyMatch(account -> account.getProvider().equals(provider.getValue()));
+        if (alreadyLinked) throw new BusinessException(ErrorCode.SOCIAL_PROVIDER_ALREADY_LINKED);
+
+        Optional<Member> conflictMember = memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider(
+                socialToken.email(), provider.getValue());
         if (conflictMember.isPresent() && !conflictMember.get().getId().equals(member.getId())) {
             throw new BusinessException(ErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED);
         }
 
-        // 새로운 소셜 계정을 현재 사용자에게 연동
-        addSocialAccountToMember(member, provider, request.oauthId(), request.email());
+        addSocialAccountToMember(member, provider, socialToken.oauthId(), socialToken.email());
+
+        socialTemporaryTokenService.deleteSocialTemporaryToken(socialTemporaryToken);
 
         log.info("소셜 계정 연동 완료: memberId={}, provider={}, email={}",
-                member.getId(), provider.getValue(), request.email());
+                member.getId(), provider.getValue(), socialToken.email());
 
-        // 토큰 생성 후 반환 (새로 추가된 소셜 계정 정보로 loginType 설정)
         return jwtTokenProvider.generateTokenPair(member.getId(), MemberRole.USER, provider.getValue());
     }
 
@@ -127,7 +138,7 @@ public class SocialLoginService {
                                                        String oauthId) {
         Optional<Member> existingMember = findExistingMemberByUserInfo(userInfo);
 
-        if (existingMember.isPresent() && hasOtherSocialAccounts(existingMember.get())) {
+        if (existingMember.isPresent() && hasOtherAccounts(existingMember.get())) {
             return handleConflictingSocialAccount(existingMember.get(), provider, userInfo, oauthId);
         }
 
@@ -138,8 +149,8 @@ public class SocialLoginService {
         return createSuccessfulLoginResponse(member, isFirstLogin, provider.getValue());
     }
 
-    private boolean hasOtherSocialAccounts(Member member) {
-        return !member.getSocialAccounts().isEmpty();
+    private boolean hasOtherAccounts(Member member) {
+        return !member.getSocialAccounts().isEmpty() || member.getLocalAccount() != null;
     }
 
     private SocialLoginResponse handleConflictingSocialAccount(Member existingMember,
@@ -149,15 +160,17 @@ public class SocialLoginService {
         log.info("다른 소셜 계정을 가진 기존 회원 발견: memberId={}, 시도한 제공자={}",
                 existingMember.getId(), provider.getValue());
 
-        UserProfile profile = createUserProfile(existingMember);
-        NewSocialAccountInfo newSocialAccount = NewSocialAccountInfo.of(
+        String socialTemporaryToken = socialTemporaryTokenService.createSocialTemporaryToken(
+                existingMember.getId(),
                 provider.getValue(),
-                userInfo.email(),
-                userInfo.name(),
-                oauthId
+                oauthId,
+                userInfo.email()
         );
 
-        return SocialLoginResponse.ofWithNewAccount(false, null, null, profile, newSocialAccount);
+        Member fullMember = memberRepository.findWithAllAccountsById(existingMember.getId()).orElse(existingMember);
+        UserProfile profile = createUserProfile(fullMember);
+
+        return SocialLoginResponse.ofWithSocialToken(false, null, null, profile, socialTemporaryToken);
     }
 
     private Member createOrUpdateMember(OAuthProvider provider,
@@ -195,7 +208,9 @@ public class SocialLoginService {
     }
 
     private Optional<Member> findMemberByProvider(OAuthProvider provider, String oauthId) {
-        return memberRepository.findByProviderAndOauthId(provider.getValue(), oauthId);
+        return memberRepository
+                .findMemberIdByProviderAndOauthId(provider.getValue(), oauthId)
+                .flatMap(memberRepository::findWithAllAccountsById);
     }
 
     private Member findAppleMemberByEmail(String email) {
@@ -209,7 +224,7 @@ public class SocialLoginService {
             Optional<Member> member = memberRepository.findByPhoneNumber(userInfo.phoneNumber());
             if (member.isPresent()) {
                 log.info("전화번호로 기존 회원 발견: phoneNumber={}", userInfo.phoneNumber());
-                return member;
+                return memberRepository.findWithAllAccountsById(member.get().getId());
             }
         }
 
@@ -217,7 +232,7 @@ public class SocialLoginService {
             Optional<Member> member = memberRepository.findBySocialAccounts_Email(userInfo.email());
             if (member.isPresent()) {
                 log.info("이메일로 기존 회원 발견: email={}", userInfo.email());
-                return member;
+                return memberRepository.findWithAllAccountsById(member.get().getId());
             }
         }
 
@@ -225,11 +240,13 @@ public class SocialLoginService {
     }
 
     private SocialLoginResponse createSuccessfulLoginResponse(Member member, boolean isFirstLogin, String currentProvider) {
-        TokenPairResponse tokenPair = generateTokenPair(member, currentProvider);
-        UserProfile profile = createUserProfile(member);
+        Member full = memberRepository.findWithAllAccountsById(member.getId()).orElse(member);
+
+        TokenPairResponse tokenPair = generateTokenPair(full, currentProvider);
+        UserProfile profile = createUserProfile(full);
 
         log.info("소셜 로그인 성공: memberId={}, 최초로그인={}, provider={}",
-                member.getId(), isFirstLogin, currentProvider);
+                full.getId(), isFirstLogin, currentProvider);
         return SocialLoginResponse.of(isFirstLogin, tokenPair.accessToken(), tokenPair.refreshToken(), profile);
     }
 
@@ -237,18 +254,8 @@ public class SocialLoginService {
         return jwtTokenProvider.generateTokenPair(member.getId(), MemberRole.USER, currentProvider);
     }
 
-    private UserProfile createUserProfile(Member member) {
-        Member fullMember = memberRepository.findById(member.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-
-        List<String> providers = new ArrayList<>(fullMember.getSocialAccounts().stream()
-                .map(SocialAccount::getProvider)
-                .toList());
-
-        // 로컬 계정이 있으면 LOCAL 추가
-        if (fullMember.getLocalAccount() != null) {
-            providers.add("LOCAL");
-        }
+    private UserProfile createUserProfile(Member fullMember) {
+        List<String> providers = extractProviders(fullMember);
 
         String email = fullMember.getSocialAccounts().stream()
                 .map(SocialAccount::getEmail)
@@ -256,6 +263,19 @@ public class SocialLoginService {
                 .findFirst()
                 .orElse(null);
 
-        return UserProfile.of(member.getName(), member.getPhoneNumber(), email, providers);
+        return UserProfile.of(fullMember.getName(), fullMember.getPhoneNumber(), email, providers);
+    }
+
+    private List<String> extractProviders(Member member) {
+        List<String> providers = member.getSocialAccounts().stream()
+                .map(SocialAccount::getProvider)
+                .toList();
+
+        if (member.getLocalAccount() != null) {
+            providers = new ArrayList<>(providers);
+            providers.add(PROVIDER_LOCAL);
+        }
+
+        return providers;
     }
 }

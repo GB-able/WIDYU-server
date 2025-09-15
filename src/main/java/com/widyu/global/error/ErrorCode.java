@@ -15,6 +15,7 @@ public enum ErrorCode {
     TEMPORARY_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_4014", "임시 토큰이 만료되었습니다."),
     ALREADY_REGISTERED_EMAIL(HttpStatus.BAD_REQUEST, "AUTH_4001", "이미 등록된 이메일입니다."),
     INVALID_TEMPORARY_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_4015", "유효하지 않은 임시 토큰입니다."),
+    MISSING_SOCIAL_TEMPORARY_TOKEN(HttpStatus.BAD_REQUEST, "AUTH_4016", "소셜 임시 토큰 헤더가 누락되었습니다."),
     INVALID_EMAIL(HttpStatus.UNAUTHORIZED, "AUTH_4011", "이메일이 올바르지 않습니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "AUTH_4012", "비밀번호가 올바르지 않습니다."),
     UNSUPPORTED_OAUTH_PROVIDER(HttpStatus.BAD_REQUEST, "AUTH_4002", "지원하지 않는 소셜 로그인 제공자입니다."),
