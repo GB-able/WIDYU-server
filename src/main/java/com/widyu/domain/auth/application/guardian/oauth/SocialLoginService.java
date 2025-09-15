@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class SocialLoginService {
+    public static final String PROVIDER_LOCAL = "local";
 
     private final SocialLoginStrategyFactory strategyFactory;
     private final MemberRepository memberRepository;
@@ -271,7 +272,7 @@ public class SocialLoginService {
 
         // 로컬 계정이 있으면 LOCAL 추가
         if (fullMember.getLocalAccount() != null) {
-            providers.add("LOCAL");
+            providers.add(PROVIDER_LOCAL);
         }
 
         String email = fullMember.getSocialAccounts().stream()
