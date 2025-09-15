@@ -30,6 +30,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // ★ 추가
 
 @Slf4j
 @Service
@@ -43,6 +44,7 @@ public class SocialLoginService {
     private final TemporaryMemberUtil temporaryMemberUtil;
     private final SocialTemporaryTokenService socialTemporaryTokenService;
 
+    @Transactional
     public SocialLoginResponse socialLogin(String providerName, SocialLoginRequest request) {
         log.info("소셜 로그인 시도: provider={}", providerName);
 
@@ -64,7 +66,7 @@ public class SocialLoginService {
         // 4. 사용자 정보 검증
         strategy.validateUserInfo(userInfo);
 
-        // 5. 기존 회원 확인
+        // 5. 기존 회원 확인 (★ 옵션 A 적용된 메서드 사용)
         Optional<Member> existingMember = findMemberByProvider(provider, socialResponse.oauthId());
 
         return existingMember
@@ -81,55 +83,42 @@ public class SocialLoginService {
     }
 
     public TokenPairResponse integrateSocialAccount(HttpServletRequest httpServletRequest) {
-        // 헤더에서 소셜 임시 토큰 추출
         String socialTemporaryToken = JwtUtil.extractTokenFromAuthorizationHeader(httpServletRequest);
         if (socialTemporaryToken == null || socialTemporaryToken.trim().isEmpty()) {
             log.warn("소셜 임시 토큰 헤더가 누락됨");
             throw new BusinessException(ErrorCode.MISSING_SOCIAL_TEMPORARY_TOKEN);
         }
 
-        // 임시 토큰으로 소셜 계정 정보 검증 및 조회
         SocialTemporaryTokenDto socialToken;
         try {
             socialToken = socialTemporaryTokenService.validateAndRetrieve(socialTemporaryToken);
         } catch (BusinessException e) {
             log.warn("소셜 임시 토큰 검증 실패: token={}, error={}", socialTemporaryToken.substring(0, Math.min(20, socialTemporaryToken.length())), e.getMessage());
-            throw e; // 기존 에러 코드(INVALID_TEMPORARY_TOKEN, TEMPORARY_TOKEN_EXPIRED) 그대로 전파
+            throw e;
         }
 
-        // 기존 회원 조회
         Member member = memberRepository.findById(socialToken.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
-        // 요청한 제공자 검증
         OAuthProvider provider = OAuthProvider.from(socialToken.provider());
 
-        // 현재 사용자가 이미 해당 제공자 계정을 가지고 있는지 확인
         boolean alreadyLinked = member.getSocialAccounts().stream()
                 .anyMatch(account -> account.getProvider().equals(provider.getValue()));
+        if (alreadyLinked) throw new BusinessException(ErrorCode.SOCIAL_PROVIDER_ALREADY_LINKED);
 
-        if (alreadyLinked) {
-            throw new BusinessException(ErrorCode.SOCIAL_PROVIDER_ALREADY_LINKED);
-        }
-
-        // 다른 회원이 이미 해당 소셜 계정을 사용하고 있는지 확인
         Optional<Member> conflictMember = memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider(
                 socialToken.email(), provider.getValue());
-
         if (conflictMember.isPresent() && !conflictMember.get().getId().equals(member.getId())) {
             throw new BusinessException(ErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED);
         }
 
-        // 새로운 소셜 계정을 현재 사용자에게 연동
         addSocialAccountToMember(member, provider, socialToken.oauthId(), socialToken.email());
 
-        // 사용한 임시 토큰 삭제 (JWT는 자동 만료)
         socialTemporaryTokenService.deleteSocialTemporaryToken(socialTemporaryToken);
 
         log.info("소셜 계정 연동 완료: memberId={}, provider={}, email={}",
                 member.getId(), provider.getValue(), socialToken.email());
 
-        // 토큰 생성 후 반환 (새로 추가된 소셜 계정 정보로 loginType 설정)
         return jwtTokenProvider.generateTokenPair(member.getId(), MemberRole.USER, provider.getValue());
     }
 
@@ -161,7 +150,6 @@ public class SocialLoginService {
     }
 
     private boolean hasOtherAccounts(Member member) {
-        // 다른 소셜 계정이 있거나 로컬 계정이 있으면 true
         return !member.getSocialAccounts().isEmpty() || member.getLocalAccount() != null;
     }
 
@@ -172,15 +160,15 @@ public class SocialLoginService {
         log.info("다른 소셜 계정을 가진 기존 회원 발견: memberId={}, 시도한 제공자={}",
                 existingMember.getId(), provider.getValue());
 
-        // 소셜 연동을 위한 임시 토큰 생성
         String socialTemporaryToken = socialTemporaryTokenService.createSocialTemporaryToken(
-                existingMember.getId(), 
-                provider.getValue(), 
-                oauthId, 
+                existingMember.getId(),
+                provider.getValue(),
+                oauthId,
                 userInfo.email()
         );
 
-        UserProfile profile = createUserProfile(existingMember);
+        Member fullMember = memberRepository.findWithAllAccountsById(existingMember.getId()).orElse(existingMember);
+        UserProfile profile = createUserProfile(fullMember);
 
         return SocialLoginResponse.ofWithSocialToken(false, null, null, profile, socialTemporaryToken);
     }
@@ -220,7 +208,9 @@ public class SocialLoginService {
     }
 
     private Optional<Member> findMemberByProvider(OAuthProvider provider, String oauthId) {
-        return memberRepository.findByProviderAndOauthId(provider.getValue(), oauthId);
+        return memberRepository
+                .findMemberIdByProviderAndOauthId(provider.getValue(), oauthId)
+                .flatMap(memberRepository::findWithAllAccountsById);
     }
 
     private Member findAppleMemberByEmail(String email) {
@@ -234,7 +224,7 @@ public class SocialLoginService {
             Optional<Member> member = memberRepository.findByPhoneNumber(userInfo.phoneNumber());
             if (member.isPresent()) {
                 log.info("전화번호로 기존 회원 발견: phoneNumber={}", userInfo.phoneNumber());
-                return member;
+                return memberRepository.findWithAllAccountsById(member.get().getId());
             }
         }
 
@@ -242,7 +232,7 @@ public class SocialLoginService {
             Optional<Member> member = memberRepository.findBySocialAccounts_Email(userInfo.email());
             if (member.isPresent()) {
                 log.info("이메일로 기존 회원 발견: email={}", userInfo.email());
-                return member;
+                return memberRepository.findWithAllAccountsById(member.get().getId());
             }
         }
 
@@ -250,11 +240,13 @@ public class SocialLoginService {
     }
 
     private SocialLoginResponse createSuccessfulLoginResponse(Member member, boolean isFirstLogin, String currentProvider) {
-        TokenPairResponse tokenPair = generateTokenPair(member, currentProvider);
-        UserProfile profile = createUserProfile(member);
+        Member full = memberRepository.findWithAllAccountsById(member.getId()).orElse(member);
+
+        TokenPairResponse tokenPair = generateTokenPair(full, currentProvider);
+        UserProfile profile = createUserProfile(full);
 
         log.info("소셜 로그인 성공: memberId={}, 최초로그인={}, provider={}",
-                member.getId(), isFirstLogin, currentProvider);
+                full.getId(), isFirstLogin, currentProvider);
         return SocialLoginResponse.of(isFirstLogin, tokenPair.accessToken(), tokenPair.refreshToken(), profile);
     }
 
@@ -262,18 +254,8 @@ public class SocialLoginService {
         return jwtTokenProvider.generateTokenPair(member.getId(), MemberRole.USER, currentProvider);
     }
 
-    private UserProfile createUserProfile(Member member) {
-        Member fullMember = memberRepository.findById(member.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-
-        List<String> providers = new ArrayList<>(fullMember.getSocialAccounts().stream()
-                .map(SocialAccount::getProvider)
-                .toList());
-
-        // 로컬 계정이 있으면 LOCAL 추가
-        if (fullMember.getLocalAccount() != null) {
-            providers.add(PROVIDER_LOCAL);
-        }
+    private UserProfile createUserProfile(Member fullMember) {
+        List<String> providers = extractProviders(fullMember);
 
         String email = fullMember.getSocialAccounts().stream()
                 .map(SocialAccount::getEmail)
@@ -281,6 +263,19 @@ public class SocialLoginService {
                 .findFirst()
                 .orElse(null);
 
-        return UserProfile.of(member.getName(), member.getPhoneNumber(), email, providers);
+        return UserProfile.of(fullMember.getName(), fullMember.getPhoneNumber(), email, providers);
+    }
+
+    private List<String> extractProviders(Member member) {
+        List<String> providers = member.getSocialAccounts().stream()
+                .map(SocialAccount::getProvider)
+                .toList();
+
+        if (member.getLocalAccount() != null) {
+            providers = new ArrayList<>(providers);
+            providers.add(PROVIDER_LOCAL);
+        }
+
+        return providers;
     }
 }
