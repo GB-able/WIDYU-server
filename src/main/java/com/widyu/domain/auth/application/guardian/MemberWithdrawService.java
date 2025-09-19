@@ -2,15 +2,15 @@ package com.widyu.domain.auth.application.guardian;
 
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategy;
 import com.widyu.domain.auth.application.guardian.oauth.strategy.SocialLoginStrategyFactory;
-import com.widyu.domain.auth.entity.OAuthProvider;
 import com.widyu.domain.auth.dto.request.MemberWithdrawRequest;
-import com.widyu.global.error.BusinessException;
-import com.widyu.global.error.ErrorCode;
-import com.widyu.global.util.MemberUtil;
+import com.widyu.domain.auth.entity.OAuthProvider;
+import com.widyu.domain.auth.repository.RefreshTokenRepository;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.SocialAccount;
 import com.widyu.domain.member.repository.MemberRepository;
-import java.util.Map;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.global.util.MemberUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberWithdrawService {
 
     private final MemberRepository memberRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final SocialLoginStrategyFactory strategyFactory;
     private final MemberUtil memberUtil;
 
@@ -31,25 +32,27 @@ public class MemberWithdrawService {
         
         log.info("회원 탈퇴 시작: memberId={}, reason={}", member.getId(), request.reason());
 
-        // 1. 연동된 모든 소셜 계정 탈퇴
-        withdrawAllSocialAccounts(member, request.socialAccessTokens());
+        // 1. 리프레시 토큰 삭제
+        refreshTokenRepository.deleteById(member.getId());
 
-        // 2. 개인정보 마스킹 (GDPR 준수)
+        // 2. 연동된 모든 소셜 계정 탈퇴
+        withdrawAllSocialAccounts(member);
+
+        // 3. 개인정보 마스킹 (GDPR 준수)
         member.maskPersonalInfo();
 
-        // 3. 로컬 계정도 비활성화 (완전 삭제 대신 상태 변경)
+        // 4. 로컬 계정 삭제
         member.withdraw();
 
-        // 4. 회원 데이터 저장
+        // 5. 회원 데이터 저장
         memberRepository.save(member);
         
         log.info("회원 탈퇴 완료: memberId={}", member.getId());
     }
 
-    private void withdrawAllSocialAccounts(Member member, Map<String, String> socialAccessTokens) {
+    private void withdrawAllSocialAccounts(Member member) {
         for (SocialAccount socialAccount : member.getSocialAccounts()) {
             String provider = socialAccount.getProvider();
-            String accessToken = socialAccessTokens != null ? socialAccessTokens.get(provider) : null;
             
             // 카카오의 경우 어드민 키로 탈퇴하므로 액세스 토큰 불필요
             if ("kakao".equals(provider)) {
@@ -69,17 +72,8 @@ public class MemberWithdrawService {
                     log.warn("{} 계정 탈퇴 실패하지만 진행 계속: oauthId={}, error={}", 
                             provider, socialAccount.getOauthId(), e.getMessage());
                 }
-            }
-            // 다른 제공자들은 액세스 토큰 필요
-            else if (accessToken != null && !accessToken.isBlank()) {
-                try {
-                    withdrawSocialAccount(provider, accessToken, socialAccount.getOauthId());
-                } catch (Exception e) {
-                    log.warn("소셜 계정 탈퇴 실패하지만 진행 계속: provider={}, oauthId={}, error={}", 
-                            provider, socialAccount.getOauthId(), e.getMessage());
-                }
             } else {
-                log.warn("소셜 계정 탈퇴를 위한 액세스 토큰 없음: provider={}, oauthId={}", 
+                log.warn("소셜 계정 탈퇴를 위한 토큰 없음: provider={}, oauthId={}", 
                         provider, socialAccount.getOauthId());
             }
         }
