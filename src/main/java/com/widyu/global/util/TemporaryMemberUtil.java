@@ -28,7 +28,7 @@ public class TemporaryMemberUtil {
         try {
             dto = jwtUtil.parseTemporaryToken(token);
         } catch (ExpiredJwtException e) {
-            throw new BusinessException(ErrorCode.TEMPORARY_TOKEN_EXPIRED); // 프로젝트 에러코드에 맞게
+            throw new BusinessException(ErrorCode.TEMPORARY_TOKEN_EXPIRED);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
