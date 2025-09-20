@@ -1,6 +1,5 @@
 package com.widyu.domain.auth.dto.request;
 
-import com.widyu.global.constant.Platform;
 import lombok.Builder;
 
 @Builder

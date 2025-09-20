@@ -52,7 +52,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
     @Override
     public SocialClientResponse getUserInfo(SocialLoginRequest request) {
         try {
-            String clientSecret = appleJwtUtils.generateClientSecret();
+            String clientSecret = appleJwtUtils.generateClientSecret(request.platform());
             AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret, request.platform());
             AppleIdTokenPayload idTokenPayload = parseIdToken(tokenResponse.idToken());
             log.info("애플 사용자 정보 조회 성공: oauthId={}", idTokenPayload.subject());
@@ -112,7 +112,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
 
     private AppleTokenResponse exchangeCodeForTokens(String authorizationCode, String clientSecret, String platformValue) {
         String clientId = getClientIdByPlatform(platformValue);
-        log.info("애플 토큰 교환 시작: platform={}, clientId={}", platformValue, clientId);
+        log.info("애플 토큰 교환 시작: platform={}", platformValue);
         
         AppleTokenRequest tokenRequest = AppleTokenRequest.of(
                 clientId,
