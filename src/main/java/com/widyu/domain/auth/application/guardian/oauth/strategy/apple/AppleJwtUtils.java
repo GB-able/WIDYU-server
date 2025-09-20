@@ -2,6 +2,7 @@ package com.widyu.domain.auth.application.guardian.oauth.strategy.apple;
 
 import static com.widyu.global.constant.SecurityConstant.APPLE_ISSUER;
 
+import com.widyu.global.constant.Platform;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.properties.AppleProperties;
@@ -31,9 +32,16 @@ public class AppleJwtUtils {
     private final AppleProperties appleProperties;
 
     public String generateClientSecret() {
+        return generateClientSecret(null);
+    }
+
+    public String generateClientSecret(String platformValue) {
         LocalDateTime now = LocalDateTime.now();
         Date issuedAt = Date.from(now.atZone(ZoneId.systemDefault()).toInstant());
         Date expiration = Date.from(now.plusMinutes(5).atZone(ZoneId.systemDefault()).toInstant());
+
+        String clientId = getClientIdByPlatform(platformValue);
+        log.debug("Apple JWT 생성: platform={}", platformValue);
 
         return Jwts.builder()
                 .setHeaderParam("alg", "ES256")
@@ -42,9 +50,17 @@ public class AppleJwtUtils {
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiration)
                 .setAudience(APPLE_ISSUER)
-                .setSubject(appleProperties.iosClientId())
+                .setSubject(clientId)
                 .signWith(getPrivateKey(), SignatureAlgorithm.ES256)
                 .compact();
+    }
+
+    private String getClientIdByPlatform(String platformValue) {
+        Platform platform = Platform.from(platformValue);
+        return switch (platform) {
+            case ANDROID -> appleProperties.androidClientId();
+            case IOS -> appleProperties.iosClientId();
+        };
     }
 
     private PrivateKey getPrivateKey() {
