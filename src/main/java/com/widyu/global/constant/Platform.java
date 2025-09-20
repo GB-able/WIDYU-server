@@ -17,12 +17,12 @@ public enum Platform {
         if (value == null) {
             return IOS; // 기본값
         }
-        
+
         for (Platform platform : Platform.values()) {
             if (platform.value.equalsIgnoreCase(value)) {
                 return platform;
             }
         }
-        return IOS; // 알 수 없는 값일 때 기본값
+        return IOS;
     }
 }
