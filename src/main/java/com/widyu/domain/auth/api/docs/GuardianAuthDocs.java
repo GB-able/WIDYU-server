@@ -280,7 +280,7 @@ public interface GuardianAuthDocs {
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
-                    description = "소셜 로그인 정보 (Kakao: accessToken, Naver: accessToken + refreshToken, Apple: authorizationCode + profile)",
+                    description = "소셜 로그인 정보 (Kakao: accessToken, Naver: accessToken + refreshToken, Apple: authorizationCode + profile + platform)",
                     content = @Content(
                             schema = @Schema(implementation = SocialLoginRequest.class),
                             examples = {
@@ -302,22 +302,24 @@ public interface GuardianAuthDocs {
                                                     """
                                     ),
                                     @ExampleObject(
-                                            name = "Apple 요청 (최초 로그인)",
+                                            name = "Apple 요청 (최초 로그인 - iOS)",
                                             value = """
                                                     {
                                                       "authorizationCode": "abc123",
                                                       "profile": {
                                                         "email": "user@icloud.com",
                                                         "name": "홍길동"
-                                                      }
+                                                      },
+                                                      "platform": "ios"
                                                     }
                                                     """
                                     ),
                                     @ExampleObject(
-                                            name = "Apple 요청 (재로그인)",
+                                            name = "Apple 요청 (재로그인 - Android)",
                                             value = """
                                                     {
-                                                      "authorizationCode": "def456"
+                                                      "authorizationCode": "def456",
+                                                      "platform": "android"
                                                     }
                                                     """
                                     )
