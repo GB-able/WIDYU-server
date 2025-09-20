@@ -7,6 +7,7 @@ import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.ParentProfile;
 import com.widyu.domain.member.repository.MemberRepository;
 import com.widyu.domain.member.repository.ParentProfileRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -14,17 +15,12 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class AlbumNotificationListener {
 
     private final FcmService fcmService;
     private final ParentProfileRepository parentProfileRepository;
     private final MemberRepository memberRepository;
-
-    public AlbumNotificationListener(FcmService fcmService, ParentProfileRepository parentProfileRepository, MemberRepository memberRepository) {
-        this.fcmService = fcmService;
-        this.parentProfileRepository = parentProfileRepository;
-        this.memberRepository = memberRepository;
-    }
 
     @Async
     @EventListener
