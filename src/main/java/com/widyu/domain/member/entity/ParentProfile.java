@@ -47,7 +47,7 @@ public class ParentProfile {
     @Column(name = "detail_address")
     private String detailAddress;
 
-    @Column(name = "invite_code", nullable = false, unique = true, length = 7)
+    @Column(name = "invite_code", nullable = false, length = 7)
     private String inviteCode;
 
     @Builder(access = AccessLevel.PRIVATE)

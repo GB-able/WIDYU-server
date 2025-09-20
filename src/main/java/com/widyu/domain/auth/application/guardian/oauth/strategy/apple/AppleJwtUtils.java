@@ -42,7 +42,7 @@ public class AppleJwtUtils {
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiration)
                 .setAudience(APPLE_ISSUER)
-                .setSubject(appleProperties.clientId())
+                .setSubject(appleProperties.iosClientId())
                 .signWith(getPrivateKey(), SignatureAlgorithm.ES256)
                 .compact();
     }

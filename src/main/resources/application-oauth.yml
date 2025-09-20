@@ -11,7 +11,8 @@ oauth:
     redirect-uri: ${OAUTH_KAKAO_REDIRECT_URI}
     admin-key: ${OAUTH_KAKAO_ADMIN_KEY}
   apple:
-    client-id: ${OAUTH_APPLE_CLIENT_ID}
+    ios-client-id: ${OAUTH_APPLE_IOS_CLIENT_ID}
+    android-client-id: ${OAUTH_APPLE_ANDROID_CLIENT_ID}
     team-id: ${OAUTH_APPLE_TEAM_ID}
     key-id: ${OAUTH_APPLE_KEY_ID}
     private-key: ${OAUTH_APPLE_PRIVATE_KEY}

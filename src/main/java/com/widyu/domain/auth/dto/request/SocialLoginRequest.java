@@ -1,5 +1,6 @@
 package com.widyu.domain.auth.dto.request;
 
+import com.widyu.global.constant.Platform;
 import lombok.Builder;
 
 @Builder
@@ -7,7 +8,8 @@ public record SocialLoginRequest(
         String accessToken,
         String authorizationCode,
         String refreshToken,
-        AppleProfile profile
+        AppleProfile profile,
+        String platform
 ) {
     public record AppleProfile(
             String email,

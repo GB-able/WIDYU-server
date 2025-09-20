@@ -46,7 +46,7 @@ public class SocialLoginService {
 
     @Transactional
     public SocialLoginResponse socialLogin(String providerName, SocialLoginRequest request) {
-        log.info("소셜 로그인 시도: provider={}", providerName);
+        log.info("소셜 로그인 시도: provider={}, platform={}", providerName, request.platform());
 
         SocialLoginStrategy strategy = strategyFactory.getStrategy(providerName);
         OAuthProvider provider = strategy.getSupportedProvider();

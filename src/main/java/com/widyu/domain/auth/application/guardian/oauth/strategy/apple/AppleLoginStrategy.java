@@ -12,6 +12,7 @@ import com.widyu.domain.auth.dto.request.SocialLoginRequest;
 import com.widyu.domain.auth.dto.response.AppleIdTokenPayload;
 import com.widyu.domain.auth.dto.response.AppleTokenResponse;
 import com.widyu.domain.auth.dto.response.SocialClientResponse;
+import com.widyu.global.constant.Platform;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.properties.AppleProperties;
@@ -52,7 +53,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
     public SocialClientResponse getUserInfo(SocialLoginRequest request) {
         try {
             String clientSecret = appleJwtUtils.generateClientSecret();
-            AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret);
+            AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret, request.platform());
             AppleIdTokenPayload idTokenPayload = parseIdToken(tokenResponse.idToken());
             log.info("애플 사용자 정보 조회 성공: oauthId={}", idTokenPayload.subject());
 
@@ -100,13 +101,19 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
         return (currentValue != null && !currentValue.isBlank()) ? currentValue : defaultValue;
     }
 
-    private AppleTokenResponse exchangeCodeForTokens(String authorizationCode, String clientSecret) {
-        log.info("애플 토큰 교환 시작: clientId={}, redirectUri={}, codeLength={}", 
-                appleProperties.clientId(), appleProperties.redirectUri(), 
-                authorizationCode != null ? authorizationCode.length() : 0);
-        
+
+    private String getClientIdByPlatform(String platformValue) {
+        Platform platform = Platform.from(platformValue);
+        return switch (platform) {
+            case ANDROID -> appleProperties.androidClientId();
+            case IOS -> appleProperties.iosClientId();
+        };
+    }
+
+    private AppleTokenResponse exchangeCodeForTokens(String authorizationCode, String clientSecret, String platformValue) {
+        String clientId = getClientIdByPlatform(platformValue);
         AppleTokenRequest tokenRequest = AppleTokenRequest.of(
-                appleProperties.clientId(),
+                clientId,
                 clientSecret,
                 authorizationCode,
                 appleProperties.redirectUri()
@@ -120,7 +127,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
                 .body(formData)
                 .exchange((req, res) -> {
-                    log.info("애플 토큰 응답: 상태코드={}, 헤더={}", 
+                    log.info("애플 토큰 응답: 상태코드={}, 헤더={}",
                             res.getStatusCode(), res.getHeaders());
                     
                     if (!res.getStatusCode().is2xxSuccessful()) {
@@ -138,9 +145,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
                     
                     try {
                         AppleTokenResponse response = Objects.requireNonNull(res.bodyTo(AppleTokenResponse.class));
-                        log.info("애플 토큰 교환 성공: accessToken={}, idTokenLength={}", 
-                                response.accessToken() != null ? "존재" : "없음",
-                                response.idToken() != null ? response.idToken().length() : 0);
+                        log.info("애플 토큰 교환 성공");
                         return response;
                     } catch (Exception e) {
                         log.error("애플 토큰 응답 파싱 실패: {}", e.getMessage(), e);
@@ -177,7 +182,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
             String clientSecret = appleJwtUtils.generateClientSecret();
             String formData = String.format(
                     "client_id=%s&client_secret=%s&token=%s&token_type_hint=refresh_token",
-                    appleProperties.clientId(),
+                    appleProperties.iosClientId(),
                     clientSecret,
                     refreshToken
             );
