@@ -7,6 +7,7 @@ import com.widyu.domain.fcm.api.dto.FcmMessageDto;
 import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
 import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
+import com.widyu.domain.fcm.domain.FcmCategory;
 import com.widyu.domain.fcm.domain.FcmNotification;
 import com.widyu.domain.fcm.domain.MemberFcmToken;
 import com.widyu.domain.fcm.domain.repository.FcmNotificationRepository;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.*;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -61,7 +63,7 @@ public class FcmService {
             HttpEntity<String> entity = new HttpEntity<>(message, headers);
             RestTemplate restTemplate = new RestTemplate();
             restTemplate.getMessageConverters()
-                    .add(0, new org.springframework.http.converter.StringHttpMessageConverter(StandardCharsets.UTF_8));
+                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
 
             ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
 
@@ -70,7 +72,7 @@ public class FcmService {
 
                 fcmNotificationRepository.save(FcmNotification.builder()
                         .title(fcmSendDto.title())
-                        .body(fcmSendDto.body())
+                        .body(fcmSendDto.content())
                         .memberFcmToken(tokenEntity)
                         .isRead(false)
                         .build());
@@ -88,7 +90,7 @@ public class FcmService {
                         .token(token)
                         .notification(FcmMessageDto.Notification.builder()
                                 .title(dto.title())
-                                .body(dto.body())
+                                .body(dto.content())
                                 .image(null)
                                 .build())
                         .build())
@@ -134,6 +136,42 @@ public class FcmService {
 
         if (!notification.isRead()) {
             notification.markAsRead();
+        }
+    }
+
+    @Transactional
+    public void sendMessageToUser(Long memberId, FcmSendDto fcmSendDto) {
+        try {
+            List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(memberId);
+
+            for (MemberFcmToken tokenEntity : tokens) {
+                String token = tokenEntity.getToken();
+                String message = makeMessage(token, fcmSendDto);
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setBearerAuth(getAccessToken());
+
+                HttpEntity<String> entity = new HttpEntity<>(message, headers);
+                RestTemplate restTemplate = new RestTemplate();
+                restTemplate.getMessageConverters()
+                        .add(0, new StringHttpMessageConverter(
+                                StandardCharsets.UTF_8));
+
+                ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
+
+                if (response.getStatusCode() == HttpStatus.OK) {
+                    fcmNotificationRepository.save(FcmNotification.builder()
+                            .title(fcmSendDto.title())
+                            .body(fcmSendDto.content())
+                            .fcmCategory(FcmCategory.ALBUM)
+                            .memberFcmToken(tokenEntity)
+                            .isRead(false)
+                            .build());
+                }
+            }
+        } catch (IOException e) {
+            log.error("Failed to send FCM message to user {}: {}", memberId, e.getMessage());
         }
     }
 

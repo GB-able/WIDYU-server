@@ -23,7 +23,7 @@ public class FcmNotification extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
+    private FcmCategory fcmCategory;
     private String title;
     private String body;
     private boolean isRead;
