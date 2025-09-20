@@ -29,7 +29,7 @@ import org.springframework.web.client.RestClient;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AppleLoginStrategy implements SocialLoginStrategy, ApplePlatformAware {
+public class AppleLoginStrategy implements SocialLoginStrategy {
 
     private final AppleProperties appleProperties;
     private final AppleJwtUtils appleJwtUtils;
@@ -101,10 +101,6 @@ public class AppleLoginStrategy implements SocialLoginStrategy, ApplePlatformAwa
         return (currentValue != null && !currentValue.isBlank()) ? currentValue : defaultValue;
     }
 
-    @Override
-    public void setPlatform(String platform) {
-        // 더 이상 사용하지 않음 - request body에서 직접 가져옴
-    }
 
     private String getClientIdByPlatform(String platformValue) {
         Platform platform = Platform.from(platformValue);
