@@ -71,6 +71,13 @@ public enum ErrorCode {
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),
 
+    // 파일 업로드 관련
+    FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_5000", "파일 업로드에 실패했습니다."),
+    FILE_IS_EMPTY(HttpStatus.BAD_REQUEST, "FILE_4000", "파일이 비어있습니다."),
+    FILE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "FILE_4001", "파일 크기가 허용 범위를 초과했습니다."),
+    INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "FILE_4002", "지원하지 않는 파일 형식입니다."),
+    INVALID_FILE_URL(HttpStatus.BAD_REQUEST, "FILE_4003", "유효하지 않은 파일 URL입니다."),
+
     // 잘못된 요청
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "REQ_4000", "잘못된 요청입니다."),
 
