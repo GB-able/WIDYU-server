@@ -1,5 +1,6 @@
 package com.widyu.domain.fcm.domain.repository;
 
+import com.widyu.domain.fcm.domain.FcmCategory;
 import com.widyu.domain.fcm.domain.FcmNotification;
 import java.util.List;
 import java.util.Optional;
@@ -16,5 +17,9 @@ public interface FcmNotificationRepository extends JpaRepository<FcmNotification
     void markAllAsReadByMemberId(@Param("memberId") Long memberId);
 
     Optional<FcmNotification> findByIdAndMemberFcmToken_MemberId(Long id, Long memberId);
+
+    long countByMemberFcmToken_MemberIdAndIsReadFalse(Long memberId);
+
+    long countByMemberFcmToken_MemberIdAndFcmCategoryAndIsReadFalse(Long memberId, FcmCategory fcmCategory);
 }
 

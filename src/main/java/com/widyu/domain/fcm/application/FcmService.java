@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.widyu.domain.fcm.api.dto.FcmMessageDto;
 import com.widyu.domain.fcm.api.dto.FcmSendDto;
+import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
 import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
 import com.widyu.domain.fcm.domain.FcmCategory;
@@ -28,6 +29,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
@@ -128,7 +130,7 @@ public class FcmService {
 
     // 알림 개별 읽기
     @Transactional
-    public void markAsRead(Long notificationId) {
+    public String markAsRead(Long notificationId) {
         Member member = memberUtil.getCurrentMember();
         FcmNotification notification = fcmNotificationRepository
                 .findByIdAndMemberFcmToken_MemberId(notificationId, member.getId())
@@ -136,6 +138,9 @@ public class FcmService {
 
         if (!notification.isRead()) {
             notification.markAsRead();
+            return "알림 읽음 처리 성공";
+        } else {
+            return "이미 읽은 알림입니다";
         }
     }
 
@@ -173,6 +178,20 @@ public class FcmService {
         } catch (IOException e) {
             log.error("Failed to send FCM message to user {}: {}", memberId, e.getMessage());
         }
+    }
+
+    public List<FcmCategoryResponse> getNotificationCategories() {
+        Member member = memberUtil.getCurrentMember();
+
+        return Arrays.stream(FcmCategory.values())
+                .map(category -> {
+                    long count = switch (category) {
+                        case ALL -> fcmNotificationRepository.countByMemberFcmToken_MemberIdAndIsReadFalse(member.getId());
+                        default -> fcmNotificationRepository.countByMemberFcmToken_MemberIdAndFcmCategoryAndIsReadFalse(member.getId(), category);
+                    };
+                    return FcmCategoryResponse.of(category, count);
+                })
+                .toList();
     }
 
 }
