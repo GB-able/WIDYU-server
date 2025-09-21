@@ -1,16 +1,13 @@
 package com.widyu.domain.fcm.api;
 
-import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
-import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
 import com.widyu.domain.fcm.application.FcmService;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -32,11 +29,14 @@ public class FcmController implements FcmDocs {
 //    }
 
     @GetMapping()
-    public ApiResponseTemplate<FcmNotificationResponses> getNotification() {
+    public ApiResponseTemplate<FcmNotificationResponses> getNotification(
+            @RequestParam(required = false, defaultValue = "ALL") String category,
+            @RequestParam(required = false) Long cursor
+    ) {
         return ApiResponseTemplate.ok()
-                .code("FCM_2002")
-                .message("사용자 알림 조회 성공")
-                .body(fcmService.getNotificationsForCurrentUser());
+                .code("200")
+                .message("OK")
+                .body(fcmService.getNotificationsForCurrentUser(category, cursor));
     }
 
     @PatchMapping("/{notificationId}")

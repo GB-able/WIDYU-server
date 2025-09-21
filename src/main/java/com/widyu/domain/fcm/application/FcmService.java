@@ -21,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
@@ -112,20 +114,42 @@ public class FcmService {
         return googleCredentials.getAccessToken().getTokenValue();
     }
 
-    // 유저별 알림 목록 조회 api 구현
-    public FcmNotificationResponses getNotificationsForCurrentUser() {
+    // 카테고리 및 커서 기반 알림 목록 조회
+    public FcmNotificationResponses getNotificationsForCurrentUser(String category, Long cursor) {
         Member member = memberUtil.getCurrentMember();
 
-        return FcmNotificationResponses.from(
-                fcmNotificationRepository.findAllByMemberFcmToken_MemberIdOrderByCreatedAtDesc(member.getId())
-        );
-    }
+        int pageSize = 10;
+        int fetchSize = pageSize + 1;
+        Pageable pageable = PageRequest.of(0, fetchSize);
 
-    // 알림 전체 읽기
-    @Transactional
-    public void markAllAsRead() {
-        Member member = memberUtil.getCurrentMember();
-        fcmNotificationRepository.markAllAsReadByMemberId(member.getId());
+        List<FcmNotification> notifications;
+
+        if ("ALL".equals(category)) {
+            notifications = fcmNotificationRepository.findNotificationsWithCursor(
+                    member.getId(), cursor, pageable);
+        } else {
+            try {
+                FcmCategory fcmCategory = FcmCategory.valueOf(category);
+                notifications = fcmNotificationRepository.findNotificationsByCategoryWithCursor(
+                        member.getId(), fcmCategory, cursor, pageable);
+            } catch (IllegalArgumentException e) {
+                // 잘못된 카테고리인 경우 전체 조회로 처리
+                notifications = fcmNotificationRepository.findNotificationsWithCursor(
+                        member.getId(), cursor, pageable);
+            }
+        }
+
+        if (notifications.isEmpty()) {
+            return FcmNotificationResponses.empty();
+        }
+
+        boolean hasNext = notifications.size() > pageSize;
+        List<FcmNotification> pageNotifications = hasNext ?
+                notifications.subList(0, pageSize) : notifications;
+
+        Long nextCursor = hasNext ? pageNotifications.get(pageSize - 1).getId() : null;
+
+        return FcmNotificationResponses.of(pageNotifications, hasNext, nextCursor);
     }
 
     // 알림 개별 읽기

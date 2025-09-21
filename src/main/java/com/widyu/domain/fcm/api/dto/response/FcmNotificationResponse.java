@@ -4,19 +4,23 @@ import com.widyu.domain.fcm.domain.FcmNotification;
 import java.time.LocalDateTime;
 
 public record FcmNotificationResponse(
-        Long id,
+        Long notificationId,
+        String image,
+        String category,
         String title,
-        String body,
-        boolean isRead,
-        LocalDateTime createdAt
+        String content,
+        LocalDateTime createdAt,
+        String scheme
 ) {
     public static FcmNotificationResponse from(FcmNotification n) {
         return new FcmNotificationResponse(
                 n.getId(),
+                "/album.png",
+                n.getFcmCategory() != null ? n.getFcmCategory().name() : "ALL",
                 n.getTitle(),
                 n.getBody(),
-                n.isRead(),
-                n.getCreatedAt()
+                n.getCreatedAt(),
+                "" // 기본 스킴 값
         );
     }
 }

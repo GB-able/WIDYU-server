@@ -64,7 +64,7 @@ public interface FcmDocs {
 
     @Operation(
             summary = "알림 목록 조회",
-            description = "현재 로그인한 유저의 알림 목록을 최신순으로 조회합니다."
+            description = "현재 로그인한 유저의 알림 목록을 카테고리별 및 커서 기반으로 조회합니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -74,32 +74,29 @@ public interface FcmDocs {
                     examples = @ExampleObject(
                             value = """
                                     {
-                                      "code": "FCM_2002",
-                                      "message": "사용자 알림 조회 성공",
+                                      "code": "200",
+                                      "message": "OK",
                                       "data": {
                                         "notifications": [
                                           {
-                                            "id": 1,
-                                            "title": "새 댓글",
-                                            "body": "홍길동님이 댓글을 남겼습니다.",
-                                            "isRead": false,
-                                            "createdAt": "2025-08-26T14:00:00"
-                                          },
-                                          {
-                                            "id": 2,
-                                            "title": "공지사항",
-                                            "body": "서버 점검이 예정되어 있습니다.",
-                                            "isRead": true,
-                                            "createdAt": "2025-08-25T10:00:00"
+                                            "notificationId": 1,
+                                            "image": "~",
+                                            "category": "ALBUM",
+                                            "title": "부모님이 올려두신 게시물을 모두 읽었어요!",
+                                            "content": "새로운 게시물을 업로드해주세요",
+                                            "createdAt": "2025-08-26T14:00:00",
+                                            "scheme": "gbableappcare://~"
                                           }
-                                        ]
+                                        ],
+                                        "hasNext": true,
+                                        "nextCursor": 123
                                       }
                                     }
                                     """
                     )
             )
     )
-    ApiResponseTemplate<FcmNotificationResponses> getNotification();
+    ApiResponseTemplate<FcmNotificationResponses> getNotification(String category, Long cursor);
 
     @Operation(
             summary = "개별 알림 읽음 처리",
