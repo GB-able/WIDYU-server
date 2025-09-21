@@ -1,8 +1,9 @@
-package com.widyu.domain.fcm.event.album;
+package com.widyu.domain.fcm.event.album.listener;
 
 import com.widyu.domain.fcm.application.FcmService;
 import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.domain.FcmCategory;
+import com.widyu.domain.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.ParentProfile;
 import com.widyu.domain.member.repository.MemberRepository;
