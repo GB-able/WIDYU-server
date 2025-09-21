@@ -52,7 +52,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
     @Override
     public SocialClientResponse getUserInfo(SocialLoginRequest request) {
         try {
-            String clientSecret = appleJwtUtils.generateClientSecret();
+            String clientSecret = appleJwtUtils.generateClientSecret(request.platform());
             AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret, request.platform());
             AppleIdTokenPayload idTokenPayload = parseIdToken(tokenResponse.idToken());
             log.info("애플 사용자 정보 조회 성공: oauthId={}", idTokenPayload.subject());
@@ -112,6 +112,8 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
 
     private AppleTokenResponse exchangeCodeForTokens(String authorizationCode, String clientSecret, String platformValue) {
         String clientId = getClientIdByPlatform(platformValue);
+        log.info("애플 토큰 교환 시작: platform={}", platformValue);
+        
         AppleTokenRequest tokenRequest = AppleTokenRequest.of(
                 clientId,
                 clientSecret,
@@ -134,18 +136,18 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
                         String responseBody = "";
                         try {
                             responseBody = new String(res.getBody().readAllBytes());
-                            log.error("애플 토큰 교환 실패 - 상태코드: {}, 응답본문: {}", 
-                                    res.getStatusCode(), responseBody);
+                            log.error("애플 토큰 교환 실패 - platform: {}, 상태코드: {}, 응답본문: {}", 
+                                    platformValue, res.getStatusCode(), responseBody);
                         } catch (Exception e) {
-                            log.error("애플 토큰 교환 실패 - 상태코드: {}, 응답본문 읽기 실패: {}", 
-                                    res.getStatusCode(), e.getMessage());
+                            log.error("애플 토큰 교환 실패 - platform: {}, 상태코드: {}, 응답본문 읽기 실패: {}", 
+                                    platformValue, res.getStatusCode(), e.getMessage());
                         }
                         throw new BusinessException(ErrorCode.APPLE_COMMUNICATION_ERROR);
                     }
                     
                     try {
                         AppleTokenResponse response = Objects.requireNonNull(res.bodyTo(AppleTokenResponse.class));
-                        log.info("애플 토큰 교환 성공");
+                        log.info("애플 토큰 교환 성공: platform={}", platformValue);
                         return response;
                     } catch (Exception e) {
                         log.error("애플 토큰 응답 파싱 실패: {}", e.getMessage(), e);
