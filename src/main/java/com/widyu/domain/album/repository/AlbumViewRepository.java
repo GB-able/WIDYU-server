@@ -12,4 +12,10 @@ public interface AlbumViewRepository extends JpaRepository<AlbumView, Long> {
 
     @Query("SELECT av.member FROM AlbumView av WHERE av.album.id = :albumId")
     List<Member> findMembersByAlbumId(@Param("albumId") Long albumId);
+
+    @Query("SELECT COUNT(DISTINCT av.album.id) FROM AlbumView av WHERE av.member.id = :memberId AND av.album.status = com.widyu.global.domain.Status.ACTIVE")
+    long countViewedAlbumsByMember(@Param("memberId") Long memberId);
+
+    @Query("SELECT COUNT(DISTINCT a.id) FROM Album a WHERE a.member.id IN :guardianIds AND a.status = com.widyu.global.domain.Status.ACTIVE")
+    long countTotalAlbumsByGuardians(@Param("guardianIds") List<Long> guardianIds);
 }
