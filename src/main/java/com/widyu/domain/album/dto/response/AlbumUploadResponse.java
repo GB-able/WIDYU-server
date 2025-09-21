@@ -1,7 +1,6 @@
 package com.widyu.domain.album.dto.response;
 
 import com.widyu.domain.album.entity.Album;
-import com.widyu.domain.album.entity.MediaType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,7 +12,6 @@ public record AlbumUploadResponse(
         int mediaCount,
         int photoCount,
         int videoCount,
-        MediaType primaryMediaType,
         String authorName,
         LocalDateTime createdAt
 ) {
@@ -26,7 +24,6 @@ public record AlbumUploadResponse(
                 album.getMediaCount(),
                 album.getPhotoCount(),
                 album.getVideoCount(),
-                album.getPrimaryMediaType(),
                 album.getMember().getName(),
                 album.getCreatedAt()
         );
