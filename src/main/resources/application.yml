@@ -3,9 +3,9 @@ spring:
     name: SGMarket-Backend
   profiles:
     group:
-      local: "local, datasource, fcm, pay"
-      dev: "dev, datasource, fcm, pay"
-      test: "test, fcm, pay"
+      local: "local, datasource, fcm, pay, s3"
+      dev: "dev, datasource, fcm, pay, s3"
+      test: "test, fcm, pay, s3"
 
     include:
       - security
@@ -13,7 +13,7 @@ spring:
       - redis
       - imp
       - oauth
-
+      - video
 swagger:
   version: ${SWAGGER_VERSION:0.0.1}
   url: ${SWAGGER_URL:http://localhost:8080}

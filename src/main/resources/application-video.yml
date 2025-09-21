@@ -1,0 +1,15 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 1000MB
+      max-request-size: 1000MB
+      resolve-lazily: true
+
+ffmpeg:
+  path: ${FFMPEG_PATH:/usr/local/bin/ffmpeg}
+
+ffprobe:
+  path: ${FFPROBE_PATH:/usr/local/bin/ffprobe}
+
+video:
+  force-cap: true
