@@ -19,12 +19,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(
-        name = "parent_profile",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_parent_invite_code", columnNames = "invite_code")
-        }
-)
+@Table(name = "parent_profile")
 public class ParentProfile {
 
     @Id
