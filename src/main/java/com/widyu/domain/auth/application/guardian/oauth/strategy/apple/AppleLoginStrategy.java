@@ -55,12 +55,11 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
             String clientSecret = appleJwtUtils.generateClientSecret(request.platform());
             AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret, request.platform());
             AppleIdTokenPayload idTokenPayload = parseIdToken(tokenResponse.idToken());
-            log.info("애플 사용자 정보 조회 성공: oauthId={}", idTokenPayload.subject());
 
             return SocialClientResponse.of(
                     idTokenPayload.subject(),
                     idTokenPayload.email(),
-                    null,
+                    request.profile().name(),
                     null,
                     tokenResponse.refreshToken()
             );
@@ -100,6 +99,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
     private String getValueOrDefault(String currentValue, String defaultValue) {
         return (currentValue != null && !currentValue.isBlank()) ? currentValue : defaultValue;
     }
+
 
 
     private String getClientIdByPlatform(String platformValue) {

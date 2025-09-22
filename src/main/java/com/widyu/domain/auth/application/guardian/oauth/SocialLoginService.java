@@ -66,7 +66,7 @@ public class SocialLoginService {
         // 4. 사용자 정보 검증
         strategy.validateUserInfo(userInfo);
 
-        // 5. 기존 회원 확인 (★ 옵션 A 적용된 메서드 사용)
+        // 5. 기존 회원 확인
         Optional<Member> existingMember = findMemberByProvider(provider, socialResponse.oauthId());
 
         return existingMember
