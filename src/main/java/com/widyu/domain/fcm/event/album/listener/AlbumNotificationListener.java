@@ -67,7 +67,7 @@ public class AlbumNotificationListener {
         List<ParentProfile> parentProfiles = parentProfileRepository.findAll()
                 .stream()
                 .filter(pp -> pp.getMember().getId().equals(event.memberId()))
-                .collect(Collectors.toList());
+                .toList();
 
         if (parentProfiles.isEmpty()) {
             return;
