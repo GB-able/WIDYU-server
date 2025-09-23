@@ -46,7 +46,7 @@ public class AlbumUploadService {
         }
 
         if (!request.hasValidMediaCount()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "사진은 최대 10개, 동영상은 최대 3개까지 업로드 가능합니다.");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "전체 최대 8개, 사진 최대 8개, 동영상 최대 3개까지 업로드 가능합니다.");
         }
 
         for (MultipartFile file : request.mediaFiles()) {

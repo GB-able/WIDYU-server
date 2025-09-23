@@ -11,7 +11,7 @@ public record AlbumUploadRequest(
         String content,
         
         @NotNull(message = "미디어 파일은 필수입니다.")
-        @Size(min = 1, max = 13, message = "미디어 파일은 최소 1개, 최대 13개까지 업로드 가능합니다.")
+        @Size(min = 1, max = 8, message = "미디어 파일은 최소 1개, 최대 8개까지 업로드 가능합니다.")
         List<MultipartFile> mediaFiles
 ) {
     
@@ -30,8 +30,9 @@ public record AlbumUploadRequest(
     public boolean hasValidMediaCount() {
         int photoCount = getPhotoCount();
         int videoCount = getVideoCount();
+        int totalCount = photoCount + videoCount;
         
-        // 사진 최대 10개, 동영상 최대 3개
-        return photoCount <= 10 && videoCount <= 3;
+        // 전체 최대 8개, 사진 최대 8개, 동영상 최대 3개
+        return totalCount <= 8 && photoCount <= 8 && videoCount <= 3;
     }
 }
