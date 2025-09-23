@@ -2,6 +2,7 @@ package com.widyu.domain.fcm.event.album.listener;
 
 import com.widyu.domain.fcm.event.album.dto.AlbumViewedEvent;
 import com.widyu.domain.fcm.event.album.dto.AlbumCommentedEvent;
+import com.widyu.domain.fcm.event.album.dto.AlbumLikedEvent;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.domain.album.repository.AlbumViewRepository;
@@ -189,6 +190,29 @@ public class AlbumNotificationListener {
         FcmSendDto dto = new FcmSendDto(
                 commenter.getName() + "님이 회원님의 게시물에 댓글을 남겼어요!",
                 "댓글을 확인해보세요.",
+                FcmCategory.ALBUM,
+                ""
+        );
+        fcmService.sendMessageToUser(albumAuthor.getId(), dto);
+    }
+
+    // 게시글에 좋아요가 달리면 게시물 주인에게 알림 발송
+    @Async
+    @EventListener
+    public void handleAlbumLiked(AlbumLikedEvent event) {
+        Member liker = memberRepository.findById(event.likerMemberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
+        Member albumAuthor = memberRepository.findById(event.albumAuthorId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
+
+        // 자신의 게시물에 자신이 좋아요를 누른 경우 알림 발송하지 않음
+        if (event.likerMemberId().equals(event.albumAuthorId())) {
+            return;
+        }
+
+        FcmSendDto dto = new FcmSendDto(
+                liker.getName() + "님이 회원님의 게시물을 좋아합니다!",
+                "게시물을 확인해보세요.",
                 FcmCategory.ALBUM,
                 ""
         );
