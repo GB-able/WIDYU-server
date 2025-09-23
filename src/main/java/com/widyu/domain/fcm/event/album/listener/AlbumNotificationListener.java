@@ -1,6 +1,9 @@
 package com.widyu.domain.fcm.event.album.listener;
 
 import com.widyu.domain.fcm.event.album.dto.AlbumViewedEvent;
+import com.widyu.domain.fcm.event.album.dto.AlbumCommentedEvent;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.domain.album.repository.AlbumViewRepository;
 import com.widyu.domain.album.repository.AlbumRepository;
 import com.widyu.domain.fcm.application.FcmService;
@@ -42,10 +45,7 @@ public class AlbumNotificationListener {
     public void handleAlbumCreated(AlbumCreatedEvent event) {
         // 보호자 정보 조회
         Member guardian = memberRepository.findById(event.authorId())
-                .orElse(null);
-        if (guardian == null) {
-            return;
-        }
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_GUARDIAN_NOT_FOUND));
 
         // 보호자의 부모님 목록 조회
         List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(event.authorId());
@@ -67,10 +67,7 @@ public class AlbumNotificationListener {
     @EventListener
     public void handleAlbumViewed(AlbumViewedEvent event) {
         Member parentMember = memberRepository.findById(event.memberId())
-                .orElse(null);
-        if (parentMember == null) {
-            return;
-        }
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_PARENT_MEMBER_NOT_FOUND));
 
         // 부모님 프로필 조회
         List<ParentProfile> parentProfiles = parentProfileRepository.findAll()
@@ -113,6 +110,7 @@ public class AlbumNotificationListener {
         }
     }
 
+    // 3/5/7일 비활성 사용자 체크 및 알림 발송
     @Scheduled(cron = "0 0 10 * * *")
     @Transactional
     public void checkInactiveUsersAndSendNotification() {
@@ -172,5 +170,28 @@ public class AlbumNotificationListener {
                 log.error("{}일 비활성 알림 전송 실패: {} -> {}", days, member.getName(), parentProfile.getMember().getName(), e);
             }
         }
+    }
+
+    // 게시글에 댓글이 달리면 게시물 주인에게 알림 발송
+    @Async
+    @EventListener
+    public void handleAlbumCommented(AlbumCommentedEvent event) {
+        Member commenter = memberRepository.findById(event.commenterMemberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
+        Member albumAuthor = memberRepository.findById(event.albumAuthorId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
+
+        // 자신의 게시물에 자신이 댓글을 단 경우 알림 발송하지 않음
+        if (event.commenterMemberId().equals(event.albumAuthorId())) {
+            return;
+        }
+
+        FcmSendDto dto = new FcmSendDto(
+                commenter.getName() + "님이 회원님의 게시물에 댓글을 남겼어요!",
+                "댓글을 확인해보세요.",
+                FcmCategory.ALBUM,
+                ""
+        );
+        fcmService.sendMessageToUser(albumAuthor.getId(), dto);
     }
 }
