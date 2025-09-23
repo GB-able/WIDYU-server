@@ -2,6 +2,7 @@ package com.widyu.domain.fcm.event.album.listener;
 
 import com.widyu.domain.fcm.event.album.dto.AlbumViewedEvent;
 import com.widyu.domain.album.repository.AlbumViewRepository;
+import com.widyu.domain.album.repository.AlbumRepository;
 import com.widyu.domain.fcm.application.FcmService;
 import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.domain.FcmCategory;
@@ -10,14 +11,21 @@ import com.widyu.domain.member.entity.Member;
 import com.widyu.domain.member.entity.ParentProfile;
 import com.widyu.domain.member.repository.MemberRepository;
 import com.widyu.domain.member.repository.ParentProfileRepository;
+import com.widyu.global.domain.Status;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AlbumNotificationListener {
@@ -26,6 +34,7 @@ public class AlbumNotificationListener {
     private final ParentProfileRepository parentProfileRepository;
     private final MemberRepository memberRepository;
     private final AlbumViewRepository albumViewRepository;
+    private final AlbumRepository albumRepository;
 
     // 게시물 작성시 부모님께 알림 발송
     @Async
@@ -100,6 +109,67 @@ public class AlbumNotificationListener {
                         ""
                 );
                 fcmService.sendMessageToUser(profile.getGuardian().getId(), dto);
+            }
+        }
+    }
+
+    @Scheduled(cron = "0 0 10 * * *")
+    @Transactional
+    public void checkInactiveUsersAndSendNotification() {
+        LocalDateTime now = LocalDateTime.now();
+
+        checkAndNotifyInactiveUsers(3, now);
+        checkAndNotifyInactiveUsers(5, now);
+        checkAndNotifyInactiveUsers(7, now);
+    }
+
+    private void checkAndNotifyInactiveUsers(int days, LocalDateTime now) {
+        LocalDateTime cutoffDate = now.minusDays(days);
+
+        List<Member> allMembers = memberRepository.findAll();
+
+        for (Member member : allMembers) {
+            Optional<LocalDateTime> lastUploadDate = albumRepository.findLastUploadDateByMember(member, Status.ACTIVE);
+
+            boolean shouldNotify = false;
+            if (lastUploadDate.isEmpty()) {
+                if (member.getCreatedAt().isBefore(cutoffDate)) {
+                    shouldNotify = true;
+                }
+            } else {
+                LocalDateTime lastUpload = lastUploadDate.get();
+                if (lastUpload.isBefore(cutoffDate)) {
+                    shouldNotify = true;
+                }
+            }
+
+            if (shouldNotify) {
+                sendInactivityNotificationToParents(member, days);
+            }
+        }
+    }
+
+    private void sendInactivityNotificationToParents(Member member, int days) {
+        List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(member.getId());
+
+        if (parentProfiles.isEmpty()) {
+            return;
+        }
+
+        String message = member.getName() + "님, " + days + "일 간 소식이 뜸했어요. 새로운 근황을 전하는 건 어떨까요?";
+
+        for (ParentProfile parentProfile : parentProfiles) {
+            FcmSendDto dto = new FcmSendDto(
+                    message,
+                    "새로운 소식을 공유해보세요.",
+                    FcmCategory.ALBUM,
+                    ""
+            );
+            try {
+                fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
+                log.info("{}일 비활성 알림 전송 완료: {} -> {}", days, member.getName(), parentProfile.getMember().getName());
+            } catch (Exception e) {
+                log.error("{}일 비활성 알림 전송 실패: {} -> {}", days, member.getName(), parentProfile.getMember().getName(), e);
             }
         }
     }

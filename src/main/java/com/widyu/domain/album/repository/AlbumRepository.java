@@ -48,4 +48,10 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
      */
     @Query("SELECT COUNT(a) FROM Album a WHERE a.member = :member AND a.status = :status")
     long countByMemberAndStatus(@Param("member") Member member, @Param("status") Status status);
+
+    /**
+     * 특정 회원의 마지막 앨범 업로드 시간 조회
+     */
+    @Query("SELECT a.createdAt FROM Album a WHERE a.member = :member AND a.status = :status ORDER BY a.createdAt DESC LIMIT 1")
+    Optional<LocalDateTime> findLastUploadDateByMember(@Param("member") Member member, @Param("status") Status status);
 }
