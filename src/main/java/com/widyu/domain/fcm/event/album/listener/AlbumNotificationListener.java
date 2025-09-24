@@ -42,75 +42,85 @@ public class AlbumNotificationListener {
     private final AlbumViewRepository albumViewRepository;
     private final AlbumRepository albumRepository;
 
-    // 게시물 작성시 부모님께 알림 발송
+    // 게시물 작성시 알림 발송 (작성자가 부모님이면 보호자들에게, 보호자면 부모님들에게)
     @Async
     @EventListener
     public void handleAlbumCreated(AlbumCreatedEvent event) {
-        // 보호자 정보 조회
-        Member guardian = memberRepository.findById(event.authorId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_GUARDIAN_NOT_FOUND));
+        Member author = memberRepository.findById(event.authorId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
 
-        // 보호자의 부모님 목록 조회
-        List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(event.authorId());
+        String title = author.getName() + "님이 새로운 소식을 전했어요!";
+        String content = "새로운 앨범을 확인해보세요.";
 
-        // 각 부모님에게 알림 발송
-        for (ParentProfile parentProfile : parentProfiles) {
-            FcmSendDto dto = new FcmSendDto(
-                    guardian.getName() + "님이 새로운 소식을 전했어요!",
-                    "새로운 앨범을 확인해보세요.",
-                    FcmCategory.ALBUM
-                    ,""
-            );
-            fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
-        }
+        sendNotificationToFamilyMembers(event.authorId(), title, content);
     }
 
-    // 게시물 조회시 모든 게시물 확인했는지 체크 및 알림 발송
+    // 게시물 조회시 해당 작성자의 모든 게시물 확인했는지 체크 및 알림 발송
     @Async
     @EventListener
     public void handleAlbumViewed(AlbumViewedEvent event) {
-        Member parentMember = memberRepository.findById(event.memberId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_PARENT_MEMBER_NOT_FOUND));
+        Member viewer = memberRepository.findById(event.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
 
-        // 부모님 프로필 조회
-        List<ParentProfile> parentProfiles = parentProfileRepository.findAll()
+        // 조회한 앨범의 작성자 찾기
+        Album album = albumRepository.findById(event.albumId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+
+        // 해당 작성자의 모든 게시물을 확인했는지 체크
+        if (hasViewedAllAlbums(event.memberId(), album.getId())) {
+            Member albumWriter = album.getMember();
+            String title = viewer.getName() + "님이 " + albumWriter.getName() + "님의 모든 소식을 확인했어요!";
+            String content = "새로운 소식을 공유해보세요.";
+
+            // 앨범 작성자에게 알림 발송
+            sendNotificationToSpecificMember(albumWriter.getId(), title, content);
+        }
+    }
+
+    // 가족 구성원들에게 알림 발송하는 공통 메서드
+    private void sendNotificationToFamilyMembers(Long memberId, String title, String content) {
+        // 사용자가 부모님인지 보호자인지 확인
+        List<ParentProfile> memberAsParent = parentProfileRepository.findAll()
                 .stream()
-                .filter(pp -> pp.getMember().getId().equals(event.memberId()))
+                .filter(pp -> pp.getMember().getId().equals(memberId))
                 .toList();
 
-        if (parentProfiles.isEmpty()) {
-            return;
-        }
-
-        ParentProfile parentProfile = parentProfiles.getFirst();
-
-        // 보호자들 ID 조회
-        List<Long> guardianIds = parentProfileRepository.findAllByInviteCodeIn(
-                List.of(parentProfile.getInviteCode()))
-                .stream()
-                .map(pp -> pp.getGuardian().getId())
-                .distinct()
-                .collect(Collectors.toList());
-
-        // 조회한 게시물 수 vs 전체 게시물 수 비교
-        long viewedCount = albumViewRepository.countViewedAlbumsByMember(event.memberId());
-        long totalCount = albumViewRepository.countTotalAlbumsByGuardians(guardianIds);
-
-        if (viewedCount == totalCount && totalCount > 0) {
-            // 모든 보호자들에게 알림 발송
-            String inviteCode = parentProfile.getInviteCode();
-            List<ParentProfile> allParentProfiles = parentProfileRepository.findAllByInviteCodeIn(List.of(inviteCode));
-
-            for (ParentProfile profile : allParentProfiles) {
-                FcmSendDto dto = new FcmSendDto(
-                        parentMember.getName() + "님이 모든 소식을 확인했어요!",
-                        "새로운 소식을 공유해보세요.",
-                        FcmCategory.ALBUM,
-                        ""
-                );
+        if (!memberAsParent.isEmpty()) {
+            // 부모님인 경우 → 보호자들에게 알림 발송
+            for (ParentProfile profile : memberAsParent) {
+                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
                 fcmService.sendMessageToUser(profile.getGuardian().getId(), dto);
             }
+        } else {
+            // 보호자인 경우 → 부모님들에게 알림 발송
+            List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(memberId);
+
+            for (ParentProfile parentProfile : parentProfiles) {
+                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
+                fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
+            }
         }
+    }
+
+    // 특정 멤버에게 알림 발송하는 메서드
+    private void sendNotificationToSpecificMember(Long memberId, String title, String content) {
+        FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
+        fcmService.sendMessageToUser(memberId, dto);
+    }
+
+    // 특정 작성자의 모든 게시물을 확인했는지 체크하는 메서드
+    private boolean hasViewedAllAlbums(Long viewerId, Long albumId) {
+        // 내가 특정 작성자의 게시물을 본 개수
+        long viewedCount = albumViewRepository.countViewedAlbumsByMemberIdAndAlbumId(viewerId, albumId);
+
+        Member writer = albumRepository.findById(albumId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND))
+                .getMember();
+
+        // 그 작성자가 쓴 총 게시물 수
+        long totalCount = albumRepository.countByMemberId(writer.getId());
+
+        return viewedCount == totalCount && totalCount > 0;
     }
 
     // 3/5/7일 비활성 사용자 체크 및 알림 발송
@@ -191,7 +201,7 @@ public class AlbumNotificationListener {
 
         FcmSendDto dto = new FcmSendDto(
                 commenter.getName() + "님이 회원님의 게시물에 댓글을 남겼어요!",
-                "댓글을 확인해보세요.",
+                "답글을 달아주세요.",
                 FcmCategory.ALBUM,
                 ""
         );
