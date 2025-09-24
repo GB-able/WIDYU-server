@@ -227,7 +227,6 @@ public class AlbumNotificationListener {
         Member parentMember = memberRepository.findById(event.parentMemberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_PARENT_MEMBER_NOT_FOUND));
 
-        // 앨범 조회
         Album album = albumRepository.findById(event.albumId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
@@ -239,6 +238,4 @@ public class AlbumNotificationListener {
         );
         fcmService.sendMessageToUser(album.getMember().getId(), dto);
     }
-
-    // TODO: "부모님 미열남 누적 게시물 6/4/2개 이하 -> {}께서 보실 소식이 얼마 남지 않았어요. 새로운 게시물을 전해주세요!"
 }

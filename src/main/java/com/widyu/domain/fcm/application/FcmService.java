@@ -8,15 +8,19 @@ import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
 import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
+import com.widyu.domain.fcm.api.dto.response.ToastResDto;
 import com.widyu.domain.fcm.domain.FcmCategory;
 import com.widyu.domain.fcm.domain.FcmNotification;
 import com.widyu.domain.fcm.domain.MemberFcmToken;
 import com.widyu.domain.fcm.domain.repository.FcmNotificationRepository;
 import com.widyu.domain.fcm.domain.repository.MemberFcmTokenRepository;
+import com.widyu.domain.album.repository.AlbumViewRepository;
+import com.widyu.domain.member.repository.ParentProfileRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.domain.member.entity.Member;
+import com.widyu.domain.member.entity.ParentProfile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +49,8 @@ public class FcmService {
 
     private final FcmNotificationRepository fcmNotificationRepository;
     private final MemberFcmTokenRepository memberFcmTokenRepository;
+    private final AlbumViewRepository albumViewRepository;
+    private final ParentProfileRepository parentProfileRepository;
     private final MemberUtil memberUtil;
     private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widuy-875a5/messages:send";
 
@@ -182,12 +188,50 @@ public class FcmService {
 
     // Todo: 토스트 모달 알림 설정
     // 부모님 미열람 누적 게시물 6/4/2개 이하
-    //“{}께서 보실 소식이 얼마 남지 않았어요.
-    //새로운 게시물을 전해주세요!”
+    // “{}께서 보실 소식이 얼마 남지 않았어요.
+    // 새로운 게시물을 전해주세요!”
+    // 부모님 미열람 누적 게시물 0개
+    // “부모님께서 모든 소식을 다 보셨어요.
+    // 새로운 게시물을 전해주세요!”
+    public ToastResDto getToastNotification() {
+        Member member = memberUtil.getCurrentMember();
 
-    //조건 : 누적 게시물 0개
-    //“부모님께서 모든 소식을 다 보셨어요.
-    //새로운 게시물을 전해주세요!”
+        List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(member.getId());
+        if (parentProfiles.isEmpty()) {
+            return null;
+        }
 
+        int[] thresholds = {0, 2, 4, 6};
+
+        for (int threshold : thresholds) {
+            for (ParentProfile parentProfile : parentProfiles) {
+                long unviewedCount = calculateUnviewedCount(member.getId(), parentProfile);
+
+                if ((threshold == 0 && unviewedCount == 0) ||
+                    (threshold > 0 && unviewedCount > 0 && unviewedCount <= threshold)) {
+                    return createToastMessage(parentProfile.getMember().getName(), unviewedCount);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private long calculateUnviewedCount(Long guardianId, ParentProfile parentProfile) {
+        Long parentMemberId = parentProfile.getMember().getId();
+        // 내가 올린 전체 앨범 수
+        long totalCount = albumViewRepository.countTotalAlbumsByParent(guardianId);
+        // 부모님이 내 앨범을 본 수
+        long viewedCount = albumViewRepository.countViewedAlbumsByGuardianAndParent(parentMemberId, guardianId);
+        return totalCount - viewedCount;
+    }
+
+    private ToastResDto createToastMessage(String parentName, long unviewedCount) {
+        if (unviewedCount == 0) {
+            return ToastResDto.from(parentName + "님께서 모든 소식을 다 보셨어요. 새로운 게시물을 전해주세요!");
+        } else {
+            return ToastResDto.from(parentName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요. 새로운 게시물을 전해주세요!");
+        }
+    }
 
 }
