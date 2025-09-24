@@ -1,15 +1,15 @@
 package com.widyu.domain.fcm.api;
 
-import com.widyu.domain.fcm.api.dto.FcmSendDto;
+import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
-import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
+import com.widyu.domain.fcm.api.dto.response.ToastResDto;
 import com.widyu.domain.fcm.application.FcmService;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -19,41 +19,38 @@ public class FcmController implements FcmDocs {
 
     private final FcmService fcmService;
 
-    @PostMapping()
-    public ApiResponseTemplate<FcmSendResponse> pushMessage(@RequestBody FcmSendDto fcmSendDto) throws IOException {
-        FcmSendResponse response = fcmService.sendMessageTo(fcmSendDto);
-
-        return ApiResponseTemplate.ok()
-                .code("FCM_2001")
-                .message("푸시 메시지 전송 성공")
-                .body(response);
-    }
-
     @GetMapping()
-    public ApiResponseTemplate<FcmNotificationResponses> getNotification() {
+    public ApiResponseTemplate<FcmNotificationResponses> getNotification(
+            @RequestParam(required = false, defaultValue = "ALL") String category,
+            @RequestParam(required = false) Long cursor
+    ) {
         return ApiResponseTemplate.ok()
-                .code("FCM_2002")
-                .message("사용자 알림 조회 성공")
-                .body(fcmService.getNotificationsForCurrentUser());
-    }
-
-    @PatchMapping()
-    public ApiResponseTemplate<Void> markAllAsRead() {
-        fcmService.markAllAsRead();
-
-        return ApiResponseTemplate.ok()
-                .code("FCM_2003")
-                .message("전체 알림 읽음 처리 완료")
-                .build();
+                .code("200")
+                .message("OK")
+                .body(fcmService.getNotificationsForCurrentUser(category, cursor));
     }
 
     @PatchMapping("/{notificationId}")
-    public ApiResponseTemplate<Void> markAsRead(@PathVariable Long notificationId) {
-        fcmService.markAsRead(notificationId);
-
+    public ApiResponseTemplate<String> markAsRead(@PathVariable Long notificationId) {
         return ApiResponseTemplate.ok()
-                .code("FCM_2004")
-                .message("알림 읽음 처리 완료")
-                .build();
+                .code("200")
+                .message("OK")
+                .body(fcmService.markAsRead(notificationId));
+    }
+
+    @GetMapping("/categories")
+    public ApiResponseTemplate<List<FcmCategoryResponse>> getNotificationCategories() {
+        return ApiResponseTemplate.ok()
+                .code("FCM_2005")
+                .message("OK")
+                .body(fcmService.getNotificationCategories());
+    }
+
+    @GetMapping("/toast")
+    public ApiResponseTemplate<ToastResDto> getToastNotification() {
+        return ApiResponseTemplate.ok()
+                .code("FCM_2006")
+                .message("OK")
+                .body(fcmService.getToastNotification());
     }
 }

@@ -67,6 +67,16 @@ public enum ErrorCode {
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),
     FCM_NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4041", "FCM 알림이 존재하지 않습니다."),
 
+    // 알림 관련
+    NOTIFICATION_COMMENTER_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4040", "댓글 작성자를 찾을 수 없습니다."),
+    NOTIFICATION_ALBUM_AUTHOR_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4041", "게시물 작성자를 찾을 수 없습니다."),
+    NOTIFICATION_GUARDIAN_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4042", "보호자를 찾을 수 없습니다."),
+    NOTIFICATION_PARENT_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4043", "부모님 회원을 찾을 수 없습니다."),
+    NOTIFICATION_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4044", "회원을 찾을 수 없습니다."),
+
+    // 앨범 관련
+    ALBUM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_4040", "앨범을 찾을 수 없습니다."),
+
     // 결제 관련
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),
