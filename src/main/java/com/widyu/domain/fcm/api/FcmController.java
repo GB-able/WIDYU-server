@@ -18,16 +18,6 @@ public class FcmController implements FcmDocs {
 
     private final FcmService fcmService;
 
-//    @PostMapping()
-//    public ApiResponseTemplate<FcmSendResponse> pushMessage(@RequestBody FcmSendDto fcmSendDto) throws IOException {
-//        FcmSendResponse response = fcmService.sendMessageTo(fcmSendDto);
-//
-//        return ApiResponseTemplate.ok()
-//                .code("FCM_2001")
-//                .message("푸시 메시지 전송 성공")
-//                .body(response);
-//    }
-
     @GetMapping()
     public ApiResponseTemplate<FcmNotificationResponses> getNotification(
             @RequestParam(required = false, defaultValue = "ALL") String category,

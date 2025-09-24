@@ -19,49 +19,6 @@ import java.util.List;
 @Tag(name = "FCM", description = "푸시 메시지 및 알림 API")
 public interface FcmDocs {
 
-//    @Operation(
-//            summary = "푸시 메시지 전송",
-//            description = "현재 로그인한 유저의 모든 디바이스 토큰으로 푸시 메시지를 전송합니다."
-//    )
-//    @ApiResponse(
-//            responseCode = "200",
-//            description = "푸시 메시지 전송 성공",
-//            content = @Content(
-//                    schema = @Schema(implementation = ApiResponseTemplate.class),
-//                    examples = @ExampleObject(
-//                            value = """
-//                                    {
-//                                      "code": "FCM_2001",
-//                                      "message": "푸시 메시지 전송 성공",
-//                                      "data": {
-//                                        "title": "새 공지사항",
-//                                        "body": "새로운 공지사항이 등록되었습니다.",
-//                                        "successCount": 2
-//                                      }
-//                                    }
-//                                    """
-//                    )
-//            )
-//    )
-//    ApiResponseTemplate<FcmSendResponse> pushMessage(
-//            @RequestBody(
-//                    required = true,
-//                    description = "푸시 메시지 요청 DTO",
-//                    content = @Content(
-//                            schema = @Schema(implementation = FcmSendDto.class),
-//                            examples = @ExampleObject(
-//                                    value = """
-//                                            {
-//                                              "title": "새 공지사항",
-//                                              "body": "새로운 공지사항이 등록되었습니다."
-//                                            }
-//                                            """
-//                            )
-//                    )
-//            )
-//            FcmSendDto fcmSendDto
-//    ) throws IOException;
-
     @Operation(
             summary = "알림 목록 조회",
             description = "현재 로그인한 유저의 알림 목록을 카테고리별 및 커서 기반으로 조회합니다."

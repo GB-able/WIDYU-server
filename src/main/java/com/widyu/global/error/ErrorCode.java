@@ -74,6 +74,9 @@ public enum ErrorCode {
     NOTIFICATION_PARENT_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4043", "부모님 회원을 찾을 수 없습니다."),
     NOTIFICATION_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_4044", "회원을 찾을 수 없습니다."),
 
+    // 앨범 관련
+    ALBUM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_4040", "앨범을 찾을 수 없습니다."),
+
     // 결제 관련
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),

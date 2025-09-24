@@ -3,8 +3,10 @@ package com.widyu.domain.fcm.event.album.listener;
 import com.widyu.domain.fcm.event.album.dto.AlbumViewedEvent;
 import com.widyu.domain.fcm.event.album.dto.AlbumCommentedEvent;
 import com.widyu.domain.fcm.event.album.dto.AlbumLikedEvent;
+import com.widyu.domain.fcm.event.album.dto.AlbumUnlockedEvent;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.domain.album.entity.Album;
 import com.widyu.domain.album.repository.AlbumViewRepository;
 import com.widyu.domain.album.repository.AlbumRepository;
 import com.widyu.domain.fcm.application.FcmService;
@@ -218,4 +220,25 @@ public class AlbumNotificationListener {
         );
         fcmService.sendMessageToUser(albumAuthor.getId(), dto);
     }
+
+    // 부모님이 게시물을 잠금 해제했을 때 해당 앨범 작성자에게 알림 발송
+    @EventListener
+    public void handleAlbumUnlocked(AlbumUnlockedEvent event) {
+        Member parentMember = memberRepository.findById(event.parentMemberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_PARENT_MEMBER_NOT_FOUND));
+
+        // 앨범 조회
+        Album album = albumRepository.findById(event.albumId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+
+        FcmSendDto dto = new FcmSendDto(
+                parentMember.getName() + "님이 회원님의 게시물을 잠금해제했어요.",
+                "새로운 소식을 확인해보세요.",
+                FcmCategory.ALBUM,
+                ""
+        );
+        fcmService.sendMessageToUser(album.getMember().getId(), dto);
+    }
+
+    // TODO: "부모님 미열남 누적 게시물 6/4/2개 이하 -> {}께서 보실 소식이 얼마 남지 않았어요. 새로운 게시물을 전해주세요!"
 }

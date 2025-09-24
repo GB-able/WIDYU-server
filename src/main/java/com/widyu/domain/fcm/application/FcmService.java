@@ -48,44 +48,6 @@ public class FcmService {
     private final MemberUtil memberUtil;
     private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widuy-875a5/messages:send";
 
-    @Transactional
-    public FcmSendResponse sendMessageTo(FcmSendDto fcmSendDto) throws IOException {
-        Member member = memberUtil.getCurrentMember();
-
-        List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(member.getId());
-
-        int successCount = 0;
-
-        for (MemberFcmToken tokenEntity : tokens) {
-            String token = tokenEntity.getToken();
-            String message = makeMessage(token, fcmSendDto);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(getAccessToken());
-
-            HttpEntity<String> entity = new HttpEntity<>(message, headers);
-            RestTemplate restTemplate = new RestTemplate();
-            restTemplate.getMessageConverters()
-                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
-
-            ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
-
-            if (response.getStatusCode() == HttpStatus.OK) {
-                successCount++;
-
-                fcmNotificationRepository.save(FcmNotification.builder()
-                        .title(fcmSendDto.title())
-                        .body(fcmSendDto.content())
-                        .memberFcmToken(tokenEntity)
-                        .isRead(false)
-                        .build());
-            }
-        }
-
-        return FcmSendResponse.of(fcmSendDto, successCount);
-    }
-
     private String makeMessage(String token, FcmSendDto dto) throws JsonProcessingException {
         ObjectMapper om = new ObjectMapper();
 
@@ -217,5 +179,15 @@ public class FcmService {
                 })
                 .toList();
     }
+
+    // Todo: 토스트 모달 알림 설정
+    // 부모님 미열람 누적 게시물 6/4/2개 이하
+    //“{}께서 보실 소식이 얼마 남지 않았어요.
+    //새로운 게시물을 전해주세요!”
+
+    //조건 : 누적 게시물 0개
+    //“부모님께서 모든 소식을 다 보셨어요.
+    //새로운 게시물을 전해주세요!”
+
 
 }
