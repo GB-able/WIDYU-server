@@ -2,6 +2,7 @@ package com.widyu.domain.fcm.api;
 
 import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
+import com.widyu.domain.fcm.api.dto.response.ToastResDto;
 import com.widyu.domain.fcm.application.FcmService;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +42,15 @@ public class FcmController implements FcmDocs {
     public ApiResponseTemplate<List<FcmCategoryResponse>> getNotificationCategories() {
         return ApiResponseTemplate.ok()
                 .code("FCM_2005")
-                .message("알림 카테고리 조회 성공")
+                .message("OK")
                 .body(fcmService.getNotificationCategories());
+    }
+
+    @GetMapping("/toast")
+    public ApiResponseTemplate<ToastResDto> getToastNotification() {
+        return ApiResponseTemplate.ok()
+                .code("FCM_2006")
+                .message("OK")
+                .body(fcmService.getToastNotification());
     }
 }

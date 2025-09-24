@@ -186,13 +186,7 @@ public class FcmService {
                 .toList();
     }
 
-    // Todo: 토스트 모달 알림 설정
-    // 부모님 미열람 누적 게시물 6/4/2개 이하
-    // “{}께서 보실 소식이 얼마 남지 않았어요.
-    // 새로운 게시물을 전해주세요!”
-    // 부모님 미열람 누적 게시물 0개
-    // “부모님께서 모든 소식을 다 보셨어요.
-    // 새로운 게시물을 전해주세요!”
+    // 토스트 모달 알림
     public ToastResDto getToastNotification() {
         Member member = memberUtil.getCurrentMember();
 
@@ -223,15 +217,15 @@ public class FcmService {
         long totalCount = albumViewRepository.countTotalAlbumsByParent(guardianId);
         // 부모님이 내 앨범을 본 수
         long viewedCount = albumViewRepository.countViewedAlbumsByGuardianAndParent(parentMemberId, guardianId);
+
         return totalCount - viewedCount;
     }
 
     private ToastResDto createToastMessage(String parentName, long unviewedCount) {
         if (unviewedCount == 0) {
-            return ToastResDto.from(parentName + "님께서 모든 소식을 다 보셨어요. 새로운 게시물을 전해주세요!");
-        } else {
-            return ToastResDto.from(parentName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요. 새로운 게시물을 전해주세요!");
+            return ToastResDto.from(parentName + "님께서 모든 소식을 다 보셨어요.");
         }
+            return ToastResDto.from(parentName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요.");
     }
 
 }

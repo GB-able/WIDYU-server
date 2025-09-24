@@ -4,6 +4,7 @@ import com.widyu.domain.fcm.api.dto.FcmSendDto;
 import com.widyu.domain.fcm.api.dto.response.FcmCategoryResponse;
 import com.widyu.domain.fcm.api.dto.response.FcmNotificationResponses;
 import com.widyu.domain.fcm.api.dto.response.FcmSendResponse;
+import com.widyu.domain.fcm.api.dto.response.ToastResDto;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -124,4 +125,30 @@ public interface FcmDocs {
             )
     )
     ApiResponseTemplate<List<FcmCategoryResponse>> getNotificationCategories();
+
+    @Operation(
+            summary = "토스트 알림 조회",
+            description = "현재 로그인한 유저의 토스트 알림을 조회합니다."
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "토스트 알림 조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "FCM_2006",
+                                      "message": "OK",
+                                      "data": {
+                                        "title": "김아빠님께서 보실 소식이 2개밖에 남지 않았어요. ",
+                                        "content": "새로운 게시물을 전해주세요!.",
+                                        "scheme": ""
+                                      }
+                                    }
+                                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<ToastResDto> getToastNotification();
 }
