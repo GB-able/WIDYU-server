@@ -54,4 +54,6 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
      */
     @Query("SELECT a.createdAt FROM Album a WHERE a.member = :member AND a.status = :status ORDER BY a.createdAt DESC LIMIT 1")
     Optional<LocalDateTime> findLastUploadDateByMember(@Param("member") Member member, @Param("status") Status status);
+
+    long countByMemberId(Long id);
 }
