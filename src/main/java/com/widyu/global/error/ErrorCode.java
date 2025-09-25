@@ -77,6 +77,7 @@ public enum ErrorCode {
     FILE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "FILE_4001", "파일 크기가 허용 범위를 초과했습니다."),
     INVALID_FILE_TYPE(HttpStatus.BAD_REQUEST, "FILE_4002", "지원하지 않는 파일 형식입니다."),
     INVALID_FILE_URL(HttpStatus.BAD_REQUEST, "FILE_4003", "유효하지 않은 파일 URL입니다."),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "FILE_4004", "파일 크기가 너무 큽니다."),
 
     // 잘못된 요청
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "REQ_4000", "잘못된 요청입니다."),

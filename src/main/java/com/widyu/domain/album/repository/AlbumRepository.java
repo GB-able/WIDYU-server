@@ -48,4 +48,33 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
      */
     @Query("SELECT COUNT(a) FROM Album a WHERE a.member = :member AND a.status = :status")
     long countByMemberAndStatus(@Param("member") Member member, @Param("status") Status status);
+
+
+    /**
+     * 최신 앨범 ID 조회 (첫 페이지용) - createdAt, id 복합 정렬
+     */
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' ORDER BY a.createdAt DESC, a.id DESC")
+    org.springframework.data.domain.Slice<Long> findLatestAlbumIds(Pageable pageable);
+
+    /**
+     * 앨범 ID들로 컬렉션과 함께 조회
+     */
+    @Query("SELECT DISTINCT a FROM Album a LEFT JOIN FETCH a.mediaUrls LEFT JOIN FETCH a.thumbnailUrls LEFT JOIN FETCH a.durations WHERE a.id IN :albumIds ORDER BY a.createdAt DESC, a.id DESC")
+    List<Album> findAlbumsWithCollectionsByIds(@Param("albumIds") List<Long> albumIds);
+
+    /**
+     * 특정 postId 이후의 앨범 ID 조회 (무한 스크롤용)
+     */
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.id < :lastPostId ORDER BY a.id DESC")
+    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostId(
+            @Param("lastPostId") Long lastPostId,
+            Pageable pageable
+    );
+
+    /**
+     * 모든 활성 앨범 조회 (생성일 순)
+     */
+    @Query("SELECT a FROM Album a WHERE a.status = 'ACTIVE' ORDER BY a.createdAt DESC")
+    List<Album> findAllActiveAlbumsOrderByCreatedAtDesc();
+
 }

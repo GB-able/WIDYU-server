@@ -14,8 +14,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
 
 @Slf4j
 @Service
@@ -24,150 +26,251 @@ public class AlbumFileService {
 
     private final S3Service s3Service;
     private final VideoCompressionService videoCompressionService;
+    private final AlbumMediaPolicy mediaPolicy;
 
     private static final String ALBUM_PHOTO_PREFIX = "albums/photos";
     private static final String ALBUM_VIDEO_PREFIX = "albums/videos";
     private static final String THUMBNAIL_PREFIX = "albums/thumbnails";
-    private static final long MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10MB
-    private static final long MAX_VIDEO_SIZE = 2L * 1024 * 1024 * 1024; // 2GB (압축 전 제한)
 
+    /**
+     * 업로드 결과(미디어 URL/썸네일 URL/길이)
+     */
+    public static record UploadResult(List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations) {
+    }
+
+    /**
+     * 단일 비디오 업로드 결과
+     */
+    public static record VideoUploadResult(String videoUrl, String thumbnailUrl, Integer duration) {
+    }
+
+    /**
+     * 단일 이미지 업로드
+     */
     public String uploadAlbumPhoto(MultipartFile file, Long memberId) {
-        validatePhotoFile(file);
-        String directory = String.format("%s/%d", ALBUM_PHOTO_PREFIX, memberId);
-        String filePath = s3Service.generateFilePath(directory, file.getOriginalFilename());
+        mediaPolicy.validate(List.of(file));
+
+        String directory = ALBUM_PHOTO_PREFIX + "/" + memberId;
+        String filePath = s3Service.generateFilePath(directory, safeOriginalName(file));
         return s3Service.uploadFile(file, filePath);
     }
 
+    /**
+     * 단일 비디오 업로드(압축 포함, 썸네일/길이 추출 없음)
+     */
     public String uploadAlbumVideo(MultipartFile file, Long memberId) {
-        validateVideoFile(file);
-        
+        mediaPolicy.validate(List.of(file));
+
         MultipartFile processedFile = file;
         File tempCompressedFile = null;
-        
+
         try {
-            // 압축이 필요한 경우 압축 실행
             if (videoCompressionService.needsCompression(file)) {
-                log.info("동영상 압축 시작: fileName={}, originalSize={}MB",
-                        file.getOriginalFilename(), file.getSize() / (1024 * 1024));
-                
                 tempCompressedFile = videoCompressionService.compressVideo(file);
-                
-                // 압축된 파일을 MultipartFile로 변환
-                processedFile = convertFileToMultipartFile(tempCompressedFile, file.getOriginalFilename());
-                
-                log.info("동영상 압축 완료: fileName={}, compressedSize={}MB", 
-                        file.getOriginalFilename(), processedFile.getSize() / (1024 * 1024));
+                processedFile = wrapFileAsMultipart(tempCompressedFile, safeOriginalName(file));
             }
-            
-            // S3 업로드
-            String directory = String.format("%s/%d", ALBUM_VIDEO_PREFIX, memberId);
-            String filePath = s3Service.generateFilePath(directory, processedFile.getOriginalFilename());
+
+            String directory = ALBUM_VIDEO_PREFIX + "/" + memberId;
+            String filePath = s3Service.generateFilePath(directory, safeOriginalName(processedFile));
             return s3Service.uploadFile(processedFile, filePath);
-            
+
         } catch (IOException e) {
-            log.error("동영상 처리 실패: fileName={}, error={}", file.getOriginalFilename(), e.getMessage());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         } finally {
-            // 임시 압축 파일 정리
-            if (tempCompressedFile != null) {
-                videoCompressionService.cleanupTempFile(tempCompressedFile);
-            }
+            cleanupTemp(tempCompressedFile);
         }
     }
 
-    // 썸네일 이미지 업로드 (동영상용)
+    /**
+     * 단일 비디오 업로드(압축 포함) + 썸네일 업로드 + 길이 추출
+     */
+    public VideoUploadResult uploadAlbumVideoWithThumbnail(MultipartFile file, Long memberId) {
+        mediaPolicy.validate(List.of(file));
+
+        MultipartFile processedFile = file;
+        File tempCompressedFile = null;
+        File tempThumbnailFile = null;
+
+        try {
+            // 1) 필요 시 압축
+            if (videoCompressionService.needsCompression(file)) {
+                log.info("동영상 압축 시작: name={}, originalSizeMB={}", file.getOriginalFilename(), mb(file.getSize()));
+                tempCompressedFile = videoCompressionService.compressVideo(file);
+                processedFile = wrapFileAsMultipart(tempCompressedFile, safeOriginalName(file));
+                log.info("동영상 압축 완료: name={}, compressedSizeMB={}", file.getOriginalFilename(),
+                        mb(processedFile.getSize()));
+            }
+
+            // 2) processedFile 기준 썸네일 생성 & 길이 추출
+            log.info("썸네일 생성 시작: name={}", processedFile.getOriginalFilename());
+            tempThumbnailFile = videoCompressionService.generateThumbnail(processedFile); // MultipartFile 기반 API
+            String thumbName = baseName(safeOriginalName(processedFile)) + "_thumbnail.jpg";
+            MultipartFile thumbnailPart = wrapFileAsMultipart(tempThumbnailFile, thumbName);
+
+            int duration = videoCompressionService.extractDuration(processedFile);
+            log.info("동영상 길이 추출 완료: duration={}s", duration);
+
+            // 3) 업로드
+            String videoDir = ALBUM_VIDEO_PREFIX + "/" + memberId;
+            String videoKey = s3Service.generateFilePath(videoDir, safeOriginalName(processedFile));
+            String videoUrl = s3Service.uploadFile(processedFile, videoKey);
+
+            String thumbnailUrl = uploadThumbnail(thumbnailPart, memberId);
+            log.info("비디오/썸네일 업로드 성공: videoUrl={}, thumbnailUrl={}", videoUrl, thumbnailUrl);
+
+            return new VideoUploadResult(videoUrl, thumbnailUrl, duration);
+
+        } catch (IOException e) {
+            log.error("동영상 처리 실패: name={}, error={}", file.getOriginalFilename(), e.getMessage());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        } finally {
+            cleanupTemp(tempCompressedFile);
+            cleanupTemp(tempThumbnailFile);
+        }
+    }
+
     public String uploadThumbnail(MultipartFile file, Long memberId) {
-        validatePhotoFile(file);
-        String directory = String.format("%s/%d", THUMBNAIL_PREFIX, memberId);
-        String filePath = s3Service.generateFilePath(directory, file.getOriginalFilename());
+        validateInternalImage(file);
+
+        String directory = THUMBNAIL_PREFIX + "/" + memberId;
+        String filePath = s3Service.generateFilePath(directory, safeOriginalName(file));
         return s3Service.uploadFile(file, filePath);
     }
 
-    public List<String> uploadMediaFiles(List<MultipartFile> mediaFiles, Long memberId) {
-        List<String> mediaUrls = new ArrayList<>();
+    UploadResult uploadMediaFilesWithThumbnails(List<MultipartFile> mediaFiles, Long memberId) {
+        mediaPolicy.validate(mediaFiles);
 
-        for (MultipartFile file : mediaFiles) {
-            try {
-                String contentType = file.getContentType();
-                if (contentType == null) {
-                    cleanupUploadedFiles(mediaUrls);
+        List<String> mediaUrls = new ArrayList<>();
+        List<String> thumbnailUrls = new ArrayList<>();
+        List<Integer> durations = new ArrayList<>();
+
+        try {
+            for (MultipartFile file : mediaFiles) {
+                String ct = file.getContentType();
+                if (ct == null) {
                     throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
                 }
 
-                String mediaUrl;
-                if (contentType.startsWith("image/")) {
-                    mediaUrl = uploadAlbumPhoto(file, memberId);
-                    mediaUrls.add(mediaUrl);
-                    log.debug("이미지 업로드 성공: memberId={}, url={}", memberId, mediaUrl);
+                if (ct.startsWith("image/")) {
+                    String url = uploadAlbumPhoto(file, memberId);
+                    mediaUrls.add(url);
+                    thumbnailUrls.add(null);
+                    durations.add(null);
+                    log.debug("이미지 업로드 성공: url={}", url);
                     continue;
                 }
 
-                if (contentType.startsWith("video/")) {
-                    mediaUrl = uploadAlbumVideo(file, memberId);
-                    mediaUrls.add(mediaUrl);
-                    log.debug("비디오 업로드 성공: memberId={}, url={}", memberId, mediaUrl);
+                if (ct.startsWith("video/")) {
+                    VideoUploadResult r = uploadAlbumVideoWithThumbnail(file, memberId);
+                    mediaUrls.add(r.videoUrl());
+                    thumbnailUrls.add(r.thumbnailUrl());
+                    durations.add(r.duration());
+                    log.debug("비디오 업로드 성공: videoUrl={}, thumbUrl={}, duration={}", r.videoUrl(), r.thumbnailUrl(),
+                            r.duration());
                     continue;
                 }
 
-                // 여기까지 오면 지원하지 않는 타입
-                cleanupUploadedFiles(mediaUrls);
                 throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
-
-            } catch (Exception e) {
-                cleanupUploadedFiles(mediaUrls);
-                log.error("미디어 파일 업로드 실패: memberId={}, fileName={}, error={}",
-                        memberId, file.getOriginalFilename(), e.getMessage());
-                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
             }
-        }
 
-        return mediaUrls;
-    }
+            return new UploadResult(mediaUrls, thumbnailUrls, durations);
 
-    private void validatePhotoFile(MultipartFile file) {
-        if (file.isEmpty()) {
-            throw new BusinessException(ErrorCode.FILE_IS_EMPTY);
-        }
-
-        if (file.getSize() > MAX_PHOTO_SIZE) {
-            throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED);
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+        } catch (Exception e) {
+            cleanupUploadedFiles(mediaUrls);
+            cleanupUploadedFiles(thumbnailUrls);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, e.getMessage());
         }
     }
 
-    private void validateVideoFile(MultipartFile file) {
-        if (file.isEmpty()) {
+    public List<String> uploadMediaFiles(List<MultipartFile> mediaFiles, Long memberId) {
+        return uploadMediaFilesWithThumbnails(mediaFiles, memberId).mediaUrls();
+    }
+
+    private void validateInternalImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.FILE_IS_EMPTY);
         }
-
-        if (file.getSize() > MAX_VIDEO_SIZE) {
-            throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED);
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("video/")) {
+        String ct = file.getContentType();
+        if (ct == null || !ct.startsWith("image/")) {
             throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
         }
     }
 
     private void cleanupUploadedFiles(List<String> uploadedUrls) {
+        if (uploadedUrls == null || uploadedUrls.isEmpty()) {
+            return;
+        }
+
         for (String url : uploadedUrls) {
+            if (url == null) {
+                continue;
+            }
             try {
                 s3Service.deleteFile(url);
-            } catch (Exception e) {
-                log.warn("파일 정리 실패: url={}, error={}", url, e.getMessage());
+            } catch (Exception ex) {
+                log.warn("파일 정리 실패: url={}, error={}", url, ex.getMessage());
             }
         }
     }
 
-    private MultipartFile convertFileToMultipartFile(File file, String originalFileName) throws IOException {
-        String fileName = originalFileName != null ? originalFileName : file.getName();
-        String contentType = "video/mp4";
-        
+    private void cleanupTemp(File f) {
+        if (f == null) {
+            return;
+        }
+        try {
+            videoCompressionService.cleanupTempFile(f);
+        } catch (Exception ex) {
+            log.warn("임시 파일 정리 실패: path={}, error={}", f.getAbsolutePath(), ex.getMessage());
+        }
+    }
+
+    private String safeOriginalName(MultipartFile file) {
+        String name = file.getOriginalFilename();
+        if (name == null || name.isBlank()) {
+            // 확장자 없을 수도 있으니, 타입 기준 fallback
+            String ext = guessExtByContentType(file.getContentType());
+            return "upload_" + System.currentTimeMillis() + (ext.isEmpty() ? "" : "." + ext);
+        }
+        return name;
+    }
+
+    private String baseName(String fileName) {
+        if (fileName == null) {
+            return "file";
+        }
+        int idx = fileName.lastIndexOf('.');
+        return (idx > 0) ? fileName.substring(0, idx) : fileName;
+    }
+
+    private String guessExtByContentType(String ct) {
+        if (ct == null) {
+            return "";
+        }
+        return switch (ct) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/gif" -> "gif";
+            case "image/webp" -> "webp";
+            case "image/bmp" -> "bmp";
+            case "image/svg+xml" -> "svg";
+            case "video/mp4" -> "mp4";
+            case "video/quicktime" -> "mov";
+            case "video/x-msvideo" -> "avi";
+            case "video/x-matroska" -> "mkv";
+            case "video/webm" -> "webm";
+            case "video/x-flv" -> "flv";
+            case "video/x-ms-wmv" -> "wmv";
+            default -> "";
+        };
+    }
+
+    private MultipartFile wrapFileAsMultipart(File file, String originalFileName) throws IOException {
+        final Path path = file.toPath();
+        final String fileName =
+                (originalFileName != null && !originalFileName.isBlank()) ? originalFileName : file.getName();
+        final String contentType =
+                Files.probeContentType(path) != null ? Files.probeContentType(path) : detectContentTypeByName(fileName);
+
         return new MultipartFile() {
             @NotNull
             @Override
@@ -197,8 +300,8 @@ public class AlbumFileService {
 
             @NotNull
             @Override
-            public byte[] getBytes() throws IOException {
-                return Files.readAllBytes(file.toPath());
+            public byte[] getBytes() throws IOException { // ⚠️ 대용량 사용 금지(필요 시만)
+                return Files.readAllBytes(path);
             }
 
             @NotNull
@@ -209,8 +312,36 @@ public class AlbumFileService {
 
             @Override
             public void transferTo(@NotNull File dest) throws IOException {
-                Files.copy(file.toPath(), dest.toPath());
+                // 목적에 따라 move/copy 선택
+                Files.copy(path, dest.toPath());
             }
         };
+    }
+
+    private String detectContentTypeByName(String fileName) {
+        if (fileName == null || !fileName.contains(".")) {
+            return "application/octet-stream";
+        }
+        String ext = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+        return switch (ext) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "webp" -> "image/webp";
+            case "bmp" -> "image/bmp";
+            case "svg" -> "image/svg+xml";
+            case "mp4" -> "video/mp4";
+            case "mov" -> "video/quicktime";
+            case "avi" -> "video/x-msvideo";
+            case "mkv" -> "video/x-matroska";
+            case "webm" -> "video/webm";
+            case "flv" -> "video/x-flv";
+            case "wmv" -> "video/x-ms-wmv";
+            default -> "application/octet-stream";
+        };
+    }
+
+    private String mb(long bytes) {
+        return String.valueOf(bytes / (1024 * 1024));
     }
 }

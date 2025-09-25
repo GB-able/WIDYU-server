@@ -19,7 +19,6 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(
-    name = "album_comment_likes",
     uniqueConstraints = @UniqueConstraint(
         name = "uk_album_comment_likes_comment_member",
         columnNames = {"comment_id", "member_id"}
