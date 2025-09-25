@@ -18,7 +18,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderColumn;
-import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AccessLevel;
@@ -27,7 +26,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "albums")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Album extends BaseTimeEntity {
@@ -58,10 +56,22 @@ public class Album extends BaseTimeEntity {
     private Status status = Status.ACTIVE;
 
     @ElementCollection
-    @CollectionTable(name = "album_media_urls", joinColumns = @JoinColumn(name = "album_id"))
+    @CollectionTable(name = "album_media_url", joinColumns = @JoinColumn(name = "album_id"))
     @Column(name = "media_url")
     @OrderColumn(name = "display_order")
     private List<String> mediaUrls = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "album_thumbnail_url", joinColumns = @JoinColumn(name = "album_id"))
+    @Column(name = "thumbnail_url")
+    @OrderColumn(name = "display_order")
+    private List<String> thumbnailUrls = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "album_duration", joinColumns = @JoinColumn(name = "album_id"))
+    @Column(name = "duration")
+    @OrderColumn(name = "display_order")
+    private List<Integer> durations = new ArrayList<>();
 
     @OneToMany(mappedBy = "album", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AlbumComment> comments = new ArrayList<>();
@@ -73,7 +83,7 @@ public class Album extends BaseTimeEntity {
     private List<AlbumView> views = new ArrayList<>();
 
     @Builder(access = AccessLevel.PRIVATE)
-    private Album(Member member, String content, List<String> mediaUrls, Integer likeCount, Integer commentCount, Integer viewCount, Status status) {
+    private Album(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations, Integer likeCount, Integer commentCount, Integer viewCount, Status status) {
         this.member = member;
         this.content = content;
         this.likeCount = likeCount != null ? likeCount : 0;
@@ -81,6 +91,8 @@ public class Album extends BaseTimeEntity {
         this.viewCount = viewCount != null ? viewCount : 0;
         this.status = status != null ? status : Status.ACTIVE;
         this.mediaUrls = mediaUrls != null ? mediaUrls : new ArrayList<>();
+        this.thumbnailUrls = thumbnailUrls != null ? thumbnailUrls : new ArrayList<>();
+        this.durations = durations != null ? durations : new ArrayList<>();
         this.comments = new ArrayList<>();
         this.likes = new ArrayList<>();
         this.views = new ArrayList<>();
@@ -91,6 +103,25 @@ public class Album extends BaseTimeEntity {
                 .member(member)
                 .content(content)
                 .mediaUrls(mediaUrls)
+                .build();
+    }
+
+    public static Album createAlbumWithThumbnails(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls) {
+        return Album.builder()
+                .member(member)
+                .content(content)
+                .mediaUrls(mediaUrls)
+                .thumbnailUrls(thumbnailUrls)
+                .build();
+    }
+
+    public static Album createAlbumWithMetadata(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations) {
+        return Album.builder()
+                .member(member)
+                .content(content)
+                .mediaUrls(mediaUrls)
+                .thumbnailUrls(thumbnailUrls)
+                .durations(durations)
                 .build();
     }
 
@@ -151,5 +182,13 @@ public class Album extends BaseTimeEntity {
             return "";
         }
         return url.substring(url.lastIndexOf(".") + 1);
+    }
+
+    public void updateContent(String content) {
+        this.content = content;
+    }
+
+    public void delete() {
+        this.status = Status.DELETED;
     }
 }

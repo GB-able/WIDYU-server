@@ -92,6 +92,95 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
             }
         }
     }
+
+    @Override
+    public File generateThumbnail(MultipartFile inputFile) throws IOException {
+        File tempInputFile = null;
+        File tempThumbnailFile = null;
+        
+        try {
+            // 1. 임시 파일 생성
+            tempInputFile = createTempFile(inputFile, "thumbnail_input");
+            tempThumbnailFile = createTempThumbnailFile();
+            
+            // 2. FFmpeg 객체 생성
+            FFmpeg ffmpeg = new FFmpeg(ffmpegProperties.path());
+            FFprobe ffprobe = new FFprobe(ffprobeProperties.path());
+            
+            // 3. 썸네일 생성 (1초 지점에서 스크린샷)
+            FFmpegBuilder builder = new FFmpegBuilder()
+                    .setInput(tempInputFile.getAbsolutePath())
+                    .overrideOutputFiles(true)
+                    .addOutput(tempThumbnailFile.getAbsolutePath())
+                    .setFormat("image2")
+                    .setVideoCodec("mjpeg")
+                    .setVideoFrameRate(1) // 1프레임만
+                    .setVideoResolution(640, 480) // 썸네일 크기
+                    .addExtraArgs("-ss", "1") // 1초 지점
+                    .addExtraArgs("-vframes", "1") // 1프레임만
+                    .addExtraArgs("-q:v", "2") // 고품질
+                    .done();
+                    
+            FFmpegExecutor executor = new FFmpegExecutor(ffmpeg, ffprobe);
+            executor.createJob(builder).run();
+            
+            log.info("썸네일 생성 완료: 파일명={}, 크기={}KB", 
+                    inputFile.getOriginalFilename(), tempThumbnailFile.length() / 1024);
+            
+            return tempThumbnailFile;
+            
+        } catch (Exception e) {
+            // 실패 시 임시 파일 정리
+            if (tempThumbnailFile != null && tempThumbnailFile.exists()) {
+                tempThumbnailFile.delete();
+            }
+            log.error("썸네일 생성 실패: fileName={}, error={}", inputFile.getOriginalFilename(), e.getMessage());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "썸네일 생성 중 오류가 발생했습니다.");
+        } finally {
+            // 입력 임시 파일 정리
+            if (tempInputFile != null && tempInputFile.exists()) {
+                tempInputFile.delete();
+            }
+        }
+    }
+
+    @Override
+    public int extractDuration(MultipartFile inputFile) throws IOException {
+        File tempInputFile = null;
+        
+        try {
+            // 1. 임시 파일 생성
+            tempInputFile = createTempFile(inputFile, "duration_input");
+            
+            // 2. FFprobe 객체 생성
+            FFprobe ffprobe = new FFprobe(ffprobeProperties.path());
+            
+            // 3. 동영상 정보 분석
+            FFmpegProbeResult probeResult = ffprobe.probe(tempInputFile.getAbsolutePath());
+            FFmpegStream videoStream = probeResult.getStreams().stream()
+                    .filter(stream -> stream.codec_type == FFmpegStream.CodecType.VIDEO)
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_FILE_TYPE));
+            
+            // 4. duration 추출 (초 단위로 반올림)
+            double durationSeconds = videoStream.duration > 0 ? videoStream.duration : 0.0;
+            int duration = (int) Math.round(durationSeconds);
+            
+            log.info("동영상 길이 추출 완료: fileName={}, duration={}초", 
+                    inputFile.getOriginalFilename(), duration);
+            
+            return duration;
+            
+        } catch (Exception e) {
+            log.error("동영상 길이 추출 실패: fileName={}, error={}", inputFile.getOriginalFilename(), e.getMessage());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "동영상 길이 추출 중 오류가 발생했습니다.");
+        } finally {
+            // 입력 임시 파일 정리
+            if (tempInputFile != null && tempInputFile.exists()) {
+                tempInputFile.delete();
+            }
+        }
+    }
     
     private File createTempFile(MultipartFile inputFile, String prefix) throws IOException {
         String extension = getFileExtension(inputFile.getOriginalFilename());
@@ -102,6 +191,11 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
     
     private File createTempOutputFile() throws IOException {
         Path tempFile = Files.createTempFile("compressed_" + UUID.randomUUID(), ".mp4");
+        return tempFile.toFile();
+    }
+
+    private File createTempThumbnailFile() throws IOException {
+        Path tempFile = Files.createTempFile("thumbnail_" + UUID.randomUUID(), ".jpg");
         return tempFile.toFile();
     }
     

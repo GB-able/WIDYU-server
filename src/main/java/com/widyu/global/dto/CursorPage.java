@@ -1,4 +1,4 @@
-package com.widyu.global.response;
+package com.widyu.global.dto;
 
 import java.util.List;
 import java.util.function.Function;

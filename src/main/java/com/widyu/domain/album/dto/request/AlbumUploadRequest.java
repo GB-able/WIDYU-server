@@ -14,25 +14,5 @@ public record AlbumUploadRequest(
         @Size(min = 1, max = 8, message = "미디어 파일은 최소 1개, 최대 8개까지 업로드 가능합니다.")
         List<MultipartFile> mediaFiles
 ) {
-    
-    public int getPhotoCount() {
-        return (int) mediaFiles.stream()
-                .filter(file -> file.getContentType() != null && file.getContentType().startsWith("image/"))
-                .count();
-    }
-    
-    public int getVideoCount() {
-        return (int) mediaFiles.stream()
-                .filter(file -> file.getContentType() != null && file.getContentType().startsWith("video/"))
-                .count();
-    }
-    
-    public boolean hasValidMediaCount() {
-        int photoCount = getPhotoCount();
-        int videoCount = getVideoCount();
-        int totalCount = photoCount + videoCount;
-        
-        // 전체 최대 8개, 사진 최대 8개, 동영상 최대 3개
-        return totalCount <= 8 && photoCount <= 8 && videoCount <= 3;
-    }
+    // 순수한 데이터 전달 객체 - 비즈니스 로직 없음
 }

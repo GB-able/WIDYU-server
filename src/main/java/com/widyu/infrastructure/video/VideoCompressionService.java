@@ -25,4 +25,18 @@ public interface VideoCompressionService {
      * @param file 삭제할 파일
      */
     void cleanupTempFile(File file);
+    
+    /**
+     * 동영상에서 썸네일 이미지 생성
+     * @param inputFile 원본 동영상 파일
+     * @return 썸네일 이미지 파일
+     */
+    File generateThumbnail(MultipartFile inputFile) throws IOException;
+    
+    /**
+     * 동영상 길이(초) 추출
+     * @param inputFile 원본 동영상 파일
+     * @return 동영상 길이 (초 단위)
+     */
+    int extractDuration(MultipartFile inputFile) throws IOException;
 }

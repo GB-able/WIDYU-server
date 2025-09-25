@@ -6,10 +6,10 @@ spring:
       resolve-lazily: true
 
 ffmpeg:
-  path: ${FFMPEG_PATH:/usr/local/bin/ffmpeg}
+  path: ${FFMPEG_PATH:/opt/homebrew/bin/ffmpeg}
 
 ffprobe:
-  path: ${FFPROBE_PATH:/usr/local/bin/ffprobe}
+  path: ${FFPROBE_PATH:/opt/homebrew/bin/ffprobe}
 
 video:
   force-cap: true
