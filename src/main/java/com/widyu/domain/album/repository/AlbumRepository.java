@@ -49,7 +49,6 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT COUNT(a) FROM Album a WHERE a.member = :member AND a.status = :status")
     long countByMemberAndStatus(@Param("member") Member member, @Param("status") Status status);
 
-
     /**
      * 최신 앨범 ID 조회 (첫 페이지용) - createdAt, id 복합 정렬
      */
@@ -77,4 +76,11 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT a FROM Album a WHERE a.status = 'ACTIVE' ORDER BY a.createdAt DESC")
     List<Album> findAllActiveAlbumsOrderByCreatedAtDesc();
 
+    /**
+     * 특정 회원의 마지막 앨범 업로드 시간 조회
+     */
+    @Query("SELECT a.createdAt FROM Album a WHERE a.member = :member AND a.status = :status ORDER BY a.createdAt DESC LIMIT 1")
+    Optional<LocalDateTime> findLastUploadDateByMember(@Param("member") Member member, @Param("status") Status status);
+
+    long countByMemberId(Long id);
 }

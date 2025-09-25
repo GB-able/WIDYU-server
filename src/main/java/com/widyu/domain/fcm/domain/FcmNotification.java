@@ -2,6 +2,8 @@ package com.widyu.domain.fcm.domain;
 
 import com.widyu.global.domain.BaseTimeEntity;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,6 +26,8 @@ public class FcmNotification extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    private FcmCategory fcmCategory;
     private String title;
     private String body;
     private boolean isRead;

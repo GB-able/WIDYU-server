@@ -24,4 +24,12 @@ public interface AlbumViewRepository extends JpaRepository<AlbumView, Long> {
         ORDER BY av.album_id, av.created_at DESC
    \s""", nativeQuery = true)
     List<AlbumView> findTop3ViewersForAlbums(@Param("albumIds") List<Long> albumIds);
+
+    @Query("SELECT COUNT(DISTINCT a.id) FROM Album a WHERE a.member.id = :parentMemberId AND a.status = com.widyu.global.domain.Status.ACTIVE")
+    long countTotalAlbumsByParent(@Param("parentMemberId") Long parentMemberId);
+
+    @Query("SELECT COUNT(DISTINCT av.album.id) FROM AlbumView av WHERE av.member.id = :guardianId AND av.album.member.id = :parentMemberId AND av.album.status = com.widyu.global.domain.Status.ACTIVE")
+    long countViewedAlbumsByGuardianAndParent(@Param("guardianId") Long guardianId, @Param("parentMemberId") Long parentMemberId);
+
+    long countViewedAlbumsByMemberIdAndAlbumId(Long viewerId, Long albumId);
 }
