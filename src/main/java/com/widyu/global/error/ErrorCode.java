@@ -76,6 +76,20 @@ public enum ErrorCode {
 
     // 앨범 관련
     ALBUM_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_4040", "앨범을 찾을 수 없습니다."),
+    ALBUM_ALREADY_LIKED(HttpStatus.BAD_REQUEST, "ALBUM_4001", "이미 좋아요한 앨범입니다."),
+    ALBUM_NOT_LIKED(HttpStatus.BAD_REQUEST, "ALBUM_4002", "좋아요하지 않은 앨범입니다."),
+    
+    // 앨범 댓글 관련
+    ALBUM_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_COMMENT_4040", "댓글을 찾을 수 없습니다."),
+    ALBUM_COMMENT_NOT_OWNER(HttpStatus.FORBIDDEN, "ALBUM_COMMENT_4030", "본인의 댓글만 수정/삭제할 수 있습니다."),
+    ALBUM_COMMENT_PARENT_ALBUM_MISMATCH(HttpStatus.BAD_REQUEST, "ALBUM_COMMENT_4001", "다른 앨범의 댓글에는 대댓글을 작성할 수 없습니다."),
+    ALBUM_COMMENT_DEPTH_EXCEEDED(HttpStatus.BAD_REQUEST, "ALBUM_COMMENT_4002", "대댓글은 2단계까지만 허용됩니다."),
+    ALBUM_COMMENT_PARENT_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "ALBUM_COMMENT_4003", "삭제되거나 비활성화된 댓글에는 대댓글을 작성할 수 없습니다."),
+    
+    // 앨범 해금 관련
+    ALBUM_ALREADY_UNLOCKED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4001", "이미 해금된 앨범입니다."),
+    ALBUM_UNLOCK_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4002", "본인의 앨범은 해금할 수 없습니다."),
+    ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
 
     // 결제 관련
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),

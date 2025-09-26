@@ -3,6 +3,7 @@ package com.widyu.domain.album.application;
 import com.widyu.domain.album.dto.request.AlbumFeedRequest;
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
+import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
@@ -41,6 +42,11 @@ public class AlbumFacadeImpl implements AlbumFacade {
     @Override
     public CursorPage<MediaItem> getMediaFeed(Long lastPostId) {
         return albumFeedService.getMediaFeed(lastPostId);
+    }
+
+    @Override
+    public AlbumDetailResponse getAlbumDetail(Long albumId) {
+        return albumService.getAlbumDetail(albumId);
     }
 
     @Override

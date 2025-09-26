@@ -41,16 +41,25 @@ public class AlbumView extends BaseTimeEntity {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+    @Column(name = "view_count", nullable = false)
+    private Integer viewCount = 1;
+
     @Builder(access = AccessLevel.PRIVATE)
-    private AlbumView(Album album, Member member) {
+    private AlbumView(Album album, Member member, Integer viewCount) {
         this.album = album;
         this.member = member;
+        this.viewCount = viewCount != null ? viewCount : 1;
     }
 
     public static AlbumView createView(Album album, Member member) {
         return AlbumView.builder()
                 .album(album)
                 .member(member)
+                .viewCount(1)
                 .build();
+    }
+
+    public void incrementViewCount() {
+        this.viewCount++;
     }
 }

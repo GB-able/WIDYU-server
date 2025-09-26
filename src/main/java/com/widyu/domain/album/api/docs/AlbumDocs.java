@@ -2,8 +2,10 @@ package com.widyu.domain.album.api.docs;
 
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
+import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
+import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
@@ -412,6 +414,334 @@ public interface AlbumDocs {
             )
     })
     ApiResponseTemplate<Void> deleteAlbum(
+            @Parameter(description = "앨범 ID", required = true, example = "123")
+            @PathVariable Long albumId
+    );
+
+    // ========== 앨범 좋아요 ==========
+    
+    @Operation(
+            summary = "앨범 좋아요 추가",
+            description = """
+                    앨범에 좋아요를 추가합니다.
+                    
+                    **기능:**
+                    - 좋아요를 누르지 않은 앨범에만 좋아요 추가 가능
+                    - 이미 좋아요한 앨범에는 에러 반환
+                    - 자동으로 좋아요 수 증가
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "좋아요 추가 성공",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = """
+                                            {
+                                              "code": "ALBM_2004",
+                                              "message": "앨범 좋아요가 완료되었습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "이미 좋아요한 앨범이거나 앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = {
+                                    @ExampleObject(
+                                            name = "이미 좋아요한 앨범",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4001",
+                                                      "message": "이미 좋아요한 앨범입니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "앨범을 찾을 수 없음",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4040",
+                                                      "message": "앨범을 찾을 수 없습니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            )
+    })
+    ApiResponseTemplate<Void> likeAlbum(
+            @Parameter(description = "앨범 ID", required = true, example = "123")
+            @PathVariable Long albumId
+    );
+
+    @Operation(
+            summary = "앨범 좋아요 삭제",
+            description = """
+                    앨범에서 좋아요를 삭제합니다.
+                    
+                    **기능:**
+                    - 좋아요를 누른 앨범에서만 좋아요 삭제 가능
+                    - 좋아요를 누르지 않은 앨범에는 에러 반환
+                    - 자동으로 좋아요 수 감소
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "좋아요 삭제 성공",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = """
+                                            {
+                                              "code": "ALBM_2005",
+                                              "message": "앨범 좋아요가 취소되었습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "좋아요하지 않은 앨범이거나 앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = {
+                                    @ExampleObject(
+                                            name = "좋아요하지 않은 앨범",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4002",
+                                                      "message": "좋아요하지 않은 앨범입니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "앨범을 찾을 수 없음",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4040",
+                                                      "message": "앨범을 찾을 수 없습니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            )
+    })
+    ApiResponseTemplate<Void> unlikeAlbum(
+            @Parameter(description = "앨범 ID", required = true, example = "123")
+            @PathVariable Long albumId
+    );
+
+    @Operation(
+            summary = "좋아요한 앨범 목록 조회",
+            description = """
+                    현재 사용자가 좋아요한 앨범의 ID 목록을 조회합니다.
+                    
+                    **기능:**
+                    - 현재 로그인한 사용자가 좋아요한 앨범 ID들을 반환
+                    - 삭제된 앨범은 제외
+                    - 앨범 ID만 반환 (상세 정보는 별도 API로 조회)
+                    
+                    **용도:**
+                    - 앨범 피드에서 좋아요 상태 표시
+                    - 마이페이지 좋아요 목록
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "좋아요한 앨범 목록 조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = LikedAlbumsResponse.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = """
+                                            {
+                                              "code": "ALBM_2006",
+                                              "message": "좋아요한 앨범 목록 조회 성공",
+                                              "data": {
+                                                "albumIds": [123, 456, 789]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "인증 실패",
+                                    value = """
+                                            {
+                                              "code": "AUTH_4010",
+                                              "message": "인증이 필요합니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    ApiResponseTemplate<LikedAlbumsResponse> getLikedAlbumIds();
+
+    // ========== 앨범 상세 조회 ==========
+    
+    @Operation(
+            summary = "앨범 상세 조회",
+            description = """
+                    특정 앨범의 상세 정보를 조회합니다.
+                    
+                    **기능:**
+                    - 앨범의 모든 정보 (작성자, 미디어, 좋아요, 댓글 등)
+                    - 댓글과 대댓글 포함 (최대 2단계)
+                    - 현재 사용자의 수정 권한 표시 (canEdit)
+                    - 댓글별 수정 권한 표시
+                    
+                    **권한:**
+                    - 보호자: 모든 앨범 조회 가능
+                    - 부모: 해금한 앨범만 조회 가능 (price: 50)
+                    - 현재는 임시로 모든 사용자 조회 가능
+                    
+                    **포함 정보:**
+                    - 게시물 기본 정보 (내용, 미디어, 통계)
+                    - 작성자 정보
+                    - 조회자 목록 (최대 표시 수 미정)
+                    - 댓글 및 대댓글 (계층 구조)
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "앨범 상세 조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = AlbumDetailResponse.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = """
+                                            {
+                                              "code": "ALBM_2007",
+                                              "message": "앨범 상세 조회 성공",
+                                              "data": {
+                                                "postId": 101,
+                                                "content": "오늘 소풍 다녀왔어요!",
+                                                "mediaUrls": [
+                                                  "https://s3.aws.com/album/1.jpg"
+                                                ],
+                                                "likeCount": 12,
+                                                "commentCount": 3,
+                                                "viewCount": 45,
+                                                "createdAt": "2025-09-13T11:42:36",
+                                                "author": {
+                                                  "memberId": 10,
+                                                  "name": "홍길동",
+                                                  "profileImage": null
+                                                },
+                                                "viewers": [
+                                                  {
+                                                    "memberId": 12,
+                                                    "name": "김철수",
+                                                    "profileImage": null
+                                                  }
+                                                ],
+                                                "price": 50,
+                                                "comments": [
+                                                  {
+                                                    "commentId": 201,
+                                                    "content": "정말 즐거워 보이네요!",
+                                                    "createdAt": "2025-09-13T12:00:00",
+                                                    "author": {
+                                                      "memberId": 13,
+                                                      "name": "이영희",
+                                                      "profileImage": null
+                                                    },
+                                                    "canEdit": false,
+                                                    "replies": [
+                                                      {
+                                                        "commentId": 202,
+                                                        "content": "네, 날씨도 좋았어요 ☀️",
+                                                        "createdAt": "2025-09-13T12:05:00",
+                                                        "author": {
+                                                          "memberId": 10,
+                                                          "name": "홍길동",
+                                                          "profileImage": null
+                                                        },
+                                                        "canEdit": true,
+                                                        "replies": []
+                                                      }
+                                                    ]
+                                                  }
+                                                ],
+                                                "canEdit": true
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "앨범 없음",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4040",
+                                              "message": "앨범을 찾을 수 없습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "인증 실패",
+                                    value = """
+                                            {
+                                              "code": "AUTH_4010",
+                                              "message": "인증이 필요합니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "접근 권한 없음 (해금되지 않은 앨범)",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "해금 필요",
+                                    value = """
+                                            {
+                                              "code": "AUTH_4030",
+                                              "message": "앨범을 조회하려면 해금이 필요합니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    ApiResponseTemplate<AlbumDetailResponse> getAlbumDetail(
             @Parameter(description = "앨범 ID", required = true, example = "123")
             @PathVariable Long albumId
     );
