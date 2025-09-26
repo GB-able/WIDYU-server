@@ -24,14 +24,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AlbumFacadeImpl implements AlbumFacade {
     
-    private final AlbumUploadService albumUploadService;
     private final AlbumFeedService albumFeedService;
     private final AlbumService albumService;
 
     @Override
     public AlbumUploadResponse uploadAlbum(AlbumUploadRequest request) {
-        log.debug("파사드: 앨범 업로드 요청 처리 시작");
-        return albumUploadService.uploadAlbum(request);
+        return albumService.uploadAlbum(request);
     }
 
     @Override
