@@ -17,40 +17,48 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
     uniqueConstraints = @UniqueConstraint(
-        name = "uk_album_comment_likes_comment_member",
-        columnNames = {"comment_id", "member_id"}
+        name = "uk_album_unlocks_album_member",
+        columnNames = {"album_id", "member_id"}
     )
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class AlbumCommentLike extends BaseTimeEntity {
+public class AlbumUnlock extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "like_id")
+    @Column(name = "unlock_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "comment_id", nullable = false)
-    private AlbumComment comment;
+    @JoinColumn(name = "album_id", nullable = false)
+    private Album album;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+
+    @Column(name = "unlocked_at", nullable = false)
+    private LocalDateTime unlockedAt;
+
     @Builder(access = AccessLevel.PRIVATE)
-    private AlbumCommentLike(AlbumComment comment, Member member) {
-        this.comment = comment;
+    private AlbumUnlock(Album album, Member member, LocalDateTime unlockedAt) {
+        this.album = album;
         this.member = member;
+        this.unlockedAt = unlockedAt != null ? unlockedAt : LocalDateTime.now();
     }
 
-    public static AlbumCommentLike createLike(AlbumComment comment, Member member) {
-        return AlbumCommentLike.builder()
-                .comment(comment)
+    public static AlbumUnlock createUnlock(Album album, Member member) {
+        return AlbumUnlock.builder()
+                .album(album)
                 .member(member)
+                .unlockedAt(LocalDateTime.now())
                 .build();
     }
 }

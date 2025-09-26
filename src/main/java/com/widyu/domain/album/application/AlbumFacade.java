@@ -2,6 +2,7 @@ package com.widyu.domain.album.application;
 
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
+import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
@@ -12,16 +13,12 @@ import com.widyu.global.dto.CursorPage;
  * 여러 서비스들을 통합하여 컨트롤러에 단일 진입점을 제공
  */
 public interface AlbumFacade {
-    
-    // ========== 앨범 업로드 ==========
-    
+
     /**
      * 앨범 업로드
      */
     AlbumUploadResponse uploadAlbum(AlbumUploadRequest request);
-    
-    // ========== 앨범 조회 ==========
-    
+
     /**
      * 앨범 피드 조회 (무한 스크롤)
      */
@@ -32,8 +29,12 @@ public interface AlbumFacade {
      */
     CursorPage<MediaItem> getMediaFeed(Long lastPostId);
     
-    // ========== 앨범 관리 ==========
+    /**
+     * 앨범 상세 조회
+     */
+    AlbumDetailResponse getAlbumDetail(Long albumId);
     
+
     /**
      * 앨범 수정
      */

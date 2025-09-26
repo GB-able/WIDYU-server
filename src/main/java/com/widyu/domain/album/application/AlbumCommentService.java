@@ -1,0 +1,102 @@
+package com.widyu.domain.album.application;
+
+import com.widyu.domain.album.dto.request.AlbumCommentCreateRequest;
+import com.widyu.domain.album.dto.request.AlbumCommentUpdateRequest;
+import com.widyu.domain.album.dto.response.AlbumCommentResponse;
+import com.widyu.domain.album.entity.Album;
+import com.widyu.domain.album.entity.AlbumComment;
+import com.widyu.domain.album.repository.AlbumCommentRepository;
+import com.widyu.domain.album.repository.AlbumRepository;
+import com.widyu.domain.member.entity.Member;
+import com.widyu.global.domain.Status;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.global.util.MemberUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AlbumCommentService {
+
+    private final AlbumCommentRepository albumCommentRepository;
+    private final AlbumRepository albumRepository;
+    private final MemberUtil memberUtil;
+
+    @Transactional
+    public AlbumCommentResponse createComment(Long albumId, AlbumCommentCreateRequest request) {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+
+        AlbumComment comment;
+        if (request.parentCommentId() != null) {
+            AlbumComment parentComment = albumCommentRepository.findByIdAndStatus(request.parentCommentId(), Status.ACTIVE)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_FOUND));
+
+            if (!parentComment.getAlbum().getId().equals(albumId)) {
+                throw new BusinessException(ErrorCode.ALBUM_COMMENT_PARENT_ALBUM_MISMATCH);
+            }
+
+            if (parentComment.getDepth() >= 1) {
+                throw new BusinessException(ErrorCode.ALBUM_COMMENT_DEPTH_EXCEEDED);
+            }
+
+            comment = AlbumComment.createReply(album, currentMember, parentComment, request.content());
+        } else {
+            comment = AlbumComment.createComment(album, currentMember, request.content());
+        }
+
+        AlbumComment savedComment = albumCommentRepository.save(comment);
+        
+        // 앨범 댓글 수 증가
+        album.incrementCommentCount();
+
+        return AlbumCommentResponse.fromWithoutReplies(savedComment);
+    }
+
+
+    @Transactional
+    public AlbumCommentResponse updateComment(Long commentId, AlbumCommentUpdateRequest request) {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        AlbumComment comment = albumCommentRepository.findByIdAndStatus(commentId, Status.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_FOUND));
+
+        if (!comment.getMember().getId().equals(currentMember.getId())) {
+            throw new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_OWNER);
+        }
+
+        comment.updateContent(request.content());
+
+        return AlbumCommentResponse.fromWithoutReplies(comment);
+    }
+
+    @Transactional
+    public void deleteComment(Long commentId) {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        AlbumComment comment = albumCommentRepository.findByIdAndStatus(commentId, Status.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_FOUND));
+
+        if (!comment.getMember().getId().equals(currentMember.getId())) {
+            throw new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_OWNER);
+        }
+
+        // 삭제될 댓글 수 계산 (본인 + 활성 대댓글들)
+        long deletedCount = 1 + comment.getReplies().stream()
+                .filter(reply -> reply.getStatus() == Status.ACTIVE)
+                .count();
+        
+        comment.deleteWithReplies();
+        
+        // 앨범 댓글 수 감소
+        Album album = comment.getAlbum();
+        for (int i = 0; i < deletedCount; i++) {
+            album.decrementCommentCount();
+        }
+
+    }
+}

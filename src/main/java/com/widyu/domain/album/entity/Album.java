@@ -98,23 +98,6 @@ public class Album extends BaseTimeEntity {
         this.views = new ArrayList<>();
     }
 
-    public static Album createAlbum(Member member, String content, List<String> mediaUrls) {
-        return Album.builder()
-                .member(member)
-                .content(content)
-                .mediaUrls(mediaUrls)
-                .build();
-    }
-
-    public static Album createAlbumWithThumbnails(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls) {
-        return Album.builder()
-                .member(member)
-                .content(content)
-                .mediaUrls(mediaUrls)
-                .thumbnailUrls(thumbnailUrls)
-                .build();
-    }
-
     public static Album createAlbumWithMetadata(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations) {
         return Album.builder()
                 .member(member)
@@ -122,18 +105,6 @@ public class Album extends BaseTimeEntity {
                 .mediaUrls(mediaUrls)
                 .thumbnailUrls(thumbnailUrls)
                 .durations(durations)
-                .build();
-    }
-
-    public static Album createAlbumWithCounts(Member member, String content, List<String> mediaUrls, 
-                                            Integer likeCount, Integer commentCount, Integer viewCount) {
-        return Album.builder()
-                .member(member)
-                .content(content)
-                .mediaUrls(mediaUrls)
-                .likeCount(likeCount)
-                .commentCount(commentCount)
-                .viewCount(viewCount)
                 .build();
     }
 
@@ -158,12 +129,6 @@ public class Album extends BaseTimeEntity {
         boolean hasVideo = mediaUrls.stream().anyMatch(this::isVideoUrl);
         return hasVideo ? MediaType.VIDEO : MediaType.PHOTO;
     }
-    
-    public boolean hasMixedMedia() {
-        boolean hasPhoto = mediaUrls.stream().anyMatch(this::isPhotoUrl);
-        boolean hasVideo = mediaUrls.stream().anyMatch(this::isVideoUrl);
-        return hasPhoto && hasVideo;
-    }
 
     private boolean isPhotoUrl(String url) {
         if (url == null) return false;
@@ -186,6 +151,30 @@ public class Album extends BaseTimeEntity {
 
     public void updateContent(String content) {
         this.content = content;
+    }
+
+    public void incrementLikeCount() {
+        this.likeCount++;
+    }
+
+    public void decrementLikeCount() {
+        if (this.likeCount > 0) {
+            this.likeCount--;
+        }
+    }
+
+    public void incrementCommentCount() {
+        this.commentCount++;
+    }
+
+    public void decrementCommentCount() {
+        if (this.commentCount > 0) {
+            this.commentCount--;
+        }
+    }
+
+    public void incrementViewCount() {
+        this.viewCount++;
     }
 
     public void delete() {

@@ -50,6 +50,9 @@ public class AlbumComment extends BaseTimeEntity {
     @Column(name = "like_count", nullable = false)
     private Integer likeCount = 0;
 
+    @Column(name = "depth", nullable = false)
+    private Integer depth = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private Status status = Status.ACTIVE;
@@ -57,20 +60,17 @@ public class AlbumComment extends BaseTimeEntity {
     @OneToMany(mappedBy = "parentComment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AlbumComment> replies = new ArrayList<>();
 
-    @OneToMany(mappedBy = "comment", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<AlbumCommentLike> likes = new ArrayList<>();
-
     @Builder(access = AccessLevel.PRIVATE)
     private AlbumComment(Album album, Member member, AlbumComment parentComment, String content, 
-                        Integer likeCount, Status status) {
+                        Integer likeCount, Integer depth, Status status) {
         this.album = album;
         this.member = member;
         this.parentComment = parentComment;
         this.content = content;
         this.likeCount = likeCount != null ? likeCount : 0;
+        this.depth = depth != null ? depth : 0;
         this.status = status != null ? status : Status.ACTIVE;
         this.replies = new ArrayList<>();
-        this.likes = new ArrayList<>();
     }
 
     public static AlbumComment createComment(Album album, Member member, String content) {
@@ -78,6 +78,7 @@ public class AlbumComment extends BaseTimeEntity {
                 .album(album)
                 .member(member)
                 .content(content)
+                .depth(0)
                 .build();
     }
 
@@ -87,6 +88,25 @@ public class AlbumComment extends BaseTimeEntity {
                 .member(member)
                 .parentComment(parentComment)
                 .content(content)
+                .depth(parentComment.getDepth() + 1)
                 .build();
+    }
+    
+    public void updateContent(String content) {
+        this.content = content;
+    }
+    
+    public void delete() {
+        this.status = Status.DELETED;
+    }
+    
+    public void deleteWithReplies() {
+        this.status = Status.DELETED;
+        
+        for (AlbumComment reply : this.replies) {
+            if (reply.getStatus() == Status.ACTIVE) {
+                reply.deleteWithReplies();
+            }
+        }
     }
 }

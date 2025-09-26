@@ -10,7 +10,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -45,14 +44,17 @@ public class ParentProfile {
     @Column(name = "invite_code", nullable = false, length = 7)
     private String inviteCode;
 
+    private Long points = 0L;
+
     @Builder(access = AccessLevel.PRIVATE)
-    private ParentProfile(Member member, Member guardian, String birthDate, String address, String detailAddress, String inviteCode) {
+    private ParentProfile(Member member, Member guardian, String birthDate, String address, String detailAddress, String inviteCode, Long points) {
         this.member = member;
         this.guardian = guardian;
         this.birthDate = birthDate;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
+        this.points = points;
     }
 
     public static ParentProfile createParentProfile(final Member member, final Member guardian, final String birthDate, final String address,
@@ -64,6 +66,19 @@ public class ParentProfile {
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
+                .points(100L)
                 .build();
+    }
+
+    public void addPoints(Long additionalPoints) {
+        if (additionalPoints != null && additionalPoints > 0) {
+            this.points += additionalPoints;
+        }
+    }
+
+    public void deductPoints(Long deductionPoints) {
+        if (deductionPoints != null && deductionPoints > 0 && this.points >= deductionPoints) {
+            this.points -= deductionPoints;
+        }
     }
 }

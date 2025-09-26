@@ -3,6 +3,7 @@ package com.widyu.domain.album.application;
 import com.widyu.domain.album.dto.request.AlbumFeedRequest;
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
+import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
@@ -24,14 +25,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AlbumFacadeImpl implements AlbumFacade {
     
-    private final AlbumUploadService albumUploadService;
     private final AlbumFeedService albumFeedService;
     private final AlbumService albumService;
 
     @Override
     public AlbumUploadResponse uploadAlbum(AlbumUploadRequest request) {
-        log.debug("파사드: 앨범 업로드 요청 처리 시작");
-        return albumUploadService.uploadAlbum(request);
+        return albumService.uploadAlbum(request);
     }
 
     @Override
@@ -43,6 +42,11 @@ public class AlbumFacadeImpl implements AlbumFacade {
     @Override
     public CursorPage<MediaItem> getMediaFeed(Long lastPostId) {
         return albumFeedService.getMediaFeed(lastPostId);
+    }
+
+    @Override
+    public AlbumDetailResponse getAlbumDetail(Long albumId) {
+        return albumService.getAlbumDetail(albumId);
     }
 
     @Override

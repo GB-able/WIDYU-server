@@ -42,6 +42,8 @@ public class Member extends BaseTimeEntity {
 
     private String phoneNumber;
 
+    private String profileImage;
+
     @OneToOne(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private LocalAccount localAccount;
 
@@ -62,11 +64,12 @@ public class Member extends BaseTimeEntity {
 
     @Builder(access = AccessLevel.PRIVATE)
     private Member(final MemberRole role, final MemberType type, final String name, final String phoneNumber,
-                   final Status status) {
+                   final String profileImage, final Status status) {
         this.role = role;
         this.type = type;
         this.name = name;
         this.phoneNumber = phoneNumber;
+        this.profileImage = profileImage;
         this.status = status;
     }
 

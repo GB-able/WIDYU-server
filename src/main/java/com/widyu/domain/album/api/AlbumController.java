@@ -2,17 +2,24 @@ package com.widyu.domain.album.api;
 
 import com.widyu.domain.album.api.docs.AlbumDocs;
 import com.widyu.domain.album.application.AlbumFacade;
+import com.widyu.domain.album.application.AlbumLikeService;
+import com.widyu.domain.album.application.AlbumUnlockService;
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
+import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
+import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
+import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
-import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,14 +32,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "앨범", description = "앨범 관리 API - 업로드, 조회, 수정, 삭제")
-@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/albums")
 public class AlbumController implements AlbumDocs {
 
     private final AlbumFacade albumFacade;
+    private final AlbumLikeService albumLikeService;
+    private final AlbumUnlockService albumUnlockService;
 
     @Override
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -97,5 +104,60 @@ public class AlbumController implements AlbumDocs {
                 .code("ALBM_2003")
                 .message("앨범이 삭제되었습니다.")
                 .build();
+    }
+
+    @Override
+    @PostMapping("/{albumId}/like")
+    public ApiResponseTemplate<Void> likeAlbum(@PathVariable Long albumId) {
+        albumLikeService.likeAlbum(albumId);
+        return ApiResponseTemplate.ok()
+                .code("ALBM_2004")
+                .message("앨범 좋아요가 완료되었습니다.")
+                .build();
+    }
+
+    @Override
+    @DeleteMapping("/{albumId}/like")
+    public ApiResponseTemplate<Void> unlikeAlbum(@PathVariable Long albumId) {
+        albumLikeService.unlikeAlbum(albumId);
+        return ApiResponseTemplate.ok()
+                .code("ALBM_2005")
+                .message("앨범 좋아요가 취소되었습니다.")
+                .build();
+    }
+
+    @Override
+    @GetMapping("/liked")
+    public ApiResponseTemplate<LikedAlbumsResponse> getLikedAlbumIds() {
+        LikedAlbumsResponse response = albumLikeService.getLikedAlbumIds();
+        return ApiResponseTemplate.ok()
+                .code("ALBM_2006")
+                .message("좋아요한 앨범 목록 조회 성공")
+                .body(response);
+    }
+
+    @GetMapping("/{albumId}")
+    public ApiResponseTemplate<AlbumDetailResponse> getAlbumDetail(@PathVariable Long albumId) {
+        AlbumDetailResponse response = albumFacade.getAlbumDetail(albumId);
+        return ApiResponseTemplate.ok()
+                .code("ALBM_2007")
+                .message("앨범 상세 조회 성공")
+                .body(response);
+    }
+
+    @Operation(summary = "앨범 해금", description = "포인트를 사용하여 다른 사용자의 앨범을 해금합니다. 해금 가격은 50포인트로 고정되어 있습니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "앨범 해금 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (본인 앨범 해금 시도, 이미 해금된 앨범, 포인트 부족)"),
+            @ApiResponse(responseCode = "404", description = "앨범을 찾을 수 없음")
+    })
+    @PostMapping("/{albumId}/unlock")
+    public ApiResponseTemplate<AlbumUnlockResponse> unlockAlbum(
+            @Parameter(description = "해금할 앨범 ID", required = true) @PathVariable Long albumId) {
+        AlbumUnlockResponse response = albumUnlockService.unlockAlbum(albumId);
+        return ApiResponseTemplate.ok()
+                .code("ALBM_2008")
+                .message("앨범 해금이 완료되었습니다.")
+                .body(response);
     }
 }
