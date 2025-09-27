@@ -5,7 +5,9 @@ import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
 import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
+import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
+import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
 import com.widyu.global.dto.CursorPage;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ public class AlbumFacadeImpl implements AlbumFacade {
     
     private final AlbumFeedService albumFeedService;
     private final AlbumService albumService;
+    private final AlbumLikeService albumLikeService;
+    private final AlbumUnlockService albumUnlockService;
 
     @Override
     public AlbumUploadResponse uploadAlbum(AlbumUploadRequest request) {
@@ -57,5 +61,25 @@ public class AlbumFacadeImpl implements AlbumFacade {
     @Override
     public void deleteAlbum(Long albumId) {
         albumService.deleteAlbum(albumId);
+    }
+    
+    @Override
+    public void likeAlbum(Long albumId) {
+        albumLikeService.likeAlbum(albumId);
+    }
+    
+    @Override
+    public void unlikeAlbum(Long albumId) {
+        albumLikeService.unlikeAlbum(albumId);
+    }
+    
+    @Override
+    public LikedAlbumsResponse getLikedAlbumIds() {
+        return albumLikeService.getLikedAlbumIds();
+    }
+    
+    @Override
+    public AlbumUnlockResponse unlockAlbum(Long albumId) {
+        return albumUnlockService.unlockAlbum(albumId);
     }
 }
