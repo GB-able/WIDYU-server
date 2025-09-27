@@ -4,7 +4,9 @@ import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
 import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
+import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
+import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
 import com.widyu.global.dto.CursorPage;
 
@@ -44,4 +46,24 @@ public interface AlbumFacade {
      * 앨범 삭제
      */
     void deleteAlbum(Long albumId);
+    
+    /**
+     * 앨범 좋아요
+     */
+    void likeAlbum(Long albumId);
+    
+    /**
+     * 앨범 좋아요 취소
+     */
+    void unlikeAlbum(Long albumId);
+    
+    /**
+     * 좋아요한 앨범 목록 조회
+     */
+    LikedAlbumsResponse getLikedAlbumIds();
+    
+    /**
+     * 앨범 해금
+     */
+    AlbumUnlockResponse unlockAlbum(Long albumId);
 }

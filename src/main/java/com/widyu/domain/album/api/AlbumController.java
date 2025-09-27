@@ -2,8 +2,6 @@ package com.widyu.domain.album.api;
 
 import com.widyu.domain.album.api.docs.AlbumDocs;
 import com.widyu.domain.album.application.AlbumFacade;
-import com.widyu.domain.album.application.AlbumLikeService;
-import com.widyu.domain.album.application.AlbumUnlockService;
 import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
 import com.widyu.domain.album.dto.response.AlbumDetailResponse;
@@ -24,9 +22,9 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,8 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AlbumController implements AlbumDocs {
 
     private final AlbumFacade albumFacade;
-    private final AlbumLikeService albumLikeService;
-    private final AlbumUnlockService albumUnlockService;
 
     @Override
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -82,7 +78,7 @@ public class AlbumController implements AlbumDocs {
 
 
     @Override
-    @PutMapping("/{albumId}")
+    @PatchMapping("/{albumId}")
     public ApiResponseTemplate<AlbumUploadResponse> updateAlbum(
             @PathVariable Long albumId,
             @Valid @RequestBody AlbumUpdateRequest request
@@ -109,7 +105,7 @@ public class AlbumController implements AlbumDocs {
     @Override
     @PostMapping("/{albumId}/like")
     public ApiResponseTemplate<Void> likeAlbum(@PathVariable Long albumId) {
-        albumLikeService.likeAlbum(albumId);
+        albumFacade.likeAlbum(albumId);
         return ApiResponseTemplate.ok()
                 .code("ALBM_2004")
                 .message("앨범 좋아요가 완료되었습니다.")
@@ -119,7 +115,7 @@ public class AlbumController implements AlbumDocs {
     @Override
     @DeleteMapping("/{albumId}/like")
     public ApiResponseTemplate<Void> unlikeAlbum(@PathVariable Long albumId) {
-        albumLikeService.unlikeAlbum(albumId);
+        albumFacade.unlikeAlbum(albumId);
         return ApiResponseTemplate.ok()
                 .code("ALBM_2005")
                 .message("앨범 좋아요가 취소되었습니다.")
@@ -129,7 +125,7 @@ public class AlbumController implements AlbumDocs {
     @Override
     @GetMapping("/liked")
     public ApiResponseTemplate<LikedAlbumsResponse> getLikedAlbumIds() {
-        LikedAlbumsResponse response = albumLikeService.getLikedAlbumIds();
+        LikedAlbumsResponse response = albumFacade.getLikedAlbumIds();
         return ApiResponseTemplate.ok()
                 .code("ALBM_2006")
                 .message("좋아요한 앨범 목록 조회 성공")
@@ -154,7 +150,7 @@ public class AlbumController implements AlbumDocs {
     @PostMapping("/{albumId}/unlock")
     public ApiResponseTemplate<AlbumUnlockResponse> unlockAlbum(
             @Parameter(description = "해금할 앨범 ID", required = true) @PathVariable Long albumId) {
-        AlbumUnlockResponse response = albumUnlockService.unlockAlbum(albumId);
+        AlbumUnlockResponse response = albumFacade.unlockAlbum(albumId);
         return ApiResponseTemplate.ok()
                 .code("ALBM_2008")
                 .message("앨범 해금이 완료되었습니다.")
