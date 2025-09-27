@@ -4,6 +4,7 @@ import com.widyu.domain.album.dto.request.AlbumUpdateRequest;
 import com.widyu.domain.album.dto.request.AlbumUploadRequest;
 import com.widyu.domain.album.dto.response.AlbumDetailResponse;
 import com.widyu.domain.album.dto.response.AlbumFeedResponse;
+import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
 import com.widyu.domain.album.dto.response.MediaItem;
@@ -743,6 +744,127 @@ public interface AlbumDocs {
     })
     ApiResponseTemplate<AlbumDetailResponse> getAlbumDetail(
             @Parameter(description = "앨범 ID", required = true, example = "123")
+            @PathVariable Long albumId
+    );
+
+    // ========== 앨범 해금 ==========
+    
+    @Operation(
+            summary = "앨범 해금",
+            description = """
+                    포인트를 사용하여 다른 사용자의 앨범을 해금합니다.
+                    
+                    **기능:**
+                    - 해금 가격: 50포인트 고정
+                    - 본인 앨범은 해금 불가 (자동으로 접근 가능)
+                    - 이미 해금된 앨범은 해금 불가
+                    - 포인트 부족 시 해금 불가
+                    
+                    **해금 후 혜택:**
+                    - 앨범 상세 조회 가능
+                    - 댓글 작성 가능
+                    - 좋아요 가능
+                    
+                    **포인트 시스템:**
+                    - 해금 시 포인트 차감
+                    - 앨범 작성자에게 포인트 지급 (추후 구현)
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "앨범 해금 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = AlbumUnlockResponse.class),
+                            examples = @ExampleObject(
+                                    name = "해금 성공",
+                                    value = """
+                                            {
+                                              "code": "ALBM_2008",
+                                              "message": "앨범 해금이 완료되었습니다.",
+                                              "data": {
+                                                "albumId": 123,
+                                                "unlockPrice": 50,
+                                                "remainingPoints": 450
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 요청",
+                    content = @Content(
+                            examples = {
+                                    @ExampleObject(
+                                            name = "본인 앨범 해금 시도",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4003",
+                                                      "message": "본인의 앨범은 해금할 수 없습니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "이미 해금된 앨범",
+                                            value = """
+                                                    {
+                                                      "code": "ALBUM_4004",
+                                                      "message": "이미 해금된 앨범입니다.",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "포인트 부족",
+                                            value = """
+                                                    {
+                                                      "code": "POINT_4001",
+                                                      "message": "포인트가 부족합니다. 필요 포인트: 50, 현재 포인트: 30",
+                                                      "data": null
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "앨범 없음",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4040",
+                                              "message": "앨범을 찾을 수 없습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "인증 실패",
+                                    value = """
+                                            {
+                                              "code": "AUTH_4010",
+                                              "message": "인증이 필요합니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    ApiResponseTemplate<AlbumUnlockResponse> unlockAlbum(
+            @Parameter(description = "해금할 앨범 ID", required = true, example = "123")
             @PathVariable Long albumId
     );
 }
