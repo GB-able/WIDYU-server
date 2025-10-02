@@ -7,7 +7,7 @@ import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
-import com.widyu.domain.album.dto.response.MediaItem;
+import com.widyu.domain.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 
 /**
@@ -24,12 +24,12 @@ public interface AlbumFacade {
     /**
      * 앨범 피드 조회 (무한 스크롤)
      */
-    CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId);
+    CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId, String date);
     
     /**
      * 미디어 피드 조회 (무한 스크롤)
      */
-    CursorPage<MediaItem> getMediaFeed(Long lastPostId);
+    CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId);
     
     /**
      * 앨범 상세 조회

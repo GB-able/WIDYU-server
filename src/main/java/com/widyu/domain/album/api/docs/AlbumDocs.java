@@ -7,7 +7,7 @@ import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
-import com.widyu.domain.album.dto.response.MediaItem;
+import com.widyu.domain.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
@@ -138,11 +138,16 @@ public interface AlbumDocs {
                     - 무한 스크롤 지원 (커서 기반 페이지네이션)
                     - 각 게시물의 좋아요, 댓글, 조회수 정보 포함
                     - 열람자 정보 (최대 3명까지)
-                    - 현재 사용자의 좋아요 여부 표시
+                    - 현재 사용자의 수정 가능 여부 표시
                     
                     **무한 스크롤 사용법:**
-                    1. 첫 번째 요청: lastAlbumId 없이 호출
-                    2. 다음 요청: 응답의 nextCursor를 lastAlbumId로 사용
+                    1. 첫 번째 요청: cursor 없이 호출
+                    2. 다음 요청: 응답의 nextCursor를 cursor로 사용
+                    
+                    **날짜 필터링:**
+                    - date 파라미터로 특정 날짜의 앨범만 조회 가능
+                    - 형식: yyyy-MM-dd (예: 2024-12-21)
+                    - 캘린더 탭에서 활용
                     """
     )
     @ApiResponses({
@@ -177,7 +182,7 @@ public interface AlbumDocs {
                                                       {"name": "김엄마", "profileImage": null}
                                                     ],
                                                     "createdAt": "2024-12-21T14:30:00",
-                                                    "isLikedByCurrentUser": true,
+                                                    "canEdit": true,
                                                     "videoDuration": null
                                                   }
                                                 ],
@@ -192,7 +197,9 @@ public interface AlbumDocs {
     })
     ApiResponseTemplate<CursorPage<AlbumFeedResponse>> getAlbumFeed(
             @Parameter(description = "마지막으로 조회한 앨범 ID (무한 스크롤용)", example = "123")
-            @RequestParam(value = "lastAlbumId", required = false) Long lastAlbumId
+            @RequestParam(value = "cursor", required = false) Long cursor,
+            @Parameter(description = "캘린더용 날짜 파라미터 (yyyy-MM-dd 형식)", example = "2024-12-21")
+            @RequestParam(value = "date", required = false) String date
     );
 
     @Operation(
@@ -253,7 +260,7 @@ public interface AlbumDocs {
                     )
             )
     })
-    ApiResponseTemplate<CursorPage<MediaItem>> getMediaFeed(
+    ApiResponseTemplate<CursorPage<AlbumMediaResponse>> getMediaFeed(
             @Parameter(description = "마지막으로 조회한 postId (무한 스크롤용)", example = "123")
             @RequestParam(value = "lastPostId", required = false) Long lastPostId
     );
