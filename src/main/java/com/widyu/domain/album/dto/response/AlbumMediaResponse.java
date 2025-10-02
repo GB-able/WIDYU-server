@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-public record MediaItem(
+public record AlbumMediaResponse(
         Long id,
         Long postId,
         String type,
@@ -14,8 +14,8 @@ public record MediaItem(
         LocalDateTime createdAt
 ) {
 
-    public static List<MediaItem> fromAlbum(Album album) {
-        List<MediaItem> mediaItems = new ArrayList<>();
+    public static List<AlbumMediaResponse> fromAlbum(Album album) {
+        List<AlbumMediaResponse> albumMediaResponses = new ArrayList<>();
         List<String> mediaUrls = album.getMediaUrls();
         List<String> thumbnailUrls = album.getThumbnailUrls();
         List<Integer> durations = album.getDurations();
@@ -31,7 +31,7 @@ public record MediaItem(
                 duration = null;
             }
             
-            mediaItems.add(new MediaItem(
+            albumMediaResponses.add(new AlbumMediaResponse(
                     generateMediaId(album.getId(), i), // 앨범ID + 인덱스로 고유 ID 생성
                     album.getId(),
                     isImageUrl(mediaUrl) ? "image" : "video",
@@ -41,7 +41,7 @@ public record MediaItem(
             ));
         }
         
-        return mediaItems;
+        return albumMediaResponses;
     }
     
     private static Long generateMediaId(Long albumId, int index) {

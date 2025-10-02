@@ -8,7 +8,7 @@ import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
-import com.widyu.domain.album.dto.response.MediaItem;
+import com.widyu.domain.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,13 +38,13 @@ public class AlbumFacadeImpl implements AlbumFacade {
     }
 
     @Override
-    public CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId) {
-        AlbumFeedRequest request = AlbumFeedRequest.from(lastAlbumId);
+    public CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId, String date) {
+        AlbumFeedRequest request = AlbumFeedRequest.from(lastAlbumId, date);
         return albumFeedService.getAlbumFeed(request);
     }
     
     @Override
-    public CursorPage<MediaItem> getMediaFeed(Long lastPostId) {
+    public CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId) {
         return albumFeedService.getMediaFeed(lastPostId);
     }
 

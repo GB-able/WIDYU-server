@@ -3,6 +3,7 @@ package com.widyu.domain.album.repository;
 import com.widyu.domain.album.entity.Album;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.global.domain.Status;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -35,4 +36,14 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     Optional<LocalDateTime> findLastUploadDateByMember(@Param("member") Member member, @Param("status") Status status);
 
     long countByMemberId(Long id);
+    
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date ORDER BY a.createdAt DESC, a.id DESC")
+    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("date") LocalDate date, Pageable pageable);
+    
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date AND a.id < :lastPostId ORDER BY a.id DESC")
+    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdByDate(
+            @Param("lastPostId") Long lastPostId,
+            @Param("date") LocalDate date,
+            Pageable pageable
+    );
 }

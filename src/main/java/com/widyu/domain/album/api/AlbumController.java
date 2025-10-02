@@ -9,7 +9,7 @@ import com.widyu.domain.album.dto.response.AlbumFeedResponse;
 import com.widyu.domain.album.dto.response.AlbumUnlockResponse;
 import com.widyu.domain.album.dto.response.AlbumUploadResponse;
 import com.widyu.domain.album.dto.response.LikedAlbumsResponse;
-import com.widyu.domain.album.dto.response.MediaItem;
+import com.widyu.domain.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,9 +53,10 @@ public class AlbumController implements AlbumDocs {
     @Override
     @GetMapping("/feed")
     public ApiResponseTemplate<CursorPage<AlbumFeedResponse>> getAlbumFeed(
-            @RequestParam(value = "cursor", required = false) Long cursor
+            @RequestParam(value = "cursor", required = false) Long cursor,
+            @RequestParam(value = "date", required = false) String date
     ) {
-        CursorPage<AlbumFeedResponse> response = albumFacade.getAlbumFeed(cursor);
+        CursorPage<AlbumFeedResponse> response = albumFacade.getAlbumFeed(cursor, date);
         
         return ApiResponseTemplate.ok()
                 .code("ALBM_2010")
@@ -65,10 +66,10 @@ public class AlbumController implements AlbumDocs {
 
     @Override
     @GetMapping("/media")
-    public ApiResponseTemplate<CursorPage<MediaItem>> getMediaFeed(
+    public ApiResponseTemplate<CursorPage<AlbumMediaResponse>> getMediaFeed(
             @RequestParam(value = "cursor", required = false) Long cursor
     ) {
-        CursorPage<MediaItem> response = albumFacade.getMediaFeed(cursor);
+        CursorPage<AlbumMediaResponse> response = albumFacade.getMediaFeed(cursor);
         
         return ApiResponseTemplate.ok()
                 .code("ALBM_2011")

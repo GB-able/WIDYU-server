@@ -21,7 +21,7 @@ public record AlbumFeedResponse(
         Integer viewCount,
         List<ViewerInfo> viewers,
         LocalDateTime createdAt,
-        Boolean isLikedByCurrentUser,
+        Boolean canEdit,
         String videoDuration // 동영상인 경우만
 ) {
     public record ViewerInfo(
@@ -29,7 +29,7 @@ public record AlbumFeedResponse(
             String profileImage
     ) {}
 
-    public static AlbumFeedResponse from(Album album, Boolean isLikedByCurrentUser, List<ViewerInfo> viewers) {
+    public static AlbumFeedResponse from(Album album, Boolean canEdit, List<ViewerInfo> viewers) {
         return new AlbumFeedResponse(
                 album.getId(),
                 album.getMember().getName(),
@@ -46,7 +46,7 @@ public record AlbumFeedResponse(
                 album.getViewCount(),
                 viewers,
                 album.getCreatedAt(),
-                isLikedByCurrentUser,
+                canEdit,
                 null // TODO: 비디오 지속시간 구현 시 추가
         );
     }
