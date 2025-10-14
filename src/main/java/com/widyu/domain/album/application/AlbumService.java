@@ -8,6 +8,7 @@ import com.widyu.domain.album.entity.Album;
 import com.widyu.domain.album.entity.AlbumComment;
 import com.widyu.domain.album.repository.AlbumCommentRepository;
 import com.widyu.domain.album.repository.AlbumRepository;
+import com.widyu.domain.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.global.domain.Status;
 import com.widyu.global.error.BusinessException;
@@ -16,6 +17,7 @@ import com.widyu.global.util.MemberUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class AlbumService {
     private final AlbumPermissionService albumPermissionService;
     private final MemberUtil memberUtil;
     private final AlbumMediaPolicy mediaPolicy;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public AlbumUploadResponse uploadAlbum(AlbumUploadRequest request) {
@@ -53,6 +56,12 @@ public class AlbumService {
                 uploadResult.durations()
         );
         Album saved = albumRepository.save(album);
+
+        // 앨범 작성 알림 이벤트 발행
+        eventPublisher.publishEvent(new AlbumCreatedEvent(
+                saved.getId(),
+                currentMember.getId()
+        ));
 
         return AlbumUploadResponse.from(saved);
     }

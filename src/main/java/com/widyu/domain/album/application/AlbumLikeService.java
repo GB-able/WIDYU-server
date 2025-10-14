@@ -5,6 +5,7 @@ import com.widyu.domain.album.entity.Album;
 import com.widyu.domain.album.entity.AlbumLike;
 import com.widyu.domain.album.repository.AlbumLikeRepository;
 import com.widyu.domain.album.repository.AlbumRepository;
+import com.widyu.domain.fcm.event.album.dto.AlbumLikedEvent;
 import com.widyu.domain.member.entity.Member;
 import com.widyu.global.domain.Status;
 import com.widyu.global.error.BusinessException;
@@ -12,6 +13,7 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class AlbumLikeService {
     private final AlbumLikeRepository albumLikeRepository;
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void likeAlbum(Long albumId) {
@@ -36,9 +39,16 @@ public class AlbumLikeService {
 
         AlbumLike albumLike = AlbumLike.createLike(album, currentMember);
         albumLikeRepository.save(albumLike);
-        
+
         // 앨범 좋아요 수 증가
         album.incrementLikeCount();
+
+        // 좋아요 알림 이벤트 발행
+        eventPublisher.publishEvent(new AlbumLikedEvent(
+                albumId,
+                currentMember.getId(),
+                album.getMember().getId()
+        ));
     }
 
     @Transactional
