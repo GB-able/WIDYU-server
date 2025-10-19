@@ -7,12 +7,14 @@ import com.widyu.album.Album;
 import com.widyu.album.AlbumComment;
 import com.widyu.album.repository.AlbumCommentRepository;
 import com.widyu.album.repository.AlbumRepository;
+import com.widyu.fcm.event.album.dto.AlbumCommentedEvent;
 import com.widyu.member.Member;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ public class AlbumCommentService {
     private final AlbumCommentRepository albumCommentRepository;
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public AlbumCommentResponse createComment(Long albumId, AlbumCommentCreateRequest request) {
@@ -50,9 +53,16 @@ public class AlbumCommentService {
         }
 
         AlbumComment savedComment = albumCommentRepository.save(comment);
-        
+
         // 앨범 댓글 수 증가
         album.incrementCommentCount();
+
+        // 댓글 작성 알림 이벤트 발행
+        eventPublisher.publishEvent(new AlbumCommentedEvent(
+                albumId,
+                currentMember.getId(),
+                album.getMember().getId()
+        ));
 
         return AlbumCommentResponse.fromWithoutReplies(savedComment);
     }

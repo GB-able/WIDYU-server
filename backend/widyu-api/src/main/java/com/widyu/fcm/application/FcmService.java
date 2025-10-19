@@ -51,7 +51,7 @@ public class FcmService {
     private final AlbumViewRepository albumViewRepository;
     private final ParentProfileRepository parentProfileRepository;
     private final MemberUtil memberUtil;
-    private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widuy-875a5/messages:send";
+    private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widyu-d384f/messages:send";
 
     private String makeMessage(String token, FcmSendDto dto) throws JsonProcessingException {
         ObjectMapper om = new ObjectMapper();

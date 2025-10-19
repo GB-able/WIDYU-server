@@ -5,9 +5,11 @@ import static org.springframework.transaction.annotation.Propagation.REQUIRES_NE
 import com.widyu.album.Album;
 import com.widyu.album.AlbumView;
 import com.widyu.album.repository.AlbumViewRepository;
+import com.widyu.fcm.event.album.dto.AlbumViewedEvent;
 import com.widyu.member.Member;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ import java.util.Optional;
 public class AlbumViewService {
 
     private final AlbumViewRepository albumViewRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(propagation = REQUIRES_NEW)
     public void recordView(Album album, Member member) {
@@ -30,7 +33,14 @@ public class AlbumViewService {
             albumViewRepository.save(albumView);
             
             album.incrementViewCount();
-            
+
+
+            // 앨범 조회 알림 이벤트 발행
+            eventPublisher.publishEvent(new AlbumViewedEvent(
+                    member.getId(),
+                    album.getId()
+            ));
+
             log.info("앨범 첫 조회 기록: albumId={}, memberId={}", album.getId(), member.getId());
         }
     }

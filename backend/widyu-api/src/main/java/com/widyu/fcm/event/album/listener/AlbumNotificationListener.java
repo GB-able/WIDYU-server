@@ -57,12 +57,13 @@ public class AlbumNotificationListener {
     // 게시물 조회시 해당 작성자의 모든 게시물 확인했는지 체크 및 알림 발송
     @Async
     @EventListener
+    @Transactional
     public void handleAlbumViewed(AlbumViewedEvent event) {
         Member viewer = memberRepository.findById(event.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
 
-        // 조회한 앨범의 작성자 찾기
-        Album album = albumRepository.findById(event.albumId())
+        // 조회한 앨범의 작성자 찾기 (Fetch Join으로 Member도 함께 조회)
+        Album album = albumRepository.findByIdAndStatusWithCollections(event.albumId(), Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
         // 해당 작성자의 모든 게시물을 확인했는지 체크
@@ -118,7 +119,7 @@ public class AlbumNotificationListener {
 
         // 그 작성자가 쓴 총 게시물 수
         long totalCount = albumRepository.countByMemberId(writer.getId());
-
+        log.info(String.valueOf(totalCount) +" " + String.valueOf(viewedCount));
         return viewedCount == totalCount && totalCount > 0;
     }
 
@@ -231,6 +232,7 @@ public class AlbumNotificationListener {
     }
 
     // 부모님이 게시물을 잠금 해제했을 때 해당 앨범 작성자에게 알림 발송
+    @Async
     @EventListener
     public void handleAlbumUnlocked(AlbumUnlockedEvent event) {
         Member parentMember = memberRepository.findById(event.parentMemberId())

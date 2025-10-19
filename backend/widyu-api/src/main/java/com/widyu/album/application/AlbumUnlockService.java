@@ -5,6 +5,7 @@ import com.widyu.album.Album;
 import com.widyu.album.AlbumUnlock;
 import com.widyu.album.repository.AlbumRepository;
 import com.widyu.album.repository.AlbumUnlockRepository;
+import com.widyu.fcm.event.album.dto.AlbumUnlockedEvent;
 import com.widyu.member.Member;
 import com.widyu.member.ParentProfile;
 import com.widyu.global.entity.Status;
@@ -12,6 +13,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class AlbumUnlockService {
     private final AlbumUnlockRepository albumUnlockRepository;
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final long DEFAULT_UNLOCK_PRICE = 50;
 
@@ -55,6 +58,12 @@ public class AlbumUnlockService {
         // 5. 해금 기록 생성
         AlbumUnlock albumUnlock = AlbumUnlock.createUnlock(album, currentMember);
         AlbumUnlock savedUnlock = albumUnlockRepository.save(albumUnlock);
+
+        // 앨범 잠금 해제 알림 이벤트 발행
+        eventPublisher.publishEvent(new AlbumUnlockedEvent(
+                albumId,
+                currentMember.getId()
+        ));
 
         return AlbumUnlockResponse.from(savedUnlock);
     }
