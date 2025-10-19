@@ -1,0 +1,43 @@
+name: CI - Build & Test
+
+on:
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - feature/*
+      - fix/*
+      - refactor/*
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ 코드 체크아웃
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ JDK 21 설치
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 3️⃣ Gradlew 실행 권한 부여
+      - name: Grant execute permission for Gradlew
+        run: chmod +x gradlew
+
+      # 4️⃣ 빌드 & 테스트 (API 모듈만)
+      - name: Build & Run Tests (API module only)
+        run: ./gradlew :backend:widyu-api:clean :backend:widyu-api:test --no-daemon
+
+      # 5️⃣ 테스트 결과 아티팩트 업로드 (항상 실행)
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: backend/widyu-api/build/reports/tests/test

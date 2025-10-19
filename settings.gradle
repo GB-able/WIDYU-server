@@ -1,1 +1,6 @@
-rootProject.name = 'widyu'
+rootProject.name = 'backend'
+
+include(
+        'backend:widyu-api',
+        'backend:widyu-domain',
+)
