@@ -1,7 +1,7 @@
-package com.widyu.fcm.api.controller.docs;
+package com.widyu.fcm.controller.docs;
 
-import com.widyu.fcm.api.dto.request.FcmTokenLoginRequest;
-import com.widyu.fcm.api.dto.request.FcmTokenLogoutRequest;
+import com.widyu.fcm.dto.request.FcmTokenLoginRequest;
+import com.widyu.fcm.dto.request.FcmTokenLogoutRequest;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

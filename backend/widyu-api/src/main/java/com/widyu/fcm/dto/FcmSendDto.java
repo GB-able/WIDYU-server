@@ -1,4 +1,4 @@
-package com.widyu.fcm.api.dto;
+package com.widyu.fcm.dto;
 
 import com.widyu.fcm.FcmCategory;
 import lombok.Builder;

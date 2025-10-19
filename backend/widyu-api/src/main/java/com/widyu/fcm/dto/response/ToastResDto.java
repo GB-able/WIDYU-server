@@ -1,4 +1,4 @@
-package com.widyu.fcm.api.dto.response;
+package com.widyu.fcm.dto.response;
 
 import lombok.Builder;
 

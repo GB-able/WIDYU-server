@@ -1,6 +1,6 @@
-package com.widyu.fcm.api.dto.response;
+package com.widyu.fcm.dto.response;
 
-import com.widyu.fcm.api.dto.FcmSendDto;
+import com.widyu.fcm.dto.FcmSendDto;
 
 public record FcmSendResponse(
         String title,

@@ -1,9 +1,9 @@
-package com.widyu.fcm.api.controller;
+package com.widyu.fcm.controller;
 
-import com.widyu.fcm.api.controller.docs.FcmDocs;
-import com.widyu.fcm.api.dto.response.FcmCategoryResponse;
-import com.widyu.fcm.api.dto.response.FcmNotificationResponses;
-import com.widyu.fcm.api.dto.response.ToastResDto;
+import com.widyu.fcm.controller.docs.FcmDocs;
+import com.widyu.fcm.dto.response.FcmCategoryResponse;
+import com.widyu.fcm.dto.response.FcmNotificationResponses;
+import com.widyu.fcm.dto.response.ToastResDto;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;

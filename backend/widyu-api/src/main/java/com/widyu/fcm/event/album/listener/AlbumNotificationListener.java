@@ -10,7 +10,7 @@ import com.widyu.album.Album;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.album.repository.AlbumRepository;
 import com.widyu.fcm.application.FcmService;
-import com.widyu.fcm.api.dto.FcmSendDto;
+import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.member.Member;

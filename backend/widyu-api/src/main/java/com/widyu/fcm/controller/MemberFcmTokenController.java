@@ -1,8 +1,8 @@
-package com.widyu.fcm.api.controller;
+package com.widyu.fcm.controller;
 
-import com.widyu.fcm.api.controller.docs.MemberFcmTokenDocs;
-import com.widyu.fcm.api.dto.request.FcmTokenLoginRequest;
-import com.widyu.fcm.api.dto.request.FcmTokenLogoutRequest;
+import com.widyu.fcm.controller.docs.MemberFcmTokenDocs;
+import com.widyu.fcm.dto.request.FcmTokenLoginRequest;
+import com.widyu.fcm.dto.request.FcmTokenLogoutRequest;
 import com.widyu.fcm.application.MemberFcmTokenService;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
