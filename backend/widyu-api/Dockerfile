@@ -2,7 +2,7 @@
 FROM gradle:8.10.2-jdk21 AS build
 WORKDIR /workspace
 COPY . ./
-RUN gradle :backend:widyu-api:clean :backend:widyu-api:bootJar --no-daemon
+RUN ./gradlew :backend:widyu-api:clean backend:widyu-api:bootJar --no-daemon
 
 # ---------- Run stage ----------
 FROM amazoncorretto:21-alpine
