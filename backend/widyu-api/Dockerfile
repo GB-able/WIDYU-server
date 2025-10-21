@@ -1,7 +1,7 @@
 # ---------- Build stage ----------
-FROM gradle:8.10.2-jdk21 AS build
+FROM amazoncorretto:21-alpine AS build
 WORKDIR /workspace
-COPY . ./
+COPY . .
 RUN ./gradlew :backend:widyu-api:clean backend:widyu-api:bootJar --no-daemon
 
 # ---------- Run stage ----------
