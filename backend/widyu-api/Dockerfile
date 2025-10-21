@@ -2,6 +2,7 @@
 FROM amazoncorretto:21-alpine AS build
 WORKDIR /workspace
 COPY . .
+RUN chmod +x ./gradlew
 RUN ./gradlew :backend:widyu-api:clean backend:widyu-api:bootJar --no-daemon
 
 # ---------- Run stage ----------
