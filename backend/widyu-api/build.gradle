@@ -95,5 +95,5 @@ tasks.named('test') {
 }
 
 bootJar {
-    mainClass = 'com.widyu.api.WidyuApiApplication'
+    mainClass = 'com.widyu.WidyuApiApplication'
 }
