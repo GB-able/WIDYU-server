@@ -1,5 +1,6 @@
 package com.widyu.fcm.controller.docs;
 
+import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
 import com.widyu.fcm.dto.response.ToastResDto;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -147,4 +149,42 @@ public interface FcmDocs {
             )
     )
     ApiResponseTemplate<ToastResDto> getToastNotification();
+
+    @Operation(
+            summary = "상대방에게 응원 알림 전송",
+            description = "특정 사용자에게 푸시 알림을 전송합니다. 해당 알림 카테고리는 ALBUM으로 자동 설정되며, 발신자의 프로필 이미지가 자동으로 포함됩니다."
+    )
+    @RequestBody(
+            description = "알림 전송 요청 정보",
+            required = true,
+            content = @Content(
+                    schema = @Schema(implementation = SendNotificationRequest.class),
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "receiverId": 123,
+                                      "title": "응원합니다!",
+                                      "content": "오늘도 좋은 하루 보내세요~"
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "알림 전송 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "FCM_2007",
+                                      "message": "알림이 성공적으로 전송되었습니다.",
+                                      "data": "알림 전송 완료"
+                                    }
+                                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<String> sendNotification(SendNotificationRequest sendNotificationRequest);
 }
