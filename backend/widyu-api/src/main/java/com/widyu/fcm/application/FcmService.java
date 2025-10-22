@@ -237,7 +237,7 @@ public class FcmService {
         FcmSendDto fcmSendDto = FcmSendDto.builder()
                 .title(sendNotificationRequest.title())
                 .content(sendNotificationRequest.content())
-                .fcmCategory(FcmCategory.ALBUM)
+                .fcmCategory(FcmCategory.TARGET)
                 .scheme("")
                 .image(sender.getProfileImage())
                 .build();
