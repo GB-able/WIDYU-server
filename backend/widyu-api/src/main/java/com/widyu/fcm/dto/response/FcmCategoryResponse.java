@@ -23,6 +23,7 @@ public class FcmCategoryResponse {
         return switch (category) {
             case ALL -> "전체";
             case ALBUM -> "앨범";
+            case TARGET -> "목표";
         };
     }
 }
