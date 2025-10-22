@@ -62,7 +62,7 @@ public class FcmService {
                         .notification(FcmMessageDto.Notification.builder()
                                 .title(dto.title())
                                 .body(dto.content())
-                                .image(null)
+                                .image(dto.image())
                                 .build())
                         .build())
                 .validateOnly(false)
@@ -163,6 +163,7 @@ public class FcmService {
                             .fcmCategory(FcmCategory.ALBUM)
                             .memberFcmToken(tokenEntity)
                             .isRead(false)
+                            .image(fcmSendDto.image())
                             .build());
                 }
             }
