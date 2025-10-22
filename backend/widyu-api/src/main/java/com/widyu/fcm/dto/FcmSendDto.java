@@ -8,6 +8,7 @@ public record FcmSendDto(
         String title,
         String content,
         FcmCategory fcmCategory,
-        String scheme
+        String scheme,
+        String image
 ) {
 }

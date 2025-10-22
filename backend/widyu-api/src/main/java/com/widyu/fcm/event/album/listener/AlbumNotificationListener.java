@@ -35,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AlbumNotificationListener {
 
+    private static final String ALBUM_DEFAULT_IMAGE = "album.png";
+
     private final FcmService fcmService;
     private final ParentProfileRepository parentProfileRepository;
     private final MemberRepository memberRepository;
@@ -42,7 +44,6 @@ public class AlbumNotificationListener {
     private final AlbumRepository albumRepository;
 
     // 게시물 작성시 알림 발송 (작성자가 부모님이면 보호자들에게, 보호자면 부모님들에게)
-    @Async
     @EventListener
     public void handleAlbumCreated(AlbumCreatedEvent event) {
         Member author = memberRepository.findById(event.authorId())
@@ -51,11 +52,10 @@ public class AlbumNotificationListener {
         String title = author.getName() + "님이 새로운 소식을 전했어요!";
         String content = "새로운 앨범을 확인해보세요.";
 
-        sendNotificationToFamilyMembers(event.authorId(), title, content);
+        sendNotificationToFamilyMembers(event.authorId(), title, content, author.getProfileImage());
     }
 
     // 게시물 조회시 해당 작성자의 모든 게시물 확인했는지 체크 및 알림 발송
-    @Async
     @EventListener
     @Transactional
     public void handleAlbumViewed(AlbumViewedEvent event) {
@@ -78,7 +78,7 @@ public class AlbumNotificationListener {
     }
 
     // 가족 구성원들에게 알림 발송하는 공통 메서드
-    private void sendNotificationToFamilyMembers(Long memberId, String title, String content) {
+    private void sendNotificationToFamilyMembers(Long memberId, String title, String content, String image) {
         // 사용자가 부모님인지 보호자인지 확인
         List<ParentProfile> memberAsParent = parentProfileRepository.findAll()
                 .stream()
@@ -88,7 +88,7 @@ public class AlbumNotificationListener {
         if (!memberAsParent.isEmpty()) {
             // 부모님인 경우 → 보호자들에게 알림 발송
             for (ParentProfile profile : memberAsParent) {
-                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
+                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
                 fcmService.sendMessageToUser(profile.getGuardian().getId(), dto);
             }
         } else {
@@ -96,7 +96,7 @@ public class AlbumNotificationListener {
             List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(memberId);
 
             for (ParentProfile parentProfile : parentProfiles) {
-                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
+                FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
                 fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
             }
         }
@@ -104,22 +104,24 @@ public class AlbumNotificationListener {
 
     // 특정 멤버에게 알림 발송하는 메서드
     private void sendNotificationToSpecificMember(Long memberId, String title, String content) {
-        FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "");
+        FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", ALBUM_DEFAULT_IMAGE);
         fcmService.sendMessageToUser(memberId, dto);
     }
 
     // 특정 작성자의 모든 게시물을 확인했는지 체크하는 메서드
     private boolean hasViewedAllAlbums(Long viewerId, Long albumId) {
-        // 내가 특정 작성자의 게시물을 본 개수
-        long viewedCount = albumViewRepository.countViewedAlbumsByMemberIdAndAlbumId(viewerId, albumId);
-
+        // 앨범 작성자 찾기
         Member writer = albumRepository.findById(albumId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND))
                 .getMember();
 
         // 그 작성자가 쓴 총 게시물 수
         long totalCount = albumRepository.countByMemberId(writer.getId());
-        log.info(String.valueOf(totalCount) +" " + String.valueOf(viewedCount));
+
+        // 내가 그 작성자의 게시물을 본 개수
+        long viewedCount = albumViewRepository.countViewedAlbumsByGuardianAndParent(viewerId, writer.getId());
+
+        log.info("작성자: {}, 전체: {}, 본 개수: {}", writer.getName(), totalCount, viewedCount);
         return viewedCount == totalCount && totalCount > 0;
     }
 
@@ -174,7 +176,8 @@ public class AlbumNotificationListener {
                     message,
                     "새로운 소식을 공유해보세요.",
                     FcmCategory.ALBUM,
-                    ""
+                    "",
+                    ALBUM_DEFAULT_IMAGE
             );
             try {
                 fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
@@ -186,7 +189,6 @@ public class AlbumNotificationListener {
     }
 
     // 게시글에 댓글이 달리면 게시물 주인에게 알림 발송
-    @Async
     @EventListener
     public void handleAlbumCommented(AlbumCommentedEvent event) {
         Member commenter = memberRepository.findById(event.commenterMemberId())
@@ -203,13 +205,13 @@ public class AlbumNotificationListener {
                 commenter.getName() + "님이 회원님의 게시물에 댓글을 남겼어요!",
                 "답글을 달아주세요.",
                 FcmCategory.ALBUM,
-                ""
+                "",
+                commenter.getProfileImage()
         );
         fcmService.sendMessageToUser(albumAuthor.getId(), dto);
     }
 
     // 게시글에 좋아요가 달리면 게시물 주인에게 알림 발송
-    @Async
     @EventListener
     public void handleAlbumLiked(AlbumLikedEvent event) {
         Member liker = memberRepository.findById(event.likerMemberId())
@@ -226,13 +228,13 @@ public class AlbumNotificationListener {
                 liker.getName() + "님이 회원님의 게시물을 좋아합니다!",
                 "게시물을 확인해보세요.",
                 FcmCategory.ALBUM,
-                ""
+                "",
+                liker.getProfileImage()
         );
         fcmService.sendMessageToUser(albumAuthor.getId(), dto);
     }
 
     // 부모님이 게시물을 잠금 해제했을 때 해당 앨범 작성자에게 알림 발송
-    @Async
     @EventListener
     public void handleAlbumUnlocked(AlbumUnlockedEvent event) {
         Member parentMember = memberRepository.findById(event.parentMemberId())
@@ -245,7 +247,8 @@ public class AlbumNotificationListener {
                 parentMember.getName() + "님이 회원님의 게시물을 잠금해제했어요.",
                 "새로운 소식을 확인해보세요.",
                 FcmCategory.ALBUM,
-                ""
+                "",
+                parentMember.getProfileImage()
         );
         fcmService.sendMessageToUser(album.getMember().getId(), dto);
     }
