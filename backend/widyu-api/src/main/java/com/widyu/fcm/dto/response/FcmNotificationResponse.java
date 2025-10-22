@@ -15,7 +15,7 @@ public record FcmNotificationResponse(
     public static FcmNotificationResponse from(FcmNotification n) {
         return new FcmNotificationResponse(
                 n.getId(),
-                "/album.png",
+                n.getImage(),
                 n.getFcmCategory() != null ? n.getFcmCategory().name() : "ALL",
                 n.getTitle(),
                 n.getBody(),
