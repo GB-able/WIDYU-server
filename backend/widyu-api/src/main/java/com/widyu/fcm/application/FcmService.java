@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.widyu.fcm.dto.FcmMessageDto;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
 import com.widyu.fcm.dto.response.ToastResDto;
@@ -226,6 +227,23 @@ public class FcmService {
             return ToastResDto.from(parentName + "님께서 모든 소식을 다 보셨어요.");
         }
             return ToastResDto.from(parentName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요.");
+    }
+
+    // 응원 알림 보내기
+    @Transactional
+    public void sendNotificationToMember(SendNotificationRequest sendNotificationRequest) {
+        Member sender = memberUtil.getCurrentMember();
+
+        FcmSendDto fcmSendDto = FcmSendDto.builder()
+                .title(sendNotificationRequest.title())
+                .content(sendNotificationRequest.content())
+                .fcmCategory(FcmCategory.ALBUM)
+                .scheme("")
+                .image(sender.getProfileImage())
+                .build();
+
+        // 받는 사람에게 알림 전송
+        sendMessageToUser(sendNotificationRequest.receiverId(), fcmSendDto);
     }
 
 }
