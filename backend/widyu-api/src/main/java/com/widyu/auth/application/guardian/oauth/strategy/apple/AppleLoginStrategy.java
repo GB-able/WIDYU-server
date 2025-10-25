@@ -58,7 +58,7 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
 
             return SocialClientResponse.of(
                     idTokenPayload.subject(),
-                    idTokenPayload.email(),
+                    request.profile().email(),
                     request.profile().name(),
                     null,
                     tokenResponse.refreshToken()
