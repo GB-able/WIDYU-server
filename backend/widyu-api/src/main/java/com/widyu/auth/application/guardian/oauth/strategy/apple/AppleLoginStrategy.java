@@ -56,10 +56,18 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
             AppleTokenResponse tokenResponse = exchangeCodeForTokens(request.authorizationCode(), clientSecret, request.platform());
             AppleIdTokenPayload idTokenPayload = parseIdToken(tokenResponse.idToken());
 
+            // 클라이언트에서 email 보내주면 사용, 없으면 ID Token에서 조회
+            String email = (request.profile() != null && request.profile().email() != null)
+                    ? request.profile().email()
+                    : idTokenPayload.email();
+
+            // 클라이언트에서 name 보내주면 사용
+            String name = (request.profile() != null) ? request.profile().name() : null;
+
             return SocialClientResponse.of(
                     idTokenPayload.subject(),
-                    request.profile().email(),
-                    request.profile().name(),
+                    email,
+                    name,
                     null,
                     tokenResponse.refreshToken()
             );
@@ -78,6 +86,12 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
         if (request.profile() != null) {
             name = getValueOrDefault(name, request.profile().name());
             email = getValueOrDefault(email, request.profile().email());
+        }
+
+        // name이 null이거나 빈 값이면 "익명의 사용자"로 설정
+        if (name == null || name.isBlank()) {
+            name = "익명의 사용자";
+            log.info("애플 로그인: 이름 정보 없음, '익명의 사용자'로 설정");
         }
 
         String normalizedPhone = PhoneNumberUtil.normalize(phoneNumber);
