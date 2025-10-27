@@ -178,8 +178,6 @@ public class SocialLoginService {
                                         UserInfo userInfo,
                                         Optional<Member> existingMember) {
         Member member = existingMember.orElseGet(() -> {
-            log.info("신규 회원 생성: provider={}, phoneNumber={}, email={}",
-                    provider.getValue(), userInfo.phoneNumber(), userInfo.email());
             return Member.createMember(MemberType.GUARDIAN, userInfo.name(), userInfo.phoneNumber());
         });
 
