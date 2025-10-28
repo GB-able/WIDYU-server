@@ -47,7 +47,7 @@ public class AlbumUnlockService {
         }
 
         // 시니어 타입 검증
-        if (currentMember.getType() != MemberType.SENIOR && currentMember.getType() != MemberType.PARENT) {
+        if (currentMember.getType() != MemberType.SENIOR) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 앨범을 해금할 수 있습니다.");
         }
 

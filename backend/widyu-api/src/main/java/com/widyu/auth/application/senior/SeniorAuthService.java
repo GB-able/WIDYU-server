@@ -7,7 +7,6 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.ConnectionRole;
 import com.widyu.member.FamilyConnection;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -99,17 +98,11 @@ public class SeniorAuthService {
             Member guardian) {
         List<FamilyConnection> connections = new ArrayList<>(requests.size());
         for (int i = 0; i < requests.size(); i++) {
-            SeniorSignUpRequest req = requests.get(i);
             SeniorProfile profile = profiles.get(i);
-
-            ConnectionRole role = req.role() != null
-                    ? ConnectionRole.valueOf(req.role())
-                    : ConnectionRole.CHILD;
 
             FamilyConnection connection = FamilyConnection.createConnection(
                     profile,
-                    guardian,
-                    role
+                    guardian
             );
             connections.add(connection);
         }

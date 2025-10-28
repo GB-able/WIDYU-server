@@ -1,6 +1,5 @@
 package com.widyu.member.repository;
 
-import com.widyu.member.ConnectionStatus;
 import com.widyu.member.FamilyConnection;
 import java.util.List;
 import java.util.Optional;
@@ -12,11 +11,7 @@ public interface FamilyConnectionRepository extends JpaRepository<FamilyConnecti
 
     List<FamilyConnection> findAllByGuardianId(Long guardianId);
 
-    List<FamilyConnection> findAllByGuardianIdAndStatus(Long guardianId, ConnectionStatus status);
-
     List<FamilyConnection> findAllBySeniorId(Long seniorId);
-
-    List<FamilyConnection> findAllBySeniorIdAndStatus(Long seniorId, ConnectionStatus status);
 
     Optional<FamilyConnection> findBySeniorIdAndGuardianId(Long seniorId, Long guardianId);
 
@@ -25,9 +20,8 @@ public interface FamilyConnectionRepository extends JpaRepository<FamilyConnecti
     @Query("SELECT fc FROM FamilyConnection fc " +
            "JOIN FETCH fc.senior sp " +
            "JOIN FETCH sp.member " +
-           "WHERE fc.guardian.id = :guardianId AND fc.status = :status")
-    List<FamilyConnection> findAllByGuardianIdWithSeniorAndMember(@Param("guardianId") Long guardianId,
-                                                                    @Param("status") ConnectionStatus status);
+           "WHERE fc.guardian.id = :guardianId")
+    List<FamilyConnection> findAllByGuardianIdWithSeniorAndMember(@Param("guardianId") Long guardianId);
 
-    long countBySeniorIdAndStatus(Long seniorId, ConnectionStatus status);
+    long countBySeniorId(Long seniorId);
 }

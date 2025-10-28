@@ -28,8 +28,8 @@ public class SeniorProfileService {
     public SeniorPointsResponse getLeftPoints() {
         Member currentMember = memberUtil.getCurrentMember();
 
-        // 시니어 타입 검증 (SENIOR 또는 PARENT 허용 - 하위 호환)
-        if (currentMember.getType() != MemberType.SENIOR && currentMember.getType() != MemberType.PARENT) {
+        // 시니어 타입 검증
+        if (currentMember.getType() != MemberType.SENIOR) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 접근할 수 있습니다.");
         }
 
@@ -47,7 +47,7 @@ public class SeniorProfileService {
         Member currentMember = memberUtil.getCurrentMember();
 
         // 시니어 타입 검증
-        if (currentMember.getType() != MemberType.SENIOR && currentMember.getType() != MemberType.PARENT) {
+        if (currentMember.getType() != MemberType.SENIOR) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 접근할 수 있습니다.");
         }
 

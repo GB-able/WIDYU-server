@@ -29,9 +29,5 @@ public record SeniorSignUpRequest(
 
         @NotBlank(message = "초대코드는 필수입니다.")
         @Pattern(regexp = "^\\d{7}$", message = "초대코드는 숫자 7자리여야 합니다.")
-        String inviteCode,
-
-        @Pattern(regexp = "^(CHILD|SPOUSE|CAREGIVER|NURSE|SOCIAL_WORKER|OTHER)$",
-                message = "역할은 CHILD, SPOUSE, CAREGIVER, NURSE, SOCIAL_WORKER, OTHER 중 하나여야 합니다.")
-        String role  // 보호자의 역할 (자녀, 배우자, 간병인 등)
+        String inviteCode
 ) { }

@@ -15,7 +15,6 @@ import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.member.Member;
 import com.widyu.member.FamilyConnection;
-import com.widyu.member.ConnectionStatus;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.global.entity.Status;
@@ -86,7 +85,7 @@ public class AlbumNotificationListener {
         if (member.getSeniorProfile() != null) {
             // 시니어인 경우 → 보호자들에게 알림 발송
             List<FamilyConnection> connections = familyConnectionRepository
-                    .findAllBySeniorIdAndStatus(member.getSeniorProfile().getId(), ConnectionStatus.ACTIVE);
+                    .findAllBySeniorId(member.getSeniorProfile().getId());
 
             for (FamilyConnection connection : connections) {
                 FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
@@ -95,7 +94,7 @@ public class AlbumNotificationListener {
         } else {
             // 보호자인 경우 → 시니어들에게 알림 발송
             List<FamilyConnection> connections = familyConnectionRepository
-                    .findAllByGuardianIdAndStatus(memberId, ConnectionStatus.ACTIVE);
+                    .findAllByGuardianId(memberId);
 
             for (FamilyConnection connection : connections) {
                 FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
@@ -167,7 +166,7 @@ public class AlbumNotificationListener {
     private void sendInactivityNotificationToParents(Member member, int days) {
         // 보호자가 비활성인 경우 → 연결된 시니어들에게 알림
         List<FamilyConnection> connections = familyConnectionRepository
-                .findAllByGuardianIdAndStatus(member.getId(), ConnectionStatus.ACTIVE);
+                .findAllByGuardianId(member.getId());
 
         if (connections.isEmpty()) {
             return;

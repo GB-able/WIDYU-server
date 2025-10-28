@@ -24,8 +24,8 @@ public class AlbumPermissionService {
             case Member m when m.getType() == MemberType.GUARDIAN -> {
             }
 
-            // 부모(PARENT)인데 해금되어 있으면 허용
-            case Member m when m.getType() == MemberType.PARENT
+            // 시니어(SENIOR)인데 해금되어 있으면 허용
+            case Member m when m.getType() == MemberType.SENIOR
                     && albumUnlockService.isAlbumUnlocked(album, m) -> {
             }
 

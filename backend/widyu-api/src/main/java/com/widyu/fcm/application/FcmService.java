@@ -16,7 +16,6 @@ import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.member.repository.FamilyConnectionRepository;
-import com.widyu.member.ConnectionStatus;
 import com.widyu.member.FamilyConnection;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -193,7 +192,7 @@ public class FcmService {
         Member member = memberUtil.getCurrentMember();
 
         List<FamilyConnection> connections = familyConnectionRepository
-                .findAllByGuardianIdAndStatus(member.getId(), ConnectionStatus.ACTIVE);
+                .findAllByGuardianId(member.getId());
         if (connections.isEmpty()) {
             return null;
         }
