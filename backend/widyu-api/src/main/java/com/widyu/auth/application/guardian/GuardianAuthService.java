@@ -163,8 +163,9 @@ public class GuardianAuthService {
     }
 
     private boolean hasParentProfiles(Member member) {
-        return member.getGuardianParentProfiles() != null &&
-                !member.getGuardianParentProfiles().isEmpty();
+        // familyConnections 확인 (시니어와의 연결 여부)
+        return member.getFamilyConnections() != null &&
+                !member.getFamilyConnections().isEmpty();
     }
 
     @Transactional(readOnly = true)

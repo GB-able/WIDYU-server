@@ -14,9 +14,9 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.member.Member;
-import com.widyu.member.ParentProfile;
+import com.widyu.member.FamilyConnection;
 import com.widyu.member.repository.MemberRepository;
-import com.widyu.member.repository.ParentProfileRepository;
+import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.global.entity.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +38,7 @@ public class AlbumNotificationListener {
     private static final String ALBUM_DEFAULT_IMAGE = "album.png";
 
     private final FcmService fcmService;
-    private final ParentProfileRepository parentProfileRepository;
+    private final FamilyConnectionRepository familyConnectionRepository;
     private final MemberRepository memberRepository;
     private final AlbumViewRepository albumViewRepository;
     private final AlbumRepository albumRepository;
@@ -79,25 +79,26 @@ public class AlbumNotificationListener {
 
     // 가족 구성원들에게 알림 발송하는 공통 메서드
     private void sendNotificationToFamilyMembers(Long memberId, String title, String content, String image) {
-        // 사용자가 부모님인지 보호자인지 확인
-        List<ParentProfile> memberAsParent = parentProfileRepository.findAll()
-                .stream()
-                .filter(pp -> pp.getMember().getId().equals(memberId))
-                .toList();
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
 
-        if (!memberAsParent.isEmpty()) {
-            // 부모님인 경우 → 보호자들에게 알림 발송
-            for (ParentProfile profile : memberAsParent) {
+        if (member.getSeniorProfile() != null) {
+            // 시니어인 경우 → 보호자들에게 알림 발송
+            List<FamilyConnection> connections = familyConnectionRepository
+                    .findAllBySeniorId(member.getSeniorProfile().getId());
+
+            for (FamilyConnection connection : connections) {
                 FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
-                fcmService.sendMessageToUser(profile.getGuardian().getId(), dto);
+                fcmService.sendMessageToUser(connection.getGuardian().getId(), dto);
             }
         } else {
-            // 보호자인 경우 → 부모님들에게 알림 발송
-            List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(memberId);
+            // 보호자인 경우 → 시니어들에게 알림 발송
+            List<FamilyConnection> connections = familyConnectionRepository
+                    .findAllByGuardianId(memberId);
 
-            for (ParentProfile parentProfile : parentProfiles) {
+            for (FamilyConnection connection : connections) {
                 FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
-                fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
+                fcmService.sendMessageToUser(connection.getSenior().getMember().getId(), dto);
             }
         }
     }
@@ -163,15 +164,17 @@ public class AlbumNotificationListener {
     }
 
     private void sendInactivityNotificationToParents(Member member, int days) {
-        List<ParentProfile> parentProfiles = parentProfileRepository.findAllByGuardianId(member.getId());
+        // 보호자가 비활성인 경우 → 연결된 시니어들에게 알림
+        List<FamilyConnection> connections = familyConnectionRepository
+                .findAllByGuardianId(member.getId());
 
-        if (parentProfiles.isEmpty()) {
+        if (connections.isEmpty()) {
             return;
         }
 
         String message = member.getName() + "님, " + days + "일 간 소식이 뜸했어요. 새로운 근황을 전하는 건 어떨까요?";
 
-        for (ParentProfile parentProfile : parentProfiles) {
+        for (FamilyConnection connection : connections) {
             FcmSendDto dto = new FcmSendDto(
                     message,
                     "새로운 소식을 공유해보세요.",
@@ -180,10 +183,11 @@ public class AlbumNotificationListener {
                     ALBUM_DEFAULT_IMAGE
             );
             try {
-                fcmService.sendMessageToUser(parentProfile.getMember().getId(), dto);
-                log.info("{}일 비활성 알림 전송 완료: {} -> {}", days, member.getName(), parentProfile.getMember().getName());
+                Long seniorMemberId = connection.getSenior().getMember().getId();
+                fcmService.sendMessageToUser(seniorMemberId, dto);
+                log.info("{}일 비활성 알림 전송 완료: {} -> {}", days, member.getName(), connection.getSenior().getMember().getName());
             } catch (Exception e) {
-                log.error("{}일 비활성 알림 전송 실패: {} -> {}", days, member.getName(), parentProfile.getMember().getName(), e);
+                log.error("{}일 비활성 알림 전송 실패: {} -> {}", days, member.getName(), connection.getSenior().getMember().getName(), e);
             }
         }
     }

@@ -21,18 +21,18 @@ public interface AlbumCalendarRepository extends JpaRepository<Album, Long> {
         AND (
             a.member.id = :memberId
             OR a.member.id IN (
-                SELECT pp1.member.id FROM ParentProfile pp1 
-                WHERE pp1.guardian.id = :memberId
+                SELECT fc1.senior.member.id FROM FamilyConnection fc1
+                WHERE fc1.guardian.id = :memberId
             )
             OR a.member.id IN (
-                SELECT pp2.guardian.id FROM ParentProfile pp2
-                WHERE pp2.member.id = :memberId
+                SELECT fc2.guardian.id FROM FamilyConnection fc2
+                WHERE fc2.senior.member.id = :memberId
             )
             OR a.member.id IN (
-                SELECT pp3.guardian.id FROM ParentProfile pp3
-                WHERE pp3.member.id IN (
-                    SELECT pp4.member.id FROM ParentProfile pp4
-                    WHERE pp4.guardian.id = :memberId
+                SELECT fc3.guardian.id FROM FamilyConnection fc3
+                WHERE fc3.senior.id IN (
+                    SELECT fc4.senior.id FROM FamilyConnection fc4
+                    WHERE fc4.guardian.id = :memberId
                 )
             )
         )

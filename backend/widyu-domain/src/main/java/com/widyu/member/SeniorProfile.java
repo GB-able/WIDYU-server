@@ -1,5 +1,7 @@
 package com.widyu.member;
 
+import com.widyu.global.entity.BaseTimeEntity;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -7,9 +9,11 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,20 +22,16 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "parent_profile")
-public class ParentProfile {
+@Table(name = "senior_profile")
+public class SeniorProfile extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "member_id", nullable = false)
+    @JoinColumn(name = "member_id", nullable = false, unique = true)
     private Member member;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "guardian_id", nullable = false)
-    private Member guardian;
 
     @Column(name = "birth_date")
     private String birthDate;
@@ -41,15 +41,19 @@ public class ParentProfile {
     @Column(name = "detail_address")
     private String detailAddress;
 
-    @Column(name = "invite_code", nullable = false, length = 7)
+    @Column(name = "invite_code", nullable = false, unique = true, length = 7)
     private String inviteCode;
 
+    @Column(nullable = false)
     private Long points = 0L;
 
+    @OneToMany(mappedBy = "senior", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FamilyConnection> familyConnections = new ArrayList<>();
+
     @Builder(access = AccessLevel.PRIVATE)
-    private ParentProfile(Member member, Member guardian, String birthDate, String address, String detailAddress, String inviteCode, Long points) {
+    private SeniorProfile(Member member, String birthDate, String address, String detailAddress,
+                          String inviteCode, Long points) {
         this.member = member;
-        this.guardian = guardian;
         this.birthDate = birthDate;
         this.address = address;
         this.detailAddress = detailAddress;
@@ -57,16 +61,15 @@ public class ParentProfile {
         this.points = points;
     }
 
-    public static ParentProfile createParentProfile(final Member member, final Member guardian, final String birthDate, final String address,
-                                                    final String detailAddress, final String inviteCode) {
-        return ParentProfile.builder()
+    public static SeniorProfile createSeniorProfile(Member member, String birthDate, String address,
+                                                    String detailAddress, String inviteCode) {
+        return SeniorProfile.builder()
                 .member(member)
-                .guardian(guardian)
                 .birthDate(birthDate)
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
-                .points(100L)
+                .points(100L)  // 초기 포인트 100점
                 .build();
     }
 
@@ -80,5 +83,9 @@ public class ParentProfile {
         if (deductionPoints != null && deductionPoints > 0 && this.points >= deductionPoints) {
             this.points -= deductionPoints;
         }
+    }
+
+    public boolean hasEnoughPoints(Long requiredPoints) {
+        return this.points >= requiredPoints;
     }
 }
