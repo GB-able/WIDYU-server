@@ -50,16 +50,11 @@ public class Member extends BaseTimeEntity {
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SocialAccount> socialAccounts = new ArrayList<>();
 
-    @OneToOne(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
-    private ParentProfile parentProfile;
-
-    @OneToMany(mappedBy = "guardian", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ParentProfile> guardianParentProfiles = new ArrayList<>();
-
-    // 새로운 다대다 구조
+    // 시니어일 경우: 본인의 프로필
     @OneToOne(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private SeniorProfile seniorProfile;
 
+    // 보호자일 경우: 연결된 시니어들
     @OneToMany(mappedBy = "guardian", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FamilyConnection> familyConnections = new ArrayList<>();
 

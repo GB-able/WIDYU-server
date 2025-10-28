@@ -7,7 +7,8 @@ import com.widyu.album.repository.AlbumRepository;
 import com.widyu.album.repository.AlbumUnlockRepository;
 import com.widyu.fcm.event.album.dto.AlbumUnlockedEvent;
 import com.widyu.member.Member;
-import com.widyu.member.ParentProfile;
+import com.widyu.member.MemberType;
+import com.widyu.member.SeniorProfile;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -45,15 +46,23 @@ public class AlbumUnlockService {
             throw new BusinessException(ErrorCode.ALBUM_ALREADY_UNLOCKED);
         }
 
-        ParentProfile parentProfile = currentMember.getParentProfile();
+        // 시니어 타입 검증
+        if (currentMember.getType() != MemberType.SENIOR && currentMember.getType() != MemberType.PARENT) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 앨범을 해금할 수 있습니다.");
+        }
+
+        SeniorProfile seniorProfile = currentMember.getSeniorProfile();
+        if (seniorProfile == null) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다.");
+        }
 
         // 3. 포인트 잔액 확인
-        if (!hasEnoughBalance(parentProfile)) {
+        if (!hasEnoughBalance(seniorProfile)) {
             throw new BusinessException(ErrorCode.ALBUM_UNLOCK_INSUFFICIENT_BALANCE);
         }
 
-        // 4. 포인트 차감 (임시 구현 - 실제로는 포인트 시스템과 연동)
-        deductPoints(parentProfile);
+        // 4. 포인트 차감
+        deductPoints(seniorProfile);
 
         // 5. 해금 기록 생성
         AlbumUnlock albumUnlock = AlbumUnlock.createUnlock(album, currentMember);
@@ -73,12 +82,11 @@ public class AlbumUnlockService {
         return albumUnlockRepository.existsByAlbumAndMember(album, member);
     }
 
-    private boolean hasEnoughBalance(ParentProfile parentProfile) {
-        Long points = parentProfile.getPoints();
-        return points >= DEFAULT_UNLOCK_PRICE;
+    private boolean hasEnoughBalance(SeniorProfile seniorProfile) {
+        return seniorProfile.hasEnoughPoints(DEFAULT_UNLOCK_PRICE);
     }
 
-    private void deductPoints(ParentProfile parentProfile) {
-        parentProfile.deductPoints(DEFAULT_UNLOCK_PRICE);
+    private void deductPoints(SeniorProfile seniorProfile) {
+        seniorProfile.deductPoints(DEFAULT_UNLOCK_PRICE);
     }
 }
