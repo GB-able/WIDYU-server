@@ -56,6 +56,13 @@ public class Member extends BaseTimeEntity {
     @OneToMany(mappedBy = "guardian", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ParentProfile> guardianParentProfiles = new ArrayList<>();
 
+    // 새로운 다대다 구조
+    @OneToOne(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
+    private SeniorProfile seniorProfile;
+
+    @OneToMany(mappedBy = "guardian", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FamilyConnection> familyConnections = new ArrayList<>();
+
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MemberFcmToken> memberFcmTokens = new ArrayList<>();
 
