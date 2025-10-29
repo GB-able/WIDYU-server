@@ -15,6 +15,7 @@ import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.album.repository.AlbumViewRepository;
+import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.FamilyConnection;
 import com.widyu.global.error.BusinessException;
@@ -50,6 +51,7 @@ public class FcmService {
     private final FcmNotificationRepository fcmNotificationRepository;
     private final MemberFcmTokenRepository memberFcmTokenRepository;
     private final AlbumViewRepository albumViewRepository;
+    private final MemberRepository memberRepository;
     private final FamilyConnectionRepository familyConnectionRepository;
     private final MemberUtil memberUtil;
     private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widyu-d384f/messages:send";
@@ -234,9 +236,14 @@ public class FcmService {
     @Transactional
     public void sendNotificationToMember(SendNotificationRequest sendNotificationRequest) {
         Member sender = memberUtil.getCurrentMember();
+        Member receiver = memberRepository.findById(sendNotificationRequest.receiverId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        // 알림 제목: "보내는사람님이 받는사람님에게 응원메시지를 보냈어요."
+        String title = sender.getName() + "님이 " + receiver.getName() + "님에게 응원메시지를 보냈어요.";
 
         FcmSendDto fcmSendDto = FcmSendDto.builder()
-                .title(sendNotificationRequest.title())
+                .title(title)
                 .content(sendNotificationRequest.content())
                 .fcmCategory(FcmCategory.TARGET)
                 .scheme("")

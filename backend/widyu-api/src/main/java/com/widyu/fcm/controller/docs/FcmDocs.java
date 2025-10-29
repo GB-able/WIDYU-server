@@ -152,7 +152,7 @@ public interface FcmDocs {
 
     @Operation(
             summary = "상대방에게 응원 알림 전송",
-            description = "특정 사용자에게 푸시 알림을 전송합니다. 해당 알림 카테고리는 ALBUM으로 자동 설정되며, 발신자의 프로필 이미지가 자동으로 포함됩니다."
+            description = "특정 사용자에게 푸시 알림을 전송합니다. 알림 제목은 서버에서 '{보내는사람}님이 {받는사람}님에게 응원메시지를 보냈어요.' 형식으로 자동 생성됩니다. 알림 카테고리는 TARGET으로 자동 설정되며, 발신자의 프로필 이미지가 자동으로 포함됩니다."
     )
     @RequestBody(
             description = "알림 전송 요청 정보",
@@ -163,7 +163,6 @@ public interface FcmDocs {
                             value = """
                                     {
                                       "receiverId": 123,
-                                      "title": "응원합니다!",
                                       "content": "오늘도 좋은 하루 보내세요~"
                                     }
                                     """
