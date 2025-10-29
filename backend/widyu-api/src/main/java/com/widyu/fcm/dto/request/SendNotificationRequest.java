@@ -7,9 +7,6 @@ public record SendNotificationRequest(
         @NotNull(message = "받는 사람 ID는 필수입니다.")
         Long receiverId,
 
-        @NotBlank(message = "알림 제목은 필수입니다.")
-        String title,
-
         @NotBlank(message = "알림 내용은 필수입니다.")
         String content
 ) {
