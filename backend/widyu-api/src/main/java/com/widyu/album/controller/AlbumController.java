@@ -12,10 +12,6 @@ import com.widyu.album.dto.response.LikedAlbumsResponse;
 import com.widyu.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -142,15 +138,9 @@ public class AlbumController implements AlbumDocs {
                 .body(response);
     }
 
-    @Operation(summary = "앨범 해금", description = "포인트를 사용하여 다른 사용자의 앨범을 해금합니다. 해금 가격은 50포인트로 고정되어 있습니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "앨범 해금 성공"),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청 (본인 앨범 해금 시도, 이미 해금된 앨범, 포인트 부족)"),
-            @ApiResponse(responseCode = "404", description = "앨범을 찾을 수 없음")
-    })
+    @Override
     @PostMapping("/{albumId}/unlock")
-    public ApiResponseTemplate<AlbumUnlockResponse> unlockAlbum(
-            @Parameter(description = "해금할 앨범 ID", required = true) @PathVariable Long albumId) {
+    public ApiResponseTemplate<AlbumUnlockResponse> unlockAlbum(@PathVariable Long albumId) {
         AlbumUnlockResponse response = albumFacade.unlockAlbum(albumId);
         return ApiResponseTemplate.ok()
                 .code("ALBM_2008")

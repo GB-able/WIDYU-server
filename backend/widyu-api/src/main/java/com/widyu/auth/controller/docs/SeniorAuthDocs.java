@@ -1,0 +1,39 @@
+package com.widyu.auth.controller.docs;
+
+import com.widyu.auth.dto.request.SeniorSignInRequest;
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.global.response.ApiResponseTemplate;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.List;
+import org.springframework.web.bind.annotation.RequestBody;
+
+@Tag(name = "Auth - Senior", description = "시니어 회원 인증 API")
+public interface SeniorAuthDocs {
+
+    @Operation(
+            summary = "시니어 일괄 회원가입",
+            description = "보호자가 시니어를 일괄 등록합니다. 각 시니어는 초대코드를 받아 로그인할 수 있습니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "시니어 일괄 회원가입 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (빈 리스트 등)"),
+            @ApiResponse(responseCode = "401", description = "인증 실패")
+    })
+    ApiResponseTemplate<Void> seniorSignUpBulk(@RequestBody @Valid List<SeniorSignUpRequest> requests);
+
+    @Operation(
+            summary = "시니어 로그인",
+            description = "초대코드와 전화번호로 시니어 회원이 로그인합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "시니어 로그인 성공"),
+            @ApiResponse(responseCode = "404", description = "초대코드 또는 전화번호가 일치하지 않음"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    ApiResponseTemplate<TokenPairResponse> seniorSignIn(@RequestBody @Valid SeniorSignInRequest request);
+}
