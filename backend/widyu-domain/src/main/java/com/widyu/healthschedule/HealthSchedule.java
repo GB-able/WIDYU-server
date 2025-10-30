@@ -56,13 +56,20 @@ public class HealthSchedule extends BaseTimeEntity {
     @Column(name = "progress_status", nullable = false)
     private ProgressStatus progressStatus = ProgressStatus.UPCOMING;
 
+    @Column(name = "reward_point", nullable = false)
+    private Integer rewardPoint = 100;
+
+    @Column(name = "is_reward", nullable = false)
+    private Boolean isReward = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private Status status = Status.ACTIVE;
 
     @Builder(access = AccessLevel.PRIVATE)
     private HealthSchedule(Member member, String scheduleName, String placeAddress, String latitude,
-                          String longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus, Status status) {
+                          String longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus,
+                          Integer rewardPoint, Boolean isReward, Status status) {
         this.member = member;
         this.scheduleName = scheduleName;
         this.placeAddress = placeAddress;
@@ -70,6 +77,8 @@ public class HealthSchedule extends BaseTimeEntity {
         this.longitude = longitude;
         this.scheduledAt = scheduledAt;
         this.progressStatus = progressStatus != null ? progressStatus : ProgressStatus.UPCOMING;
+        this.rewardPoint = rewardPoint != null ? rewardPoint : 100;
+        this.isReward = isReward != null ? isReward : false;
         this.status = status != null ? status : Status.ACTIVE;
     }
 
@@ -109,5 +118,9 @@ public class HealthSchedule extends BaseTimeEntity {
 
     public void delete() {
         this.status = Status.DELETED;
+    }
+
+    public void claimReward() {
+        this.isReward = true;
     }
 }

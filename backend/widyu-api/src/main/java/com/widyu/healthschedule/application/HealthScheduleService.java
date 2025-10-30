@@ -6,6 +6,7 @@ import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import java.time.LocalDate;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.healthschedule.repository.HealthScheduleRepository;
@@ -202,7 +203,7 @@ public class HealthScheduleService {
                 .toList();
     }
 
-    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date) {
+    public List<HealthScheduleDetailWithRewardResponse> getHealthSchedulesByDateForMe(LocalDate date) {
         Member currentMember = memberUtil.getCurrentMember();
 
         // 특정 날짜의 일정 조회
@@ -211,7 +212,7 @@ public class HealthScheduleService {
         );
 
         return schedules.stream()
-                .map(HealthScheduleDetailResponse::from)
+                .map(HealthScheduleDetailWithRewardResponse::from)
                 .toList();
     }
 

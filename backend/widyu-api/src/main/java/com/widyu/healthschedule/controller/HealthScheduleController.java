@@ -5,6 +5,7 @@ import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
@@ -106,10 +107,10 @@ public class HealthScheduleController {
     }
 
     @GetMapping("/daily/seniors")
-    public ApiResponseTemplate<List<HealthScheduleDetailResponse>> getHealthSchedulesByDateForMe(
+    public ApiResponseTemplate<List<HealthScheduleDetailWithRewardResponse>> getHealthSchedulesByDateForMe(
             @RequestParam LocalDate date
     ) {
-        List<HealthScheduleDetailResponse> response = healthScheduleFacade.getHealthSchedulesByDateForMe(date);
+        List<HealthScheduleDetailWithRewardResponse> response = healthScheduleFacade.getHealthSchedulesByDateForMe(date);
 
         return ApiResponseTemplate.ok()
                 .code("HLTH_2005")

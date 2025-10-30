@@ -4,6 +4,7 @@ import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import java.time.LocalDate;
 import java.util.List;
@@ -47,7 +48,7 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
     }
 
     @Override
-    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date) {
+    public List<HealthScheduleDetailWithRewardResponse> getHealthSchedulesByDateForMe(LocalDate date) {
         return healthScheduleService.getHealthSchedulesByDateForMe(date);
     }
 

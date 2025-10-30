@@ -4,6 +4,7 @@ import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import java.time.LocalDate;
 import java.util.List;
@@ -43,7 +44,7 @@ public interface HealthScheduleFacade {
     /**
      * 시니어 본인 특정 날짜 일정 조회
      */
-    List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date);
+    List<HealthScheduleDetailWithRewardResponse> getHealthSchedulesByDateForMe(LocalDate date);
 
     /**
      * 보호자가 시니어 특정 날짜 일정 조회
