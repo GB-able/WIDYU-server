@@ -2,11 +2,14 @@ package com.widyu.addressbookmark.application;
 
 import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.addressbookmark.dto.request.AddressBookmarkCreateRequest;
+import com.widyu.addressbookmark.dto.response.AddressBookmarkResponse;
 import com.widyu.addressbookmark.repository.AddressBookmarkRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,14 @@ public class AddressBookmarkService {
 
     private final AddressBookmarkRepository addressBookmarkRepository;
     private final MemberUtil memberUtil;
+
+    public List<AddressBookmarkResponse> findAll() {
+        Member member = memberUtil.getCurrentMember();
+        return addressBookmarkRepository.findAllByMember(member)
+            .stream()
+            .map(AddressBookmarkResponse::of)
+            .collect(Collectors.toList());
+    }
 
     @Transactional
     public void create(AddressBookmarkCreateRequest request) {
