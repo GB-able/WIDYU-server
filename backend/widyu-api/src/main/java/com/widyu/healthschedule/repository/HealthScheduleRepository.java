@@ -1,6 +1,7 @@
 package com.widyu.healthschedule.repository;
 
 import com.widyu.healthschedule.HealthSchedule;
+import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.global.entity.Status;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +28,13 @@ public interface HealthScheduleRepository extends JpaRepository<HealthSchedule, 
     @Query("SELECT h FROM HealthSchedule h WHERE h.member.id = :memberId AND h.scheduledAt >= :startDate AND h.scheduledAt < :endDate ORDER BY h.scheduledAt ASC")
     List<HealthSchedule> findByMemberIdAndWeek(
             @Param("memberId") Long memberId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    @Query("SELECT h FROM HealthSchedule h WHERE h.progressStatus = :status AND h.scheduledAt >= :startDate AND h.scheduledAt < :endDate")
+    List<HealthSchedule> findByStatusAndDateRange(
+            @Param("status") ProgressStatus status,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );

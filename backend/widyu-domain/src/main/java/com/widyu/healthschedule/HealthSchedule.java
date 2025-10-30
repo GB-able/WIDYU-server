@@ -119,4 +119,12 @@ public class HealthSchedule extends BaseTimeEntity {
     public void claimReward() {
         this.isReward = true;
     }
+
+    public void complete() {
+        this.progressStatus = ProgressStatus.COMPLETED;
+    }
+
+    public void markIncomplete() {
+        this.progressStatus = ProgressStatus.INCOMPLETE;
+    }
 }

@@ -19,6 +19,7 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
 
     private final HealthScheduleService healthScheduleService;
     private final HealthScheduleRewardService healthScheduleRewardService;
+    private final HealthScheduleProgressService healthScheduleProgressService;
 
     @Override
     public HealthScheduleResponse createHealthScheduleForMe(HealthScheduleCreateRequest request) {
@@ -68,5 +69,10 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
     @Override
     public HealthScheduleWeekListResponse getHealthSchedulesForWeek() {
         return healthScheduleService.getHealthSchedulesForWeek();
+    }
+
+    @Override
+    public void completeSchedule(Long healthScheduleId) {
+        healthScheduleProgressService.completeSchedule(healthScheduleId);
     }
 }

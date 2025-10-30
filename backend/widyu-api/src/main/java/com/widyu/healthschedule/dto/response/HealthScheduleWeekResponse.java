@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 public record HealthScheduleWeekResponse(
         LocalDateTime datetime,
-        Long scheduleId,
+        Long healthScheduleId,
         Position position
 ) {
     public static HealthScheduleWeekResponse from(HealthSchedule healthSchedule) {

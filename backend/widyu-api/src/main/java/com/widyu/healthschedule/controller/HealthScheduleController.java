@@ -1,6 +1,7 @@
 package com.widyu.healthschedule.controller;
 
 import com.widyu.healthschedule.application.HealthScheduleFacade;
+import com.widyu.healthschedule.dto.request.HealthScheduleCompleteRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthSchedulePointGetRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
@@ -59,7 +60,7 @@ public class HealthScheduleController {
     @PatchMapping("/{healthScheduleId}")
     public ApiResponseTemplate<HealthScheduleResponse> updateHealthSchedule(
             @PathVariable Long healthScheduleId,
-            @Valid @RequestBody HealthScheduleUpdateRequest request
+            @RequestBody HealthScheduleUpdateRequest request
     ) {
         HealthScheduleResponse response = healthScheduleFacade.updateHealthSchedule(healthScheduleId, request);
 
@@ -153,5 +154,17 @@ public class HealthScheduleController {
                 .code("HLTH_2007")
                 .message("일주일치 건강 일정 조회가 완료되었습니다.")
                 .body(response);
+    }
+
+    @PostMapping("/complete")
+    public ApiResponseTemplate<Void> completeSchedule(
+            @RequestBody HealthScheduleCompleteRequest request
+    ) {
+        healthScheduleFacade.completeSchedule(request.healthScheduleId());
+
+        return ApiResponseTemplate.ok()
+                .code("HLTH_2008")
+                .message("건강 일정이 완료 처리되었습니다.")
+                .build();
     }
 }

@@ -62,4 +62,9 @@ public interface HealthScheduleFacade {
      * 시니어 본인 일주일치 일정 조회 (로그인 시)
      */
     HealthScheduleWeekListResponse getHealthSchedulesForWeek();
+
+    /**
+     * 건강 일정 완료 처리
+     */
+    void completeSchedule(Long healthScheduleId);
 }
