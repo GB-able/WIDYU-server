@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/albums")
+@RequestMapping("/api/v1/albums")
 public class AlbumCommentController implements AlbumCommentDocs {
 
     private final AlbumCommentService albumCommentService;
