@@ -5,7 +5,7 @@ import com.widyu.healthschedule.ProgressStatus;
 import java.time.LocalDateTime;
 
 public record HealthScheduleResponse(
-        Long id,
+        Long healthScheduleId,
         String scheduleName,
         String placeAddress,
         String latitude,

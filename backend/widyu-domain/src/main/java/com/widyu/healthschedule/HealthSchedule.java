@@ -2,13 +2,17 @@ package com.widyu.healthschedule;
 
 import com.widyu.global.entity.BaseTimeEntity;
 import com.widyu.global.entity.Status;
+import com.widyu.member.Member;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -28,6 +32,10 @@ public class HealthSchedule extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "health_schedule_id")
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id", nullable = false)
+    private Member member;
 
     @Column(name = "schedule_name", nullable = false)
     private String scheduleName;
@@ -53,8 +61,9 @@ public class HealthSchedule extends BaseTimeEntity {
     private Status status = Status.ACTIVE;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private HealthSchedule(String scheduleName, String placeAddress, String latitude,
+    private HealthSchedule(Member member, String scheduleName, String placeAddress, String latitude,
                           String longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus, Status status) {
+        this.member = member;
         this.scheduleName = scheduleName;
         this.placeAddress = placeAddress;
         this.latitude = latitude;
@@ -64,9 +73,10 @@ public class HealthSchedule extends BaseTimeEntity {
         this.status = status != null ? status : Status.ACTIVE;
     }
 
-    public static HealthSchedule create(String scheduleName, String placeAddress, String latitude,
+    public static HealthSchedule create(Member member, String scheduleName, String placeAddress, String latitude,
                                        String longitude, LocalDateTime scheduledAt) {
         return HealthSchedule.builder()
+                .member(member)
                 .scheduleName(scheduleName)
                 .placeAddress(placeAddress)
                 .latitude(latitude)
