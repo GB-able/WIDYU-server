@@ -1,5 +1,6 @@
 package com.widyu.member;
 
+import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.global.entity.BaseTimeEntity;
 import com.widyu.global.entity.Status;
@@ -60,6 +61,9 @@ public class Member extends BaseTimeEntity {
 
     @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MemberFcmToken> memberFcmTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "member", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<AddressBookmark> addressBookmarks = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     private Status status;
