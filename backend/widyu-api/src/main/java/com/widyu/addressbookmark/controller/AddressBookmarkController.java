@@ -1,6 +1,5 @@
 package com.widyu.addressbookmark.controller;
 
-import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.addressbookmark.application.AddressBookmarkService;
 import com.widyu.addressbookmark.controller.docs.AddressBookmarkDocs;
 import com.widyu.addressbookmark.dto.request.AddressBookmarkCreateRequest;
@@ -8,6 +7,8 @@ import com.widyu.addressbookmark.dto.response.AddressBookmarkResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,10 +25,21 @@ public class AddressBookmarkController implements AddressBookmarkDocs {
     public ApiResponseTemplate<AddressBookmarkResponse> createAddressBookmark(
         @Valid @RequestBody AddressBookmarkCreateRequest request
     ) {
-        AddressBookmark addressBookmark = addressBookmarkService.create(request);
+        addressBookmarkService.create(request);
         return ApiResponseTemplate.ok()
             .code("ADR_2001")
             .message("주소 즐겨찾기가 생성되었습니다.")
-            .body(AddressBookmarkResponse.of(addressBookmark));
+            .build();
+    }
+
+    @DeleteMapping("/{addressBookmarkId}")
+    public ApiResponseTemplate<Void> deleteAddressBookmark(
+        @PathVariable Long addressBookmarkId
+    ) {
+        addressBookmarkService.delete(addressBookmarkId);
+        return ApiResponseTemplate.ok()
+            .code("ADR_2002")
+            .message("주소 즐겨찾기가 삭제되었습니다.")
+            .build();
     }
 }

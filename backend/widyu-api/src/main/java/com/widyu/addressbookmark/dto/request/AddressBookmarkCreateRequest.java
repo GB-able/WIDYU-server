@@ -1,6 +1,7 @@
 package com.widyu.addressbookmark.dto.request;
 
 import com.widyu.addressbookmark.AddressBookmark;
+import com.widyu.global.entity.Status;
 import com.widyu.member.Member;
 import jakarta.validation.constraints.NotBlank;
 
@@ -15,6 +16,7 @@ public record AddressBookmarkCreateRequest(
             .member(member)
             .roadAddress(roadAddress)
             .address(address)
+            .status(Status.ACTIVE)
             .build();
     }
 }

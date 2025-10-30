@@ -3,6 +3,8 @@ package com.widyu.addressbookmark.application;
 import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.addressbookmark.dto.request.AddressBookmarkCreateRequest;
 import com.widyu.addressbookmark.repository.AddressBookmarkRepository;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
 import lombok.RequiredArgsConstructor;
@@ -18,10 +20,23 @@ public class AddressBookmarkService {
     private final MemberUtil memberUtil;
 
     @Transactional
-    public AddressBookmark create(AddressBookmarkCreateRequest request) {
+    public void create(AddressBookmarkCreateRequest request) {
         Member member = memberUtil.getCurrentMember();
 
-        AddressBookmark addressBookmark = request.toEntity(member);
-        return addressBookmarkRepository.save(addressBookmark);
+        if (addressBookmarkRepository.existsByMemberAndRoadAddress(member, request.roadAddress())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 즐겨찾기에 추가된 주소입니다.");
+        }
+
+        addressBookmarkRepository.save(request.toEntity(member));
+    }
+
+    @Transactional
+    public void delete(Long addressBookmarkId) {
+        Member member = memberUtil.getCurrentMember();
+
+        AddressBookmark bookmark = addressBookmarkRepository.findByIdAndMember(addressBookmarkId, member)
+            .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "이미 즐겨찾기 취소된 장소입니다."));
+
+        addressBookmarkRepository.delete(bookmark);
     }
 }
