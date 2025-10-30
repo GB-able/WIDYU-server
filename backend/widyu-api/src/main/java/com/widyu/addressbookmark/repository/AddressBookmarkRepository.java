@@ -1,4 +1,4 @@
-package com.widyu.address.repository;
+package com.widyu.addressbookmark.repository;
 
 import com.widyu.addressbookmark.AddressBookmark;
 import org.springframework.data.jpa.repository.JpaRepository;
