@@ -5,6 +5,8 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
+import java.time.LocalDate;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.member.Member;
@@ -197,6 +199,45 @@ public class HealthScheduleService {
 
         return schedules.stream()
                 .map(HealthScheduleDayResponse::from)
+                .toList();
+    }
+
+    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date) {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        // 특정 날짜의 일정 조회
+        List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndDate(
+                currentMember.getId(), date
+        );
+
+        return schedules.stream()
+                .map(HealthScheduleDetailResponse::from)
+                .toList();
+    }
+
+    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForSenior(Long memberId, LocalDate date) {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        // 시니어 프로필 조회
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
+
+        // 보호자-시니어 연결 확인
+        boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(
+                seniorProfile.getId(), currentMember.getId()
+        );
+
+        if (!isConnected) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 일정을 조회할 권한이 없습니다.");
+        }
+
+        // 특정 날짜의 일정 조회
+        List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndDate(
+                memberId, date
+        );
+
+        return schedules.stream()
+                .map(HealthScheduleDetailResponse::from)
                 .toList();
     }
 }

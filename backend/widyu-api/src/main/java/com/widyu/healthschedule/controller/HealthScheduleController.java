@@ -4,9 +4,11 @@ import com.widyu.healthschedule.application.HealthScheduleFacade;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -100,6 +102,31 @@ public class HealthScheduleController {
         return ApiResponseTemplate.ok()
                 .code("HLTH_2004")
                 .message("건강 일정 캘린더 조회가 완료되었습니다.")
+                .body(response);
+    }
+
+    @GetMapping("/daily/seniors")
+    public ApiResponseTemplate<List<HealthScheduleDetailResponse>> getHealthSchedulesByDateForMe(
+            @RequestParam LocalDate date
+    ) {
+        List<HealthScheduleDetailResponse> response = healthScheduleFacade.getHealthSchedulesByDateForMe(date);
+
+        return ApiResponseTemplate.ok()
+                .code("HLTH_2005")
+                .message("건강 일정 상세 조회가 완료되었습니다.")
+                .body(response);
+    }
+
+    @GetMapping("/daily/guardians/{memberId}")
+    public ApiResponseTemplate<List<HealthScheduleDetailResponse>> getHealthSchedulesByDateForSenior(
+            @PathVariable Long memberId,
+            @RequestParam LocalDate date
+    ) {
+        List<HealthScheduleDetailResponse> response = healthScheduleFacade.getHealthSchedulesByDateForSenior(memberId, date);
+
+        return ApiResponseTemplate.ok()
+                .code("HLTH_2005")
+                .message("건강 일정 상세 조회가 완료되었습니다.")
                 .body(response);
     }
 }

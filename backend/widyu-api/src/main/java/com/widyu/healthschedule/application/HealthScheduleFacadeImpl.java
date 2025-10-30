@@ -3,7 +3,9 @@ package com.widyu.healthschedule.application;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -42,5 +44,15 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
     @Override
     public List<HealthScheduleDayResponse> getHealthScheduleCalendarForSenior(Long seniorId, int year, int month) {
         return healthScheduleService.getHealthScheduleCalendarForSenior(seniorId, year, month);
+    }
+
+    @Override
+    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date) {
+        return healthScheduleService.getHealthSchedulesByDateForMe(date);
+    }
+
+    @Override
+    public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForSenior(Long seniorId, LocalDate date) {
+        return healthScheduleService.getHealthSchedulesByDateForSenior(seniorId, date);
     }
 }

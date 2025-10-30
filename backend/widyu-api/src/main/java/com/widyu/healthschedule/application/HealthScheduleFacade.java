@@ -3,7 +3,9 @@ package com.widyu.healthschedule.application;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface HealthScheduleFacade {
@@ -37,4 +39,14 @@ public interface HealthScheduleFacade {
      * 보호자가 시니어 건강 일정 캘린더 조회
      */
     List<HealthScheduleDayResponse> getHealthScheduleCalendarForSenior(Long seniorId, int year, int month);
+
+    /**
+     * 시니어 본인 특정 날짜 일정 조회
+     */
+    List<HealthScheduleDetailResponse> getHealthSchedulesByDateForMe(LocalDate date);
+
+    /**
+     * 보호자가 시니어 특정 날짜 일정 조회
+     */
+    List<HealthScheduleDetailResponse> getHealthSchedulesByDateForSenior(Long seniorId, LocalDate date);
 }
