@@ -5,28 +5,20 @@ import com.widyu.healthschedule.ProgressStatus;
 import java.time.LocalDateTime;
 
 public record HealthScheduleResponse(
-        Long healthScheduleId,
         String scheduleName,
+        LocalDateTime scheduledAt,
         String placeAddress,
         String latitude,
-        String longitude,
-        LocalDateTime scheduledAt,
-        ProgressStatus progressStatus,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        String longitude
 ) {
 
     public static HealthScheduleResponse from(HealthSchedule healthSchedule) {
         return new HealthScheduleResponse(
-                healthSchedule.getId(),
                 healthSchedule.getScheduleName(),
+                healthSchedule.getScheduledAt(),
                 healthSchedule.getPlaceAddress(),
                 healthSchedule.getLatitude(),
-                healthSchedule.getLongitude(),
-                healthSchedule.getScheduledAt(),
-                healthSchedule.getProgressStatus(),
-                healthSchedule.getCreatedAt(),
-                healthSchedule.getUpdatedAt()
+                healthSchedule.getLongitude()
         );
     }
 }
