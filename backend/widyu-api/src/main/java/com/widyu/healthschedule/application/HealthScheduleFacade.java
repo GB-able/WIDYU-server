@@ -1,6 +1,7 @@
 package com.widyu.healthschedule.application;
 
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
+import com.widyu.healthschedule.dto.request.HealthSchedulePointGetRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
@@ -50,4 +51,9 @@ public interface HealthScheduleFacade {
      * 보호자가 시니어 특정 날짜 일정 조회
      */
     List<HealthScheduleDetailResponse> getHealthSchedulesByDateForSenior(Long seniorId, LocalDate date);
+
+    /**
+     * 시니어 포인트 적립
+     */
+    void accumulateHealthSchedulePoints(HealthSchedulePointGetRequest healthSchedulePointGetRequest);
 }

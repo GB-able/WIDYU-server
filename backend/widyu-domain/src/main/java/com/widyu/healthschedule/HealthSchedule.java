@@ -116,10 +116,6 @@ public class HealthSchedule extends BaseTimeEntity {
         }
     }
 
-    public void delete() {
-        this.status = Status.DELETED;
-    }
-
     public void claimReward() {
         this.isReward = true;
     }
