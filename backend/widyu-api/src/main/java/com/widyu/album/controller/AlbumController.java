@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/albums")
+@RequestMapping("/api/v1/albums")
 public class AlbumController implements AlbumDocs {
 
     private final AlbumFacade albumFacade;
