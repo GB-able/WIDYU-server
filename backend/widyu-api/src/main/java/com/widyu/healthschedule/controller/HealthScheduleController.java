@@ -8,6 +8,7 @@ import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleWeekListResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -142,5 +143,15 @@ public class HealthScheduleController {
                 .code("HLTH_2006")
                 .message("건강 일정 포인트 적립이 완료되었습니다.")
                 .build();
+    }
+
+    @GetMapping("/weekly")
+    public ApiResponseTemplate<HealthScheduleWeekListResponse> getHealthSchedulesForWeek() {
+        HealthScheduleWeekListResponse response = healthScheduleFacade.getHealthSchedulesForWeek();
+
+        return ApiResponseTemplate.ok()
+                .code("HLTH_2007")
+                .message("일주일치 건강 일정 조회가 완료되었습니다.")
+                .body(response);
     }
 }

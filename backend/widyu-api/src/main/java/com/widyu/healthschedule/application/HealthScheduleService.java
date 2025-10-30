@@ -7,6 +7,7 @@ import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleWeekListResponse;
 import java.time.LocalDate;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.healthschedule.repository.HealthScheduleRepository;
@@ -240,5 +241,23 @@ public class HealthScheduleService {
         return schedules.stream()
                 .map(HealthScheduleDetailResponse::from)
                 .toList();
+    }
+
+    /**
+     * 시니어 본인 일주일치 일정 조회 (로그인 시)
+     */
+    public HealthScheduleWeekListResponse getHealthSchedulesForWeek() {
+        Member currentMember = memberUtil.getCurrentMember();
+
+        // 오늘부터 7일 후까지
+        LocalDateTime startDate = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime endDate = startDate.plusDays(7);
+
+        // 일주일치 일정 조회
+        List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndWeek(
+                currentMember.getId(), startDate, endDate
+        );
+
+        return HealthScheduleWeekListResponse.from(schedules);
     }
 }

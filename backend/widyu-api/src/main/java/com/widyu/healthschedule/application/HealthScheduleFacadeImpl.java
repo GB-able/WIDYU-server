@@ -7,6 +7,7 @@ import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleWeekListResponse;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -62,5 +63,10 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
     @Override
     public void accumulateHealthSchedulePoints(HealthSchedulePointGetRequest healthSchedulePointGetRequest) {
         healthScheduleRewardService.accumulateHealthSchedulePoints(healthSchedulePointGetRequest);
+    }
+
+    @Override
+    public HealthScheduleWeekListResponse getHealthSchedulesForWeek() {
+        return healthScheduleService.getHealthSchedulesForWeek();
     }
 }

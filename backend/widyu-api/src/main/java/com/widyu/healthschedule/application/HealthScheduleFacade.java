@@ -7,6 +7,7 @@ import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleDetailWithRewardResponse;
 import com.widyu.healthschedule.dto.response.HealthScheduleResponse;
+import com.widyu.healthschedule.dto.response.HealthScheduleWeekListResponse;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -56,4 +57,9 @@ public interface HealthScheduleFacade {
      * 시니어 포인트 적립
      */
     void accumulateHealthSchedulePoints(HealthSchedulePointGetRequest healthSchedulePointGetRequest);
+
+    /**
+     * 시니어 본인 일주일치 일정 조회 (로그인 시)
+     */
+    HealthScheduleWeekListResponse getHealthSchedulesForWeek();
 }

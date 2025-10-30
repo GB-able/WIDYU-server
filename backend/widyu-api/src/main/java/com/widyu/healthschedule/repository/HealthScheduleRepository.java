@@ -23,4 +23,11 @@ public interface HealthScheduleRepository extends JpaRepository<HealthSchedule, 
             @Param("memberId") Long memberId,
             @Param("date") java.time.LocalDate date
     );
+
+    @Query("SELECT h FROM HealthSchedule h WHERE h.member.id = :memberId AND h.scheduledAt >= :startDate AND h.scheduledAt < :endDate ORDER BY h.scheduledAt ASC")
+    List<HealthSchedule> findByMemberIdAndWeek(
+            @Param("memberId") Long memberId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }
