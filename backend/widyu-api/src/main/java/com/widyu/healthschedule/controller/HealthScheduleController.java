@@ -1,7 +1,9 @@
 package com.widyu.healthschedule.controller;
 
 import com.widyu.healthschedule.application.HealthScheduleFacade;
+import com.widyu.healthschedule.controller.docs.HealthScheduleDocs;
 import com.widyu.healthschedule.dto.request.HealthScheduleCompleteRequest;
+import com.widyu.healthschedule.dto.request.HealthScheduleCreateForSeniorRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthSchedulePointGetRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
@@ -28,13 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/health-schedules")
-public class HealthScheduleController {
+public class HealthScheduleController implements HealthScheduleDocs {
 
     private final HealthScheduleFacade healthScheduleFacade;
 
     @PostMapping("/seniors")
     public ApiResponseTemplate<HealthScheduleResponse> createHealthScheduleForMe(
-            @RequestBody HealthScheduleCreateRequest request
+            @Valid @RequestBody HealthScheduleCreateRequest request
     ) {
         HealthScheduleResponse response = healthScheduleFacade.createHealthScheduleForMe(request);
 
@@ -44,12 +46,11 @@ public class HealthScheduleController {
                 .body(response);
     }
 
-    @PostMapping("/guardians/{memberId}")
+    @PostMapping("/guardians")
     public ApiResponseTemplate<HealthScheduleResponse> createHealthScheduleForSenior(
-            @PathVariable Long memberId,
-            @RequestBody HealthScheduleCreateRequest request
+            @Valid @RequestBody HealthScheduleCreateForSeniorRequest request
     ) {
-        HealthScheduleResponse response = healthScheduleFacade.createHealthScheduleForSenior(memberId, request);
+        HealthScheduleResponse response = healthScheduleFacade.createHealthScheduleForSenior(request);
 
         return ApiResponseTemplate.ok()
                 .code("HLTH_2001")

@@ -2,6 +2,7 @@ package com.widyu.healthschedule.application;
 
 import com.widyu.global.util.MemberUtil;
 import com.widyu.healthschedule.HealthSchedule;
+import com.widyu.healthschedule.dto.request.HealthScheduleCreateForSeniorRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
 import com.widyu.healthschedule.dto.response.HealthScheduleDayResponse;
@@ -62,15 +63,15 @@ public class HealthScheduleService {
      * 보호자가 시니어 일정 생성
      */
     @Transactional
-    public HealthScheduleResponse createHealthScheduleForSenior(Long seniorId, HealthScheduleCreateRequest request) {
+    public HealthScheduleResponse createHealthScheduleForSenior(HealthScheduleCreateForSeniorRequest request) {
         Member currentMember = memberUtil.getCurrentMember();
 
         // 시니어 조회
-        Member seniorMember = memberRepository.findById(seniorId)
+        Member seniorMember = memberRepository.findById(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어를 찾을 수 없습니다."));
 
         // 시니어 프로필 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(seniorId)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
 
         // 보호자-시니어 연결 확인

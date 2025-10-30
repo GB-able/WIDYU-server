@@ -1,5 +1,6 @@
 package com.widyu.healthschedule.application;
 
+import com.widyu.healthschedule.dto.request.HealthScheduleCreateForSeniorRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthSchedulePointGetRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
@@ -21,7 +22,7 @@ public interface HealthScheduleFacade {
     /**
      * 보호자가 시니어 건강 일정 생성
      */
-    HealthScheduleResponse createHealthScheduleForSenior(Long seniorId, HealthScheduleCreateRequest request);
+    HealthScheduleResponse createHealthScheduleForSenior(HealthScheduleCreateForSeniorRequest request);
 
     /**
      * 건강 일정 수정

@@ -1,5 +1,6 @@
 package com.widyu.healthschedule.application;
 
+import com.widyu.healthschedule.dto.request.HealthScheduleCreateForSeniorRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleCreateRequest;
 import com.widyu.healthschedule.dto.request.HealthSchedulePointGetRequest;
 import com.widyu.healthschedule.dto.request.HealthScheduleUpdateRequest;
@@ -27,8 +28,8 @@ public class HealthScheduleFacadeImpl implements HealthScheduleFacade {
     }
 
     @Override
-    public HealthScheduleResponse createHealthScheduleForSenior(Long seniorId, HealthScheduleCreateRequest request) {
-        return healthScheduleService.createHealthScheduleForSenior(seniorId, request);
+    public HealthScheduleResponse createHealthScheduleForSenior(HealthScheduleCreateForSeniorRequest request) {
+        return healthScheduleService.createHealthScheduleForSenior(request);
     }
 
     @Override
