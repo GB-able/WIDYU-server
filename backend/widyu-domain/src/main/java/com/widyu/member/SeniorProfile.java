@@ -47,18 +47,22 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(nullable = false)
     private Long points = 0L;
 
+    @Column(name = "default_walk_goal")
+    private Integer defaultWalkGoal;
+
     @OneToMany(mappedBy = "senior", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FamilyConnection> familyConnections = new ArrayList<>();
 
     @Builder(access = AccessLevel.PRIVATE)
     private SeniorProfile(Member member, String birthDate, String address, String detailAddress,
-                          String inviteCode, Long points) {
+                          String inviteCode, Long points, Integer defaultWalkGoal) {
         this.member = member;
         this.birthDate = birthDate;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
         this.points = points;
+        this.defaultWalkGoal = defaultWalkGoal;
     }
 
     public static SeniorProfile createSeniorProfile(Member member, String birthDate, String address,
@@ -70,6 +74,7 @@ public class SeniorProfile extends BaseTimeEntity {
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
                 .points(100L)  // 초기 포인트 100점
+                .defaultWalkGoal(null)  // 초기 걷기 목표는 없음
                 .build();
     }
 
@@ -87,5 +92,13 @@ public class SeniorProfile extends BaseTimeEntity {
 
     public boolean hasEnoughPoints(Long requiredPoints) {
         return this.points >= requiredPoints;
+    }
+
+    public void updateDefaultWalkGoal(Integer walkGoal) {
+        this.defaultWalkGoal = walkGoal;
+    }
+
+    public boolean hasDefaultWalkGoal() {
+        return this.defaultWalkGoal != null;
     }
 }
