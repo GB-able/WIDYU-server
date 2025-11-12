@@ -4,5 +4,6 @@ public enum FcmCategory {
     ALL,
     ALBUM,
     TARGET,
-    HEALTH_SCHEDULE
+    HEALTH_SCHEDULE,
+    WALK
 }
