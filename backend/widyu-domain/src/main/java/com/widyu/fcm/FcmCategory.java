@@ -3,5 +3,6 @@ package com.widyu.fcm;
 public enum FcmCategory {
     ALL,
     ALBUM,
-    TARGET
+    TARGET,
+    HEALTH_SCHEDULE
 }
