@@ -25,6 +25,7 @@ public class FcmCategoryResponse {
             case ALBUM -> "앨범";
             case TARGET -> "목표";
             case HEALTH_SCHEDULE -> "방문 일정";
+            case WALK -> "만보계";
         };
     }
 }
