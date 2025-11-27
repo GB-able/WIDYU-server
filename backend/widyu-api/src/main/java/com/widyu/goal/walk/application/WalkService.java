@@ -99,18 +99,19 @@ public class WalkService {
             targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
             log.info("걷기 목표 설정 (처음): memberId={}, defaultWalkGoal={}, 오늘부터 적용",
                     targetMember.getId(), request.steps());
-        } else {
-            // 목표 수정: 오늘은 기존 목표 유지, 내일부터 새 목표 적용
-            if (!todayWalkExists) {
-                // 오늘 Walk 기록이 없으면 기존 defaultWalkGoal로 생성
-                Walk todayWalk = Walk.createWithGoal(targetMember, today, previousDefaultGoal);
-                walkRepository.save(todayWalk);
-            }
-            // 내일부터 적용될 새 목표 설정
-            targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
-            log.info("걷기 목표 수정: memberId={}, 기존={}, 신규={}, 내일부터 적용",
-                    targetMember.getId(), previousDefaultGoal, request.steps());
+            return;
         }
+
+        // 목표 수정: 오늘은 기존 목표 유지, 내일부터 새 목표 적용
+        if (!todayWalkExists) {
+            // 오늘 Walk 기록이 없으면 기존 defaultWalkGoal로 생성
+            Walk todayWalk = Walk.createWithGoal(targetMember, today, previousDefaultGoal);
+            walkRepository.save(todayWalk);
+        }
+        // 내일부터 적용될 새 목표 설정
+        targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
+        log.info("걷기 목표 수정: memberId={}, 기존={}, 신규={}, 내일부터 적용",
+                targetMember.getId(), previousDefaultGoal, request.steps());
     }
 
     @Transactional
@@ -210,7 +211,10 @@ public class WalkService {
                         walk.getGoalSteps(),
                         walk.getActualSteps()
                 ));
-            } else if (defaultWalkGoal != null) {
+                continue;
+            }
+
+            if (defaultWalkGoal != null) {
                 // Walk 기록이 없어도 defaultWalkGoal이 있으면 기본 목표로 반환
                 dailyData.add(new WalkMonthlyResponse.WalkDaily(
                         date.toString(),
