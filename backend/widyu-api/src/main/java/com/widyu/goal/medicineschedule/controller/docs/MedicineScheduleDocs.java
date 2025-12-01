@@ -315,7 +315,7 @@ public interface MedicineScheduleDocs {
                                               "alarmTime": "08:00",
                                               "categories": [
                                                 {
-                                                  "name": "아침 식후",
+                                                  "name": "두통 약",
                                                   "medicines": [
                                                     {
                                                       "itemName": "타이레놀",
@@ -393,7 +393,7 @@ public interface MedicineScheduleDocs {
                                               "alarmTime": "09:00",
                                               "categories": [
                                                 {
-                                                  "name": "아침 식후",
+                                                  "name": "두통 약",
                                                   "medicines": [
                                                     {
                                                       "itemName": "타이레놀",
