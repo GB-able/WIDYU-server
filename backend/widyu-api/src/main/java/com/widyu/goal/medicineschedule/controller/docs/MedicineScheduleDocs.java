@@ -11,6 +11,9 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleTodayRespons
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,7 +43,53 @@ public interface MedicineScheduleDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineScheduleTodayResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "schedules": [
+                                                  {
+                                                    "scheduleId": 1,
+                                                    "totalCount": 3,
+                                                    "alarmTime": "08:00",
+                                                    "medicines": [
+                                                      {
+                                                        "itemName": "타이레놀",
+                                                        "dose": 1
+                                                      },
+                                                      {
+                                                        "itemName": "비타민C",
+                                                        "dose": 2
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "scheduleId": 2,
+                                                    "totalCount": 1,
+                                                    "alarmTime": "20:00",
+                                                    "medicines": [
+                                                      {
+                                                        "itemName": "오메가3",
+                                                        "dose": 1
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
@@ -64,7 +113,34 @@ public interface MedicineScheduleDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineMonthlyResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "lastMonthCount": 25,
+                                                "currentMonthCount": 18,
+                                                "monthlyGoalRates": [
+                                                  1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0,
+                                                  1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0,
+                                                  1.0, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0,
+                                                  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                                  0.0, 0.0
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
@@ -92,7 +168,53 @@ public interface MedicineScheduleDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineHomeResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "schedules": [
+                                                  {
+                                                    "scheduleId": 1,
+                                                    "totalCount": 3,
+                                                    "alarmTime": "08:00",
+                                                    "medicines": [
+                                                      {
+                                                        "itemName": "타이레놀",
+                                                        "dose": 1
+                                                      },
+                                                      {
+                                                        "itemName": "비타민C",
+                                                        "dose": 2
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "scheduleId": 2,
+                                                    "totalCount": 1,
+                                                    "alarmTime": "20:00",
+                                                    "medicines": [
+                                                      {
+                                                        "itemName": "오메가3",
+                                                        "dose": 1
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
@@ -114,7 +236,50 @@ public interface MedicineScheduleDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineScheduleDetailResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "alarmTime": "08:00",
+                                                "totalCount": 3.0,
+                                                "categories": [
+                                                  {
+                                                    "categoryId": 1,
+                                                    "categoryName": "아침 식후",
+                                                    "countSum": 3.0,
+                                                    "medicines": [
+                                                      {
+                                                        "medicineId": 1,
+                                                        "itemName": "타이레놀",
+                                                        "dose": 1.0,
+                                                        "itemImage": "https://example.com/tylenol.jpg",
+                                                        "description": "해열, 진통제"
+                                                      },
+                                                      {
+                                                        "medicineId": 2,
+                                                        "itemName": "비타민C",
+                                                        "dose": 2.0,
+                                                        "itemImage": "https://example.com/vitaminc.jpg",
+                                                        "description": "면역력 강화"
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "400", description = "존재하지 않는 스케줄"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
@@ -138,10 +303,64 @@ public interface MedicineScheduleDocs {
                     **권한:**
                     - memberId가 null → 본인의 약 복용 스케줄 생성 (시니어)
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 약 복용 스케줄 생성
-                    """
+                    """,
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CreateMedicineScheduleRequest.class),
+                            examples = @ExampleObject(
+                                    name = "약 복용 스케줄 생성 예시",
+                                    value = """
+                                            {
+                                              "alarmTime": "08:00",
+                                              "categories": [
+                                                {
+                                                  "name": "아침 식후",
+                                                  "medicines": [
+                                                    {
+                                                      "itemName": "타이레놀",
+                                                      "dose": 1,
+                                                      "itemImage": "https://example.com/tylenol.jpg",
+                                                      "usage": "1일 3회, 식후 30분",
+                                                      "efficacy": "해열, 진통"
+                                                    },
+                                                    {
+                                                      "itemName": "비타민C",
+                                                      "dose": 2,
+                                                      "itemImage": "https://example.com/vitaminc.jpg",
+                                                      "usage": "1일 1회",
+                                                      "efficacy": "면역력 강화"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            )
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "생성 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "생성 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineScheduleIdResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "scheduleId": 1
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
@@ -162,7 +381,35 @@ public interface MedicineScheduleDocs {
 
                     **권한:**
                     - 본인 또는 보호자만 수정 가능
-                    """
+                    """,
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = UpdateMedicineScheduleRequest.class),
+                            examples = @ExampleObject(
+                                    name = "약 복용 스케줄 수정 예시",
+                                    value = """
+                                            {
+                                              "alarmTime": "09:00",
+                                              "categories": [
+                                                {
+                                                  "name": "아침 식후",
+                                                  "medicines": [
+                                                    {
+                                                      "itemName": "타이레놀",
+                                                      "dose": 2,
+                                                      "itemImage": "https://example.com/tylenol.jpg",
+                                                      "usage": "1일 3회, 식후 30분",
+                                                      "efficacy": "해열, 진통"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            )
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "수정 성공"),
@@ -237,18 +484,52 @@ public interface MedicineScheduleDocs {
 
                     **기능:**
                     - 약품명 키워드로 검색
-                    - 약품 정보 (이름, 이미지, 설명, 용법, 효능) 반환
+                    - 약품 정보 (이름, 이미지, 용법, 효능) 반환
 
                     **특이사항:**
-                    - 추후 공공 데이터 API 연동 예정
+                    - 공공 데이터 API 연동되어 있음
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "검색 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "검색 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MedicineSearchResponse.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "isSuccess": true,
+                                              "code": "200",
+                                              "message": "요청에 성공하였습니다.",
+                                              "result": {
+                                                "medicines": [
+                                                  {
+                                                    "medicineId": 1,
+                                                    "itemName": "타이레놀",
+                                                    "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/154603080625500106",
+                                                    "usage": "1일 3회, 식후 30분에 복용",
+                                                    "efficacy": "두통, 치통, 발치 후 동통, 인후통, 이통, 관절통, 신경통, 요통, 근육통, 생리통, 타박통, 염좌통의 진통과 오한, 발열 시의 해열"
+                                                  },
+                                                  {
+                                                    "medicineId": 2,
+                                                    "itemName": "타이레놀 이알서방정",
+                                                    "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/147427291350900121",
+                                                    "usage": "성인 및 12세 이상의 소아는 1회 2정을 1일 3회 복용",
+                                                    "efficacy": "두통, 신경통, 생리통, 치통의 진통 및 해열"
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<MedicineSearchResponse> searchMedicines(
-            @Parameter(description = "검색 키워드", required = true)
+            @Parameter(description = "검색 키워드", required = true, example = "타이레놀")
             @RequestParam String keyword
     );
 }
