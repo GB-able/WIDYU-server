@@ -7,10 +7,10 @@ public record MedicineSearchResponse(
 ) {
     public record MedicineItem(
             Long medicineId,
-            String medicineName,
-            String imageUrl,
-            String description,
+            String itemName,
+            String itemImage,
             String usage,
             String efficacy
+
     ) {}
 }

@@ -65,7 +65,10 @@ dependencies {
     
     // Message
     implementation 'net.nurigo:sdk:4.2.7'
-    
+
+    // Kotlin (required for nurigo SMS SDK)
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+
     // OpenFeign
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     

@@ -2,6 +2,7 @@ package com.widyu.goal.medicineschedule.controller;
 
 import com.widyu.global.annotation.ValidateFamilyAccess;
 import com.widyu.global.response.ApiResponseTemplate;
+import com.widyu.goal.medicineschedule.application.ExternalMedicineService;
 import com.widyu.goal.medicineschedule.application.MedicationProofService;
 import com.widyu.goal.medicineschedule.application.MedicineScheduleService;
 import com.widyu.goal.medicineschedule.controller.docs.MedicineScheduleDocs;
@@ -37,6 +38,7 @@ public class MedicineScheduleController implements MedicineScheduleDocs {
 
     private final MedicineScheduleService medicineScheduleService;
     private final MedicationProofService medicationProofService;
+    private final ExternalMedicineService externalMedicineService;
 
     @Override
     @GetMapping("/today")
@@ -154,7 +156,7 @@ public class MedicineScheduleController implements MedicineScheduleDocs {
     public ApiResponseTemplate<MedicineSearchResponse> searchMedicines(
             @RequestParam String keyword
     ) {
-        MedicineSearchResponse response = medicineScheduleService.searchMedicines(keyword);
+        MedicineSearchResponse response = externalMedicineService.searchAndSaveMedicines(keyword);
         return ApiResponseTemplate.ok()
                 .code("MEDICINE_2009")
                 .message("약품 검색 성공")

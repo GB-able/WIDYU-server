@@ -1,5 +1,6 @@
 package com.widyu.goal.medicineschedule.dto.request;
 
+import com.widyu.goal.medicineschedule.validator.TimeFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -9,6 +10,7 @@ import java.util.List;
 
 public record CreateMedicineScheduleRequest(
         @NotBlank(message = "알람 시간은 필수입니다.")
+        @TimeFormat
         String alarmTime,
 
         @NotNull(message = "카테고리는 필수입니다.")
@@ -25,21 +27,21 @@ public record CreateMedicineScheduleRequest(
     ) {}
 
     public record MedicineItem(
-            @NotNull(message = "약품 ID는 필수입니다.")
-            @Positive(message = "약품 ID는 양수여야 합니다.")
-            Long medicineId,
+            String itemSeq,
 
             @NotBlank(message = "약품 이름은 필수입니다.")
-            String medicineName,
+            String itemName,
+
+            String entpName,
 
             @NotNull(message = "복용량은 필수입니다.")
             @Positive(message = "복용량은 양수여야 합니다.")
             Double dose,
 
-            String unit,
+            String itemImage,
 
-            String imageUrl,
+            String useMethodQesitm,
 
-            String description
+            String efcyQesitm
     ) {}
 }

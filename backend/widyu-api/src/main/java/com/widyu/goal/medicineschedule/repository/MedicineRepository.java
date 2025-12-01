@@ -9,8 +9,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface MedicineRepository extends JpaRepository<Medicine, Long> {
 
-    @Query("SELECT m FROM Medicine m WHERE LOWER(m.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    @Query("SELECT m FROM Medicine m WHERE LOWER(m.itemName) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Medicine> searchByName(@Param("keyword") String keyword);
 
-    Optional<Medicine> findByName(String name);
+    Optional<Medicine> findByItemName(String itemName);
+
+    Optional<Medicine> findByItemSeq(String itemSeq);
 }

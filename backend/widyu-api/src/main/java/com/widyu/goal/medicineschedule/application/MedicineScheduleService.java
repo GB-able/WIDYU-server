@@ -155,22 +155,11 @@ public class MedicineScheduleService {
             schedule.addCategory(category);
 
             for (CreateMedicineScheduleRequest.MedicineItem medicineItem : categoryItem.medicines()) {
-                Medicine medicine = medicineRepository.findById(medicineItem.medicineId())
-                        .orElseGet(() -> {
-                            Medicine newMedicine = Medicine.create(
-                                    medicineItem.medicineName(),
-                                    medicineItem.imageUrl(),
-                                    medicineItem.description(),
-                                    null,
-                                    null
-                            );
-                            return medicineRepository.save(newMedicine);
-                        });
+                Medicine medicine = findOrCreateMedicine(medicineItem);
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue(),
-                        medicineItem.unit()
+                        medicineItem.dose().intValue()
                 );
                 category.addMedicine(detail);
             }
@@ -207,22 +196,11 @@ public class MedicineScheduleService {
             schedule.addCategory(category);
 
             for (UpdateMedicineScheduleRequest.MedicineItem medicineItem : categoryItem.medicines()) {
-                Medicine medicine = medicineRepository.findById(medicineItem.medicineId())
-                        .orElseGet(() -> {
-                            Medicine newMedicine = Medicine.create(
-                                    medicineItem.medicineName(),
-                                    medicineItem.imageUrl(),
-                                    medicineItem.description(),
-                                    null,
-                                    null
-                            );
-                            return medicineRepository.save(newMedicine);
-                        });
+                Medicine medicine = findOrCreateMedicine(medicineItem);
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue(),
-                        medicineItem.unit()
+                        medicineItem.dose().intValue()
                 );
                 category.addMedicine(detail);
             }
@@ -248,21 +226,66 @@ public class MedicineScheduleService {
         log.info("약 복용 스케줄 삭제: scheduleId={}, memberId={}", scheduleId, targetMember.getId());
     }
 
-    public MedicineSearchResponse searchMedicines(String keyword) {
-        List<Medicine> medicines = medicineRepository.searchByName(keyword);
+    private Medicine findOrCreateMedicine(CreateMedicineScheduleRequest.MedicineItem medicineItem) {
+        if (medicineItem.itemSeq() != null && !medicineItem.itemSeq().isBlank()) {
+            return medicineRepository.findByItemSeq(medicineItem.itemSeq())
+                    .orElseGet(() -> {
+                        Medicine newMedicine = Medicine.create(
+                                medicineItem.itemSeq(),
+                                medicineItem.itemName(),
+                                medicineItem.entpName(),
+                                medicineItem.itemImage(),
+                                medicineItem.useMethodQesitm(),
+                                medicineItem.efcyQesitm()
+                        );
+                        return medicineRepository.save(newMedicine);
+                    });
+        }
 
-        List<MedicineSearchResponse.MedicineItem> medicineItems = medicines.stream()
-                .map(medicine -> new MedicineSearchResponse.MedicineItem(
-                        medicine.getId(),
-                        medicine.getName(),
-                        medicine.getImageUrl(),
-                        medicine.getDescription(),
-                        medicine.getUsage(),
-                        medicine.getEfficacy()
-                ))
-                .collect(Collectors.toList());
+        // itemSeq가 없으면 이름으로 검색 (기존 약품 재사용)
+        return medicineRepository.findByItemName(medicineItem.itemName())
+                .orElseGet(() -> {
+                    Medicine newMedicine = Medicine.create(
+                            null,
+                            medicineItem.itemName(),
+                            medicineItem.entpName(),
+                            medicineItem.itemImage(),
+                            medicineItem.useMethodQesitm(),
+                            medicineItem.efcyQesitm()
+                    );
+                    return medicineRepository.save(newMedicine);
+                });
+    }
 
-        return new MedicineSearchResponse(medicineItems);
+    private Medicine findOrCreateMedicine(UpdateMedicineScheduleRequest.MedicineItem medicineItem) {
+        if (medicineItem.itemSeq() != null && !medicineItem.itemSeq().isBlank()) {
+            return medicineRepository.findByItemSeq(medicineItem.itemSeq())
+                    .orElseGet(() -> {
+                        Medicine newMedicine = Medicine.create(
+                                medicineItem.itemSeq(),
+                                medicineItem.itemName(),
+                                medicineItem.entpName(),
+                                medicineItem.itemImage(),
+                                medicineItem.useMethodQesitm(),
+                                medicineItem.efcyQesitm()
+                        );
+                        return medicineRepository.save(newMedicine);
+                    });
+        }
+
+        // itemSeq가 없으면 이름으로 검색 (기존 약품 재사용)
+        return medicineRepository.findByItemName(medicineItem.itemName())
+                .orElseGet(() -> {
+                    Medicine newMedicine = Medicine.create(
+                            null,
+                            medicineItem.itemName(),
+                            medicineItem.entpName(),
+                            medicineItem.itemImage(),
+                            medicineItem.useMethodQesitm(),
+                            medicineItem.efcyQesitm()
+                    );
+                    return medicineRepository.save(newMedicine);
+                });
     }
 
     private Member getMember(Long memberId) {

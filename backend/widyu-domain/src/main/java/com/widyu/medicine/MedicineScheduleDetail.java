@@ -36,29 +36,20 @@ public class MedicineScheduleDetail extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer dose;
 
-    @Column(length = 10)
-    private String unit;
-
     @Builder(access = AccessLevel.PRIVATE)
-    private MedicineScheduleDetail(Medicine medicine, Integer dose, String unit) {
+    private MedicineScheduleDetail(Medicine medicine, Integer dose) {
         this.medicine = medicine;
         this.dose = dose;
-        this.unit = unit;
     }
 
-    public static MedicineScheduleDetail create(Medicine medicine, Integer dose, String unit) {
+    public static MedicineScheduleDetail create(Medicine medicine, Integer dose) {
         return MedicineScheduleDetail.builder()
                 .medicine(medicine)
                 .dose(dose)
-                .unit(unit)
                 .build();
     }
 
     public void updateDose(Integer dose) {
         this.dose = dose;
-    }
-
-    public void updateUnit(String unit) {
-        this.unit = unit;
     }
 }

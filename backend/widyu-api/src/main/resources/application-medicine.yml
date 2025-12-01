@@ -1,0 +1,4 @@
+medicine:
+  api:
+    url: http://apis.data.go.kr/1471000/DrbEasyDrugInfoService
+    service-key: ${MEDICINE_API_SERVICE_KEY}

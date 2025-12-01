@@ -20,38 +20,65 @@ public class Medicine extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true, length = 100)
+    private String itemSeq;
+
     @Column(nullable = false, length = 200)
-    private String name;
+    private String itemName;
+
+    @Column(length = 200)
+    private String entpName;
 
     @Column(length = 500)
-    private String imageUrl;
+    private String itemImage;
 
     @Column(columnDefinition = "TEXT")
-    private String description;
+    private String useMethodQesitm;
 
     @Column(columnDefinition = "TEXT")
-    private String usage;
-
-    @Column(columnDefinition = "TEXT")
-    private String efficacy;
+    private String efcyQesitm;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private Medicine(String name, String imageUrl, String description, String usage, String efficacy) {
-        this.name = name;
-        this.imageUrl = imageUrl;
-        this.description = description;
-        this.usage = usage;
-        this.efficacy = efficacy;
+    private Medicine(String itemSeq, String itemName, String entpName, String itemImage,
+                     String useMethodQesitm, String efcyQesitm) {
+        this.itemSeq = itemSeq;
+        this.itemName = itemName;
+        this.entpName = entpName;
+        this.itemImage = itemImage;
+        this.useMethodQesitm = useMethodQesitm;
+        this.efcyQesitm = efcyQesitm;
     }
 
-    public static Medicine create(String name, String imageUrl, String description,
-                                   String usage, String efficacy) {
+    public static Medicine create(String itemSeq, String itemName, String entpName, String itemImage,
+                                   String useMethodQesitm, String efcyQesitm) {
         return Medicine.builder()
-                .name(name)
-                .imageUrl(imageUrl)
-                .description(description)
-                .usage(usage)
-                .efficacy(efficacy)
+                .itemSeq(itemSeq)
+                .itemName(itemName)
+                .entpName(entpName)
+                .itemImage(itemImage)
+                .useMethodQesitm(useMethodQesitm)
+                .efcyQesitm(efcyQesitm)
                 .build();
+    }
+
+    // Getter 메서드 추가 (기존 코드와 호환성 유지)
+    public String getName() {
+        return itemName;
+    }
+
+    public String getImageUrl() {
+        return itemImage;
+    }
+
+    public String getUsage() {
+        return useMethodQesitm;
+    }
+
+    public String getEfficacy() {
+        return efcyQesitm;
+    }
+
+    public String getDescription() {
+        return null; // 하위 호환성
     }
 }
