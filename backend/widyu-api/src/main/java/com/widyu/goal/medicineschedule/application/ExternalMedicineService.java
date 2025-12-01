@@ -63,8 +63,8 @@ public class ExternalMedicineService {
                             medicine.getId(),
                             medicine.getItemName(),
                             medicine.getItemImage(),
-                            medicine.getEfcyQesitm(),
-                            medicine.getUseMethodQesitm()
+                            medicine.getUseMethodQesitm(),
+                            medicine.getEfcyQesitm()
                     ))
                     .collect(Collectors.toList());
 

@@ -27,12 +27,8 @@ public record UpdateMedicineScheduleRequest(
     ) {}
 
     public record MedicineItem(
-            String itemSeq,
-
             @NotBlank(message = "약품 이름은 필수입니다.")
             String itemName,
-
-            String entpName,
 
             @NotNull(message = "복용량은 필수입니다.")
             @Positive(message = "복용량은 양수여야 합니다.")
@@ -40,8 +36,8 @@ public record UpdateMedicineScheduleRequest(
 
             String itemImage,
 
-            String useMethodQesitm,
+            String usage,
 
-            String efcyQesitm
+            String efficacy
     ) {}
 }

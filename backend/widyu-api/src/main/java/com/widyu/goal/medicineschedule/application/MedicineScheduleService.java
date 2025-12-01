@@ -227,62 +227,30 @@ public class MedicineScheduleService {
     }
 
     private Medicine findOrCreateMedicine(CreateMedicineScheduleRequest.MedicineItem medicineItem) {
-        if (medicineItem.itemSeq() != null && !medicineItem.itemSeq().isBlank()) {
-            return medicineRepository.findByItemSeq(medicineItem.itemSeq())
-                    .orElseGet(() -> {
-                        Medicine newMedicine = Medicine.create(
-                                medicineItem.itemSeq(),
-                                medicineItem.itemName(),
-                                medicineItem.entpName(),
-                                medicineItem.itemImage(),
-                                medicineItem.useMethodQesitm(),
-                                medicineItem.efcyQesitm()
-                        );
-                        return medicineRepository.save(newMedicine);
-                    });
-        }
-
-        // itemSeq가 없으면 이름으로 검색 (기존 약품 재사용)
         return medicineRepository.findByItemName(medicineItem.itemName())
                 .orElseGet(() -> {
                     Medicine newMedicine = Medicine.create(
                             null,
                             medicineItem.itemName(),
-                            medicineItem.entpName(),
+                            null,
                             medicineItem.itemImage(),
-                            medicineItem.useMethodQesitm(),
-                            medicineItem.efcyQesitm()
+                            medicineItem.usage(),
+                            medicineItem.efficacy()
                     );
                     return medicineRepository.save(newMedicine);
                 });
     }
 
     private Medicine findOrCreateMedicine(UpdateMedicineScheduleRequest.MedicineItem medicineItem) {
-        if (medicineItem.itemSeq() != null && !medicineItem.itemSeq().isBlank()) {
-            return medicineRepository.findByItemSeq(medicineItem.itemSeq())
-                    .orElseGet(() -> {
-                        Medicine newMedicine = Medicine.create(
-                                medicineItem.itemSeq(),
-                                medicineItem.itemName(),
-                                medicineItem.entpName(),
-                                medicineItem.itemImage(),
-                                medicineItem.useMethodQesitm(),
-                                medicineItem.efcyQesitm()
-                        );
-                        return medicineRepository.save(newMedicine);
-                    });
-        }
-
-        // itemSeq가 없으면 이름으로 검색 (기존 약품 재사용)
         return medicineRepository.findByItemName(medicineItem.itemName())
                 .orElseGet(() -> {
                     Medicine newMedicine = Medicine.create(
                             null,
                             medicineItem.itemName(),
-                            medicineItem.entpName(),
+                            null,
                             medicineItem.itemImage(),
-                            medicineItem.useMethodQesitm(),
-                            medicineItem.efcyQesitm()
+                            medicineItem.usage(),
+                            medicineItem.efficacy()
                     );
                     return medicineRepository.save(newMedicine);
                 });
