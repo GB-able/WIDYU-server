@@ -228,32 +228,14 @@ public class MedicineScheduleService {
 
     private Medicine findOrCreateMedicine(CreateMedicineScheduleRequest.MedicineItem medicineItem) {
         return medicineRepository.findByItemName(medicineItem.itemName())
-                .orElseGet(() -> {
-                    Medicine newMedicine = Medicine.create(
-                            null,
-                            medicineItem.itemName(),
-                            null,
-                            medicineItem.itemImage(),
-                            medicineItem.usage(),
-                            medicineItem.efficacy()
-                    );
-                    return medicineRepository.save(newMedicine);
-                });
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST,
+                        "약품을 찾을 수 없습니다. 먼저 약품 검색을 통해 약품을 등록해주세요."));
     }
 
     private Medicine findOrCreateMedicine(UpdateMedicineScheduleRequest.MedicineItem medicineItem) {
         return medicineRepository.findByItemName(medicineItem.itemName())
-                .orElseGet(() -> {
-                    Medicine newMedicine = Medicine.create(
-                            null,
-                            medicineItem.itemName(),
-                            null,
-                            medicineItem.itemImage(),
-                            medicineItem.usage(),
-                            medicineItem.efficacy()
-                    );
-                    return medicineRepository.save(newMedicine);
-                });
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST,
+                        "약품을 찾을 수 없습니다. 먼저 약품 검색을 통해 약품을 등록해주세요."));
     }
 
     private Member getMember(Long memberId) {
