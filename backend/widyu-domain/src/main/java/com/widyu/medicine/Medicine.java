@@ -79,6 +79,19 @@ public class Medicine extends BaseTimeEntity {
     }
 
     public String getDescription() {
-        return null; // 하위 호환성
+        StringBuilder description = new StringBuilder();
+
+        if (efcyQesitm != null && !efcyQesitm.isBlank()) {
+            description.append(efcyQesitm);
+        }
+
+        if (useMethodQesitm != null && !useMethodQesitm.isBlank()) {
+            if (description.length() > 0) {
+                description.append("\n\n");
+            }
+            description.append(useMethodQesitm);
+        }
+
+        return description.length() > 0 ? description.toString() : null;
     }
 }

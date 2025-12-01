@@ -27,6 +27,8 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -147,7 +149,7 @@ public class MedicineScheduleService {
     public MedicineScheduleIdResponse createSchedule(CreateMedicineScheduleRequest request, Long memberId) {
         Member targetMember = getMember(memberId);
 
-        LocalTime alarmTime = LocalTime.parse(request.alarmTime());
+        LocalTime alarmTime = parseAlarmTime(request.alarmTime());
         MedicineSchedule schedule = MedicineSchedule.create(targetMember, alarmTime);
 
         for (CreateMedicineScheduleRequest.CategoryItem categoryItem : request.categories()) {
@@ -155,7 +157,7 @@ public class MedicineScheduleService {
             schedule.addCategory(category);
 
             for (CreateMedicineScheduleRequest.MedicineItem medicineItem : categoryItem.medicines()) {
-                Medicine medicine = findOrCreateMedicine(medicineItem);
+                Medicine medicine = findMedicineByName(medicineItem.itemName());
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
@@ -186,7 +188,7 @@ public class MedicineScheduleService {
                     "해당 스케줄을 수정할 권한이 없습니다.");
         }
 
-        LocalTime alarmTime = LocalTime.parse(request.alarmTime());
+        LocalTime alarmTime = parseAlarmTime(request.alarmTime());
         schedule.updateAlarmTime(alarmTime);
 
         schedule.getCategories().clear();
@@ -196,7 +198,7 @@ public class MedicineScheduleService {
             schedule.addCategory(category);
 
             for (UpdateMedicineScheduleRequest.MedicineItem medicineItem : categoryItem.medicines()) {
-                Medicine medicine = findOrCreateMedicine(medicineItem);
+                Medicine medicine = findMedicineByName(medicineItem.itemName());
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
@@ -226,14 +228,17 @@ public class MedicineScheduleService {
         log.info("약 복용 스케줄 삭제: scheduleId={}, memberId={}", scheduleId, targetMember.getId());
     }
 
-    private Medicine findOrCreateMedicine(CreateMedicineScheduleRequest.MedicineItem medicineItem) {
-        return medicineRepository.findByItemName(medicineItem.itemName())
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST,
-                        "약품을 찾을 수 없습니다. 먼저 약품 검색을 통해 약품을 등록해주세요."));
+    private LocalTime parseAlarmTime(String alarmTimeStr) {
+        try {
+            return LocalTime.parse(alarmTimeStr);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "알람 시간 형식이 올바르지 않습니다. HH:mm 형식으로 입력해주세요.");
+        }
     }
 
-    private Medicine findOrCreateMedicine(UpdateMedicineScheduleRequest.MedicineItem medicineItem) {
-        return medicineRepository.findByItemName(medicineItem.itemName())
+    private Medicine findMedicineByName(String itemName) {
+        return medicineRepository.findByItemName(itemName.trim())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST,
                         "약품을 찾을 수 없습니다. 먼저 약품 검색을 통해 약품을 등록해주세요."));
     }
@@ -265,8 +270,7 @@ public class MedicineScheduleService {
         int daysInMonth = month.lengthOfMonth();
         List<Double> rates = new ArrayList<>();
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 사용자입니다."));
+        Member member = getMember(memberId);
 
         List<MedicineSchedule> schedules = medicineScheduleRepository
                 .findByMemberAndStatusOrderByAlarmTime(member, Status.ACTIVE);
@@ -280,20 +284,25 @@ public class MedicineScheduleService {
             return rates;
         }
 
+        // 한 달치 MedicationProof를 한 번에 조회
+        LocalDateTime start = month.atDay(1).atStartOfDay();
+        LocalDateTime end = month.atEndOfMonth().atTime(LocalTime.MAX);
+        List<com.widyu.medicine.MedicationProof> proofs = medicationProofRepository
+                .findByMemberIdAndDateRange(member.getId(), start, end);
+
+        // 날짜별로 "어떤 스케줄들이 인증됐는지" 집계
+        Map<LocalDate, Set<Long>> scheduleIdsByDate = proofs.stream()
+                .collect(Collectors.groupingBy(
+                        proof -> proof.getVerifiedAt().toLocalDate(),
+                        Collectors.mapping(p -> p.getMedicineSchedule().getId(), Collectors.toSet())
+                ));
+
+        // 각 날짜별 달성률 계산
         for (int day = 1; day <= daysInMonth; day++) {
             LocalDate date = month.atDay(day);
-            int achievedCount = 0;
-
-            for (MedicineSchedule schedule : schedules) {
-                boolean hasProof = medicationProofRepository.existsByMedicineScheduleAndVerifiedAtBetween(
-                        schedule,
-                        date.atStartOfDay(),
-                        date.atTime(LocalTime.MAX)
-                );
-                if (hasProof) {
-                    achievedCount++;
-                }
-            }
+            int achievedCount = scheduleIdsByDate
+                    .getOrDefault(date, Set.of())
+                    .size();
 
             double rate = (double) achievedCount / totalSchedulesPerDay;
             rates.add(rate);
