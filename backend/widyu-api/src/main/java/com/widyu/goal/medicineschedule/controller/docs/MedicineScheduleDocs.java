@@ -315,21 +315,14 @@ public interface MedicineScheduleDocs {
                                               "alarmTime": "08:00",
                                               "categories": [
                                                 {
-                                                  "name": "두통 약",
+                                                  "name": "위염약",
                                                   "medicines": [
                                                     {
-                                                      "itemName": "타이레놀",
+                                                      "itemName": "이노엔비타메진캡슐",
                                                       "dose": 1,
-                                                      "itemImage": "https://example.com/tylenol.jpg",
-                                                      "usage": "1일 3회, 식후 30분",
-                                                      "efficacy": "해열, 진통"
-                                                    },
-                                                    {
-                                                      "itemName": "비타민C",
-                                                      "dose": 2,
-                                                      "itemImage": "https://example.com/vitaminc.jpg",
-                                                      "usage": "1일 1회",
-                                                      "efficacy": "면역력 강화"
+                                                      "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/1OSm8xoWGbV",
+                                                      "usage": "성인은 1회 2캡슐씩, 1일 1~2회 복용합니다.\\n",
+                                                      "efficacy": "이 약은 육체피로, 임신ㆍ수유기, 병중ㆍ병후(병을 앓는 동안이나 회복 후)의 체력 저하 시 비타민 B1, B6의 보급과 신경통, 근육통, 관절통(요통, 어깨결림 등), 각기, 눈의 피로, 구각염(입꼬리염), 구순염(입술염), 구내염(입안염), 설염(혀염), 습진, 피부염 증상의 완화에 사용합니다.\\n"
                                                     }
                                                   ]
                                                 }
@@ -393,14 +386,14 @@ public interface MedicineScheduleDocs {
                                               "alarmTime": "09:00",
                                               "categories": [
                                                 {
-                                                  "name": "두통 약",
+                                                  "name": "위염약",
                                                   "medicines": [
                                                     {
-                                                      "itemName": "타이레놀",
+                                                      "itemName": "이노엔비타메진캡슐",
                                                       "dose": 2,
-                                                      "itemImage": "https://example.com/tylenol.jpg",
-                                                      "usage": "1일 3회, 식후 30분",
-                                                      "efficacy": "해열, 진통"
+                                                      "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/1OSm8xoWGbV",
+                                                      "usage": "성인은 1회 2캡슐씩, 1일 1~2회 복용합니다.\\n",
+                                                      "efficacy": "이 약은 육체피로, 임신ㆍ수유기, 병중ㆍ병후(병을 앓는 동안이나 회복 후)의 체력 저하 시 비타민 B1, B6의 보급과 신경통, 근육통, 관절통(요통, 어깨결림 등), 각기, 눈의 피로, 구각염(입꼬리염), 구순염(입술염), 구내염(입안염), 설염(혀염), 습진, 피부염 증상의 완화에 사용합니다.\\n"
                                                     }
                                                   ]
                                                 }
