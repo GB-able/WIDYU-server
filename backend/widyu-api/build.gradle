@@ -55,7 +55,6 @@ dependencies {
     
     // FCM
     implementation 'com.google.firebase:firebase-admin:9.2.0'
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.16.1'
     
     // Swagger
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
@@ -90,6 +89,7 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.1"
+        mavenBom "com.fasterxml.jackson:jackson-bom:2.17.2"
     }
 }
 

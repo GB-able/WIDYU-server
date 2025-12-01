@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import org.hibernate.annotations.BatchSize;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +41,7 @@ public class MedicineSchedule extends BaseTimeEntity {
     private LocalTime alarmTime;
 
     @OneToMany(mappedBy = "medicineSchedule", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 100)
     private List<MedicineCategory> categories = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)

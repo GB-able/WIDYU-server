@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import org.hibernate.annotations.BatchSize;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AccessLevel;
@@ -37,6 +38,7 @@ public class MedicineCategory extends BaseTimeEntity {
     private String name;
 
     @OneToMany(mappedBy = "medicineCategory", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 100)
     private List<MedicineScheduleDetail> medicines = new ArrayList<>();
 
     @Builder(access = AccessLevel.PRIVATE)
