@@ -16,6 +16,7 @@ spring:
       - video
       - pay
       - medicine
+      - actuator
 swagger:
   version: ${SWAGGER_VERSION:0.0.1}
   url: ${SWAGGER_URL:http://localhost:8080}
