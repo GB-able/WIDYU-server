@@ -52,3 +52,9 @@ src/main/resources/firebase/
 # claude
 CLAUDE.md
 apiDocs/
+
+# k6
+k6/
+
+# scripts
+scripts/
