@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/album/calendar")
+@RequestMapping("/api/v1/albums/calendar")
 public class AlbumCalendarController implements AlbumCalendarDocs {
 
     private final AlbumCalendarService albumCalendarService;
