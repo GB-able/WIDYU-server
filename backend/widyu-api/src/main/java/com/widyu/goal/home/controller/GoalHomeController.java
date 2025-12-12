@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/goal/home")
+@RequestMapping("/api/v1/goals/home")
 public class GoalHomeController implements GoalHomeDocs {
 
     private final GoalHomeService goalHomeService;

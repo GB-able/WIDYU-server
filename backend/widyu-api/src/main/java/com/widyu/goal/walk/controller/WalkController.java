@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/walks")
+@RequestMapping("/api/v1/goals/walks")
 public class WalkController implements WalkDocs {
 
     private final WalkService walkService;

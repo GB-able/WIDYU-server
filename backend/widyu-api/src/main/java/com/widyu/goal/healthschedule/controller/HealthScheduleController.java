@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/health-schedules")
+@RequestMapping("/api/v1/goals/health-schedules")
 public class HealthScheduleController implements HealthScheduleDocs {
 
     private final HealthScheduleFacade healthScheduleFacade;

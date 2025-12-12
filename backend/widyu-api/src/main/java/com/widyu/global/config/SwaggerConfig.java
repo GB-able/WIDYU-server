@@ -9,6 +9,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -60,5 +61,61 @@ public class SwaggerConfig {
         String url = swaggerProperties.url();
         String description = url.contains(LOCAL_IDENTIFIER) ? LOCAL_SERVER : DEV_SERVER;
         return new Server().url(url).description(description);
+    }
+
+    @Bean
+    public GroupedOpenApi allApi() {
+        return GroupedOpenApi.builder()
+                .group("전체 API")
+                .pathsToMatch("/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi authApi() {
+        return GroupedOpenApi.builder()
+                .group("인증 API")
+                .pathsToMatch("/api/v1/auth/**", "/api/v1/sms/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi albumApi() {
+        return GroupedOpenApi.builder()
+                .group("앨범 API")
+                .pathsToMatch("/api/v1/albums/**", "/api/v1/album/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi goalApi() {
+        return GroupedOpenApi.builder()
+                .group("목표 API")
+                .pathsToMatch("/api/v1/goals/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi memberApi() {
+        return GroupedOpenApi.builder()
+                .group("회원 API")
+                .pathsToMatch("/api/v1/members/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi paymentApi() {
+        return GroupedOpenApi.builder()
+                .group("결제 API")
+                .pathsToMatch("/api/v1/payment/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi notificationApi() {
+        return GroupedOpenApi.builder()
+                .group("알림 API")
+                .pathsToMatch("/api/v1/fcm/**")
+                .build();
     }
 }

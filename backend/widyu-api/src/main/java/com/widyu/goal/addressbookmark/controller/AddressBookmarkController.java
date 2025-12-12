@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/address-bookmarks")
+@RequestMapping("/api/v1/goals/address-bookmarks")
 public class AddressBookmarkController implements AddressBookmarkDocs {
 
     private final AddressBookmarkService addressBookmarkService;

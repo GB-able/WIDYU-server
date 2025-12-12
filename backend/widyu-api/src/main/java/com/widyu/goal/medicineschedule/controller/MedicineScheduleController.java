@@ -33,7 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/medicine-schedules")
+@RequestMapping("/api/v1/goals/medicine-schedules")
 public class MedicineScheduleController implements MedicineScheduleDocs {
 
     private final MedicineScheduleService medicineScheduleService;
