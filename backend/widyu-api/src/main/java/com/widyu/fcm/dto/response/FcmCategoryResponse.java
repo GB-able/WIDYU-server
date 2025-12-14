@@ -26,6 +26,7 @@ public class FcmCategoryResponse {
             case TARGET -> "목표";
             case HEALTH_SCHEDULE -> "방문 일정";
             case WALK -> "만보계";
+            case MEDICINE_SCHEDULE -> "복약 알림";
         };
     }
 }
