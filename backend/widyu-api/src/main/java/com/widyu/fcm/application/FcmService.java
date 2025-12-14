@@ -163,7 +163,7 @@ public class FcmService {
                     fcmNotificationRepository.save(FcmNotification.builder()
                             .title(fcmSendDto.title())
                             .body(fcmSendDto.content())
-                            .fcmCategory(FcmCategory.ALBUM)
+                            .fcmCategory(fcmSendDto.fcmCategory())
                             .memberFcmToken(tokenEntity)
                             .isRead(false)
                             .image(fcmSendDto.image())
