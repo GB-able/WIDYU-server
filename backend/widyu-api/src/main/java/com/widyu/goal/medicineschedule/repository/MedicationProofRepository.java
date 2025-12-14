@@ -47,4 +47,13 @@ public interface MedicationProofRepository extends JpaRepository<MedicationProof
             LocalDateTime startDateTime,
             LocalDateTime endDateTime
     );
+
+    @Query("SELECT DISTINCT mp.medicineSchedule.id FROM MedicationProof mp " +
+           "WHERE mp.medicineSchedule.id IN :scheduleIds " +
+           "AND mp.verifiedAt BETWEEN :startDate AND :endDate")
+    List<Long> findVerifiedScheduleIds(
+            @Param("scheduleIds") List<Long> scheduleIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }

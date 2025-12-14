@@ -3,6 +3,7 @@ package com.widyu.goal.medicineschedule.repository;
 import com.widyu.global.entity.Status;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Member;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,6 +34,14 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
            "ORDER BY ms.alarmTime ASC")
     List<MedicineSchedule> findByMemberAndStatusWithDetails(
             @Param("member") Member member,
+            @Param("status") Status status
+    );
+
+    @Query("SELECT DISTINCT ms FROM MedicineSchedule ms " +
+           "LEFT JOIN FETCH ms.member " +
+           "WHERE ms.alarmTime = :alarmTime AND ms.status = :status")
+    List<MedicineSchedule> findByAlarmTimeAndStatus(
+            @Param("alarmTime") LocalTime alarmTime,
             @Param("status") Status status
     );
 
