@@ -77,12 +77,12 @@ services:
       - app_logs:/app/logs
     networks:
       - widyu-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 10
+    #   start_period: 120s
 
   # Redis Cache (공통)
   redis:
@@ -116,8 +116,7 @@ services:
     networks:
       - widyu-network
     depends_on:
-      widyu-api:
-        condition: service_healthy
+      - widyu-api
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/actuator/health"]
       interval: 30s
