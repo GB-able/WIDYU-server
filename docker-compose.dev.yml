@@ -8,13 +8,13 @@ services:
     container_name: widyu-mysql-dev
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${DB_NAME:-widyu_dev}
-      MYSQL_USER: ${MYSQL_USERNAME:-widyu_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-widyu_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${MYSQL_USERNAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: Asia/Seoul
     ports:
-      - "${HOST_MYSQL_PORT:-3307}:3306"
+      - "${HOST_MYSQL_PORT}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./scripts/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -25,7 +25,7 @@ services:
     networks:
       - widyu-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
