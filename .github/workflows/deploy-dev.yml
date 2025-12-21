@@ -104,20 +104,3 @@ jobs:
 
             echo "🚀 Starting new containers..."
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-
-            echo "⏳ Waiting for application to start..."
-            sleep 30
-
-            echo "🏥 Checking application health..."
-            for i in {1..30}; do
-              if curl -f http://localhost/actuator/health > /dev/null 2>&1; then
-                echo "✅ Deployment completed successfully!"
-                docker image prune -f
-                exit 0
-              fi
-              echo "Waiting for application to be ready... ($i/30)"
-              sleep 2
-            done
-
-            echo "⚠️  Health check timeout. Please check logs manually on the server."
-            exit 1
