@@ -8,8 +8,6 @@ src/**/application-prod.yml   # 기존
 
 ### 🔒 Secrets & Env files (추가) ###
 .env
-*.env
-.env.*
 # macOS
 .DS_Store
 src/**/firebase
@@ -52,9 +50,3 @@ src/main/resources/firebase/
 # claude
 CLAUDE.md
 apiDocs/
-
-# k6
-k6/
-
-# scripts
-scripts/
