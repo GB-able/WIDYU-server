@@ -106,7 +106,7 @@ jobs:
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
             echo "⏳ Waiting for health check..."
-            sleep 15
+            sleep 10
 
             echo "🏥 Checking application health..."
             for i in {1..30}; do
@@ -115,10 +115,17 @@ jobs:
                 docker image prune -f
                 exit 0
               fi
+
+              # 5초마다 로그 확인
+              if [ $((i % 5)) -eq 0 ]; then
+                echo "📋 Recent logs (attempt $i/30):"
+                docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=20 widyu-api
+              fi
+
               echo "Waiting for application to be ready... ($i/30)"
               sleep 2
             done
 
-            echo "⚠️  Health check timeout. Checking logs..."
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=50 widyu-api
+            echo "⚠️  Health check timeout. Full logs:"
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100 widyu-api
             exit 1

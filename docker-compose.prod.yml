@@ -12,7 +12,7 @@ services:
 
       # Database (RDS)
       MYSQL_HOST: ${RDS_ENDPOINT}
-      MYSQL_PORT: ${RDS_PORT:-3306}
+      MYSQL_PORT: ${RDS_PORT}
       MYSQL_USERNAME: ${RDS_USERNAME}
       MYSQL_PASSWORD: ${RDS_PASSWORD}
 
@@ -58,7 +58,7 @@ services:
       --save 300 10
       --save 60 10000
     ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"  # 내부 접근만
+      - "127.0.0.1:${REDIS_PORT}:6379"  # 내부 접근만
     healthcheck:
       test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
     logging:

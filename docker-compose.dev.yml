@@ -1,8 +1,9 @@
 # Development environment override
 # 사용법: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# 개발 환경은 내부 MySQL 컨테이너 사용
 
 services:
-  # MySQL Database (로컬/개발 전용)
+  # MySQL Database (개발 전용)
   mysql:
     image: mysql:8.0
     container_name: widyu-mysql-dev
