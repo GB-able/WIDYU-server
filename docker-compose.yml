@@ -117,11 +117,11 @@ services:
       - widyu-network
     depends_on:
       - widyu-api
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/actuator/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
 
   # Certbot (필요할 때만 docker compose run으로 실행)
   certbot:
