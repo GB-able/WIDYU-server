@@ -1,0 +1,77 @@
+# Development environment override
+# 사용법: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # MySQL Database (로컬/개발 전용)
+  mysql:
+    image: mysql:8.0
+    container_name: widyu-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-widyu_dev}
+      MYSQL_USER: ${MYSQL_USERNAME:-widyu_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-widyu_password}
+      TZ: Asia/Seoul
+    ports:
+      - "${HOST_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    networks:
+      - widyu-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Spring API (로컬/개발 설정 오버라이드)
+  widyu-api:
+    container_name: widyu-api-dev
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      JAVA_OPTS: >
+        -Xms512m
+        -Xmx1024m
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+    ports:
+      - "8080:8080"  # 외부 접근 허용
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis (로컬/개발 설정)
+  redis:
+    container_name: widyu-redis-dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx (로컬/개발 설정)
+  nginx:
+    container_name: widyu-nginx-dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mysql_data:
+    driver: local

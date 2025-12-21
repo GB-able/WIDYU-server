@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Build outputs (will be built inside Docker)
+**/build/
+**/bin/
+**/out/
+**/.gradle/
+
+# Test
+**/test/
+**/*Test.java
+
+# Documentation
+*.md
+README.md
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Docker files
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Scripts
+scripts/
+k6/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.bak
