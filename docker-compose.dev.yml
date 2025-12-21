@@ -42,7 +42,7 @@ services:
         -XX:+UseG1GC
         -XX:MaxGCPauseMillis=200
     ports:
-      - "8080:8080"  # 외부 접근 허용
+      - "8081:8080"
     depends_on:
       mysql:
         condition: service_healthy
