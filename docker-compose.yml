@@ -81,8 +81,8 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
 
   # Redis Cache (공통)
   redis:
@@ -90,7 +90,7 @@ services:
     restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
     ports:
-      - "${HOST_REDIS_PORT}:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
     networks:
