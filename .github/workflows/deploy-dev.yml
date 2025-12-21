@@ -91,19 +91,19 @@ jobs:
 
             cd /home/ec2-user/widyu
 
-            export DOCKER_IMAGE_NAME="${{ env.DOCKER_IMAGE_NAME }}"
-            export IMAGE_TAG="${{ github.sha }}"
+            # .env 파일 복사 및 Docker 이미지 정보 추가
+            cp /home/ec2-user/.env .env
+            echo "DOCKER_IMAGE_NAME=${{ env.DOCKER_IMAGE_NAME }}" >> .env
+            echo "IMAGE_TAG=${{ github.sha }}" >> .env
 
             echo "🐳 Pulling Docker image..."
-            docker pull ${DOCKER_IMAGE_NAME}:${IMAGE_TAG}
+            docker pull ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
 
             echo "🛑 Stopping existing containers..."
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-              --env-file /home/ec2-user/.env down || true
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml down || true
 
             echo "🚀 Starting new containers..."
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-              --env-file /home/ec2-user/.env up -d
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
             echo "⏳ Waiting for health check..."
             sleep 15
@@ -120,6 +120,5 @@ jobs:
             done
 
             echo "⚠️  Health check timeout. Checking logs..."
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-              --env-file /home/ec2-user/.env logs --tail=50 widyu-api
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --tail=50 widyu-api
             exit 1

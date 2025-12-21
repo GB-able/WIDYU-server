@@ -73,8 +73,6 @@ services:
       SWAGGER_VERSION: ${SWAGGER_VERSION:-1.0.0}
       SWAGGER_URL: ${SWAGGER_URL:-http://localhost}
 
-    ports:
-      - "127.0.0.1:8080:8080"
     volumes:
       - app_logs:/app/logs
     networks:

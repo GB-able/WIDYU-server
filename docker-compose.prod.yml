@@ -28,7 +28,7 @@ services:
         -Duser.timezone=Asia/Seoul
 
     ports:
-      - "127.0.0.1:8080:8080"  # 내부 접근만 허용
+      - "8080:8080"
     depends_on:
       redis:
         condition: service_healthy
