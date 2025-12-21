@@ -1,4 +1,4 @@
-name: Deploy to AWS EC2 using Docker
+name: Deploy to AWS EC2 using Docker Compose
 
 on:
   push:
@@ -10,7 +10,6 @@ env:
   EC2_HOST: ${{ secrets.EC2_HOST }}
   EC2_SSH_USER: ec2-user
   PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-  CONTAINER_NAME: ${{ secrets.DEV_CONTAINER_NAME }}
 
 jobs:
   build-and-push-docker:
@@ -19,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -34,13 +33,13 @@ jobs:
         run: ./gradlew :backend:widyu-api:clean :backend:widyu-api:bootJar --no-daemon
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Build and Push Image (latest + sha)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@2634353318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: ./backend/widyu-api
           file: ./backend/widyu-api/Dockerfile
@@ -55,39 +54,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: SSH into EC2 and deploy container
-        uses: appleboy/ssh-action@v0.1.10
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Sync compose files to EC2
+        run: |
+          echo "${{ env.PRIVATE_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+          # EC2에 배포 디렉토리 생성
+          ssh -i private_key.pem -o StrictHostKeyChecking=no \
+            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }} \
+            "mkdir -p /home/ec2-user/widyu/nginx"
+
+          # 파일 동기화
+          rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
+            docker-compose.yml docker-compose.dev.yml \
+            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/
+
+          rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
+            nginx/ \
+            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/nginx/
+
+          rm -f private_key.pem
+
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          DOCKER_IMAGE: ${{ env.DOCKER_IMAGE_NAME }}
         with:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_SSH_USER }}
           key: ${{ env.PRIVATE_KEY }}
+          envs: GITHUB_SHA,DOCKER_IMAGE
           script: |
             set -e
 
-            IMAGE=${{ env.DOCKER_IMAGE_NAME }}
-            TAG=${{ github.sha }}     # 고유 SHA 태그로 롤백 가능
-            NAME=${{ env.CONTAINER_NAME }}
+            # 배포 디렉토리로 이동
+            cd /home/ec2-user/widyu
 
-            echo "Pulling image: ${IMAGE}:${TAG}"
-            docker pull ${IMAGE}:${TAG}
+            # Docker 이미지 정보 환경 변수 설정
+            export DOCKER_IMAGE_NAME=${DOCKER_IMAGE}
+            export IMAGE_TAG=${GITHUB_SHA}
 
-            echo "Stopping existing container (if any)..."
-            if [ "$(docker ps -q -f name=^/${NAME}$)" ]; then
-              docker stop ${NAME}
-            fi
-            if [ "$(docker ps -aq -f name=^/${NAME}$)" ]; then
-              docker rm ${NAME}
-            fi
+            # Docker 이미지 pull
+            echo "🐳 Pulling Docker image..."
+            docker pull ${DOCKER_IMAGE}:${GITHUB_SHA}
 
-            echo "Cleaning old images..."
-            docker image prune -f
+            # 기존 컨테이너 중지 및 제거
+            echo "🛑 Stopping existing containers..."
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file /home/ec2-user/.env down || true
 
-            echo "Starting new container..."
-            docker run -d --name ${NAME} \
-              --env-file /home/ec2-user/.env \
-              -e TZ=Asia/Seoul \
-              -p 8080:8080 \
-              --restart=always \
-              ${IMAGE}:${TAG}
+            # 새 컨테이너 시작
+            echo "🚀 Starting new containers..."
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file /home/ec2-user/.env up -d
 
-            echo "Deployment completed successfully ✅"
+            # 헬스 체크 대기
+            echo "⏳ Waiting for health check..."
+            sleep 15
+
+            # 헬스 체크 확인
+            echo "🏥 Checking application health..."
+            for i in {1..30}; do
+              if curl -f http://localhost/actuator/health > /dev/null 2>&1; then
+                echo "✅ Deployment completed successfully!"
+
+                # 정리 작업: 사용하지 않는 이미지 제거
+                docker image prune -f
+                exit 0
+              fi
+              echo "Waiting for application to be ready... ($i/30)"
+              sleep 2
+            done
+
+            echo "⚠️  Health check timeout. Checking logs..."
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file /home/ec2-user/.env logs --tail=50 widyu-api
+            exit 1
