@@ -1,0 +1,6 @@
+# AI Server Configuration
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://localhost:5000}
+    connect-timeout: 5000  # 5초
+    read-timeout: 10000    # 10초
