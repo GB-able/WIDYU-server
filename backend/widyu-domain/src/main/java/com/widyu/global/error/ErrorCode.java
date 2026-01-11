@@ -109,6 +109,7 @@ public enum ErrorCode {
     // 서버 오류
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "SRV_5000", "서버 내부 오류가 발생했습니다."),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SRV_5030", "현재 서비스를 사용할 수 없습니다."),
+    NOT_FOUND(HttpStatus.SERVICE_UNAVAILABLE, "SRV_5040", "찾을 수 없습니다");
     ;
 
     private final HttpStatus httpStatus;

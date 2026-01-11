@@ -18,16 +18,16 @@ import java.util.List;
 public interface ParentLocationDocs {
 
     @Operation(
-        summary = "부모님 장소 등록",
-        description = "시니어 회원의 자주 가는 장소를 등록합니다. 장소 타입은 HOME(집) 또는 OTHER(기타)로 구분됩니다."
+            summary = "부모님 장소 등록",
+            description = "시니어 회원의 자주 가는 장소를 등록합니다. 장소 타입은 HOME(집) 또는 OTHER(기타)로 구분됩니다."
     )
     @RequestBody(
-        description = "부모님 장소 등록 정보",
-        required = true,
-        content = @Content(
-            schema = @Schema(implementation = ParentLocationCreateRequest.class),
-            examples = @ExampleObject(
-                value = """
+            description = "부모님 장소 등록 정보",
+            required = true,
+            content = @Content(
+                    schema = @Schema(implementation = ParentLocationCreateRequest.class),
+                    examples = @ExampleObject(
+                            value = """
                     {
                       "memberId": 1,
                       "locationType": "HOME",
@@ -36,65 +36,65 @@ public interface ParentLocationDocs {
                       "longitude": "127.0396"
                     }
                     """
+                    )
             )
-        )
     )
     @ApiResponse(
-        responseCode = "200",
-        description = "부모님 장소 등록 성공",
-        content = @Content(
-            schema = @Schema(implementation = ApiResponseTemplate.class),
-            examples = @ExampleObject(
-                value = """
+            responseCode = "200",
+            description = "부모님 장소 등록 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
                     {
                       "code": "PLO_2001",
                       "message": "부모님 장소가 등록되었습니다.",
                       "data": null
                     }
                     """
+                    )
             )
-        )
     )
     ApiResponseTemplate<Void> createParentLocation(ParentLocationCreateRequest request);
 
     @Operation(
-        summary = "부모님 장소 삭제",
-        description = "등록된 부모님 장소를 삭제합니다. 소프트 삭제 방식으로 상태만 변경됩니다."
+            summary = "부모님 장소 삭제",
+            description = "등록된 부모님 장소를 삭제합니다. 소프트 삭제 방식으로 상태만 변경됩니다."
     )
     @ApiResponse(
-        responseCode = "200",
-        description = "부모님 장소 삭제 성공",
-        content = @Content(
-            schema = @Schema(implementation = ApiResponseTemplate.class),
-            examples = @ExampleObject(
-                value = """
+            responseCode = "200",
+            description = "부모님 장소 삭제 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
                     {
                       "code": "PLO_2002",
                       "message": "부모님 장소가 삭제되었습니다.",
                       "data": null
                     }
                     """
+                    )
             )
-        )
     )
     ApiResponseTemplate<Void> deleteParentLocation(
-        @Parameter(description = "시니어 회원 ID", required = true, example = "1")
-        Long memberId,
-        @Parameter(description = "삭제할 부모님 장소 ID", required = true, example = "1")
-        Long parentLocationId
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1")
+            Long memberId,
+            @Parameter(description = "삭제할 부모님 장소 ID", required = true, example = "1")
+            Long parentLocationId
     );
 
     @Operation(
-        summary = "부모님 장소 목록 조회",
-        description = "보호자가 관리하는 모든 부모님들의 등록된 장소 목록을 부모님별로 그룹핑하여 조회합니다."
+            summary = "부모님 장소 목록 조회",
+            description = "보호자가 관리하는 모든 부모님들의 등록된 장소 목록을 부모님별로 그룹핑하여 조회합니다."
     )
     @ApiResponse(
-        responseCode = "200",
-        description = "부모님 장소 목록 조회 성공",
-        content = @Content(
-            schema = @Schema(implementation = ApiResponseTemplate.class),
-            examples = @ExampleObject(
-                value = """
+            responseCode = "200",
+            description = "부모님 장소 목록 조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
                     {
                       "code": "PLO_2000",
                       "message": "부모님 장소 목록이 조회되었습니다.",
@@ -135,11 +135,9 @@ public interface ParentLocationDocs {
                       ]
                     }
                     """
+                    )
             )
-        )
     )
     ApiResponseTemplate<List<SeniorWithLocationsResponse>> getParentLocations(
-        @Parameter(description = "보호자 회원 ID", required = true, example = "1")
-        Long guardianId
     );
 }
