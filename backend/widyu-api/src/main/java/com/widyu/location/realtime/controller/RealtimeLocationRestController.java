@@ -5,6 +5,8 @@ import com.widyu.global.util.SecurityUtil;
 import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
+import com.widyu.location.realtime.dto.TrackedSeniorResponse;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +20,20 @@ public class RealtimeLocationRestController {
 
     private final RealtimeLocationService realtimeLocationService;
     private final SecurityUtil securityUtil;
+
+    /**
+     * 보호자가 추적 가능한 시니어 목록 조회 (위치 탭 진입 시)
+     */
+    @GetMapping("/seniors")
+    public ApiResponseTemplate<List<TrackedSeniorResponse>> getTrackedSeniors() {
+        Long guardianId = securityUtil.getCurrentMemberId();
+        List<TrackedSeniorResponse> response = realtimeLocationService.getTrackedSeniors(guardianId);
+
+        return ApiResponseTemplate.ok()
+                .code("LOC_1000")
+                .message("추적 가능한 시니어 목록 조회 성공")
+                .body(response);
+    }
 
     /**
      * 시니어의 마지막 위치 조회 (초기 로딩용)
@@ -36,7 +52,7 @@ public class RealtimeLocationRestController {
     }
 
     /**
-     * 시니어의 1시간 이동 경로 조회
+     * 시니어의 15분 이동 경로 조회
      */
     @GetMapping("/senior/{seniorId}/trail")
     public ApiResponseTemplate<LocationTrailResponse> getLocationTrail(

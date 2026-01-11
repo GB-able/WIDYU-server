@@ -7,6 +7,7 @@ import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
+import com.widyu.location.realtime.dto.TrackedSeniorResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.member.FamilyConnection;
 import com.widyu.member.Member;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class RealtimeLocationService {
 
     private final SeniorLocationRepository seniorLocationRepository;
@@ -35,7 +37,7 @@ public class RealtimeLocationService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
-    private static final long TRAIL_TTL_SECONDS = 3600; // 1시간
+    private static final long TRAIL_TTL_SECONDS = 900; // 15분
 
     @Transactional
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
@@ -58,7 +60,7 @@ public class RealtimeLocationService {
         );
         seniorLocationRepository.save(location);
 
-        // 4. Redis List에 이동 경로 저장 (1시간 TTL)
+        // 4. Redis List에 이동 경로 저장 (15분 TTL)
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + request.seniorId();
         LocationPoint point = LocationPoint.of(request.latitude(), request.longitude());
 
@@ -99,9 +101,25 @@ public class RealtimeLocationService {
     }
 
     /**
+     * 보호자가 추적 가능한 시니어 목록 조회
+     */
+    public List<TrackedSeniorResponse> getTrackedSeniors(Long guardianId) {
+
+        // 가족 연결 정보 조회 (Senior와 Member join fetch)
+        List<FamilyConnection> connections = familyConnectionRepository
+                .findAllByGuardianIdWithSeniorAndMember(guardianId);
+
+        // DTO로 변환
+        List<TrackedSeniorResponse> seniors = connections.stream()
+                .map(TrackedSeniorResponse::from)
+                .toList();
+
+        return seniors;
+    }
+
+    /**
      * 특정 시니어의 마지막 위치 조회 (REST API용)
      */
-    @Transactional(readOnly = true)
     public LocationUpdateResponse getLastLocation(Long seniorId, Long guardianId) {
 
         // 권한 검증: 가족 연결 확인
@@ -130,9 +148,8 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 특정 시니어의 1시간 이동 경로 조회
+     * 특정 시니어의 15분 이동 경로 조회
      */
-    @Transactional(readOnly = true)
     public LocationTrailResponse getLocationTrail(Long seniorId, Long guardianId) {
 
         // 권한 검증: 가족 연결 확인
@@ -160,7 +177,6 @@ public class RealtimeLocationService {
             }
         }
 
-        // 시간 순서대로 정렬 (List는 최신이 앞에 있으므로 reverse)
         java.util.Collections.reverse(trail);
 
         log.info("이동 경로 조회 완료 - seniorId: {}, 포인트 개수: {}", seniorId, trail.size());
