@@ -7,6 +7,7 @@ import com.widyu.goal.walk.controller.docs.WalkDocs;
 import com.widyu.goal.walk.dto.request.SetGoalRequest;
 import com.widyu.goal.walk.dto.request.UpdateStepsRequest;
 import com.widyu.goal.walk.dto.response.UpdateStepsResponse;
+import com.widyu.goal.walk.dto.response.UpcomingGoalResponse;
 import com.widyu.goal.walk.dto.response.WalkDetailResponse;
 import com.widyu.goal.walk.dto.response.WalkMonthlyResponse;
 import jakarta.validation.Valid;
@@ -78,6 +79,19 @@ public class WalkController implements WalkDocs {
         return ApiResponseTemplate.ok()
                 .code("WALK_2005")
                 .message("걸음 수 연동 완료")
+                .body(response);
+    }
+
+    @Override
+    @GetMapping("/upcoming-goal")
+    @ValidateFamilyAccess(memberIdParam = "memberId")
+    public ApiResponseTemplate<UpcomingGoalResponse> getUpcomingGoal(
+            @RequestParam(required = false) Long memberId
+    ) {
+        UpcomingGoalResponse response = walkService.getUpcomingGoal(memberId);
+        return ApiResponseTemplate.ok()
+                .code("WALK_2006")
+                .message("내일부터 적용될 목표 걸음수 조회 성공")
                 .body(response);
     }
 }

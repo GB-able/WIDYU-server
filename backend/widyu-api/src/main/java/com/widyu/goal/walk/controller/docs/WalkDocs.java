@@ -4,6 +4,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.goal.walk.dto.request.SetGoalRequest;
 import com.widyu.goal.walk.dto.request.UpdateStepsRequest;
 import com.widyu.goal.walk.dto.response.UpdateStepsResponse;
+import com.widyu.goal.walk.dto.response.UpcomingGoalResponse;
 import com.widyu.goal.walk.dto.response.WalkDetailResponse;
 import com.widyu.goal.walk.dto.response.WalkMonthlyResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -150,5 +151,39 @@ public interface WalkDocs {
     })
     ApiResponseTemplate<UpdateStepsResponse> syncSteps(
             @Valid @RequestBody UpdateStepsRequest request
+    );
+
+    @Operation(
+            summary = "내일부터 적용될 목표 걸음수 조회",
+            description = """
+                    내일부터 적용될 목표 걸음수를 조회합니다.
+
+                    **기능:**
+                    - 시니어 프로필의 기본 걷기 목표(defaultWalkGoal) 조회
+                    - 목표를 수정한 경우, 수정된 목표(내일부터 적용될 목표)를 조회
+
+                    **처리 로직:**
+                    - 처음 목표 설정 → 오늘부터 적용되므로, 이 API는 설정된 목표 반환
+                    - 목표 수정 → 오늘은 기존 목표 유지, 내일부터 새 목표 적용
+                    - 수정한 목표를 바로 확인할 수 있음
+
+                    **반환값:**
+                    - steps: 내일부터 적용될 목표 걸음수
+                    - 기본 목표가 설정되지 않았으면 data null 반환
+
+                    **권한:**
+                    - memberId가 null → 본인의 목표 조회
+                    - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 목표 조회
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공 (목표 미설정 시 data null)"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (시니어 프로필 없음 등)"),
+            @ApiResponse(responseCode = "401", description = "인증 실패"),
+            @ApiResponse(responseCode = "403", description = "권한 없음 (가족 관계 아님)")
+    })
+    ApiResponseTemplate<UpcomingGoalResponse> getUpcomingGoal(
+            @Parameter(description = "대상 시니어 ID (null이면 본인)", example = "1")
+            @RequestParam(required = false) Long memberId
     );
 }
