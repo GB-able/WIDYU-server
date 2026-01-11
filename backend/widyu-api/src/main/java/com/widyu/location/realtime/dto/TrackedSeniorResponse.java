@@ -9,7 +9,7 @@ import lombok.Builder;
  */
 @Builder
 public record TrackedSeniorResponse(
-        Long seniorId,
+        Long memberId,
         String name,
         String profileImage
 ) {
@@ -18,7 +18,7 @@ public record TrackedSeniorResponse(
         Member seniorMember = connection.getSenior().getMember();
 
         return TrackedSeniorResponse.builder()
-                .seniorId(connection.getSenior().getId())
+                .memberId(connection.getSenior().getMember().getId())
                 .name(seniorMember.getName())
                 .profileImage(seniorMember.getProfileImage())
                 .build();

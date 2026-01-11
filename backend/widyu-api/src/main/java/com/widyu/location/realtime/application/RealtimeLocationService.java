@@ -69,11 +69,7 @@ public class RealtimeLocationService {
 
         log.info("Redis에 위치 및 이동 경로 저장 완료 - seniorId: {}", request.seniorId());
 
-        // 5. 연결된 모든 보호자 조회
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorId(request.seniorId());
-
-        // 6. Response 객체 생성
+        // 5. Response 객체 생성
         Member seniorMember = seniorProfile.getMember();
         LocationUpdateResponse response = LocationUpdateResponse.of(
                 request.seniorId(),
@@ -83,19 +79,12 @@ public class RealtimeLocationService {
                 request.longitude()
         );
 
-        // 7. 각 보호자에게 브로드캐스트
-        connections.forEach(connection -> {
-            Long guardianId = connection.getGuardian().getId();
-            String destination = String.format("/topic/location/senior/%d", guardianId);
+        // 6. 시니어별 방으로 브로드캐스트
+        String destination = String.format("/topic/location/senior/%d", request.seniorId());
+        messagingTemplate.convertAndSend(destination, response);
 
-            messagingTemplate.convertAndSend(destination, response);
-
-            log.info("보호자에게 위치 전송 - guardianId: {}, destination: {}",
-                     guardianId, destination);
-        });
-
-        log.info("위치 브로드캐스트 완료 - seniorId: {}, 보호자 수: {}",
-                 request.seniorId(), connections.size());
+        log.info("시니어 방으로 위치 브로드캐스트 완료 - seniorId: {}, destination: {}",
+                 request.seniorId(), destination);
 
         return response;
     }
