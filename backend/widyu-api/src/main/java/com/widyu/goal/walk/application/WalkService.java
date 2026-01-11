@@ -9,6 +9,7 @@ import com.widyu.walk.Walk;
 import com.widyu.goal.walk.dto.request.SetGoalRequest;
 import com.widyu.goal.walk.dto.request.UpdateStepsRequest;
 import com.widyu.goal.walk.dto.response.UpdateStepsResponse;
+import com.widyu.goal.walk.dto.response.UpcomingGoalResponse;
 import com.widyu.goal.walk.dto.response.WalkDetailResponse;
 import com.widyu.goal.walk.dto.response.WalkMonthlyResponse;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -73,6 +74,23 @@ public class WalkService {
         }
 
         return null;
+    }
+
+    public UpcomingGoalResponse getUpcomingGoal(Long memberId) {
+        Member targetMember = getMember(memberId);
+
+        if (targetMember.getSeniorProfile() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "시니어 프로필이 없습니다.");
+        }
+
+        if (!targetMember.getSeniorProfile().hasDefaultWalkGoal()) {
+            return null;
+        }
+
+        return UpcomingGoalResponse.of(
+                targetMember.getSeniorProfile().getDefaultWalkGoal()
+        );
     }
 
     @Transactional
