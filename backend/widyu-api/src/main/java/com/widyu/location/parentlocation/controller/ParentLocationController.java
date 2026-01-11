@@ -26,35 +26,34 @@ public class ParentLocationController implements ParentLocationDocs {
 
     @PostMapping
     public ApiResponseTemplate<Void> createParentLocation(
-        @Valid @RequestBody ParentLocationCreateRequest request
+            @Valid @RequestBody ParentLocationCreateRequest request
     ) {
         parentLocationService.create(request);
         return ApiResponseTemplate.ok()
-            .code("PLO_2001")
-            .message("부모님 장소가 등록되었습니다.")
-            .build();
+                .code("PLO_2001")
+                .message("부모님 장소가 등록되었습니다.")
+                .build();
     }
 
     @DeleteMapping("/{memberId}/{parentLocationId}")
     public ApiResponseTemplate<Void> deleteParentLocation(
-        @PathVariable Long memberId,
-        @PathVariable Long parentLocationId
+            @PathVariable Long memberId,
+            @PathVariable Long parentLocationId
     ) {
         parentLocationService.delete(memberId, parentLocationId);
         return ApiResponseTemplate.ok()
-            .code("PLO_2002")
-            .message("부모님 장소가 삭제되었습니다.")
-            .build();
+                .code("PLO_2002")
+                .message("부모님 장소가 삭제되었습니다.")
+                .build();
     }
 
-    @GetMapping("/{guardianId}")
+    @GetMapping("")
     public ApiResponseTemplate<List<SeniorWithLocationsResponse>> getParentLocations(
-        @PathVariable Long guardianId
     ) {
-        List<SeniorWithLocationsResponse> data = parentLocationService.findAllByGuardianId(guardianId);
+        List<SeniorWithLocationsResponse> data = parentLocationService.findAllByGuardianId();
         return ApiResponseTemplate.ok()
-            .code("PLO_2000")
-            .message("부모님 장소 목록이 조회되었습니다.")
-            .body(data);
+                .code("PLO_2000")
+                .message("부모님 장소 목록이 조회되었습니다.")
+                .body(data);
     }
 }
