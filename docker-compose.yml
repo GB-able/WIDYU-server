@@ -111,6 +111,7 @@ services:
     image: ryuchanghoon/widyu-ai:latest
     container_name: widyu-ai
     restart: unless-stopped
+    platform: linux/amd64  # Apple Silicon 호환성
     networks:
       - widyu-network
     healthcheck:
