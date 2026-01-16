@@ -75,6 +75,9 @@ services:
       SWAGGER_VERSION: ${SWAGGER_VERSION}
       SWAGGER_URL: ${SWAGGER_URL}
 
+      # AI Server (공통)
+      AI_SERVER_URL: ${AI_SERVER_URL:-http://widyu-ai:5000}
+
     volumes:
       - app_logs:/app/logs
     networks:
@@ -102,6 +105,22 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # AI Server (심박수 이상치 판별)
+  widyu-ai:
+    image: rchagnhoon/widyu-ai-ver2:latest
+    container_name: widyu-ai
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    networks:
+      - widyu-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Nginx Reverse Proxy (공통)
   nginx:
