@@ -108,10 +108,11 @@ services:
 
   # AI Server (심박수 이상치 판별)
   widyu-ai:
-    image: ryuchanghoon/widyu-ai:latest
+    image: rchagnhoon/widyu-ai-ver2:latest
     container_name: widyu-ai
     restart: unless-stopped
-    platform: linux/amd64  # Apple Silicon 호환성
+    ports:
+      - "5000:5000"
     networks:
       - widyu-network
     healthcheck:
