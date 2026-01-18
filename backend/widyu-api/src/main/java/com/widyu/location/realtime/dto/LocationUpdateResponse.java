@@ -11,29 +11,20 @@ public record LocationUpdateResponse(
     Double longitude,
     LocalDateTime updatedAt,
     LocalDateTime stayStartTime,
-    Long stayDurationMinutes
+    Long stayDurationMinutes,
+    String locationType
 ) {
     public static LocationUpdateResponse of(Long seniorId, String seniorName,
                                               String seniorProfileImage,
-                                              Double latitude, Double longitude) {
-        LocalDateTime now = LocalDateTime.now();
-        return new LocationUpdateResponse(
-            seniorId, seniorName, seniorProfileImage,
-            latitude, longitude, now,
-            now, 0L
-        );
-    }
-
-    public static LocationUpdateResponse of(Long seniorId, String seniorName,
-                                              String seniorProfileImage,
                                               Double latitude, Double longitude,
-                                              LocalDateTime stayStartTime) {
+                                              LocalDateTime stayStartTime,
+                                              String locationType) {
         LocalDateTime now = LocalDateTime.now();
         long durationMinutes = ChronoUnit.MINUTES.between(stayStartTime, now);
         return new LocationUpdateResponse(
             seniorId, seniorName, seniorProfileImage,
             latitude, longitude, now,
-            stayStartTime, durationMinutes
+            stayStartTime, durationMinutes, locationType
         );
     }
 }

@@ -11,11 +11,14 @@ import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.dto.StayInfo;
 import com.widyu.location.realtime.dto.TrackedSeniorResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.FamilyConnection;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +39,7 @@ public class RealtimeLocationService {
     private final SeniorLocationRepository seniorLocationRepository;
     private final FamilyConnectionRepository familyConnectionRepository;
     private final SeniorProfileRepository seniorProfileRepository;
+    private final ParentLocationRepository parentLocationRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
 
@@ -75,20 +79,21 @@ public class RealtimeLocationService {
 
         log.info("Redis에 위치 및 이동 경로 저장 완료 - seniorId: {}", request.seniorId());
 
-        // 5. 체류 시간 계산
+        // 5. 체류 시간 및 위치 타입 계산
+        Member seniorMember = seniorProfile.getMember();
         String stayKey = LOCATION_STAY_KEY_PREFIX + request.seniorId();
-        LocalDateTime stayStartTime = calculateStayStartTime(
-                stayKey, request.latitude(), request.longitude());
+        StayInfo stayInfo = calculateStayInfo(
+                stayKey, request.latitude(), request.longitude(), seniorMember);
 
         // 6. Response 객체 생성
-        Member seniorMember = seniorProfile.getMember();
         LocationUpdateResponse response = LocationUpdateResponse.of(
                 request.seniorId(),
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 request.latitude(),
                 request.longitude(),
-                stayStartTime
+                stayInfo.startTime(),
+                stayInfo.locationType()
         );
 
         // 7. 시니어별 방으로 브로드캐스트
@@ -139,13 +144,15 @@ public class RealtimeLocationService {
 
         Member seniorMember = seniorProfile.getMember();
 
-        // 체류 시간 정보 조회
+        // 체류 시간 및 위치 타입 정보 조회
         String stayKey = LOCATION_STAY_KEY_PREFIX + seniorId;
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
         LocalDateTime stayStartTime = LocalDateTime.now();
+        String locationType = LocationType.OTHER.name();
 
         if (stayObj instanceof StayInfo stayInfo) {
             stayStartTime = stayInfo.startTime();
+            locationType = stayInfo.locationType();
         }
 
         return LocationUpdateResponse.of(
@@ -154,7 +161,8 @@ public class RealtimeLocationService {
                 seniorMember.getProfileImage(),
                 location.getLatitude(),
                 location.getLongitude(),
-                stayStartTime
+                stayStartTime,
+                locationType
         );
     }
 
@@ -201,11 +209,12 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 체류 시작 시간 계산
-     * - 이전 위치와 30m 이내면 기존 체류 시작 시간 유지
-     * - 30m 초과 이동 시 새로운 체류 시작 시간 설정
+     * 체류 정보 계산 (체류 시작 시간 + 위치 타입)
+     * - 이전 위치와 30m 이내면 기존 체류 정보 유지
+     * - 30m 초과 이동 시 새로운 체류 정보 설정
+     * - HOME 등록 위치와 30m 이내면 HOME, 아니면 OTHER
      */
-    private LocalDateTime calculateStayStartTime(String stayKey, Double newLat, Double newLng) {
+    private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
 
         if (stayObj instanceof StayInfo previousStay) {
@@ -216,15 +225,37 @@ public class RealtimeLocationService {
             );
 
             if (isSameLocation) {
-                log.debug("같은 위치 유지 - stayKey: {}, 체류 시작: {}", stayKey, previousStay.startTime());
-                return previousStay.startTime();
+                log.debug("같은 위치 유지 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
+                        stayKey, previousStay.startTime(), previousStay.locationType());
+                return previousStay;
             }
         }
 
-        StayInfo newStay = StayInfo.of(newLat, newLng);
-        redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
-        log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}", stayKey, newStay.startTime());
+        // 새로운 위치로 이동 → 위치 타입 계산
+        String locationType = determineLocationType(member, newLat, newLng);
 
-        return newStay.startTime();
+        StayInfo newStay = StayInfo.of(newLat, newLng, locationType);
+        redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
+        log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
+                stayKey, newStay.startTime(), locationType);
+
+        return newStay;
+    }
+
+    /**
+     * 현재 위치가 HOME인지 OTHER인지 판단
+     * - 등록된 HOME 위치와 30m 이내면 HOME
+     * - 그 외에는 OTHER
+     */
+    private String determineLocationType(Member member, Double lat, Double lng) {
+        return parentLocationRepository.findByMemberAndLocationType(member, LocationType.HOME)
+                .map(homeLocation -> {
+                    double homeLat = Double.parseDouble(homeLocation.getLatitude());
+                    double homeLng = Double.parseDouble(homeLocation.getLongitude());
+
+                    boolean isAtHome = GeoUtils.isWithinRadius(lat, lng, homeLat, homeLng, STAY_RADIUS_METERS);
+                    return isAtHome ? LocationType.HOME.name() : LocationType.OTHER.name();
+                })
+                .orElse(LocationType.OTHER.name());
     }
 }
