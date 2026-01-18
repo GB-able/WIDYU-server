@@ -125,22 +125,26 @@ public class RealtimeLocationService {
 
     /**
      * 특정 시니어의 마지막 위치 조회 (REST API용)
+     * @param memberId 시니어의 Member ID
+     * @param guardianId 보호자의 Member ID
      */
-    public LocationUpdateResponse getLastLocation(Long seniorId, Long guardianId) {
+    public LocationUpdateResponse getLastLocation(Long memberId, Long guardianId) {
 
-        // 권한 검증: 가족 연결 확인
+        // 시니어 프로필 조회 (memberId로)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+
+        Long seniorId = seniorProfile.getId();
+
+        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
         if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // Redis에서 조회
+        // Redis에서 조회 (SeniorProfile.id로)
         SeniorLocation location = seniorLocationRepository.findBySeniorId(seniorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
                                                           "최근 위치 정보가 없습니다."));
-
-        // 시니어 정보 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findById(seniorId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST));
 
         Member seniorMember = seniorProfile.getMember();
 
@@ -156,7 +160,7 @@ public class RealtimeLocationService {
         }
 
         return LocationUpdateResponse.of(
-                seniorId,
+                memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 location.getLatitude(),
@@ -168,21 +172,25 @@ public class RealtimeLocationService {
 
     /**
      * 특정 시니어의 15분 이동 경로 조회
+     * @param memberId 시니어의 Member ID
+     * @param guardianId 보호자의 Member ID
      */
-    public LocationTrailResponse getLocationTrail(Long seniorId, Long guardianId) {
+    public LocationTrailResponse getLocationTrail(Long memberId, Long guardianId) {
 
-        // 권한 검증: 가족 연결 확인
+        // 시니어 프로필 조회 (memberId로)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+
+        Long seniorId = seniorProfile.getId();
+
+        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
         if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // 시니어 정보 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findById(seniorId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
-
         Member seniorMember = seniorProfile.getMember();
 
-        // Redis에서 이동 경로 조회
+        // Redis에서 이동 경로 조회 (SeniorProfile.id로)
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + seniorId;
         List<Object> rawTrail = redisTemplate.opsForList().range(trailKey, 0, -1);
 
@@ -198,10 +206,10 @@ public class RealtimeLocationService {
 
         java.util.Collections.reverse(trail);
 
-        log.info("이동 경로 조회 완료 - seniorId: {}, 포인트 개수: {}", seniorId, trail.size());
+        log.info("이동 경로 조회 완료 - memberId: {}, 포인트 개수: {}", memberId, trail.size());
 
         return LocationTrailResponse.of(
-                seniorId,
+                memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 trail

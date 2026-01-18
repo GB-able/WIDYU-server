@@ -72,7 +72,7 @@ public interface RealtimeLocationDocs {
                       "code": "LOC_2000",
                       "message": "마지막 위치 조회 성공",
                       "data": {
-                        "seniorId": 1,
+                        "memberId": 1,
                         "seniorName": "김시니어",
                         "seniorProfileImage": "https://example.com/profile1.jpg",
                         "latitude": 37.5665,
@@ -142,7 +142,7 @@ public interface RealtimeLocationDocs {
                       "code": "LOC_2001",
                       "message": "이동 경로 조회 성공",
                       "data": {
-                        "seniorId": 1,
+                        "memberId": 1,
                         "seniorName": "김시니어",
                         "seniorProfileImage": "https://example.com/profile1.jpg",
                         "trail": [
