@@ -2,18 +2,24 @@ package com.widyu.location.realtime.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.util.GeoUtils;
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
+import com.widyu.location.realtime.dto.StayInfo;
 import com.widyu.location.realtime.dto.TrackedSeniorResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.FamilyConnection;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -33,11 +39,15 @@ public class RealtimeLocationService {
     private final SeniorLocationRepository seniorLocationRepository;
     private final FamilyConnectionRepository familyConnectionRepository;
     private final SeniorProfileRepository seniorProfileRepository;
+    private final ParentLocationRepository parentLocationRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
+    private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
+    private static final long STAY_TTL_SECONDS = 86400; // 24시간
+    private static final double STAY_RADIUS_METERS = 30.0; // 30m 이내면 같은 위치
 
     @Transactional
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
@@ -69,17 +79,24 @@ public class RealtimeLocationService {
 
         log.info("Redis에 위치 및 이동 경로 저장 완료 - seniorId: {}", request.seniorId());
 
-        // 5. Response 객체 생성
+        // 5. 체류 시간 및 위치 타입 계산
         Member seniorMember = seniorProfile.getMember();
+        String stayKey = LOCATION_STAY_KEY_PREFIX + request.seniorId();
+        StayInfo stayInfo = calculateStayInfo(
+                stayKey, request.latitude(), request.longitude(), seniorMember);
+
+        // 6. Response 객체 생성
         LocationUpdateResponse response = LocationUpdateResponse.of(
                 request.seniorId(),
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 request.latitude(),
-                request.longitude()
+                request.longitude(),
+                stayInfo.startTime(),
+                stayInfo.locationType()
         );
 
-        // 6. 시니어별 방으로 브로드캐스트
+        // 7. 시니어별 방으로 브로드캐스트
         String destination = String.format("/topic/location/senior/%d", request.seniorId());
         messagingTemplate.convertAndSend(destination, response);
 
@@ -108,51 +125,72 @@ public class RealtimeLocationService {
 
     /**
      * 특정 시니어의 마지막 위치 조회 (REST API용)
+     * @param memberId 시니어의 Member ID
+     * @param guardianId 보호자의 Member ID
      */
-    public LocationUpdateResponse getLastLocation(Long seniorId, Long guardianId) {
+    public LocationUpdateResponse getLastLocation(Long memberId, Long guardianId) {
 
-        // 권한 검증: 가족 연결 확인
+        // 시니어 프로필 조회 (memberId로)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+
+        Long seniorId = seniorProfile.getId();
+
+        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
         if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // Redis에서 조회
+        // Redis에서 조회 (SeniorProfile.id로)
         SeniorLocation location = seniorLocationRepository.findBySeniorId(seniorId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
                                                           "최근 위치 정보가 없습니다."));
 
-        // 시니어 정보 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findById(seniorId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST));
-
         Member seniorMember = seniorProfile.getMember();
 
+        // 체류 시간 및 위치 타입 정보 조회
+        String stayKey = LOCATION_STAY_KEY_PREFIX + seniorId;
+        Object stayObj = redisTemplate.opsForValue().get(stayKey);
+        LocalDateTime stayStartTime = LocalDateTime.now();
+        String locationType = LocationType.OTHER.name();
+
+        if (stayObj instanceof StayInfo stayInfo) {
+            stayStartTime = stayInfo.startTime();
+            locationType = stayInfo.locationType();
+        }
+
         return LocationUpdateResponse.of(
-                seniorId,
+                memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 location.getLatitude(),
-                location.getLongitude()
+                location.getLongitude(),
+                stayStartTime,
+                locationType
         );
     }
 
     /**
      * 특정 시니어의 15분 이동 경로 조회
+     * @param memberId 시니어의 Member ID
+     * @param guardianId 보호자의 Member ID
      */
-    public LocationTrailResponse getLocationTrail(Long seniorId, Long guardianId) {
+    public LocationTrailResponse getLocationTrail(Long memberId, Long guardianId) {
 
-        // 권한 검증: 가족 연결 확인
+        // 시니어 프로필 조회 (memberId로)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+
+        Long seniorId = seniorProfile.getId();
+
+        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
         if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // 시니어 정보 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findById(seniorId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
-
         Member seniorMember = seniorProfile.getMember();
 
-        // Redis에서 이동 경로 조회
+        // Redis에서 이동 경로 조회 (SeniorProfile.id로)
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + seniorId;
         List<Object> rawTrail = redisTemplate.opsForList().range(trailKey, 0, -1);
 
@@ -168,13 +206,64 @@ public class RealtimeLocationService {
 
         java.util.Collections.reverse(trail);
 
-        log.info("이동 경로 조회 완료 - seniorId: {}, 포인트 개수: {}", seniorId, trail.size());
+        log.info("이동 경로 조회 완료 - memberId: {}, 포인트 개수: {}", memberId, trail.size());
 
         return LocationTrailResponse.of(
-                seniorId,
+                memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 trail
         );
+    }
+
+    /**
+     * 체류 정보 계산 (체류 시작 시간 + 위치 타입)
+     * - 이전 위치와 30m 이내면 기존 체류 정보 유지
+     * - 30m 초과 이동 시 새로운 체류 정보 설정
+     * - HOME 등록 위치와 30m 이내면 HOME, 아니면 OTHER
+     */
+    private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
+        Object stayObj = redisTemplate.opsForValue().get(stayKey);
+
+        if (stayObj instanceof StayInfo previousStay) {
+            boolean isSameLocation = GeoUtils.isWithinRadius(
+                    previousStay.latitude(), previousStay.longitude(),
+                    newLat, newLng,
+                    STAY_RADIUS_METERS
+            );
+
+            if (isSameLocation) {
+                log.debug("같은 위치 유지 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
+                        stayKey, previousStay.startTime(), previousStay.locationType());
+                return previousStay;
+            }
+        }
+
+        // 새로운 위치로 이동 → 위치 타입 계산
+        String locationType = determineLocationType(member, newLat, newLng);
+
+        StayInfo newStay = StayInfo.of(newLat, newLng, locationType);
+        redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
+        log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
+                stayKey, newStay.startTime(), locationType);
+
+        return newStay;
+    }
+
+    /**
+     * 현재 위치가 HOME인지 OTHER인지 판단
+     * - 등록된 HOME 위치와 30m 이내면 HOME
+     * - 그 외에는 OTHER
+     */
+    private String determineLocationType(Member member, Double lat, Double lng) {
+        return parentLocationRepository.findByMemberAndLocationType(member, LocationType.HOME)
+                .map(homeLocation -> {
+                    double homeLat = Double.parseDouble(homeLocation.getLatitude());
+                    double homeLng = Double.parseDouble(homeLocation.getLongitude());
+
+                    boolean isAtHome = GeoUtils.isWithinRadius(lat, lng, homeLat, homeLng, STAY_RADIUS_METERS);
+                    return isAtHome ? LocationType.HOME.name() : LocationType.OTHER.name();
+                })
+                .orElse(LocationType.OTHER.name());
     }
 }

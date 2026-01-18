@@ -14,4 +14,6 @@ public interface ParentLocationRepository extends JpaRepository<ParentLocation, 
     Optional<ParentLocation> findByIdAndMember(Long id, Member member);
 
     List<ParentLocation> findAllByMember(Member member);
+
+    Optional<ParentLocation> findByMemberAndLocationType(Member member, LocationType locationType);
 }

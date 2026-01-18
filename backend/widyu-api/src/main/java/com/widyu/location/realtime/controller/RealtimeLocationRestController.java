@@ -3,6 +3,7 @@ package com.widyu.location.realtime.controller;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.global.util.SecurityUtil;
 import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.controller.docs.RealtimeLocationDocs;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.dto.TrackedSeniorResponse;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/location/realtime")
-public class RealtimeLocationRestController {
+public class RealtimeLocationRestController implements RealtimeLocationDocs {
 
     private final RealtimeLocationService realtimeLocationService;
     private final SecurityUtil securityUtil;
@@ -38,12 +39,12 @@ public class RealtimeLocationRestController {
     /**
      * 시니어의 마지막 위치 조회 (초기 로딩용)
      */
-    @GetMapping("/senior/{seniorId}")
+    @GetMapping("/senior/{memberId}")
     public ApiResponseTemplate<LocationUpdateResponse> getLastLocation(
-            @PathVariable Long seniorId
+            @PathVariable Long memberId
     ) {
         Long guardianId = securityUtil.getCurrentMemberId();
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(seniorId, guardianId);
+        LocationUpdateResponse response = realtimeLocationService.getLastLocation(memberId, guardianId);
 
         return ApiResponseTemplate.ok()
                 .code("LOC_2000")
@@ -54,12 +55,12 @@ public class RealtimeLocationRestController {
     /**
      * 시니어의 15분 이동 경로 조회
      */
-    @GetMapping("/senior/{seniorId}/trail")
+    @GetMapping("/senior/{memberId}/trail")
     public ApiResponseTemplate<LocationTrailResponse> getLocationTrail(
-            @PathVariable Long seniorId
+            @PathVariable Long memberId
     ) {
         Long guardianId = securityUtil.getCurrentMemberId();
-        LocationTrailResponse response = realtimeLocationService.getLocationTrail(seniorId, guardianId);
+        LocationTrailResponse response = realtimeLocationService.getLocationTrail(memberId, guardianId);
 
         return ApiResponseTemplate.ok()
                 .code("LOC_2001")
