@@ -30,8 +30,8 @@ public class RealtimeLocationController {
             @Valid @Payload LocationUpdateRequest request,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        log.info("위치 업데이트 수신 - memberId: {}, seniorId: {}, lat: {}, lng: {}",
-                 principal.getUsername(), request.seniorId(),
+        log.info("위치 업데이트 수신 - authenticatedMemberId: {}, requestMemberId: {}, lat: {}, lng: {}",
+                 principal.getUsername(), request.memberId(),
                  request.latitude(), request.longitude());
 
         // 시니어 본인 확인 (선택적 보안 강화)

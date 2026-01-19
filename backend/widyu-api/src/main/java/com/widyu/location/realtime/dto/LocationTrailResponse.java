@@ -3,19 +3,19 @@ package com.widyu.location.realtime.dto;
 import java.util.List;
 
 public record LocationTrailResponse(
-    Long seniorId,
-    String seniorName,
-    String seniorProfileImage,
-    List<LocationPoint> trail,  // 1시간 동안의 이동 경로
-    Integer totalPoints         // 총 포인트 개수
+    Long memberId,
+    String name,
+    String profileImage,
+    List<LocationPoint> trail,
+    Integer totalPoints
 ) {
-    public static LocationTrailResponse of(Long seniorId, String seniorName,
-                                            String seniorProfileImage,
+    public static LocationTrailResponse of(Long memberId, String name,
+                                            String profileImage,
                                             List<LocationPoint> trail) {
         return new LocationTrailResponse(
-            seniorId,
-            seniorName,
-            seniorProfileImage,
+            memberId,
+            name,
+            profileImage,
             trail,
             trail.size()
         );

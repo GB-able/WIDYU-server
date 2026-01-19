@@ -3,8 +3,8 @@ package com.widyu.location.realtime.dto;
 import jakarta.validation.constraints.NotNull;
 
 public record LocationUpdateRequest(
-    @NotNull(message = "시니어 ID는 필수입니다")
-    Long seniorId,
+    @NotNull(message = "멤버 ID는 필수입니다")
+    Long memberId,
 
     @NotNull(message = "위도는 필수입니다")
     Double latitude,
