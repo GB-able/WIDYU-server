@@ -53,41 +53,44 @@ public class RealtimeLocationService {
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
                                                       Long authenticatedMemberId) {
 
-        // 1. 시니어 프로필 조회
-        SeniorProfile seniorProfile = seniorProfileRepository.findById(request.seniorId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+        Long memberId = request.memberId();
 
-        // 2. 권한 검증: 시니어 본인인지 확인
-        if (!seniorProfile.getMember().getId().equals(authenticatedMemberId)) {
+        // 1. 권한 검증: 시니어 본인인지 확인
+        if (!memberId.equals(authenticatedMemberId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "본인의 위치만 업데이트할 수 있습니다.");
         }
 
-        // 3. Redis에 최신 위치 저장
+        // 2. 시니어 프로필 조회 (memberId로)
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
+
+        Member seniorMember = seniorProfile.getMember();
+
+        // 3. Redis에 최신 위치 저장 (memberId 기준)
         SeniorLocation location = SeniorLocation.of(
-                request.seniorId(),
+                memberId,
                 request.latitude(),
                 request.longitude()
         );
         seniorLocationRepository.save(location);
 
-        // 4. Redis List에 이동 경로 저장 (15분 TTL)
-        String trailKey = LOCATION_TRAIL_KEY_PREFIX + request.seniorId();
+        // 4. Redis List에 이동 경로 저장 (15분 TTL, memberId 기준)
+        String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         LocationPoint point = LocationPoint.of(request.latitude(), request.longitude());
 
         redisTemplate.opsForList().leftPush(trailKey, point);
         redisTemplate.expire(trailKey, TRAIL_TTL_SECONDS, TimeUnit.SECONDS);
 
-        log.info("Redis에 위치 및 이동 경로 저장 완료 - seniorId: {}", request.seniorId());
+        log.info("Redis에 위치 및 이동 경로 저장 완료 - memberId: {}", memberId);
 
-        // 5. 체류 시간 및 위치 타입 계산
-        Member seniorMember = seniorProfile.getMember();
-        String stayKey = LOCATION_STAY_KEY_PREFIX + request.seniorId();
+        // 5. 체류 시간 및 위치 타입 계산 (memberId 기준)
+        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         StayInfo stayInfo = calculateStayInfo(
                 stayKey, request.latitude(), request.longitude(), seniorMember);
 
         // 6. Response 객체 생성
         LocationUpdateResponse response = LocationUpdateResponse.of(
-                request.seniorId(),
+                memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
                 request.latitude(),
@@ -96,12 +99,12 @@ public class RealtimeLocationService {
                 stayInfo.locationType()
         );
 
-        // 7. 시니어별 방으로 브로드캐스트
-        String destination = String.format("/topic/location/senior/%d", request.seniorId());
+        // 7. 시니어별 방으로 브로드캐스트 (memberId 기준)
+        String destination = String.format("/topic/location/senior/%d", memberId);
         messagingTemplate.convertAndSend(destination, response);
 
-        log.info("시니어 방으로 위치 브로드캐스트 완료 - seniorId: {}, destination: {}",
-                 request.seniorId(), destination);
+        log.info("시니어 방으로 위치 브로드캐스트 완료 - memberId: {}, destination: {}",
+                 memberId, destination);
 
         return response;
     }
@@ -141,15 +144,15 @@ public class RealtimeLocationService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // Redis에서 조회 (SeniorProfile.id로)
-        SeniorLocation location = seniorLocationRepository.findBySeniorId(seniorId)
+        // Redis에서 조회 (memberId 기준)
+        SeniorLocation location = seniorLocationRepository.findBySeniorId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
                                                           "최근 위치 정보가 없습니다."));
 
         Member seniorMember = seniorProfile.getMember();
 
-        // 체류 시간 및 위치 타입 정보 조회
-        String stayKey = LOCATION_STAY_KEY_PREFIX + seniorId;
+        // 체류 시간 및 위치 타입 정보 조회 (memberId 기준)
+        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
         LocalDateTime stayStartTime = LocalDateTime.now();
         String locationType = LocationType.OTHER.name();
@@ -190,8 +193,8 @@ public class RealtimeLocationService {
 
         Member seniorMember = seniorProfile.getMember();
 
-        // Redis에서 이동 경로 조회 (SeniorProfile.id로)
-        String trailKey = LOCATION_TRAIL_KEY_PREFIX + seniorId;
+        // Redis에서 이동 경로 조회 (memberId 기준)
+        String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         List<Object> rawTrail = redisTemplate.opsForList().range(trailKey, 0, -1);
 
         // LocationPoint로 변환

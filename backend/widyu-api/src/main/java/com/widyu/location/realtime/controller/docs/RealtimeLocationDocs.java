@@ -73,8 +73,8 @@ public interface RealtimeLocationDocs {
                       "message": "마지막 위치 조회 성공",
                       "data": {
                         "memberId": 1,
-                        "seniorName": "김시니어",
-                        "seniorProfileImage": "https://example.com/profile1.jpg",
+                        "name": "김시니어",
+                        "profileImage": "https://example.com/profile1.jpg",
                         "latitude": 37.5665,
                         "longitude": 126.9780,
                         "updatedAt": "2024-01-12T14:30:00",
@@ -143,8 +143,8 @@ public interface RealtimeLocationDocs {
                       "message": "이동 경로 조회 성공",
                       "data": {
                         "memberId": 1,
-                        "seniorName": "김시니어",
-                        "seniorProfileImage": "https://example.com/profile1.jpg",
+                        "name": "김시니어",
+                        "profileImage": "https://example.com/profile1.jpg",
                         "trail": [
                           {
                             "latitude": 37.5663,
