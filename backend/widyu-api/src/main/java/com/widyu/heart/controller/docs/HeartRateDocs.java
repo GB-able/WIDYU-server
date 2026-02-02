@@ -1,0 +1,225 @@
+package com.widyu.heart.controller.docs;
+
+import com.widyu.global.response.ApiResponseTemplate;
+import com.widyu.heart.dto.request.HeartRateSendRequest;
+import com.widyu.heart.dto.response.HeartRateStatusResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Heart Rate", description = "심박수 관련 API")
+public interface HeartRateDocs {
+
+    @Operation(
+            summary = "심박수 이상치 조회",
+            description = """
+                    회원의 가장 최신 심박수 분석 결과를 조회합니다.
+
+                    **접근 권한**:
+                    - memberId 미입력 시: 본인의 심박수 조회
+                    - memberId 입력 시: 가족 관계가 있는 경우에만 조회 가능
+
+                    **HeartRateStatus 상태값**:
+                    - `NORMAL`: 정상
+                    - `ANOMALY`: 비정상 (이상치 감지)
+                    - `UNKNOWN`: 판별 불가 (데이터 없음)
+                    """
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = {
+                            @ExampleObject(
+                                    name = "정상 심박수",
+                                    value = """
+                                            {
+                                              "code": "HEART_2001",
+                                              "message": "심박수 이상치 조회 완료",
+                                              "data": {
+                                                "memberId": 1023,
+                                                "heartRateStatus": "NORMAL",
+                                                "bpm": 82,
+                                                "measuredAt": "2026-02-01T15:48:00"
+                                              }
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "이상 심박수",
+                                    value = """
+                                            {
+                                              "code": "HEART_2001",
+                                              "message": "심박수 이상치 조회 완료",
+                                              "data": {
+                                                "memberId": 1023,
+                                                "heartRateStatus": "ANOMALY",
+                                                "bpm": 180,
+                                                "measuredAt": "2026-02-01T15:48:00"
+                                              }
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "데이터 없음",
+                                    value = """
+                                            {
+                                              "code": "HEART_2001",
+                                              "message": "심박수 이상치 조회 완료",
+                                              "data": {
+                                                "memberId": 1023,
+                                                "heartRateStatus": "UNKNOWN",
+                                                "bpm": null,
+                                                "measuredAt": null
+                                              }
+                                            }
+                                            """
+                            )
+                    }
+            )
+    )
+    @ApiResponse(
+            responseCode = "403",
+            description = "권한 없음",
+            content = @Content(
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "FORBIDDEN",
+                                      "message": "해당 회원의 정보를 조회할 권한이 없습니다.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<HeartRateStatusResponse> getHeartRateStatus(
+            @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
+            Long memberId
+    );
+
+    @Operation(
+            summary = "워치앱 심박수 전송",
+            description = """
+                    워치앱에서 측정한 심박수 데이터를 전송하여 AI 분석을 수행합니다.
+                    액세스 토큰으로 본인 확인 후 저장됩니다.
+
+                    **특이사항**:
+                    - 정확히 15개의 심박수 값이 필요합니다.
+                    - AI 서버로 전송하여 이상치 여부를 분석합니다.
+                    - 분석 결과는 Redis에 저장되어 조회 API에서 확인 가능합니다.
+                    """
+    )
+    @RequestBody(
+            description = "워치앱 심박수 전송 요청",
+            required = true,
+            content = @Content(
+                    schema = @Schema(implementation = HeartRateSendRequest.class),
+                    examples = @ExampleObject(
+                            name = "심박수 전송 예시",
+                            value = """
+                                    {
+                                      "heartRates": [
+                                        {"heartRate": 82, "measuredAt": "2026-02-01T15:48:00"},
+                                        {"heartRate": 85, "measuredAt": "2026-02-01T15:48:01"},
+                                        {"heartRate": 83, "measuredAt": "2026-02-01T15:48:02"},
+                                        {"heartRate": 90, "measuredAt": "2026-02-01T15:48:03"},
+                                        {"heartRate": 120, "measuredAt": "2026-02-01T15:48:04"},
+                                        {"heartRate": 100, "measuredAt": "2026-02-01T15:48:05"},
+                                        {"heartRate": 84, "measuredAt": "2026-02-01T15:48:06"},
+                                        {"heartRate": 88, "measuredAt": "2026-02-01T15:48:07"},
+                                        {"heartRate": 92, "measuredAt": "2026-02-01T15:48:08"},
+                                        {"heartRate": 95, "measuredAt": "2026-02-01T15:48:09"},
+                                        {"heartRate": 100, "measuredAt": "2026-02-01T15:48:10"},
+                                        {"heartRate": 85, "measuredAt": "2026-02-01T15:48:11"},
+                                        {"heartRate": 80, "measuredAt": "2026-02-01T15:48:12"},
+                                        {"heartRate": 77, "measuredAt": "2026-02-01T15:48:13"},
+                                        {"heartRate": 125, "measuredAt": "2026-02-01T15:48:14"}
+                                      ]
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "전송 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "HEART_2002",
+                                      "message": "심박수 전송 완료",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "400",
+            description = "잘못된 요청",
+            content = @Content(
+                    examples = {
+                            @ExampleObject(
+                                    name = "데이터 개수 불일치",
+                                    value = """
+                                            {
+                                              "code": "BAD_REQUEST",
+                                              "message": "심박수 데이터는 정확히 15개여야 합니다.",
+                                              "data": null
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "필수값 누락",
+                                    value = """
+                                            {
+                                              "code": "BAD_REQUEST",
+                                              "message": "심박수 데이터는 필수입니다.",
+                                              "data": null
+                                            }
+                                            """
+                    )
+                    }
+            )
+    )
+    @ApiResponse(
+            responseCode = "401",
+            description = "인증 실패",
+            content = @Content(
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "UNAUTHORIZED",
+                                      "message": "인증이 필요합니다.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "500",
+            description = "AI 서버 통신 실패",
+            content = @Content(
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "INTERNAL_SERVER_ERROR",
+                                      "message": "AI 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해주세요.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<Void> sendHeartRates(HeartRateSendRequest request);
+}
