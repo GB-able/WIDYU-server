@@ -19,15 +19,15 @@ public class HeartRateResult {
 
     private HeartRateStatus status;
 
-    private Integer bpm;
+    private Integer heartRate;
 
     private LocalDateTime measuredAt;
 
-    public static HeartRateResult of(Long memberId, HeartRateStatus status, Integer bpm, LocalDateTime measuredAt) {
+    public static HeartRateResult of(Long memberId, HeartRateStatus status, Integer heartRate, LocalDateTime measuredAt) {
         return HeartRateResult.builder()
                 .memberId(memberId)
                 .status(status)
-                .bpm(bpm)
+                .heartRate(heartRate)
                 .measuredAt(measuredAt)
                 .build();
     }

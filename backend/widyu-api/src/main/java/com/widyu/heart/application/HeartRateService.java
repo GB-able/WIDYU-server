@@ -1,7 +1,5 @@
 package com.widyu.heart.application;
 
-import com.widyu.ai.application.HeartRateAnomalyService;
-import com.widyu.ai.dto.response.HeartRateAnomalyResponse;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
@@ -19,7 +17,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class HeartRateService {
 
-    private final HeartRateAnomalyService heartRateAnomalyService;
+    private final HeartRateAnomalyDetector heartRateAnomalyDetector;
     private final HeartRateResultRepository heartRateResultRepository;
 
     public void processHeartRates(Long memberId, HeartRateSendRequest request) {
@@ -27,9 +25,9 @@ public class HeartRateService {
                 .map(HeartRateMeasurement::heartRate)
                 .toList();
 
-        HeartRateAnomalyResponse anomalyResponse = heartRateAnomalyService.detectAnomaly(heartRateValues);
+        boolean isAbnormal = heartRateAnomalyDetector.detectAnomaly(heartRateValues);
 
-        HeartRateStatus status = anomalyResponse.isAbnormal() ? HeartRateStatus.ANOMALY : HeartRateStatus.NORMAL;
+        HeartRateStatus status = isAbnormal ? HeartRateStatus.ANOMALY : HeartRateStatus.NORMAL;
 
         HeartRateMeasurement latestMeasurement = request.heartRates().stream()
                 .max(Comparator.comparing(HeartRateMeasurement::measuredAt))
@@ -44,7 +42,7 @@ public class HeartRateService {
 
         heartRateResultRepository.save(result);
 
-        log.info("심박수 분석 완료: memberId={}, status={}, bpm={}, measuredAt={}",
+        log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
                 memberId, status, latestMeasurement.heartRate(), latestMeasurement.measuredAt());
     }
 

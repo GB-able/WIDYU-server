@@ -13,8 +13,8 @@ public record HeartRateStatusResponse(
         @Schema(description = "심박수 상태", example = "NORMAL")
         HeartRateStatus heartRateStatus,
 
-        @Schema(description = "심박수 (BPM)", example = "180")
-        Integer bpm,
+        @Schema(description = "심박수", example = "82")
+        Integer heartRate,
 
         @Schema(description = "측정 시각", example = "2026-02-01T15:48:00")
         LocalDateTime measuredAt
@@ -23,7 +23,7 @@ public record HeartRateStatusResponse(
         return new HeartRateStatusResponse(
                 result.getMemberId(),
                 result.getStatus(),
-                result.getBpm(),
+                result.getHeartRate(),
                 result.getMeasuredAt()
         );
     }

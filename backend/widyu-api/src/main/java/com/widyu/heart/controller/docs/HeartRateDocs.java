@@ -45,7 +45,7 @@ public interface HeartRateDocs {
                                               "data": {
                                                 "memberId": 1023,
                                                 "heartRateStatus": "NORMAL",
-                                                "bpm": 82,
+                                                "heartRate": 82,
                                                 "measuredAt": "2026-02-01T15:48:00"
                                               }
                                             }
@@ -60,7 +60,7 @@ public interface HeartRateDocs {
                                               "data": {
                                                 "memberId": 1023,
                                                 "heartRateStatus": "ANOMALY",
-                                                "bpm": 180,
+                                                "heartRate": 180,
                                                 "measuredAt": "2026-02-01T15:48:00"
                                               }
                                             }
@@ -75,7 +75,7 @@ public interface HeartRateDocs {
                                               "data": {
                                                 "memberId": 1023,
                                                 "heartRateStatus": "UNKNOWN",
-                                                "bpm": null,
+                                                "heartRate": null,
                                                 "measuredAt": null
                                               }
                                             }
