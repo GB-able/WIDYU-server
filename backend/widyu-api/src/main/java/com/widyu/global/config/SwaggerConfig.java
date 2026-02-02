@@ -118,4 +118,20 @@ public class SwaggerConfig {
                 .pathsToMatch("/api/v1/fcm/**")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi locationApi() {
+        return GroupedOpenApi.builder()
+                .group("위치 API")
+                .pathsToMatch("/api/v1/location/**")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi heartRateApi() {
+        return GroupedOpenApi.builder()
+                .group("심박수 API")
+                .pathsToMatch("/api/v1/heart-rate/**")
+                .build();
+    }
 }
