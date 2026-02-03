@@ -5,6 +5,9 @@ import static com.widyu.global.constant.SecurityConstant.TOKEN_PREFIX;
 import com.widyu.auth.dto.AccessTokenDto;
 import com.widyu.global.security.JwtTokenProvider;
 import java.util.Map;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -28,10 +31,21 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
         // Query parameter로도 받을 수 있도록
-        if (authHeader == null) {
+        if (authHeader == null || authHeader.isEmpty()) {
             String query = request.getURI().getQuery();
             if (query != null && query.contains("token=")) {
-                authHeader = TOKEN_PREFIX + extractTokenFromQuery(query);
+                String encodedToken = extractTokenFromQuery(query);
+                if (encodedToken != null) {
+                    try {
+                        String decodedToken = URLDecoder.decode(encodedToken, StandardCharsets.UTF_8.name());
+                        authHeader = TOKEN_PREFIX + decodedToken;
+                    } catch (UnsupportedEncodingException e) {
+                        log.error("Failed to decode token from query parameter", e);
+                        // 토큰 디코딩 실패 시 연결을 거부합니다.
+                        log.warn("WebSocket handshake 실패 - 토큰 디코딩 오류");
+                        return false;
+                    }
+                }
             }
         }
 
