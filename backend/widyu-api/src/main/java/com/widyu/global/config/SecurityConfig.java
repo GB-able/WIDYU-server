@@ -23,20 +23,31 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        defaultFilterChain(http);
+        // CSRF 비활성화, 기본 인증 및 폼 로그인 비활성화, 세션 STATELESS 설정
+        http.httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(
+                        session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        // SockJS의 iframe fallback을 위한 frameOptions 설정
+        http.headers(headers -> headers.frameOptions(frame -> frame.disable())); // [수정] sameOrigin 대신 disable로 변경
+
+        // 요청 경로에 대한 인가 설정
         http.authorizeHttpRequests(
                         authorize ->
                                 authorize
+                                        // SockJS 핸드쉐이크 및 통신 경로 허용
+                                        .requestMatchers("/ws/location/**").permitAll()
+                                        // 인증/인가 관련 API 경로 허용
+                                        .requestMatchers("/api/v1/auth/**").permitAll()
+                                        // Swagger UI 및 API 문서 경로 허용
                                         .requestMatchers(
                                                 "/swagger-ui/**",
                                                 "/v3/api-docs/**",
-                                                "/swagger-resources/**",
-                                                "/ws/**",
-                                                "/ws/location/**",
-                                                "**"
+                                                "/swagger-resources/**"
                                         ).permitAll()
-                                        .requestMatchers("/api/v1/auth/**")
-                                        .permitAll()
+                                        // 그 외 모든 요청은 인증 필요
                                         .anyRequest()
                                         .authenticated())
                 .exceptionHandling(
@@ -45,6 +56,7 @@ public class SecurityConfig {
                                         (request, response, authException) ->
                                                 response.setStatus(401)));
 
+        // JWT 인증 필터 추가
         http.addFilterBefore(
                 jwtAuthenticationFilter(jwtTokenProvider),
                 UsernamePasswordAuthenticationFilter.class);
@@ -55,14 +67,6 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    private void defaultFilterChain(HttpSecurity http) throws Exception {
-        http.httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable)
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(
-                        session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
     }
 
     @Bean

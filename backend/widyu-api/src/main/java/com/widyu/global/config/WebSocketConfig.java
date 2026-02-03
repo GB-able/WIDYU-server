@@ -20,16 +20,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // SockJS 지원 엔드포인트
         registry.addEndpoint("/ws/location")
                 .setAllowedOriginPatterns("*")
                 .addInterceptors(jwtHandshakeInterceptor)
                 .withSockJS();
-
-        // Native WebSocket 엔드포인트
-        registry.addEndpoint("/ws/location")
-                .setAllowedOriginPatterns("*")
-                .addInterceptors(jwtHandshakeInterceptor);
     }
 
     @Override
