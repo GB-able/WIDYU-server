@@ -245,7 +245,7 @@ public class SocialLoginService {
 
         log.info("소셜 로그인 성공: memberId={}, 최초로그인={}, provider={}",
                 full.getId(), isFirstLogin, currentProvider);
-        return SocialLoginResponse.of(isFirstLogin, tokenPair.accessToken(), tokenPair.refreshToken(), profile);
+        return SocialLoginResponse.of(isFirstLogin, tokenPair.memberId(), tokenPair.accessToken(), tokenPair.refreshToken(), profile);
     }
 
     private TokenPairResponse generateTokenPair(Member member, String currentProvider) {
