@@ -32,7 +32,7 @@ public class JwtTokenProvider {
         String accessToken = generateAccessToken(memberId, memberRole, loginType);
         String refreshToken = generateAndSaveRefreshToken(memberId);
 
-        return TokenPairResponse.of(accessToken, refreshToken);
+        return TokenPairResponse.of(memberId, accessToken, refreshToken);
     }
 
     public TemporaryTokenResponse generateTemporaryToken(TemporaryMember temporaryMember) {

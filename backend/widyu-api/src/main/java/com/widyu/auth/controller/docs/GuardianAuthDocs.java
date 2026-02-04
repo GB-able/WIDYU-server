@@ -147,6 +147,7 @@ public interface GuardianAuthDocs {
                                       "code": "AUTH_2003",
                                       "message": "로컬 보호자 로그인 성공",
                                       "data": {
+                                        "memberId": 1,
                                         "accessToken": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                                         "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                                       }
@@ -201,6 +202,7 @@ public interface GuardianAuthDocs {
                                       "message": "소셜 로그인 성공",
                                       "data": {
                                         "isFirst": false,
+                                        "memberId": 1,
                                         "accessToken": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                                         "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                                         "profile": {
@@ -568,6 +570,7 @@ public interface GuardianAuthDocs {
                                       "code": "AUTH_2010",
                                       "message": "소셜 계정 연동 성공",
                                       "data": {
+                                        "memberId": 1,
                                         "accessToken": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                                         "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                                       }
