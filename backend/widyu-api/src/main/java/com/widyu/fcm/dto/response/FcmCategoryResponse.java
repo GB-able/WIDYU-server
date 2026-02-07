@@ -27,6 +27,7 @@ public class FcmCategoryResponse {
             case HEALTH_SCHEDULE -> "방문 일정";
             case WALK -> "만보계";
             case MEDICINE_SCHEDULE -> "복약 알림";
+            case SAFE_ZONE -> "안전구역";
         };
     }
 }
