@@ -17,14 +17,15 @@ import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
-import com.widyu.parentlocation.LocationType;
 import com.widyu.parentlocation.ParentLocation;
+import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -42,12 +43,16 @@ public class RealtimeLocationService {
     private final ParentLocationRepository parentLocationRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
     private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
+    private static final String SAFE_ZONE_ALERT_KEY_PREFIX = "safezone:alert:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
     private static final long STAY_TTL_SECONDS = 86400; // 24시간
+    private static final long SAFE_ZONE_ALERT_TTL_SECONDS = 1800; // 30분 (중복 알림 방지)
     private static final double STAY_RADIUS_METERS = 30.0; // 30m 이내면 같은 위치
+    private static final double SAFE_ZONE_RADIUS_METERS = 75.0; // 안전구역 반경 75m (지름 150m)
 
     @Transactional
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
@@ -155,7 +160,7 @@ public class RealtimeLocationService {
         String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
         LocalDateTime stayStartTime = LocalDateTime.now();
-        String locationType = LocationType.OTHER.name();
+        String locationType = null;
 
         if (stayObj instanceof StayInfo stayInfo) {
             stayStartTime = stayInfo.startTime();
@@ -223,12 +228,16 @@ public class RealtimeLocationService {
      * 체류 정보 계산 (체류 시작 시간 + 위치 타입)
      * - 이전 위치와 30m 이내면 기존 체류 정보 유지
      * - 30m 초과 이동 시 새로운 체류 정보 설정
-     * - HOME 등록 위치와 30m 이내면 HOME, 아니면 OTHER
+     * - 안전구역(HOME, OTHER) 75m 반경 내면 해당 타입, 아니면 null
+     * - 안전구역 이탈 시 보호자에게 알림 전송
      */
     private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
+        String previousLocationType = null;
 
         if (stayObj instanceof StayInfo previousStay) {
+            previousLocationType = previousStay.locationType();
+
             boolean isSameLocation = GeoUtils.isWithinRadius(
                     previousStay.latitude(), previousStay.longitude(),
                     newLat, newLng,
@@ -245,6 +254,9 @@ public class RealtimeLocationService {
         // 새로운 위치로 이동 → 위치 타입 계산
         String locationType = determineLocationType(member, newLat, newLng);
 
+        // 안전구역 이탈 감지 및 알림 전송
+        checkAndSendSafeZoneExitAlert(member, previousLocationType, locationType);
+
         StayInfo newStay = StayInfo.of(newLat, newLng, locationType);
         redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
         log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
@@ -254,19 +266,59 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 현재 위치가 HOME인지 OTHER인지 판단
-     * - 등록된 HOME 위치와 30m 이내면 HOME
-     * - 그 외에는 OTHER
+     * 현재 위치가 어떤 안전구역 내에 있는지 판단
+     * - 등록된 모든 안전구역(HOME, OTHER)과 75m 반경(지름 150m) 내 비교
+     * - HOME 안전구역 내 → HOME
+     * - OTHER 안전구역 내 → OTHER
+     * - 어떤 안전구역에도 없으면 → null
      */
     private String determineLocationType(Member member, Double lat, Double lng) {
-        return parentLocationRepository.findByMemberAndLocationType(member, LocationType.HOME)
-                .map(homeLocation -> {
-                    double homeLat = Double.parseDouble(homeLocation.getLatitude());
-                    double homeLng = Double.parseDouble(homeLocation.getLongitude());
+        List<ParentLocation> safeZones = parentLocationRepository.findAllByMember(member);
 
-                    boolean isAtHome = GeoUtils.isWithinRadius(lat, lng, homeLat, homeLng, STAY_RADIUS_METERS);
-                    return isAtHome ? LocationType.HOME.name() : LocationType.OTHER.name();
-                })
-                .orElse(LocationType.OTHER.name());
+        for (ParentLocation safeZone : safeZones) {
+            double zoneLat = Double.parseDouble(safeZone.getLatitude());
+            double zoneLng = Double.parseDouble(safeZone.getLongitude());
+
+            boolean isWithinSafeZone = GeoUtils.isWithinRadius(lat, lng, zoneLat, zoneLng, SAFE_ZONE_RADIUS_METERS);
+
+            if (isWithinSafeZone) {
+                return safeZone.getLocationType().name();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 안전구역 이탈 감지 및 보호자 알림 전송
+     * - 이전 위치가 안전구역 내(HOME 또는 OTHER)였고, 현재 위치가 안전구역 밖(null)이면 알림
+     * - 중복 알림 방지: 30분 내 동일 알림 전송하지 않음
+     * - 안전구역에 다시 들어오면 알림 플래그 삭제
+     */
+    private void checkAndSendSafeZoneExitAlert(Member member, String previousLocationType, String currentLocationType) {
+        String alertKey = SAFE_ZONE_ALERT_KEY_PREFIX + member.getId();
+
+        // 안전구역에 다시 들어온 경우 → 알림 플래그 삭제
+        if (currentLocationType != null) {
+            redisTemplate.delete(alertKey);
+            return;
+        }
+
+        // 이전에 안전구역 내에 있었고, 현재 안전구역 밖으로 나간 경우
+        if (previousLocationType != null && currentLocationType == null) {
+            // 중복 알림 방지: 이미 알림을 보낸 경우 스킵
+            Boolean alreadySent = redisTemplate.hasKey(alertKey);
+            if (Boolean.TRUE.equals(alreadySent)) {
+                log.debug("안전구역 이탈 알림 스킵 (중복 방지) - memberId: {}", member.getId());
+                return;
+            }
+
+            // 알림 플래그 설정 (30분 TTL)
+            redisTemplate.opsForValue().set(alertKey, true, SAFE_ZONE_ALERT_TTL_SECONDS, TimeUnit.SECONDS);
+
+            // 안전구역 이탈 이벤트 발행 → FCM 리스너에서 알림 전송
+            eventPublisher.publishEvent(new SafeZoneExitEvent(member.getId()));
+            log.info("안전구역 이탈 이벤트 발행 - memberId: {}", member.getId());
+        }
     }
 }

@@ -6,5 +6,6 @@ public enum FcmCategory {
     TARGET,
     HEALTH_SCHEDULE,
     WALK,
-    MEDICINE_SCHEDULE
+    MEDICINE_SCHEDULE,
+    SAFE_ZONE
 }
