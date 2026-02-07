@@ -4,6 +4,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.location.parentlocation.dto.request.ParentLocationCreateRequest;
+import com.widyu.location.parentlocation.dto.request.ParentLocationUpdateRequest;
 import com.widyu.location.parentlocation.dto.response.LocationInfo;
 import com.widyu.location.parentlocation.dto.response.ParentLocationResponse;
 import com.widyu.location.parentlocation.dto.response.SeniorWithLocationsResponse;
@@ -68,5 +69,22 @@ public class ParentLocationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "이미 삭제된 장소입니다."));
 
         parentLocationRepository.delete(location);
+    }
+
+    @Transactional
+    public void update(Long parentLocationId, ParentLocationUpdateRequest request) {
+        Member seniorMember = memberRepository.findById(request.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
+
+        ParentLocation location = parentLocationRepository.findByIdAndMember(parentLocationId, seniorMember)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 장소입니다."));
+
+        location.update(
+                request.locationType(),
+                request.placeAddress(),
+                request.latitude(),
+                request.longitude(),
+                request.name()
+        );
     }
 }

@@ -15,6 +15,7 @@ public class LocationInfo {
     private String placeAddress;
     private String latitude;
     private String longitude;
+    private String name;
 
     public static LocationInfo of(ParentLocation parentLocation) {
         return LocationInfo.builder()
@@ -23,6 +24,7 @@ public class LocationInfo {
             .placeAddress(parentLocation.getPlaceAddress())
             .latitude(parentLocation.getLatitude())
             .longitude(parentLocation.getLongitude())
+            .name(parentLocation.getName())
             .build();
     }
 }

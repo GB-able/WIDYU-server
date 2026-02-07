@@ -52,6 +52,16 @@ public class ParentLocation extends BaseTimeEntity {
     @Column(nullable = false)
     private String longitude;
 
+    private String name;
+
     @Enumerated(EnumType.STRING)
     private Status status;
+
+    public void update(LocationType locationType, String placeAddress, String latitude, String longitude, String name) {
+        this.locationType = locationType;
+        this.placeAddress = placeAddress;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.name = name;
+    }
 }
