@@ -21,6 +21,7 @@ import com.widyu.parentlocation.ParentLocation;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
@@ -83,10 +84,10 @@ public class RealtimeLocationService {
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         LocationPoint point = LocationPoint.of(request.latitude(), request.longitude());
 
-        redisTemplate.opsForList().leftPush(trailKey, point);
+        Long listSize = redisTemplate.opsForList().leftPush(trailKey, point);
         redisTemplate.expire(trailKey, TRAIL_TTL_SECONDS, TimeUnit.SECONDS);
 
-        log.info("Redis에 위치 및 이동 경로 저장 완료 - memberId: {}", memberId);
+        log.info("[DEBUG] Trail 저장 - trailKey: {}, point: {}, listSize: {}", trailKey, point, listSize);
 
         // 5. 체류 시간 및 위치 타입 계산 (memberId 기준)
         String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
@@ -202,12 +203,20 @@ public class RealtimeLocationService {
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         List<Object> rawTrail = redisTemplate.opsForList().range(trailKey, 0, -1);
 
-        // LocationPoint로 변환
+        // LocationPoint로 변환 (LinkedHashMap으로 역직렬화된 경우 처리)
         List<LocationPoint> trail = new ArrayList<>();
         if (rawTrail != null) {
             for (Object obj : rawTrail) {
-                if (obj instanceof LocationPoint) {
-                    trail.add((LocationPoint) obj);
+                if (obj instanceof LocationPoint point) {
+                    trail.add(point);
+                } else if (obj instanceof LinkedHashMap<?, ?> map) {
+                    // GenericJackson2JsonRedisSerializer로 역직렬화 시 LinkedHashMap으로 변환되는 경우
+                    Double lat = map.get("latitude") instanceof Number n ? n.doubleValue() : null;
+                    Double lng = map.get("longitude") instanceof Number n ? n.doubleValue() : null;
+                    LocalDateTime timestamp = parseTimestamp(map.get("timestamp"));
+                    if (lat != null && lng != null) {
+                        trail.add(new LocationPoint(lat, lng, timestamp));
+                    }
                 }
             }
         }
@@ -320,5 +329,33 @@ public class RealtimeLocationService {
             eventPublisher.publishEvent(new SafeZoneExitEvent(member.getId()));
             log.info("안전구역 이탈 이벤트 발행 - memberId: {}", member.getId());
         }
+    }
+
+    /**
+     * Redis에서 역직렬화된 timestamp 파싱
+     */
+    private LocalDateTime parseTimestamp(Object timestampObj) {
+        if (timestampObj == null) {
+            return LocalDateTime.now();
+        }
+        if (timestampObj instanceof String str) {
+            return LocalDateTime.parse(str);
+        }
+        if (timestampObj instanceof LinkedHashMap<?, ?> map) {
+            // LocalDateTime이 LinkedHashMap으로 역직렬화된 경우
+            int year = getIntOrDefault(map.get("year"), 2024);
+            int month = getIntOrDefault(map.get("monthValue"), 1);
+            int day = getIntOrDefault(map.get("dayOfMonth"), 1);
+            int hour = getIntOrDefault(map.get("hour"), 0);
+            int minute = getIntOrDefault(map.get("minute"), 0);
+            int second = getIntOrDefault(map.get("second"), 0);
+            int nano = getIntOrDefault(map.get("nano"), 0);
+            return LocalDateTime.of(year, month, day, hour, minute, second, nano);
+        }
+        return LocalDateTime.now();
+    }
+
+    private int getIntOrDefault(Object value, int defaultValue) {
+        return value instanceof Number n ? n.intValue() : defaultValue;
     }
 }
