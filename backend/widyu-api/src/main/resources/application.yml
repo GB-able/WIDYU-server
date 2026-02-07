@@ -14,7 +14,7 @@ spring:
       - imp
       - oauth
       - video
-      - pay
+      - payㅁ
       - medicine
       - actuator
       - ai

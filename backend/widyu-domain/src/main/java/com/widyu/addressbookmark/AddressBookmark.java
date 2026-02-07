@@ -44,6 +44,16 @@ public class AddressBookmark extends BaseTimeEntity {
 
     private String address;
 
+    private String name;
+
+    private String latitude;
+
+    private String longitude;
+
+    private String road;
+
+    private String jibun;
+
     @Enumerated(EnumType.STRING)
     private Status status;
 }
