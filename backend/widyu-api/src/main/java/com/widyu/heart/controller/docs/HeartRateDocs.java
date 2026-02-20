@@ -1,6 +1,7 @@
 package com.widyu.heart.controller.docs;
 
 import com.widyu.global.response.ApiResponseTemplate;
+import com.widyu.heart.dto.request.HeartMessageRequest;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -222,4 +223,107 @@ public interface HeartRateDocs {
             )
     )
     ApiResponseTemplate<Void> sendHeartRates(HeartRateSendRequest request);
+
+    @Operation(
+            summary = "가족 메시지 전송",
+            description = """
+                    같은 가족에게 50자 이내의 메시지를 FCM 알림으로 전송합니다.
+                    알림은 수신자의 알림 내역에 저장됩니다.
+
+                    **접근 권한**:
+                    - 보호자 → 부모님, 부모님 → 보호자 방향 모두 가능
+                    - 반드시 가족 연결이 되어 있어야 합니다.
+                    """
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "메시지 전송 요청",
+            required = true,
+            content = @Content(
+                    schema = @Schema(implementation = HeartMessageRequest.class),
+                    examples = @ExampleObject(
+                            name = "메시지 전송 예시",
+                            value = """
+                                    {
+                                      "receiverId": 1001,
+                                      "message": "오늘 건강은 좀 어때요?"
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "전송 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "HEART_2003",
+                                      "message": "메시지 전송 완료",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "400",
+            description = "잘못된 요청",
+            content = @Content(
+                    examples = {
+                            @ExampleObject(
+                                    name = "메시지 초과",
+                                    value = """
+                                            {
+                                              "code": "REQ_4000",
+                                              "message": "메시지는 50자 이내로 입력해주세요.",
+                                              "data": null
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "필수값 누락",
+                                    value = """
+                                            {
+                                              "code": "REQ_4000",
+                                              "message": "받는 사람 ID는 필수입니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    }
+            )
+    )
+    @ApiResponse(
+            responseCode = "403",
+            description = "가족 관계 없음",
+            content = @Content(
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "AUTH_4030",
+                                      "message": "접근 권한이 없습니다.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "404",
+            description = "회원 없음",
+            content = @Content(
+                    examples = @ExampleObject(
+                            value = """
+                                    {
+                                      "code": "MEMBER_4041",
+                                      "message": "회원을 찾을 수 없습니다.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<Void> sendHeartMessage(HeartMessageRequest request);
 }

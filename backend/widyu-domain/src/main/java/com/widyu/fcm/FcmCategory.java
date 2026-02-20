@@ -7,5 +7,6 @@ public enum FcmCategory {
     HEALTH_SCHEDULE,
     WALK,
     MEDICINE_SCHEDULE,
+    HEART_MESSAGE,
     SAFE_ZONE
 }

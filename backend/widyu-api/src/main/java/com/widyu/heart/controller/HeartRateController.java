@@ -3,8 +3,10 @@ package com.widyu.heart.controller;
 import com.widyu.global.annotation.ValidateFamilyAccess;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.global.util.SecurityUtil;
+import com.widyu.heart.application.HeartMessageService;
 import com.widyu.heart.application.HeartRateService;
 import com.widyu.heart.controller.docs.HeartRateDocs;
+import com.widyu.heart.dto.request.HeartMessageRequest;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import jakarta.validation.Valid;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class HeartRateController implements HeartRateDocs {
 
     private final HeartRateService heartRateService;
+    private final HeartMessageService heartMessageService;
     private final SecurityUtil securityUtil;
 
     @Override
@@ -50,6 +53,18 @@ public class HeartRateController implements HeartRateDocs {
         return ApiResponseTemplate.ok()
                 .code("HEART_2002")
                 .message("심박수 전송 완료")
+                .build();
+    }
+
+    @Override
+    @PostMapping("/message")
+    public ApiResponseTemplate<Void> sendHeartMessage(
+            @Valid @RequestBody HeartMessageRequest request
+    ) {
+        heartMessageService.sendHeartMessage(request);
+        return ApiResponseTemplate.ok()
+                .code("HEART_2003")
+                .message("메시지 전송 완료")
                 .build();
     }
 }
