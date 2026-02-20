@@ -31,7 +31,12 @@ public interface AddressBookmarkDocs {
                             {
                                 "addressBookmarkId": 1,
                                 "roadAddress": "서울특별시 마포구 성암로 301",
-                                "address": "서울특별시 마포구 상암동 1595"
+                                "address": "서울특별시 마포구 상암동 1595",
+                                "name": "MBC",
+                                "latitude": "37.5789",
+                                "longitude": "126.8912",
+                                "road": "성암로 301",
+                                "jibun": "상암동 1595"
                             }
                         ]
                     }

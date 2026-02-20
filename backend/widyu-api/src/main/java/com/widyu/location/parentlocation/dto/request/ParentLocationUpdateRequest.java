@@ -1,13 +1,10 @@
 package com.widyu.location.parentlocation.dto.request;
 
-import com.widyu.global.entity.Status;
-import com.widyu.member.Member;
 import com.widyu.parentlocation.LocationType;
-import com.widyu.parentlocation.ParentLocation;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-public record ParentLocationCreateRequest(
+public record ParentLocationUpdateRequest(
     @NotNull(message = "시니어 회원 ID는 필수입니다.")
     Long memberId,
     @NotNull(message = "장소 타입은 필수입니다.")
@@ -20,15 +17,4 @@ public record ParentLocationCreateRequest(
     String longitude,
     String name
 ) {
-    public ParentLocation toEntity(Member seniorMember) {
-        return ParentLocation.builder()
-            .member(seniorMember)
-            .locationType(locationType)
-            .placeAddress(placeAddress)
-            .latitude(latitude)
-            .longitude(longitude)
-            .name(name)
-            .status(Status.ACTIVE)
-            .build();
-    }
 }

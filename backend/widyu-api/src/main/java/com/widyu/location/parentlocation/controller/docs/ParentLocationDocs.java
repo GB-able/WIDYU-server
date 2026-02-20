@@ -2,6 +2,7 @@ package com.widyu.location.parentlocation.controller.docs;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.location.parentlocation.dto.request.ParentLocationCreateRequest;
+import com.widyu.location.parentlocation.dto.request.ParentLocationUpdateRequest;
 import com.widyu.location.parentlocation.dto.response.ParentLocationResponse;
 import com.widyu.location.parentlocation.dto.response.SeniorWithLocationsResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +34,8 @@ public interface ParentLocationDocs {
                       "locationType": "HOME",
                       "placeAddress": "서울특별시 강남구 테헤란로 123",
                       "latitude": "37.5012",
-                      "longitude": "127.0396"
+                      "longitude": "127.0396",
+                      "name": "우리집"
                     }
                     """
                     )
@@ -108,14 +110,16 @@ public interface ParentLocationDocs {
                               "locationType": "HOME",
                               "placeAddress": "서울특별시 강남구 테헤란로 123",
                               "latitude": "37.5012",
-                              "longitude": "127.0396"
+                              "longitude": "127.0396",
+                              "name": "우리집"
                             },
                             {
                               "parentLocationId": 2,
                               "locationType": "OTHER",
                               "placeAddress": "서울특별시 마포구 월드컵북로 123",
                               "latitude": "37.5665",
-                              "longitude": "126.9780"
+                              "longitude": "126.9780",
+                              "name": "병원"
                             }
                           ]
                         },
@@ -128,7 +132,8 @@ public interface ParentLocationDocs {
                               "locationType": "HOME",
                               "placeAddress": "서울특별시 송파구 올림픽로 456",
                               "latitude": "37.5145",
-                              "longitude": "127.1059"
+                              "longitude": "127.1059",
+                              "name": "집"
                             }
                           ]
                         }
@@ -139,5 +144,50 @@ public interface ParentLocationDocs {
             )
     )
     ApiResponseTemplate<List<SeniorWithLocationsResponse>> getParentLocations(
+    );
+
+    @Operation(
+            summary = "부모님 장소 수정",
+            description = "등록된 부모님 장소 정보를 수정합니다."
+    )
+    @RequestBody(
+            description = "부모님 장소 수정 정보",
+            required = true,
+            content = @Content(
+                    schema = @Schema(implementation = ParentLocationUpdateRequest.class),
+                    examples = @ExampleObject(
+                            value = """
+                    {
+                      "memberId": 1,
+                      "locationType": "HOME",
+                      "placeAddress": "서울특별시 강남구 테헤란로 456",
+                      "latitude": "37.5015",
+                      "longitude": "127.0400",
+                      "name": "새집"
+                    }
+                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "부모님 장소 수정 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            value = """
+                    {
+                      "code": "PLO_2003",
+                      "message": "부모님 장소가 수정되었습니다.",
+                      "data": null
+                    }
+                    """
+                    )
+            )
+    )
+    ApiResponseTemplate<Void> updateParentLocation(
+            @Parameter(description = "수정할 부모님 장소 ID", required = true, example = "1")
+            Long parentLocationId,
+            ParentLocationUpdateRequest request
     );
 }

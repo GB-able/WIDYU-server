@@ -1,6 +1,6 @@
 spring:
   application:
-    name: SGMarket-Backend
+    name: WIDYU-backend
   profiles:
     group:
       local: "local, datasource, fcm, pay, s3"
@@ -14,7 +14,7 @@ spring:
       - imp
       - oauth
       - video
-      - pay
+      - payㅁ
       - medicine
       - actuator
       - ai

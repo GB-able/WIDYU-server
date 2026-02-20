@@ -47,6 +47,8 @@ public class SecurityConfig {
                                                 "/v3/api-docs/**",
                                                 "/swagger-resources/**"
                                         ).permitAll()
+                                        // Actuator 엔드포인트 허용 (Prometheus 메트릭 수집)
+                                        .requestMatchers("/actuator/**").permitAll()
                                         // 그 외 모든 요청은 인증 필요
                                         .anyRequest()
                                         .authenticated())
