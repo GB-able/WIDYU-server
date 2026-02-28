@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>WIDYU WebSocket 테스트</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs/bundles/stomp.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: monospace; }
+    body { margin: 16px; background: #1e1e1e; color: #d4d4d4; }
+    h1 { color: #4ec9b0; font-size: 18px; margin-bottom: 16px; }
+    h3 { color: #9cdcfe; margin: 16px 0 8px; font-size: 14px; }
+    input, textarea { width: 100%; padding: 7px; background: #2d2d2d; border: 1px solid #555; color: #d4d4d4; border-radius: 4px; font-size: 13px; }
+    button { padding: 6px 14px; margin: 3px 2px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .btn-connect    { background: #4ec9b0; color: #000; }
+    .btn-disconnect { background: #f44747; color: #fff; }
+    .btn-send       { background: #569cd6; color: #fff; }
+    .btn-clear      { background: #555;    color: #fff; font-size: 12px; padding: 4px 10px; }
+    .status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; margin-left: 8px; vertical-align: middle; }
+    .status-on  { background: #4ec9b0; color: #000; }
+    .status-off { background: #555;    color: #fff; }
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel { background: #252526; border: 1px solid #333; border-radius: 8px; padding: 16px; }
+    .panel-senior   { border-top: 3px solid #4ec9b0; }
+    .panel-guardian { border-top: 3px solid #c586c0; }
+    .panel-title { font-size: 15px; font-weight: bold; }
+    .panel-senior   .panel-title { color: #4ec9b0; }
+    .panel-guardian .panel-title { color: #c586c0; }
+    .section { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-top: 12px; }
+    label { display: block; margin-bottom: 4px; color: #9cdcfe; font-size: 12px; }
+    code  { font-size: 11px; color: #808080; }
+    .log  { background: #0d0d0d; border: 1px solid #444; padding: 10px; height: 220px; overflow-y: auto; border-radius: 4px; margin-top: 8px; font-size: 12px; line-height: 1.6; }
+    .log-info  { color: #4ec9b0; }
+    .log-recv  { color: #9cdcfe; }
+    .log-send  { color: #dcdcaa; }
+    .log-error { color: #f44747; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>WIDYU WebSocket 테스트</h1>
+
+  <div class="panels">
+
+    <!-- ===== 시니어 패널 ===== -->
+    <div class="panel panel-senior">
+      <div class="panel-title">시니어 (Senior) <span id="senior-badge" class="status status-off">연결 안됨</span></div>
+
+      <!-- 연결 -->
+      <div class="section">
+        <h3>연결</h3>
+        <label>서버 URL</label>
+        <input id="senior-url" value="http://localhost:8080/ws/location" style="margin-bottom:8px" />
+        <label>JWT Access Token</label>
+        <input id="senior-token" placeholder="Bearer 없이 토큰만 입력" style="margin-bottom:8px" />
+        <button class="btn-connect"    onclick="seniorConnect()">연결</button>
+        <button class="btn-disconnect" onclick="seniorDisconnect()">해제</button>
+      </div>
+
+      <!-- 위치 전송 -->
+      <div class="section">
+        <h3>위치 전송 <code>/app/location/update</code></h3>
+        <label>시니어 memberId</label>
+        <input id="senior-memberId" placeholder="본인 memberId" style="width:160px; margin-bottom:8px" />
+        <label>위도 / 경도</label>
+        <div class="row">
+          <input id="senior-lat" value="37.5665" placeholder="latitude" />
+          <input id="senior-lng" value="126.9780" placeholder="longitude" />
+        </div>
+        <button class="btn-send" onclick="seniorSendLocation()">위치 전송</button>
+      </div>
+
+      <!-- 심박수 전송 -->
+      <div class="section">
+        <h3>심박수 전송 <code>/app/heart-rate/send</code></h3>
+        <label>심박수 데이터 (정확히 15개)</label>
+        <textarea id="senior-heartRate" rows="18">{
+  "heartRates": [
+    {"heartRate": 82, "measuredAt": "2026-02-28T10:00:00"},
+    {"heartRate": 85, "measuredAt": "2026-02-28T10:00:01"},
+    {"heartRate": 83, "measuredAt": "2026-02-28T10:00:02"},
+    {"heartRate": 90, "measuredAt": "2026-02-28T10:00:03"},
+    {"heartRate": 88, "measuredAt": "2026-02-28T10:00:04"},
+    {"heartRate": 92, "measuredAt": "2026-02-28T10:00:05"},
+    {"heartRate": 95, "measuredAt": "2026-02-28T10:00:06"},
+    {"heartRate": 100, "measuredAt": "2026-02-28T10:00:07"},
+    {"heartRate": 85, "measuredAt": "2026-02-28T10:00:08"},
+    {"heartRate": 80, "measuredAt": "2026-02-28T10:00:09"},
+    {"heartRate": 77, "measuredAt": "2026-02-28T10:00:10"},
+    {"heartRate": 82, "measuredAt": "2026-02-28T10:00:11"},
+    {"heartRate": 79, "measuredAt": "2026-02-28T10:00:12"},
+    {"heartRate": 81, "measuredAt": "2026-02-28T10:00:13"},
+    {"heartRate": 84, "measuredAt": "2026-02-28T10:00:14"}
+  ]
+}</textarea>
+        <button class="btn-send" style="margin-top:6px" onclick="seniorSendHeartRate()">심박수 전송</button>
+      </div>
+
+      <!-- 시니어 로그 -->
+      <div class="section">
+        <h3>시니어 로그 <button class="btn-clear" onclick="clearLog('senior-log')">지우기</button></h3>
+        <div id="senior-log" class="log"></div>
+      </div>
+    </div>
+
+    <!-- ===== 보호자 패널 ===== -->
+    <div class="panel panel-guardian">
+      <div class="panel-title">보호자 (Guardian) <span id="guardian-badge" class="status status-off">연결 안됨</span></div>
+
+      <!-- 연결 -->
+      <div class="section">
+        <h3>연결</h3>
+        <label>서버 URL</label>
+        <input id="guardian-url" value="http://localhost:8080/ws/location" style="margin-bottom:8px" />
+        <label>JWT Access Token</label>
+        <input id="guardian-token" placeholder="Bearer 없이 토큰만 입력" style="margin-bottom:8px" />
+        <button class="btn-connect"    onclick="guardianConnect()">연결</button>
+        <button class="btn-disconnect" onclick="guardianDisconnect()">해제</button>
+      </div>
+
+      <!-- 시니어 위치 구독 -->
+      <div class="section">
+        <h3>시니어 위치 구독 <code>/topic/location/senior/{memberId}</code></h3>
+        <label>구독할 시니어 memberId</label>
+        <div class="row" style="align-items:center">
+          <input id="guardian-seniorId" placeholder="시니어 memberId" style="width:180px" />
+          <button class="btn-send" onclick="guardianSubscribeLocation()">구독</button>
+        </div>
+        <div id="guardian-subscribed" style="font-size:12px; color:#808080; margin-top:4px"></div>
+      </div>
+
+      <!-- 보호자 로그 -->
+      <div class="section">
+        <h3>보호자 로그 <button class="btn-clear" onclick="clearLog('guardian-log')">지우기</button></h3>
+        <div id="guardian-log" class="log"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let seniorClient   = null;
+    let guardianClient = null;
+    let guardianLocationSub = null;
+
+    /* ── 공통 유틸 ── */
+    function appendLog(logId, msg, type = 'info') {
+      const el = document.getElementById(logId);
+      const time = new Date().toLocaleTimeString();
+      el.innerHTML += `<div class="log-${type}">[${time}] ${escapeHtml(msg)}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function clearLog(logId) {
+      document.getElementById(logId).innerHTML = '';
+    }
+    function setBadge(badgeId, connected) {
+      const el = document.getElementById(badgeId);
+      el.textContent = connected ? '연결됨' : '연결 안됨';
+      el.className = 'status ' + (connected ? 'status-on' : 'status-off');
+    }
+    function makeClient(url, token, logId, badgeId, onConnectExtra) {
+      const client = new StompJs.Client({
+        webSocketFactory: () => new SockJS(url + '?token=' + encodeURIComponent(token)),
+        connectHeaders: { Authorization: 'Bearer ' + token },
+        onConnect: () => {
+          setBadge(badgeId, true);
+          appendLog(logId, 'WebSocket 연결 성공', 'info');
+          // 공통 개인 큐 구독
+          client.subscribe('/user/queue/location/ack', (msg) => {
+            appendLog(logId, '위치 ACK: ' + prettyJson(msg.body), 'recv');
+          });
+          client.subscribe('/user/queue/heart-rate/result', (msg) => {
+            appendLog(logId, '심박수 결과: ' + prettyJson(msg.body), 'recv');
+          });
+          client.subscribe('/user/queue/errors', (msg) => {
+            appendLog(logId, '에러: ' + msg.body, 'error');
+          });
+          if (onConnectExtra) onConnectExtra(client);
+        },
+        onStompError: (frame) => {
+          appendLog(logId, 'STOMP 에러: ' + frame.headers['message'], 'error');
+        },
+        onDisconnect: () => { setBadge(badgeId, false); appendLog(logId, '연결 해제됨', 'info'); },
+        onWebSocketClose: () => { setBadge(badgeId, false); appendLog(logId, 'WebSocket 종료됨', 'info'); }
+      });
+      return client;
+    }
+    function prettyJson(body) {
+      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { return body; }
+    }
+
+    /* ── 시니어 ── */
+    function seniorConnect() {
+      const url   = document.getElementById('senior-url').value;
+      const token = document.getElementById('senior-token').value.trim();
+      if (!token) { alert('시니어 토큰을 입력하세요.'); return; }
+      if (seniorClient) seniorClient.deactivate();
+      seniorClient = makeClient(url, token, 'senior-log', 'senior-badge');
+      seniorClient.activate();
+      appendLog('senior-log', '연결 시도 중... ' + url, 'info');
+    }
+    function seniorDisconnect() {
+      if (seniorClient) { seniorClient.deactivate(); seniorClient = null; }
+    }
+    function seniorSendLocation() {
+      if (!seniorClient?.connected) { alert('시니어를 먼저 연결하세요.'); return; }
+      const memberId = document.getElementById('senior-memberId').value;
+      const lat      = document.getElementById('senior-lat').value;
+      const lng      = document.getElementById('senior-lng').value;
+      if (!memberId) { alert('시니어 memberId를 입력하세요.'); return; }
+      const body = JSON.stringify({ memberId: parseInt(memberId), latitude: parseFloat(lat), longitude: parseFloat(lng), timestamp: null });
+      seniorClient.publish({ destination: '/app/location/update', body });
+      appendLog('senior-log', '위치 전송: ' + body, 'send');
+    }
+    function seniorSendHeartRate() {
+      if (!seniorClient?.connected) { alert('시니어를 먼저 연결하세요.'); return; }
+      const body = document.getElementById('senior-heartRate').value;
+      seniorClient.publish({ destination: '/app/heart-rate/send', body });
+      appendLog('senior-log', '심박수 전송', 'send');
+    }
+
+    /* ── 보호자 ── */
+    function guardianConnect() {
+      const url   = document.getElementById('guardian-url').value;
+      const token = document.getElementById('guardian-token').value.trim();
+      if (!token) { alert('보호자 토큰을 입력하세요.'); return; }
+      if (guardianClient) guardianClient.deactivate();
+      guardianClient = makeClient(url, token, 'guardian-log', 'guardian-badge');
+      guardianClient.activate();
+      appendLog('guardian-log', '연결 시도 중... ' + url, 'info');
+    }
+    function guardianDisconnect() {
+      if (guardianClient) { guardianClient.deactivate(); guardianClient = null; guardianLocationSub = null; }
+      document.getElementById('guardian-subscribed').textContent = '';
+    }
+    function guardianSubscribeLocation() {
+      if (!guardianClient?.connected) { alert('보호자를 먼저 연결하세요.'); return; }
+      const seniorId = document.getElementById('guardian-seniorId').value.trim();
+      if (!seniorId) { alert('시니어 memberId를 입력하세요.'); return; }
+      if (guardianLocationSub) { guardianLocationSub.unsubscribe(); }
+      const dest = `/topic/location/senior/${seniorId}`;
+      guardianLocationSub = guardianClient.subscribe(dest, (msg) => {
+        appendLog('guardian-log', `[시니어 ${seniorId}] 위치 수신: ` + prettyJson(msg.body), 'recv');
+      });
+      document.getElementById('guardian-subscribed').textContent = '구독 중: ' + dest;
+      appendLog('guardian-log', '위치 구독 시작: ' + dest, 'info');
+    }
+  </script>
+</body>
+</html>

@@ -7,7 +7,6 @@ import com.widyu.heart.application.HeartMessageService;
 import com.widyu.heart.application.HeartRateService;
 import com.widyu.heart.controller.docs.HeartRateDocs;
 import com.widyu.heart.dto.request.HeartMessageRequest;
-import com.widyu.heart.dto.request.HeartRateSendRequest;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,19 +40,6 @@ public class HeartRateController implements HeartRateDocs {
                 .code("HEART_2001")
                 .message("심박수 이상치 조회 완료")
                 .body(response);
-    }
-
-    @Override
-    @PostMapping("/send")
-    public ApiResponseTemplate<Void> sendHeartRates(
-            @Valid @RequestBody HeartRateSendRequest request
-    ) {
-        Long memberId = securityUtil.getCurrentMemberId();
-        heartRateService.processHeartRates(memberId, request);
-        return ApiResponseTemplate.ok()
-                .code("HEART_2002")
-                .message("심박수 전송 완료")
-                .build();
     }
 
     @Override
