@@ -20,7 +20,7 @@ public class HeartRateService {
     private final HeartRateAnomalyDetector heartRateAnomalyDetector;
     private final HeartRateResultRepository heartRateResultRepository;
 
-    public void processHeartRates(Long memberId, HeartRateSendRequest request) {
+    public HeartRateStatusResponse processHeartRates(Long memberId, HeartRateSendRequest request) {
         List<Integer> heartRateValues = request.heartRates().stream()
                 .map(HeartRateMeasurement::heartRate)
                 .toList();
@@ -44,6 +44,8 @@ public class HeartRateService {
 
         log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
                 memberId, status, latestMeasurement.heartRate(), latestMeasurement.measuredAt());
+
+        return HeartRateStatusResponse.from(result);
     }
 
     public HeartRateStatusResponse getHeartRateStatus(Long memberId) {
