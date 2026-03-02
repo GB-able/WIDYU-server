@@ -64,7 +64,8 @@ jobs:
 
           ssh -i private_key.pem -o StrictHostKeyChecking=no \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }} \
-            "mkdir -p /home/ec2-user/widyu/nginx /home/ec2-user/widyu/monitoring"
+            "mkdir -p /home/ec2-user/widyu/nginx"
+            # "mkdir -p /home/ec2-user/widyu/nginx /home/ec2-user/widyu/monitoring"
 
           rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
             docker-compose.yml docker-compose.dev.yml \
@@ -78,9 +79,9 @@ jobs:
             scripts/ \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/scripts/
 
-          rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
-            monitoring/ \
-            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/monitoring/
+          # rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
+          #   monitoring/ \
+          #   ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/monitoring/
   
           rm -f private_key.pem
 
@@ -106,5 +107,5 @@ jobs:
             echo "🚀 Deploying widyu-api (monitoring containers stay running)..."
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps --force-recreate widyu-api
 
-            echo "🔧 Ensuring monitoring stack is running..."
-            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d prometheus grafana loki promtail node-exporter
+            # echo "🔧 Ensuring monitoring stack is running..."
+            # docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d prometheus grafana loki promtail node-exporter
