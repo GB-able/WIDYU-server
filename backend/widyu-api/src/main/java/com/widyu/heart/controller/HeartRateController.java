@@ -7,6 +7,7 @@ import com.widyu.heart.application.HeartMessageService;
 import com.widyu.heart.application.HeartRateService;
 import com.widyu.heart.controller.docs.HeartRateDocs;
 import com.widyu.heart.dto.request.HeartMessageRequest;
+import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,34 @@ public class HeartRateController implements HeartRateDocs {
         return ApiResponseTemplate.ok()
                 .code("HEART_2001")
                 .message("심박수 이상치 조회 완료")
+                .body(response);
+    }
+
+    @Override
+    @GetMapping("/graph")
+    @ValidateFamilyAccess(memberIdParam = "memberId")
+    public ApiResponseTemplate<HeartGraphPageResponse> getHeartGraph(
+            @RequestParam(required = false) Long memberId
+    ) {
+        Long targetMemberId = memberId != null ? memberId : securityUtil.getCurrentMemberId();
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(targetMemberId);
+        return ApiResponseTemplate.ok()
+                .code("HEART_2004")
+                .message("심박수 그래프 조회 완료")
+                .body(response);
+    }
+
+    @Override
+    @GetMapping("/graph/refresh")
+    @ValidateFamilyAccess(memberIdParam = "memberId")
+    public ApiResponseTemplate<HeartGraphPageResponse> getHeartGraphRefresh(
+            @RequestParam(required = false) Long memberId
+    ) {
+        Long targetMemberId = memberId != null ? memberId : securityUtil.getCurrentMemberId();
+        HeartGraphPageResponse response = heartRateService.getHeartGraphRefresh(targetMemberId);
+        return ApiResponseTemplate.ok()
+                .code("HEART_2005")
+                .message("심박수 그래프 갱신 완료")
                 .body(response);
     }
 

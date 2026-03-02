@@ -35,7 +35,7 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                 String token = authHeader.replace(TOKEN_PREFIX, "");
                 AccessTokenDto accessTokenDto = jwtTokenProvider.retrieveAccessToken(token);
 
-                if (accessTokenDto != null) {
+                if (accessTokenDto != null && accessTokenDto.memberId() != null) {
                     PrincipalDetails principal = new PrincipalDetails(
                             accessTokenDto.memberId(),
                             accessTokenDto.memberRole()
