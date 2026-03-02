@@ -2,6 +2,7 @@ package com.widyu.heart.controller.docs;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.heart.dto.request.HeartMessageRequest;
+import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -99,6 +100,40 @@ public interface HeartRateDocs {
             )
     )
     ApiResponseTemplate<HeartRateStatusResponse> getHeartRateStatus(
+            @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
+            Long memberId
+    );
+
+    @Operation(
+            summary = "심박수 그래프 최초 조회",
+            description = """
+                    심박수 그래프 화면 최초 진입 시 호출합니다.
+                    현재 심박수, 오늘의 최대/최소, 최초 이상치 탐지 정보, 전체 이벤트, 위급상황 히스토리를 반환합니다.
+
+                    **접근 권한**:
+                    - memberId 미입력 시: 본인 조회
+                    - memberId 입력 시: 가족 연결된 경우에만 조회 가능
+                    """
+    )
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    ApiResponseTemplate<HeartGraphPageResponse> getHeartGraph(
+            @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
+            Long memberId
+    );
+
+    @Operation(
+            summary = "심박수 그래프 갱신",
+            description = """
+                    심박수 그래프를 갱신할 때 호출합니다.
+                    현재 심박수, 최대/최소, 최근 5개 이벤트, 위급상황 히스토리를 반환합니다.
+
+                    **접근 권한**:
+                    - memberId 미입력 시: 본인 조회
+                    - memberId 입력 시: 가족 연결된 경우에만 조회 가능
+                    """
+    )
+    @ApiResponse(responseCode = "200", description = "갱신 성공")
+    ApiResponseTemplate<HeartGraphPageResponse> getHeartGraphRefresh(
             @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
             Long memberId
     );

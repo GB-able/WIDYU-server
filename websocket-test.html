@@ -70,7 +70,7 @@
         <button class="btn-send" onclick="seniorSendLocation()">위치 전송</button>
       </div>
 
-      <!-- 심박수 전송 -->
+      <!-- 심박수 전송 (15개) -->
       <div class="section">
         <h3>심박수 전송 <code>/app/heart-rate/send</code></h3>
         <label>심박수 데이터 (정확히 15개)</label>
@@ -118,13 +118,13 @@
         <button class="btn-disconnect" onclick="guardianDisconnect()">해제</button>
       </div>
 
-      <!-- 시니어 위치 구독 -->
+      <!-- 시니어 구독 (위치 + 심박수 동시) -->
       <div class="section">
-        <h3>시니어 위치 구독 <code>/topic/location/senior/{memberId}</code></h3>
+        <h3>시니어 구독 <code>/topic/location/senior/{id}</code> + <code>/topic/heart-rate/{id}</code></h3>
         <label>구독할 시니어 memberId</label>
         <div class="row" style="align-items:center">
           <input id="guardian-seniorId" placeholder="시니어 memberId" style="width:180px" />
-          <button class="btn-send" onclick="guardianSubscribeLocation()">구독</button>
+          <button class="btn-send" onclick="guardianSubscribe()">구독</button>
         </div>
         <div id="guardian-subscribed" style="font-size:12px; color:#808080; margin-top:4px"></div>
       </div>
@@ -141,7 +141,8 @@
   <script>
     let seniorClient   = null;
     let guardianClient = null;
-    let guardianLocationSub = null;
+    let guardianLocationSub  = null;
+    let guardianHeartRateSub = null;
 
     /* ── 공통 유틸 ── */
     function appendLog(logId, msg, type = 'info') {
@@ -168,7 +169,6 @@
         onConnect: () => {
           setBadge(badgeId, true);
           appendLog(logId, 'WebSocket 연결 성공', 'info');
-          // 공통 개인 큐 구독
           client.subscribe('/user/queue/location/ack', (msg) => {
             appendLog(logId, '위치 ACK: ' + prettyJson(msg.body), 'recv');
           });
@@ -233,20 +233,29 @@
       appendLog('guardian-log', '연결 시도 중... ' + url, 'info');
     }
     function guardianDisconnect() {
-      if (guardianClient) { guardianClient.deactivate(); guardianClient = null; guardianLocationSub = null; }
+      if (guardianClient) { guardianClient.deactivate(); guardianClient = null; guardianLocationSub = null; guardianHeartRateSub = null; }
       document.getElementById('guardian-subscribed').textContent = '';
     }
-    function guardianSubscribeLocation() {
+    function guardianSubscribe() {
       if (!guardianClient?.connected) { alert('보호자를 먼저 연결하세요.'); return; }
       const seniorId = document.getElementById('guardian-seniorId').value.trim();
       if (!seniorId) { alert('시니어 memberId를 입력하세요.'); return; }
-      if (guardianLocationSub) { guardianLocationSub.unsubscribe(); }
-      const dest = `/topic/location/senior/${seniorId}`;
-      guardianLocationSub = guardianClient.subscribe(dest, (msg) => {
-        appendLog('guardian-log', `[시니어 ${seniorId}] 위치 수신: ` + prettyJson(msg.body), 'recv');
+      if (guardianLocationSub)  { guardianLocationSub.unsubscribe(); }
+      if (guardianHeartRateSub) { guardianHeartRateSub.unsubscribe(); }
+
+      const locationDest  = `/topic/location/senior/${seniorId}`;
+      const heartRateDest = `/topic/heart-rate/${seniorId}`;
+
+      guardianLocationSub = guardianClient.subscribe(locationDest, (msg) => {
+        appendLog('guardian-log', `[위치] ` + prettyJson(msg.body), 'recv');
       });
-      document.getElementById('guardian-subscribed').textContent = '구독 중: ' + dest;
-      appendLog('guardian-log', '위치 구독 시작: ' + dest, 'info');
+      guardianHeartRateSub = guardianClient.subscribe(heartRateDest, (msg) => {
+        appendLog('guardian-log', `[심박수] ` + prettyJson(msg.body), 'recv');
+      });
+
+      document.getElementById('guardian-subscribed').textContent = `구독 중: 위치 + 심박수 (시니어 ${seniorId})`;
+      appendLog('guardian-log', `위치 구독: ${locationDest}`, 'info');
+      appendLog('guardian-log', `심박수 구독: ${heartRateDest}`, 'info');
     }
   </script>
 </body>

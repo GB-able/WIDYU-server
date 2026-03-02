@@ -5,10 +5,12 @@ import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -28,21 +30,28 @@ public class RealtimeLocationController {
     @SendToUser("/queue/location/ack")
     public LocationUpdateResponse updateLocation(
             @Valid @Payload LocationUpdateRequest request,
-            @AuthenticationPrincipal PrincipalDetails principal
+            @AuthenticationPrincipal PrincipalDetails principal,
+            SimpMessageHeaderAccessor headerAccessor
     ) {
+        Long authenticatedMemberId = resolveMemberId(principal, headerAccessor);
         log.info("위치 업데이트 수신 - authenticatedMemberId: {}, requestMemberId: {}, lat: {}, lng: {}",
-                 principal.getUsername(), request.memberId(),
+                 authenticatedMemberId, request.memberId(),
                  request.latitude(), request.longitude());
 
-        // 시니어 본인 확인 (선택적 보안 강화)
-        Long authenticatedMemberId = Long.parseLong(principal.getUsername());
+        return realtimeLocationService.updateAndBroadcast(request, authenticatedMemberId);
+    }
 
-        // 위치 저장 및 브로드캐스트
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(
-                request, authenticatedMemberId
-        );
+    private Long resolveMemberId(PrincipalDetails principal, SimpMessageHeaderAccessor headerAccessor) {
+        if (principal != null && principal.getMemberId() != null) {
+            return principal.getMemberId();
+        }
 
-        // 시니어에게 ACK 전송 (선택사항)
-        return response;
+        Map<String, Object> sessionAttributes = headerAccessor.getSessionAttributes();
+        if (sessionAttributes != null && sessionAttributes.get("memberId") instanceof Long memberId) {
+            log.debug("세션 속성에서 memberId 조회 - memberId: {}", memberId);
+            return memberId;
+        }
+
+        throw new IllegalStateException("인증 정보가 없습니다. WebSocket 연결 시 유효한 JWT 토큰이 필요합니다.");
     }
 }

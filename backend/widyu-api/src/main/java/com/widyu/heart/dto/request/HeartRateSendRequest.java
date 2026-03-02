@@ -9,6 +9,8 @@ public record HeartRateSendRequest(
         @NotNull(message = "심박수 데이터는 필수입니다.")
         @Size(min = 15, max = 15, message = "심박수 데이터는 정확히 15개여야 합니다.")
         @Valid
-        List<HeartRateMeasurement> heartRates
+        List<HeartRateMeasurement> heartRates,
+
+        String location // 현재 위치 주소 (이상치 감지 시 위급상황 기록에 사용)
 ) {
 }
