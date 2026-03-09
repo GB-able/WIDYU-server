@@ -32,6 +32,7 @@ public enum ErrorCode {
     INVITE_CODE_DUPLICATED(HttpStatus.BAD_REQUEST, "PARENT_4001", "이미 존재하는 초대코드입니다."),
     INVITE_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "PARENT_4040", "초대코드를 찾을 수 없습니다."),
     INVITE_CODE_DUPLICATED_IN_REQUEST(HttpStatus.BAD_REQUEST, "PARENT_4002", "요청 내 중복된 초대코드가 있습니다."),
+    ALREADY_CONNECTED_TO_FAMILY(HttpStatus.BAD_REQUEST, "PARENT_4003", "이미 해당 가족에 연결되어 있습니다."),
 
     // 문자 인증
     SMS_VERIFICATION_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "SMS_4040", "문자 인증 코드가 존재하지 않습니다."),
