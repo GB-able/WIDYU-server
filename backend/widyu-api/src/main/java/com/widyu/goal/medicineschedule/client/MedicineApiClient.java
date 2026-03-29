@@ -24,4 +24,13 @@ public interface MedicineApiClient {
             @RequestParam("pageNo") Integer pageNo,
             @RequestParam("type") String type
     );
+
+    // 키워드 없이 전체 조회 (배치 동기화용)
+    @GetMapping("/getDrbEasyDrugList")
+    MedicineApiResponse fetchAllMedicines(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("numOfRows") Integer numOfRows,
+            @RequestParam("pageNo") Integer pageNo,
+            @RequestParam("type") String type
+    );
 }

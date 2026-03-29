@@ -3,14 +3,18 @@ package com.widyu.goal.medicineschedule.repository;
 import com.widyu.medicine.Medicine;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface MedicineRepository extends JpaRepository<Medicine, Long> {
 
-    @Query("SELECT m FROM Medicine m WHERE LOWER(m.itemName) LIKE LOWER(CONCAT('%', :keyword, '%'))")
-    List<Medicine> searchByName(@Param("keyword") String keyword);
+    @Query(value = "SELECT * FROM medicine WHERE MATCH(item_name) AGAINST(:keyword IN BOOLEAN MODE) LIMIT 10", nativeQuery = true)
+    List<Medicine> searchByNameFullText(@Param("keyword") String keyword);
+
+    @Query("SELECT m.itemSeq FROM Medicine m WHERE m.itemSeq IN :seqs")
+    Set<String> findItemSeqsByItemSeqIn(@Param("seqs") List<String> seqs);
 
     Optional<Medicine> findByItemName(String itemName);
 

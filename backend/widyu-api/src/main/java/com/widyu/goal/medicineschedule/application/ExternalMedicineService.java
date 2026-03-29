@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -25,19 +26,27 @@ public class ExternalMedicineService {
     private final MedicineProperties medicineProperties;
 
     /**
-     * 외부 API로 약품 검색 후 DB에 없으면 저장
+     * 약품 검색: 자체 DB 우선 조회 후 없으면 외부 API fallback
      */
     @Transactional
     public MedicineSearchResponse searchAndSaveMedicines(String keyword) {
         log.info("약품 검색 시작: keyword={}", keyword);
 
+        // 1. 자체 DB FULLTEXT 검색
+        List<Medicine> dbResults = medicineRepository.searchByNameFullText(keyword);
+        if (!dbResults.isEmpty()) {
+            log.info("자체 DB 검색 성공: keyword={}, 결과 수={}", keyword, dbResults.size());
+            return toSearchResponse(dbResults);
+        }
+
+        // 2. DB에 없으면 외부 API fallback
+        log.info("자체 DB 결과 없음, 외부 API 호출: keyword={}", keyword);
         try {
-            // 외부 API 호출 (Feign이 자동으로 URL 인코딩)
             MedicineApiResponse response = medicineApiClient.searchMedicines(
                     medicineProperties.api().serviceKey(),
                     keyword,
-                    10,  // 최대 10개 결과
-                    1,   // 첫 페이지
+                    10,
+                    1,
                     "json"
             );
 
@@ -46,7 +55,6 @@ public class ExternalMedicineService {
                 return new MedicineSearchResponse(List.of());
             }
 
-            // items 또는 item 중 null이 아닌 것을 가져옴
             List<MedicineApiResponse.MedicineItem> apiItems = response.body().items() != null
                     ? response.body().items()
                     : (response.body().item() != null ? response.body().item() : List.of());
@@ -56,20 +64,9 @@ public class ExternalMedicineService {
                 return new MedicineSearchResponse(List.of());
             }
 
-            // 결과를 DB에 저장하고 응답 생성
-            List<MedicineSearchResponse.MedicineItem> items = apiItems.stream()
-                    .map(this::findOrSaveMedicine)
-                    .map(medicine -> new MedicineSearchResponse.MedicineItem(
-                            medicine.getId(),
-                            medicine.getItemName(),
-                            medicine.getItemImage(),
-                            medicine.getUseMethodQesitm(),
-                            medicine.getEfcyQesitm()
-                    ))
-                    .collect(Collectors.toList());
-
-            log.info("약품 검색 완료: keyword={}, 결과 수={}", keyword, items.size());
-            return new MedicineSearchResponse(items);
+            List<Medicine> saved = upsertMedicines(apiItems);
+            log.info("외부 API 검색 완료: keyword={}, 결과 수={}", keyword, saved.size());
+            return toSearchResponse(saved);
 
         } catch (Exception e) {
             log.error("약품 검색 실패: keyword={}, error={}", keyword, e.getMessage(), e);
@@ -78,22 +75,46 @@ public class ExternalMedicineService {
     }
 
     /**
-     * itemSeq로 DB에서 찾거나 새로 저장
+     * 배치 동기화용 upsert: 이미 존재하는 itemSeq는 건너뛰고 신규만 저장
      */
-    private Medicine findOrSaveMedicine(MedicineApiResponse.MedicineItem apiItem) {
-        return medicineRepository.findByItemSeq(apiItem.itemSeq())
-                .orElseGet(() -> {
-                    Medicine newMedicine = Medicine.create(
-                            apiItem.itemSeq(),
-                            apiItem.itemName(),
-                            apiItem.entpName(),
-                            apiItem.itemImage(),
-                            apiItem.useMethodQesitm(),
-                            apiItem.efcyQesitm()
-                    );
-                    Medicine saved = medicineRepository.save(newMedicine);
-                    log.info("새로운 약품 저장: itemSeq={}, itemName={}", saved.getItemSeq(), saved.getItemName());
-                    return saved;
-                });
+    @Transactional
+    public List<Medicine> upsertMedicines(List<MedicineApiResponse.MedicineItem> apiItems) {
+        List<String> seqs = apiItems.stream()
+                .filter(item -> item.itemSeq() != null)
+                .map(MedicineApiResponse.MedicineItem::itemSeq)
+                .collect(Collectors.toList());
+
+        Set<String> existingSeqs = medicineRepository.findItemSeqsByItemSeqIn(seqs);
+
+        List<Medicine> toSave = apiItems.stream()
+                .filter(item -> item.itemSeq() != null && !existingSeqs.contains(item.itemSeq()))
+                .map(item -> Medicine.create(
+                        item.itemSeq(),
+                        item.itemName(),
+                        item.entpName(),
+                        item.itemImage(),
+                        item.useMethodQesitm(),
+                        item.efcyQesitm()
+                ))
+                .collect(Collectors.toList());
+
+        if (!toSave.isEmpty()) {
+            return medicineRepository.saveAll(toSave);
+        }
+
+        return List.of();
+    }
+
+    private MedicineSearchResponse toSearchResponse(List<Medicine> medicines) {
+        List<MedicineSearchResponse.MedicineItem> items = medicines.stream()
+                .map(m -> new MedicineSearchResponse.MedicineItem(
+                        m.getId(),
+                        m.getItemName(),
+                        m.getItemImage(),
+                        m.getUseMethodQesitm(),
+                        m.getEfcyQesitm()
+                ))
+                .collect(Collectors.toList());
+        return new MedicineSearchResponse(items);
     }
 }
