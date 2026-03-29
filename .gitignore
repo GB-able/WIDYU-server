@@ -50,3 +50,7 @@ src/main/resources/firebase/
 # claude
 CLAUDE.md
 apiDocs/
+
+# benchmark
+scripts/mysql/medicine_benchmark.sql
+scripts/mysql/run_medicine_benchmark.sh
