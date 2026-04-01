@@ -8,9 +8,11 @@ import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.medicine.Medicine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,8 +34,10 @@ public class ExternalMedicineService {
     public MedicineSearchResponse searchAndSaveMedicines(String keyword) {
         log.info("약품 검색 시작: keyword={}", keyword);
 
-        // 1. 자체 DB FULLTEXT 검색
-        List<Medicine> dbResults = medicineRepository.searchByNameFullText(keyword);
+        // 1. 자체 DB 검색 (2글자 미만은 prefix LIKE, 이상은 FULLTEXT)
+        List<Medicine> dbResults = keyword.length() < 2
+                ? medicineRepository.searchByNamePrefix(keyword + "%")
+                : medicineRepository.searchByNameFullText(keyword);
         if (!dbResults.isEmpty()) {
             log.info("자체 DB 검색 성공: keyword={}, 결과 수={}", keyword, dbResults.size());
             return toSearchResponse(dbResults);
@@ -68,9 +72,13 @@ public class ExternalMedicineService {
             log.info("외부 API 검색 완료: keyword={}, 결과 수={}", keyword, saved.size());
             return toSearchResponse(saved);
 
+        } catch (DataIntegrityViolationException e) {
+            log.warn("약품 중복 저장 감지, DB 재조회: keyword={}", keyword);
+            List<Medicine> fallbackResults = medicineRepository.searchByNameFullText(keyword);
+            return toSearchResponse(fallbackResults);
         } catch (Exception e) {
             log.error("약품 검색 실패: keyword={}, error={}", keyword, e.getMessage(), e);
-            throw new RuntimeException("약품 검색 중 오류가 발생했습니다.", e);
+            return new MedicineSearchResponse(List.of());
         }
     }
 
@@ -86,8 +94,11 @@ public class ExternalMedicineService {
 
         Set<String> existingSeqs = medicineRepository.findItemSeqsByItemSeqIn(seqs);
 
+        Set<String> seenSeqs = new HashSet<>();
         List<Medicine> toSave = apiItems.stream()
-                .filter(item -> item.itemSeq() != null && !existingSeqs.contains(item.itemSeq()))
+                .filter(item -> item.itemSeq() != null
+                        && !existingSeqs.contains(item.itemSeq())
+                        && seenSeqs.add(item.itemSeq()))
                 .map(item -> Medicine.create(
                         item.itemSeq(),
                         item.itemName(),
