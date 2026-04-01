@@ -34,8 +34,10 @@ public class ExternalMedicineService {
     public MedicineSearchResponse searchAndSaveMedicines(String keyword) {
         log.info("약품 검색 시작: keyword={}", keyword);
 
-        // 1. 자체 DB FULLTEXT 검색
-        List<Medicine> dbResults = medicineRepository.searchByNameFullText(keyword);
+        // 1. 자체 DB 검색 (2글자 미만은 prefix LIKE, 이상은 FULLTEXT)
+        List<Medicine> dbResults = keyword.length() < 2
+                ? medicineRepository.searchByNamePrefix(keyword + "%")
+                : medicineRepository.searchByNameFullText(keyword);
         if (!dbResults.isEmpty()) {
             log.info("자체 DB 검색 성공: keyword={}, 결과 수={}", keyword, dbResults.size());
             return toSearchResponse(dbResults);
