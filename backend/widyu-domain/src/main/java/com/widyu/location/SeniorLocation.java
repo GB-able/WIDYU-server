@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.redis.core.RedisHash;
-import org.springframework.data.redis.core.index.Indexed;
 
 @Getter
 @Builder
@@ -18,10 +17,8 @@ public class SeniorLocation {
     @Id
     private Long seniorId;
 
-    @Indexed
     private Double latitude;
 
-    @Indexed
     private Double longitude;
 
     private LocalDateTime updatedAt;
