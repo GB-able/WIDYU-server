@@ -1,6 +1,5 @@
 package com.widyu.global.infrastructure.video;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.File;
