@@ -54,3 +54,15 @@ apiDocs/
 # benchmark
 scripts/mysql/medicine_benchmark.sql
 scripts/mysql/run_medicine_benchmark.sh
+scripts/benchmark/
+scripts/feedback/
+
+# feedback loop
+feedback_runs/
+planning_review_prompt.md
+run_feedback_loop.sh
+widyu_planning.md
+
+# test files
+ai-test.http
+websocket-test.html
