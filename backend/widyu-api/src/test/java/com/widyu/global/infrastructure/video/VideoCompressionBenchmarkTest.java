@@ -1,10 +1,7 @@
 package com.widyu.global.infrastructure.video;
 
-import net.bramp.ffmpeg.FFmpeg;
-import net.bramp.ffmpeg.FFprobe;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,20 +9,15 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import net.bramp.ffmpeg.FFmpeg;
+import net.bramp.ffmpeg.FFprobe;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
- * 리팩토링 후(After) 실제 신 로직 성능 측정
- * refactor/#222 브랜치 — FFmpegVideoCompressionService 신 버전 (File 기반)
- * 측정 파일: test_300mb.mp4 (~279MB)
- * 반복 횟수: 5회 (평균/최소/최대)
- *
- * Before 수치 (develop 브랜치 실측):
- *   generateThumbnail: 평균 660 ms | 최소 477 ms | 최대 1031 ms
- *   extractDuration:   평균 396 ms | 최소 314 ms | 최대 485 ms
- *   통합 파이프라인:    평균 902 ms | 최소 814 ms | 최대 987 ms
- *   불필요 복사량: 279 MB × 2회 = 558 MB
+ * 로컬 전용 벤치마크 테스트 — CI에서는 자동 스킵됩니다.
+ * 실행 조건: FFmpeg 로컬 설치 + test_300mb.mp4 파일 존재
  */
 class VideoCompressionBenchmarkTest {
 
@@ -40,12 +32,16 @@ class VideoCompressionBenchmarkTest {
 
     @BeforeEach
     void setUp() throws IOException, URISyntaxException {
+        assumeTrue(new File(FFMPEG_PATH).exists(),  "FFmpeg 없음 — 로컬 전용 테스트, CI 스킵");
+        assumeTrue(new File(FFPROBE_PATH).exists(), "FFprobe 없음 — 로컬 전용 테스트, CI 스킵");
+
+        URL url = getClass().getClassLoader().getResource(TEST_VIDEO);
+        assumeTrue(url != null, "test_300mb.mp4 없음 — 로컬 전용 테스트, CI 스킵");
+
         FFmpeg  ffmpeg  = new FFmpeg(FFMPEG_PATH);
         FFprobe ffprobe = new FFprobe(FFPROBE_PATH);
         service = new FFmpegVideoCompressionService(ffmpeg, ffprobe);
 
-        URL url = getClass().getClassLoader().getResource(TEST_VIDEO);
-        assertThat(url).as(TEST_VIDEO + " 파일이 없습니다").isNotNull();
         testVideoAsFile = new File(url.toURI());
         fileSizeMB = testVideoAsFile.length() / (1024 * 1024);
         System.out.printf("[setUp] 파일 크기: %d MB%n", fileSizeMB);
