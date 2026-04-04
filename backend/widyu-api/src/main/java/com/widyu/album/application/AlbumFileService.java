@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 
 @Slf4j
@@ -91,24 +92,32 @@ public class AlbumFileService {
         File tempCompressedFile = null;
         File tempThumbnailFile = null;
 
+        File sourceFile = null;
+        boolean ownedSourceFile = false;
+
         try {
-            // 1) 필요 시 압축
+            // 1) 필요 시 압축 → 결과 File을 이후 단계에서 직접 재사용
             if (videoCompressionService.needsCompression(file)) {
                 log.info("동영상 압축 시작: name={}, originalSizeMB={}", file.getOriginalFilename(), mb(file.getSize()));
                 tempCompressedFile = videoCompressionService.compressVideo(file);
                 processedFile = wrapFileAsMultipart(tempCompressedFile, safeOriginalName(file));
                 log.info("동영상 압축 완료: name={}, compressedSizeMB={}", file.getOriginalFilename(),
                         mb(processedFile.getSize()));
+                sourceFile = tempCompressedFile;
+            } else {
+                // 압축 불필요 시 MultipartFile을 File로 한 번만 변환 (이후 복사 없음)
+                sourceFile = toTempFile(file);
+                ownedSourceFile = true;
             }
 
-            // 2) processedFile 기준 썸네일 생성 & 길이 추출
-            log.info("썸네일 생성 시작: name={}", processedFile.getOriginalFilename());
-            tempThumbnailFile = videoCompressionService.generateThumbnail(processedFile); // MultipartFile 기반 API
-            String thumbName = baseName(safeOriginalName(processedFile)) + "_thumbnail.jpg";
-            MultipartFile thumbnailPart = wrapFileAsMultipart(tempThumbnailFile, thumbName);
-
-            int duration = videoCompressionService.extractDuration(processedFile);
+            // 2) sourceFile 기준으로 길이 추출 → 썸네일 생성 (파일 복사 없음)
+            int duration = videoCompressionService.extractDuration(sourceFile);
             log.info("동영상 길이 추출 완료: duration={}s", duration);
+
+            log.info("썸네일 생성 시작: name={}", safeOriginalName(file));
+            tempThumbnailFile = videoCompressionService.generateThumbnail(sourceFile, (double) duration);
+            String thumbName = baseName(safeOriginalName(file)) + "_thumbnail.jpg";
+            MultipartFile thumbnailPart = wrapFileAsMultipart(tempThumbnailFile, thumbName);
 
             // 3) 업로드
             String videoDir = ALBUM_VIDEO_PREFIX + "/" + memberId;
@@ -126,6 +135,7 @@ public class AlbumFileService {
         } finally {
             cleanupTemp(tempCompressedFile);
             cleanupTemp(tempThumbnailFile);
+            if (ownedSourceFile) cleanupTemp(sourceFile);
         }
     }
 
@@ -211,6 +221,13 @@ public class AlbumFileService {
                 log.warn("파일 정리 실패: url={}, error={}", url, ex.getMessage());
             }
         }
+    }
+
+    private File toTempFile(MultipartFile file) throws IOException {
+        String ext = guessExtByContentType(file.getContentType());
+        Path tmp = Files.createTempFile("source_" + UUID.randomUUID(), ext.isEmpty() ? "" : "." + ext);
+        Files.copy(file.getInputStream(), tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        return tmp.toFile();
     }
 
     private void cleanupTemp(File f) {
