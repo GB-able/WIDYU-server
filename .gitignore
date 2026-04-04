@@ -51,6 +51,9 @@ src/main/resources/firebase/
 CLAUDE.md
 apiDocs/
 
+# test resources (large files)
+**/src/test/resources/video/test_large.mp4
+
 # benchmark
 scripts/mysql/medicine_benchmark.sql
 scripts/mysql/run_medicine_benchmark.sh
@@ -66,3 +69,4 @@ widyu_planning.md
 # test files
 ai-test.http
 websocket-test.html
+**/src/test/resources/video/test_300mb.mp4
