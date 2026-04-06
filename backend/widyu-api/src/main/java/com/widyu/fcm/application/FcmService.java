@@ -50,6 +50,7 @@ public class FcmService {
 
     private final FcmNotificationRepository fcmNotificationRepository;
     private final MemberFcmTokenRepository memberFcmTokenRepository;
+    private final NotificationSettingService notificationSettingService;
     private final AlbumViewRepository albumViewRepository;
     private final MemberRepository memberRepository;
     private final FamilyConnectionRepository familyConnectionRepository;
@@ -141,6 +142,12 @@ public class FcmService {
     @Transactional
     public void sendMessageToUser(Long memberId, FcmSendDto fcmSendDto) {
         try {
+            // 알림 설정 확인
+            if (!notificationSettingService.isNotificationEnabled(memberId, fcmSendDto.fcmCategory())) {
+                log.info("Notification disabled for member {} category {}", memberId, fcmSendDto.fcmCategory());
+                return;
+            }
+
             List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(memberId);
 
             for (MemberFcmToken tokenEntity : tokens) {
@@ -253,5 +260,4 @@ public class FcmService {
         // 받는 사람에게 알림 전송
         sendMessageToUser(sendNotificationRequest.receiverId(), fcmSendDto);
     }
-
 }
