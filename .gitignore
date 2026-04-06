@@ -11,7 +11,7 @@ src/**/application-prod.yml   # 기존
 # macOS
 .DS_Store
 src/**/firebase
-
+websocket-test.html
 ### STS ###
 .apt_generated
 .classpath
