@@ -6,9 +6,12 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface MemberNotificationSettingRepository extends JpaRepository<MemberNotificationSetting, Long> {
-
-    List<MemberNotificationSetting> findAllByMemberId(Long memberId);
+public interface MemberNotificationSettingRepository extends
+        JpaRepository<MemberNotificationSetting, Long> {
 
     Optional<MemberNotificationSetting> findByMemberIdAndCategory(Long memberId, FcmCategory category);
+
+    List<MemberNotificationSetting> findByMemberIdAndCategoryIn(Long memberId, List<FcmCategory> categories);
+
+    List<MemberNotificationSetting> findAllByMemberId(Long memberId);
 }

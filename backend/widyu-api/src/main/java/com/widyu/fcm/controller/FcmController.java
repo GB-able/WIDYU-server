@@ -59,7 +59,7 @@ public class FcmController implements FcmDocs {
 
     @PostMapping("/send")
     public ApiResponseTemplate<String> sendNotification(@Valid @RequestBody SendNotificationRequest sendNotificationRequest) {
-        fcmService.sendNotificationToMember(sendNotificationRequest);
+    fcmService.sendNotificationToMember(sendNotificationRequest);
 
         return ApiResponseTemplate.ok()
                 .code("FCM_2007")
