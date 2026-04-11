@@ -14,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Slf4j
@@ -31,7 +30,6 @@ public class S3ServiceImpl implements S3Service {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(s3Properties.s3().bucketName())
                     .key(filePath)
-                    .acl(ObjectCannedACL.PUBLIC_READ)
                     .contentType(file.getContentType())
                     .build();
 

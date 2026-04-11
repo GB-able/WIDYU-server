@@ -1,7 +1,6 @@
 package com.widyu.album.application;
 
 import com.widyu.album.dto.request.AlbumUpdateRequest;
-import com.widyu.album.dto.request.AlbumUploadRequest;
 import com.widyu.album.dto.response.AlbumDetailResponse;
 import com.widyu.album.dto.response.AlbumUploadResponse;
 import com.widyu.album.Album;
@@ -28,42 +27,25 @@ public class AlbumService {
 
     private final AlbumRepository albumRepository;
     private final AlbumCommentRepository albumCommentRepository;
-    private final AlbumFileService albumFileService;
     private final AlbumViewService albumViewService;
     private final AlbumPermissionService albumPermissionService;
     private final MemberUtil memberUtil;
-    private final AlbumMediaPolicy mediaPolicy;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public AlbumUploadResponse uploadAlbum(AlbumUploadRequest request) {
-        // 1) 사용자
-        Member currentMember = memberUtil.getCurrentMember();
-
-        // 2) 정책 검증(개수/타입/용량)
-        mediaPolicy.validate(request.mediaFiles());
-
-        // 3) 업로드 (이미지/비디오+썸네일/길이)
-        AlbumFileService.UploadResult uploadResult =
-                albumFileService.uploadMediaFilesWithThumbnails(request.mediaFiles(), currentMember.getId());
-
-        // 4) 앨범 저장
-        Album album = Album.createAlbumWithMetadata(
-                currentMember,
-                request.content(),
-                uploadResult.mediaUrls(),
-                uploadResult.thumbnailUrls(),
-                uploadResult.durations()
-        );
+    public Long saveAlbum(Member member, String content,
+                          List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations,
+                          boolean hasVideos) {
+        Album album = hasVideos
+                ? Album.createAlbumForProcessing(member, content, mediaUrls, thumbnailUrls, durations)
+                : Album.createAlbumWithMetadata(member, content, mediaUrls, thumbnailUrls, durations);
         Album saved = albumRepository.save(album);
 
-        // 앨범 작성 알림 이벤트 발행
-        eventPublisher.publishEvent(new AlbumCreatedEvent(
-                saved.getId(),
-                currentMember.getId()
-        ));
+        if (!hasVideos) {
+            eventPublisher.publishEvent(new AlbumCreatedEvent(saved.getId(), member.getId()));
+        }
 
-        return AlbumUploadResponse.from(saved);
+        return saved.getId();
     }
 
     @Transactional

@@ -5,11 +5,13 @@ import com.widyu.album.dto.request.AlbumUploadRequest;
 import com.widyu.album.dto.response.AlbumDetailResponse;
 import com.widyu.album.dto.response.AlbumFeedResponse;
 import com.widyu.album.dto.response.AlbumUnlockResponse;
+import com.widyu.album.dto.response.AlbumUploadAcceptedResponse;
 import com.widyu.album.dto.response.AlbumUploadResponse;
 import com.widyu.album.dto.response.LikedAlbumsResponse;
 import com.widyu.album.dto.response.AlbumMediaResponse;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
+import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -124,7 +126,7 @@ public interface AlbumDocs {
                     )
             )
     })
-    ApiResponseTemplate<AlbumUploadResponse> uploadAlbum(@Valid AlbumUploadRequest request);
+    ResponseEntity<ApiResponseTemplate<AlbumUploadAcceptedResponse>> uploadAlbum(@Valid AlbumUploadRequest request);
 
     // ========== 앨범 피드 조회 ==========
     

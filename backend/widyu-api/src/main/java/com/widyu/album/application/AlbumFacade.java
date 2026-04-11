@@ -5,6 +5,7 @@ import com.widyu.album.dto.request.AlbumUploadRequest;
 import com.widyu.album.dto.response.AlbumDetailResponse;
 import com.widyu.album.dto.response.AlbumFeedResponse;
 import com.widyu.album.dto.response.AlbumUnlockResponse;
+import com.widyu.album.dto.response.AlbumUploadAcceptedResponse;
 import com.widyu.album.dto.response.AlbumUploadResponse;
 import com.widyu.album.dto.response.LikedAlbumsResponse;
 import com.widyu.album.dto.response.AlbumMediaResponse;
@@ -17,9 +18,9 @@ import com.widyu.global.dto.CursorPage;
 public interface AlbumFacade {
 
     /**
-     * 앨범 업로드
+     * 앨범 업로드 (비동기) - 즉시 albumId 반환, 미디어 처리는 백그라운드 수행
      */
-    AlbumUploadResponse uploadAlbum(AlbumUploadRequest request);
+    AlbumUploadAcceptedResponse uploadAlbum(AlbumUploadRequest request);
 
     /**
      * 앨범 피드 조회 (무한 스크롤)
