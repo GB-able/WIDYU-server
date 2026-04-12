@@ -75,6 +75,10 @@ services:
       SWAGGER_VERSION: ${SWAGGER_VERSION}
       SWAGGER_URL: ${SWAGGER_URL}
 
+      # FFmpeg (공통)
+      FFMPEG_PATH: ${FFMPEG_PATH}
+      FFPROBE_PATH: ${FFPROBE_PATH}
+
       # AI Server (공통)
       AI_SERVER_URL: ${AI_SERVER_URL:-http://widyu-ai:5000}
 
