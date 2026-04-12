@@ -47,6 +47,8 @@ jobs:
           tags: |
             ${{ env.DOCKER_IMAGE_NAME }}:latest
             ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.DOCKER_IMAGE_NAME }}:cache,mode=max
 
   deploy-to-ec2:
     name: Deploy to AWS EC2
