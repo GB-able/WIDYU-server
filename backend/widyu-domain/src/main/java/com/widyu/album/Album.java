@@ -20,6 +20,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderColumn;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -106,6 +107,32 @@ public class Album extends BaseTimeEntity {
                 .thumbnailUrls(thumbnailUrls)
                 .durations(durations)
                 .build();
+    }
+
+    public static Album createAlbumForProcessing(Member member, String content, List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations) {
+        return Album.builder()
+                .member(member)
+                .content(content)
+                .mediaUrls(mediaUrls)
+                .thumbnailUrls(thumbnailUrls)
+                .durations(durations)
+                .status(Status.PROCESSING)
+                .build();
+    }
+
+    public void completeVideoProcessing(Map<Integer, String> videoUrlsByIndex,
+                                        Map<Integer, String> thumbnailUrlsByIndex,
+                                        Map<Integer, Integer> durationsByIndex) {
+        for (Map.Entry<Integer, String> entry : videoUrlsByIndex.entrySet()) {
+            this.mediaUrls.set(entry.getKey(), entry.getValue());
+        }
+        for (Map.Entry<Integer, String> entry : thumbnailUrlsByIndex.entrySet()) {
+            this.thumbnailUrls.set(entry.getKey(), entry.getValue());
+        }
+        for (Map.Entry<Integer, Integer> entry : durationsByIndex.entrySet()) {
+            this.durations.set(entry.getKey(), entry.getValue());
+        }
+        this.status = Status.ACTIVE;
     }
 
     public int getPhotoCount() {

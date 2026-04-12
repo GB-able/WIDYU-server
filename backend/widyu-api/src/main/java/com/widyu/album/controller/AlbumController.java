@@ -7,6 +7,7 @@ import com.widyu.album.dto.request.AlbumUploadRequest;
 import com.widyu.album.dto.response.AlbumDetailResponse;
 import com.widyu.album.dto.response.AlbumFeedResponse;
 import com.widyu.album.dto.response.AlbumUnlockResponse;
+import com.widyu.album.dto.response.AlbumUploadAcceptedResponse;
 import com.widyu.album.dto.response.AlbumUploadResponse;
 import com.widyu.album.dto.response.LikedAlbumsResponse;
 import com.widyu.album.dto.response.AlbumMediaResponse;
@@ -14,7 +15,9 @@ import com.widyu.global.dto.CursorPage;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -35,15 +38,16 @@ public class AlbumController implements AlbumDocs {
 
     @Override
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponseTemplate<AlbumUploadResponse> uploadAlbum(
+    public ResponseEntity<ApiResponseTemplate<AlbumUploadAcceptedResponse>> uploadAlbum(
             @ModelAttribute @Valid AlbumUploadRequest request
     ) {
-        AlbumUploadResponse response = albumFacade.uploadAlbum(request);
-        
-        return ApiResponseTemplate.ok()
-                .code("ALBM_2001")
-                .message("앨범 업로드가 완료되었습니다.")
-                .body(response);
+        AlbumUploadAcceptedResponse response = albumFacade.uploadAlbum(request);
+
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponseTemplate.ok()
+                        .code("ALBM_2001")
+                        .message("앨범 업로드 요청이 접수되었습니다.")
+                        .body(response));
     }
 
     @Override

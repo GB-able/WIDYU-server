@@ -223,7 +223,7 @@ public class AlbumFileService {
         }
     }
 
-    private File toTempFile(MultipartFile file) throws IOException {
+    File toTempFile(MultipartFile file) throws IOException {
         String ext = guessExtByContentType(file.getContentType());
         Path tmp = Files.createTempFile("source_" + UUID.randomUUID(), ext.isEmpty() ? "" : "." + ext);
         Files.copy(file.getInputStream(), tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
