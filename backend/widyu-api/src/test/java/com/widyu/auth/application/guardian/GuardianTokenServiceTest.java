@@ -1,0 +1,118 @@
+package com.widyu.auth.application.guardian;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.widyu.auth.dto.RefreshTokenDto;
+import com.widyu.auth.dto.request.RefreshTokenRequest;
+import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.global.util.MemberUtil;
+import com.widyu.member.LocalAccount;
+import com.widyu.member.Member;
+import com.widyu.member.MemberRole;
+import com.widyu.member.MemberType;
+import com.widyu.member.SocialAccount;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("GuardianTokenService 단위 테스트")
+class GuardianTokenServiceTest {
+
+    @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock private MemberUtil memberUtil;
+
+    @InjectMocks
+    private GuardianTokenService guardianTokenService;
+
+    @Test
+    @DisplayName("유효한 리프레시 토큰으로 새로운 토큰 쌍을 반환한다")
+    void reissueTokenPair_validRefreshToken_returnsNewTokenPair() {
+        // given
+        String refreshToken = "valid-refresh-token";
+        Long memberId = 1L;
+        RefreshTokenDto refreshTokenDto = new RefreshTokenDto(memberId, refreshToken, 604800L);
+        RefreshTokenDto newRefreshTokenDto = new RefreshTokenDto(memberId, "new-refresh-token", 604800L);
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        LocalAccount localAccount = LocalAccount.createLocalAccount(member, "test@test.com", "encoded");
+        ReflectionTestUtils.setField(member, "localAccount", localAccount);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        TokenPairResponse expectedTokenPair = TokenPairResponse.of(memberId, "new-access", "new-refresh");
+
+        when(jwtTokenProvider.retrieveRefreshToken(refreshToken)).thenReturn(refreshTokenDto);
+        when(jwtTokenProvider.createRefreshTokenDto(memberId)).thenReturn(newRefreshTokenDto);
+        when(memberUtil.getMemberByMemberId(memberId)).thenReturn(member);
+        when(jwtTokenProvider.generateTokenPair(any(), eq(MemberRole.USER), eq("local")))
+                .thenReturn(expectedTokenPair);
+
+        // when
+        TokenPairResponse result = guardianTokenService.reissueTokenPair(new RefreshTokenRequest(refreshToken));
+
+        // then
+        assertThat(result).isEqualTo(expectedTokenPair);
+    }
+
+    @Test
+    @DisplayName("로컬 계정 보유 멤버는 loginType이 local로 재발급된다")
+    void reissueTokenPair_memberWithLocalAccount_loginTypeIsLocal() {
+        // given
+        Long memberId = 1L;
+        String refreshToken = "refresh-token";
+        RefreshTokenDto dto = new RefreshTokenDto(memberId, refreshToken, 604800L);
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        LocalAccount localAccount = LocalAccount.createLocalAccount(member, "test@test.com", "pw");
+        ReflectionTestUtils.setField(member, "localAccount", localAccount);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        TokenPairResponse tokenPair = TokenPairResponse.of(memberId, "access", "refresh");
+
+        when(jwtTokenProvider.retrieveRefreshToken(refreshToken)).thenReturn(dto);
+        when(jwtTokenProvider.createRefreshTokenDto(memberId)).thenReturn(dto);
+        when(memberUtil.getMemberByMemberId(memberId)).thenReturn(member);
+        when(jwtTokenProvider.generateTokenPair(any(), any(), eq("local"))).thenReturn(tokenPair);
+
+        // when
+        guardianTokenService.reissueTokenPair(new RefreshTokenRequest(refreshToken));
+
+        // then
+        verify(jwtTokenProvider).generateTokenPair(any(), eq(MemberRole.USER), eq("local"));
+    }
+
+    @Test
+    @DisplayName("소셜 계정만 있는 멤버는 loginType이 소셜 provider로 재발급된다")
+    void reissueTokenPair_memberWithSocialAccount_loginTypeIsSocialProvider() {
+        // given
+        Long memberId = 1L;
+        String refreshToken = "refresh-token";
+        RefreshTokenDto dto = new RefreshTokenDto(memberId, refreshToken, 604800L);
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "localAccount", null);
+
+        SocialAccount kakaoAccount = SocialAccount.createSocialAccount(
+                "test@kakao.com", "kakao", "kakao-oauth-id", member
+        );
+        ReflectionTestUtils.setField(member, "socialAccounts", List.of(kakaoAccount));
+        TokenPairResponse tokenPair = TokenPairResponse.of(memberId, "access", "refresh");
+
+        when(jwtTokenProvider.retrieveRefreshToken(refreshToken)).thenReturn(dto);
+        when(jwtTokenProvider.createRefreshTokenDto(memberId)).thenReturn(dto);
+        when(memberUtil.getMemberByMemberId(memberId)).thenReturn(member);
+        when(jwtTokenProvider.generateTokenPair(any(), any(), eq("kakao"))).thenReturn(tokenPair);
+
+        // when
+        guardianTokenService.reissueTokenPair(new RefreshTokenRequest(refreshToken));
+
+        // then
+        verify(jwtTokenProvider).generateTokenPair(any(), eq(MemberRole.USER), eq("kakao"));
+    }
+}
