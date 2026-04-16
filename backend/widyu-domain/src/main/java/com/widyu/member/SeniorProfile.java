@@ -44,6 +44,9 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(name = "invite_code", nullable = false, unique = true, length = 7)
     private String inviteCode;
 
+    @Column(name = "family_code", nullable = false, unique = true, length = 6)
+    private String familyCode;
+
     @Column(nullable = false)
     private Long points = 0L;
 
@@ -55,26 +58,28 @@ public class SeniorProfile extends BaseTimeEntity {
 
     @Builder(access = AccessLevel.PRIVATE)
     private SeniorProfile(Member member, String birthDate, String address, String detailAddress,
-                          String inviteCode, Long points, Integer defaultWalkGoal) {
+                          String inviteCode, String familyCode, Long points, Integer defaultWalkGoal) {
         this.member = member;
         this.birthDate = birthDate;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
+        this.familyCode = familyCode;
         this.points = points;
         this.defaultWalkGoal = defaultWalkGoal;
     }
 
     public static SeniorProfile createSeniorProfile(Member member, String birthDate, String address,
-                                                    String detailAddress, String inviteCode) {
+                                                    String detailAddress, String inviteCode, String familyCode) {
         return SeniorProfile.builder()
                 .member(member)
                 .birthDate(birthDate)
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
-                .points(100L)  // 초기 포인트 100점
-                .defaultWalkGoal(null)  // 초기 걷기 목표는 없음
+                .familyCode(familyCode)
+                .points(100L)
+                .defaultWalkGoal(null)
                 .build();
     }
 
@@ -100,5 +105,10 @@ public class SeniorProfile extends BaseTimeEntity {
 
     public boolean hasDefaultWalkGoal() {
         return this.defaultWalkGoal != null;
+    }
+
+    public void updateAddress(String address, String detailAddress) {
+        this.address = address;
+        this.detailAddress = detailAddress;
     }
 }
