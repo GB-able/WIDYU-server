@@ -8,7 +8,9 @@ import com.widyu.album.repository.AlbumUnlockRepository;
 import com.widyu.fcm.event.album.dto.AlbumUnlockedEvent;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
+import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -26,6 +28,7 @@ public class AlbumUnlockService {
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final PointHistoryRepository pointHistoryRepository;
 
     private static final long DEFAULT_UNLOCK_PRICE = 50;
 
@@ -61,8 +64,9 @@ public class AlbumUnlockService {
             throw new BusinessException(ErrorCode.ALBUM_UNLOCK_INSUFFICIENT_BALANCE);
         }
 
-        // 4. 포인트 차감
+        // 4. 포인트 차감 및 내역 기록
         deductPoints(seniorProfile);
+        pointHistoryRepository.save(PointHistory.use(seniorProfile, DEFAULT_UNLOCK_PRICE, "앨범 해금"));
 
         // 5. 해금 기록 생성
         AlbumUnlock albumUnlock = AlbumUnlock.createUnlock(album, currentMember);
