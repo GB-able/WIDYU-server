@@ -24,4 +24,13 @@ public interface FamilyConnectionRepository extends JpaRepository<FamilyConnecti
     List<FamilyConnection> findAllByGuardianIdWithSeniorAndMember(@Param("guardianId") Long guardianId);
 
     long countBySeniorId(Long seniorId);
+
+    @Query("SELECT fc FROM FamilyConnection fc JOIN FETCH fc.guardian WHERE fc.senior.id = :seniorId")
+    List<FamilyConnection> findAllBySeniorIdWithGuardian(@Param("seniorId") Long seniorId);
+
+    Optional<FamilyConnection> findBySeniorIdAndIsRepresentativeTrue(Long seniorId);
+
+    Optional<FamilyConnection> findBySeniorIdAndGuardianIdAndIsLeaderTrue(Long seniorId, Long guardianId);
+
+    boolean existsBySeniorIdAndGuardianIdAndIsLeaderTrue(Long seniorId, Long guardianId);
 }

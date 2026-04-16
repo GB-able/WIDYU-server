@@ -33,8 +33,8 @@ public class FamilyConnectionService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "보호자 회원만 초대코드로 가족에 참여할 수 있습니다.");
         }
 
-        SeniorProfile seniorProfile = seniorProfileRepository.findByInviteCode(request.inviteCode())
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_NOT_FOUND, request.inviteCode()));
+        SeniorProfile seniorProfile = seniorProfileRepository.findByFamilyCode(request.familyCode())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_NOT_FOUND, request.familyCode()));
 
         if (familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorProfile.getId(), currentMember.getId())) {
             throw new BusinessException(ErrorCode.ALREADY_CONNECTED_TO_FAMILY, "이미 해당 가족에 연결되어 있습니다.");

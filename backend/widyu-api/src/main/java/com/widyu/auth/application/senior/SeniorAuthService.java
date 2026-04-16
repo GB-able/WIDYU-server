@@ -16,6 +16,7 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.security.SecureRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,11 +82,28 @@ public class SeniorAuthService {
                     req.birthDate(),
                     req.address(),
                     req.detailAddress(),
-                    req.inviteCode()
+                    req.inviteCode(),
+                    generateUniqueFamilyCode()
             );
             profiles.add(profile);
         }
         return profiles;
+    }
+
+    private static final String FAMILY_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int FAMILY_CODE_LENGTH = 6;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private String generateUniqueFamilyCode() {
+        String code;
+        do {
+            StringBuilder sb = new StringBuilder(FAMILY_CODE_LENGTH);
+            for (int i = 0; i < FAMILY_CODE_LENGTH; i++) {
+                sb.append(FAMILY_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(FAMILY_CODE_CHARS.length())));
+            }
+            code = sb.toString();
+        } while (seniorProfileRepository.existsByFamilyCode(code));
+        return code;
     }
 
     private void saveAllProfiles(List<SeniorProfile> profiles) {
@@ -100,7 +118,7 @@ public class SeniorAuthService {
         for (int i = 0; i < requests.size(); i++) {
             SeniorProfile profile = profiles.get(i);
 
-            FamilyConnection connection = FamilyConnection.createConnection(
+            FamilyConnection connection = FamilyConnection.createLeaderConnection(
                     profile,
                     guardian
             );
