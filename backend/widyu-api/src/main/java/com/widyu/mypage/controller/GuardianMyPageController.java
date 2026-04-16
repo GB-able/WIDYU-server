@@ -8,6 +8,7 @@ import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
+import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
@@ -87,6 +88,15 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
                 .code("MYPAGE_2015")
                 .message("시니어 프로필 조회 성공")
                 .body(guardianMyPageService.getSeniorProfile(seniorId));
+    }
+
+    @Override
+    @GetMapping("/seniors/{seniorId}/family-code")
+    public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(@PathVariable Long seniorId) {
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2022")
+                .message("가족코드 조회 성공")
+                .body(guardianMyPageService.getFamilyCode(seniorId));
     }
 
     @Override

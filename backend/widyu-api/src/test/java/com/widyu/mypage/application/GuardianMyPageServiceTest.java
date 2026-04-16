@@ -23,6 +23,7 @@ import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
+import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
@@ -259,6 +260,47 @@ class GuardianMyPageServiceTest {
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.getSeniorProfile(10L))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 시니어 가족코드 조회 ========================
+
+    @Test
+    @DisplayName("연결된 시니어의 가족코드를 조회하면 6자리 코드를 반환한다")
+    void 시니어_가족코드_조회() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(seniorProfile.getFamilyCode()).willReturn("AB12CD");
+
+        // when
+        FamilyCodeResponse response = guardianMyPageService.getFamilyCode(10L);
+
+        // then
+        assertThat(response.familyCode()).isEqualTo("AB12CD");
+    }
+
+    @Test
+    @DisplayName("연결되지 않은 시니어의 가족코드를 조회하면 예외가 발생한다")
+    void 시니어_가족코드_조회_접근권한_없음() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.getFamilyCode(10L))
                 .isInstanceOf(BusinessException.class);
     }
 

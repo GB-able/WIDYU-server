@@ -6,6 +6,7 @@ import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
+import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
@@ -44,6 +45,13 @@ public interface GuardianMyPageDocs {
             @ApiResponse(responseCode = "403", description = "접근 권한 없음")
     })
     ApiResponseTemplate<SeniorProfileForGuardianResponse> getSeniorProfile(Long seniorId);
+
+    @Operation(summary = "시니어 가족코드 조회", description = "연결된 시니어의 가족코드(6자리)를 조회합니다. 다른 보호자를 초대할 때 사용합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "403", description = "접근 권한 없음")
+    })
+    ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(Long seniorId);
 
     @Operation(summary = "시니어 전화번호 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
