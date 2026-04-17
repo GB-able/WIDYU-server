@@ -7,10 +7,9 @@ import com.widyu.member.SeniorProfile;
 import java.util.List;
 
 public record SeniorProfileResponse(
-        Long seniorId,
+        Long memberId,
         String name,
         String profileImage,
-        String birthDate,
         String address,
         String detailAddress,
         String inviteCode,
@@ -19,7 +18,7 @@ public record SeniorProfileResponse(
 ) {
 
     public record GuardianInfo(
-            Long guardianId,
+            Long memberId,
             String name,
             String profileImage,
             String nickname
@@ -44,7 +43,6 @@ public record SeniorProfileResponse(
                 seniorProfile.getMember().getId(),
                 seniorProfile.getMember().getName(),
                 seniorProfile.getMember().getProfileImage(),
-                seniorProfile.getBirthDate(),
                 seniorProfile.getAddress(),
                 seniorProfile.getDetailAddress(),
                 seniorProfile.getInviteCode(),

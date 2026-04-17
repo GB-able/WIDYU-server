@@ -5,8 +5,8 @@ import jakarta.validation.constraints.Pattern;
 
 public record FamilyJoinRequest(
 
-        @NotBlank(message = "초대코드는 필수입니다.")
-        @Pattern(regexp = "^\\d{7}$", message = "초대코드는 숫자 7자리여야 합니다.")
-        String inviteCode
+        @NotBlank(message = "가족코드는 필수입니다.")
+        @Pattern(regexp = "^[A-Z0-9]{6}$", message = "가족코드는 영문 대문자와 숫자로 이루어진 6자리여야 합니다.")
+        String familyCode
 ) {
 }

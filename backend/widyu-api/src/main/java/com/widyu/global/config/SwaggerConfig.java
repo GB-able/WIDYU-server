@@ -134,4 +134,12 @@ public class SwaggerConfig {
                 .pathsToMatch("/api/v1/heart-rate/**")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi myPageApi() {
+        return GroupedOpenApi.builder()
+                .group("마이페이지 API")
+                .pathsToMatch("/api/v1/mypage/**")
+                .build();
+    }
 }
