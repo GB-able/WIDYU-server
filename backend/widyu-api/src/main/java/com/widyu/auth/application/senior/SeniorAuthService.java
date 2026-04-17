@@ -90,7 +90,7 @@ public class SeniorAuthService {
             usedCodesInBatch.add(familyCode);
             SeniorProfile profile = SeniorProfile.createSeniorProfile(
                     member,
-                    req.birthDate(),
+                    null,
                     req.address(),
                     req.detailAddress(),
                     req.inviteCode(),
