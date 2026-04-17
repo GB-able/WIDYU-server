@@ -69,10 +69,14 @@ public class GuardianMyPageService {
         return SeniorProfileForGuardianResponse.of(seniorProfile.getMember(), seniorProfile);
     }
 
-    public FamilyCodeResponse getFamilyCode(Long seniorId) {
+    public FamilyCodeResponse getFamilyCode() {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
-        return FamilyCodeResponse.of(seniorProfile.getFamilyCode());
+        List<FamilyConnection> connections = familyConnectionRepository
+                .findAllByGuardianIdWithSeniorAndMember(guardian.getId());
+        if (connections.isEmpty()) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다.");
+        }
+        return FamilyCodeResponse.of(connections.get(0).getSenior().getFamilyCode());
     }
 
     @Transactional

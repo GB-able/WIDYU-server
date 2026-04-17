@@ -91,12 +91,12 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @GetMapping("/seniors/{seniorId}/family-code")
-    public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(@PathVariable Long seniorId) {
+    @GetMapping("/family-code")
+    public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode() {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2022")
                 .message("가족코드 조회 성공")
-                .body(guardianMyPageService.getFamilyCode(seniorId));
+                .body(guardianMyPageService.getFamilyCode());
     }
 
     @Override
