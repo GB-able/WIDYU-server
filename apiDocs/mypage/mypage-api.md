@@ -581,6 +581,40 @@ body: 없음
 
 ---
 
+### MYPAGE_2023 | 시니어 초대코드 조회 (보호자용)
+
+🥔 특이사항
+
+연결된 시니어의 초대코드(7자리 숫자)를 조회합니다.
+시니어 앱 로그인 시 사용하는 코드입니다.
+가족으로 연결되지 않은 시니어 조회 시 403 에러가 발생합니다.
+
+📤 Request
+
+```
+GET /api/v1/mypage/guardian/seniors/{seniorId}/invite-code
+```
+
+| path param | 타입 | 설명 |
+|------------|------|------|
+| seniorId | Long | 조회할 시니어의 Member ID |
+
+body: 없음
+
+📥 Response
+
+```json
+{
+  "code": "MYPAGE_2023",
+  "message": "초대코드 조회 성공",
+  "data": {
+    "inviteCode": "1234567"
+  }
+}
+```
+
+---
+
 ### MYPAGE_2016 | 시니어 전화번호 수정
 
 📤 Request

@@ -15,6 +15,7 @@ import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
+import com.widyu.mypage.dto.response.InviteCodeResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
@@ -73,6 +74,12 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
         return FamilyCodeResponse.of(seniorProfile.getFamilyCode());
+    }
+
+    public InviteCodeResponse getInviteCode(Long seniorId) {
+        Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        return InviteCodeResponse.of(seniorProfile.getInviteCode());
     }
 
     @Transactional
