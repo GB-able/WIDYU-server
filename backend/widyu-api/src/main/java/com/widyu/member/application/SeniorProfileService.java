@@ -5,7 +5,9 @@ import com.widyu.album.repository.AlbumUnlockRepository;
 import com.widyu.member.dto.response.SeniorPointsResponse;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
+import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -25,6 +27,7 @@ public class SeniorProfileService {
     private final MemberUtil memberUtil;
     private final AlbumUnlockRepository albumUnlockRepository;
     private final SeniorProfileRepository seniorProfileRepository;
+    private final PointHistoryRepository pointHistoryRepository;
 
     @Transactional(readOnly = true)
     public SeniorPointsResponse getLeftPoints() {
@@ -74,6 +77,7 @@ public class SeniorProfileService {
                         "시니어 프로필을 찾을 수 없습니다."));
 
         seniorProfile.addPoints(points);
+        pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, "포인트 적립"));
         log.info("포인트 적립 완료: memberId={}, addedPoints={}, totalPoints={}",
                 memberId, points, seniorProfile.getPoints());
     }

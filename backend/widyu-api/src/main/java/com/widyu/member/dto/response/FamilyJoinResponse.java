@@ -3,7 +3,7 @@ package com.widyu.member.dto.response;
 import com.widyu.member.SeniorProfile;
 
 public record FamilyJoinResponse(
-        Long seniorId,
+        Long memberId,
         String seniorName,
         String seniorProfileImage
 ) {

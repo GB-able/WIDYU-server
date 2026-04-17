@@ -39,12 +39,21 @@ public class FamilyConnection extends BaseTimeEntity {
 
     private String nickname;
 
+    @Column(name = "is_representative", nullable = false)
+    private boolean isRepresentative = false;
+
+    @Column(name = "is_leader", nullable = false)
+    private boolean isLeader = false;
+
     @Builder(access = AccessLevel.PRIVATE)
-    private FamilyConnection(SeniorProfile senior, Member guardian, LocalDateTime connectedAt, String nickname) {
+    private FamilyConnection(SeniorProfile senior, Member guardian, LocalDateTime connectedAt, String nickname,
+                             boolean isRepresentative, boolean isLeader) {
         this.senior = senior;
         this.guardian = guardian;
         this.connectedAt = connectedAt;
         this.nickname = nickname;
+        this.isRepresentative = isRepresentative;
+        this.isLeader = isLeader;
     }
 
     public static FamilyConnection createConnection(SeniorProfile senior, Member guardian) {
@@ -52,10 +61,30 @@ public class FamilyConnection extends BaseTimeEntity {
                 .senior(senior)
                 .guardian(guardian)
                 .connectedAt(LocalDateTime.now())
+                .isRepresentative(false)
+                .isLeader(false)
+                .build();
+    }
+
+    public static FamilyConnection createLeaderConnection(SeniorProfile senior, Member guardian) {
+        return FamilyConnection.builder()
+                .senior(senior)
+                .guardian(guardian)
+                .connectedAt(LocalDateTime.now())
+                .isRepresentative(false)
+                .isLeader(true)
                 .build();
     }
 
     public void updateNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public void setRepresentative(boolean representative) {
+        this.isRepresentative = representative;
+    }
+
+    public void setLeader(boolean leader) {
+        this.isLeader = leader;
     }
 }
