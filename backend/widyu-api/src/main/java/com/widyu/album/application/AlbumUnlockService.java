@@ -11,6 +11,7 @@ import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.PointHistoryRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -29,6 +30,7 @@ public class AlbumUnlockService {
     private final MemberUtil memberUtil;
     private final ApplicationEventPublisher eventPublisher;
     private final PointHistoryRepository pointHistoryRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
 
     private static final long DEFAULT_UNLOCK_PRICE = 50;
 
@@ -49,10 +51,8 @@ public class AlbumUnlockService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 앨범을 해금할 수 있습니다.");
         }
 
-        SeniorProfile seniorProfile = currentMember.getSeniorProfile();
-        if (seniorProfile == null) {
-            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다.");
-        }
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(currentMember.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다."));
 
         // 3. 이미 해금된 앨범인지 확인
         if (albumUnlockRepository.existsByAlbumAndMember(album, currentMember)) {

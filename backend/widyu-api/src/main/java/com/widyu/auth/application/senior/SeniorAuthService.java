@@ -14,9 +14,11 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
-import java.util.ArrayList;
-import java.util.List;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,35 +81,42 @@ public class SeniorAuthService {
     }
 
     private List<SeniorProfile> buildProfilesFromRequests(List<SeniorSignUpRequest> requests, List<Member> members) {
+        Set<String> usedCodesInBatch = new HashSet<>();
         List<SeniorProfile> profiles = new ArrayList<>(requests.size());
         for (int i = 0; i < requests.size(); i++) {
             SeniorSignUpRequest req = requests.get(i);
             Member member = members.get(i);
+            String familyCode = generateUniqueFamilyCode(usedCodesInBatch);
+            usedCodesInBatch.add(familyCode);
             SeniorProfile profile = SeniorProfile.createSeniorProfile(
                     member,
                     req.birthDate(),
                     req.address(),
                     req.detailAddress(),
                     req.inviteCode(),
-                    generateUniqueFamilyCode()
+                    familyCode
             );
             profiles.add(profile);
         }
         return profiles;
     }
 
-    private String generateUniqueFamilyCode() {
+    private String generateUniqueFamilyCode(Set<String> usedInBatch) {
         for (int attempt = 0; attempt < FAMILY_CODE_MAX_ATTEMPTS; attempt++) {
-            StringBuilder sb = new StringBuilder(FAMILY_CODE_LENGTH);
-            for (int i = 0; i < FAMILY_CODE_LENGTH; i++) {
-                sb.append(FAMILY_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(FAMILY_CODE_CHARS.length())));
-            }
-            String code = sb.toString();
-            if (!seniorProfileRepository.existsByFamilyCode(code)) {
+            String code = generateCode();
+            if (!usedInBatch.contains(code) && !seniorProfileRepository.existsByFamilyCode(code)) {
                 return code;
             }
         }
         throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "가족코드 생성에 실패했습니다.");
+    }
+
+    private String generateCode() {
+        StringBuilder sb = new StringBuilder(FAMILY_CODE_LENGTH);
+        for (int i = 0; i < FAMILY_CODE_LENGTH; i++) {
+            sb.append(FAMILY_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(FAMILY_CODE_CHARS.length())));
+        }
+        return sb.toString();
     }
 
     private void saveAllProfiles(List<SeniorProfile> profiles) {
