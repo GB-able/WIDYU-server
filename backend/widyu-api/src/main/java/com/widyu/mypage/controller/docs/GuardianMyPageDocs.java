@@ -12,6 +12,7 @@ import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,42 +45,55 @@ public interface GuardianMyPageDocs {
             @ApiResponse(responseCode = "200", description = "조회 성공"),
             @ApiResponse(responseCode = "403", description = "접근 권한 없음")
     })
-    ApiResponseTemplate<SeniorProfileForGuardianResponse> getSeniorProfile(Long seniorId);
+    ApiResponseTemplate<SeniorProfileForGuardianResponse> getSeniorProfile(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId);
 
     @Operation(summary = "시니어 가족코드 조회", description = "연결된 시니어의 가족코드(6자리)를 조회합니다. 다른 보호자를 초대할 때 사용합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공"),
             @ApiResponse(responseCode = "403", description = "접근 권한 없음")
     })
-    ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(Long seniorId);
+    ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId);
 
     @Operation(summary = "시니어 전화번호 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
-    ApiResponseTemplate<Void> updateSeniorPhone(Long seniorId, UpdatePhoneRequest request);
+    ApiResponseTemplate<Void> updateSeniorPhone(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            UpdatePhoneRequest request);
 
     @Operation(summary = "시니어 주소 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
-    ApiResponseTemplate<Void> updateSeniorAddress(Long seniorId, UpdateSeniorAddressRequest request);
+    ApiResponseTemplate<Void> updateSeniorAddress(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            UpdateSeniorAddressRequest request);
 
     @Operation(summary = "시니어 프로필 이미지 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
-    ApiResponseTemplate<Void> updateSeniorProfileImage(Long seniorId, ProfileImageUploadRequest request);
+    ApiResponseTemplate<Void> updateSeniorProfileImage(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            ProfileImageUploadRequest request);
 
     @Operation(summary = "가족 멤버 목록 조회", description = "특정 시니어 가족의 보호자 목록과 방장 여부를 조회합니다.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "조회 성공")})
-    ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers(Long seniorId);
+    ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId);
 
     @Operation(summary = "방장 변경", description = "방장만 호출 가능. 다른 보호자를 방장으로 변경합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "변경 성공"),
             @ApiResponse(responseCode = "403", description = "방장만 변경 가능")
     })
-    ApiResponseTemplate<Void> changeLeader(Long seniorId, Long guardianId);
+    ApiResponseTemplate<Void> changeLeader(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            @Parameter(description = "새 방장으로 지정할 보호자 회원 ID", required = true, example = "2") Long guardianId);
 
     @Operation(summary = "가족 멤버 삭제", description = "방장만 호출 가능. 특정 보호자를 가족에서 삭제합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "삭제 성공"),
             @ApiResponse(responseCode = "403", description = "방장만 삭제 가능")
     })
-    ApiResponseTemplate<Void> deleteFamilyMember(Long seniorId, Long guardianId);
+    ApiResponseTemplate<Void> deleteFamilyMember(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            @Parameter(description = "삭제할 보호자 회원 ID", required = true, example = "2") Long guardianId);
 }

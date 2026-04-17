@@ -44,12 +44,7 @@ public class AlbumUnlockService {
             throw new BusinessException(ErrorCode.ALBUM_UNLOCK_SELF_NOT_ALLOWED);
         }
 
-        // 2. 이미 해금된 앨범인지 확인
-        if (albumUnlockRepository.existsByAlbumAndMember(album, currentMember)) {
-            throw new BusinessException(ErrorCode.ALBUM_ALREADY_UNLOCKED);
-        }
-
-        // 시니어 타입 검증
+        // 2. 시니어 타입 검증
         if (currentMember.getType() != MemberType.SENIOR) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 앨범을 해금할 수 있습니다.");
         }
@@ -59,16 +54,21 @@ public class AlbumUnlockService {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다.");
         }
 
-        // 3. 포인트 잔액 확인
+        // 3. 이미 해금된 앨범인지 확인
+        if (albumUnlockRepository.existsByAlbumAndMember(album, currentMember)) {
+            throw new BusinessException(ErrorCode.ALBUM_ALREADY_UNLOCKED);
+        }
+
+        // 4. 포인트 잔액 확인
         if (!hasEnoughBalance(seniorProfile)) {
             throw new BusinessException(ErrorCode.ALBUM_UNLOCK_INSUFFICIENT_BALANCE);
         }
 
-        // 4. 포인트 차감 및 내역 기록
+        // 5. 포인트 차감 및 내역 기록
         deductPoints(seniorProfile);
         pointHistoryRepository.save(PointHistory.use(seniorProfile, DEFAULT_UNLOCK_PRICE, "앨범 해금"));
 
-        // 5. 해금 기록 생성
+        // 6. 해금 기록 생성
         AlbumUnlock albumUnlock = AlbumUnlock.createUnlock(album, currentMember);
         AlbumUnlock savedUnlock = albumUnlockRepository.save(albumUnlock);
 

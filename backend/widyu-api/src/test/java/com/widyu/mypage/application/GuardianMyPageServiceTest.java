@@ -468,10 +468,12 @@ class GuardianMyPageServiceTest {
 
         given(leaderConnection.getGuardian()).willReturn(leaderGuardian);
         given(leaderGuardian.getId()).willReturn(1L);
+        given(leaderGuardian.getName()).willReturn("한채희");
         given(leaderConnection.isLeader()).willReturn(true);
 
         given(memberConnection.getGuardian()).willReturn(memberGuardian);
         given(memberGuardian.getId()).willReturn(2L);
+        given(memberGuardian.getName()).willReturn("한토마");
         given(memberConnection.isLeader()).willReturn(false);
 
         // when
@@ -480,6 +482,8 @@ class GuardianMyPageServiceTest {
         // then
         assertThat(response.isCurrentUserLeader()).isFalse();
         assertThat(response.members()).hasSize(2);
+        assertThat(response.members().get(0).name()).isEqualTo("한채희");
+        assertThat(response.members().get(1).name()).isEqualTo("한토마");
     }
 
     // ======================== 방장 변경 ========================

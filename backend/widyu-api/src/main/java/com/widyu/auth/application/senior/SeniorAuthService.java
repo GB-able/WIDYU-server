@@ -24,6 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SeniorAuthService {
+
+    private static final String FAMILY_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int FAMILY_CODE_LENGTH = 6;
+    private static final int FAMILY_CODE_MAX_ATTEMPTS = 5;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final MemberRepository memberRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final FamilyConnectionRepository familyConnectionRepository;
@@ -90,20 +96,18 @@ public class SeniorAuthService {
         return profiles;
     }
 
-    private static final String FAMILY_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final int FAMILY_CODE_LENGTH = 6;
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
     private String generateUniqueFamilyCode() {
-        String code;
-        do {
+        for (int attempt = 0; attempt < FAMILY_CODE_MAX_ATTEMPTS; attempt++) {
             StringBuilder sb = new StringBuilder(FAMILY_CODE_LENGTH);
             for (int i = 0; i < FAMILY_CODE_LENGTH; i++) {
                 sb.append(FAMILY_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(FAMILY_CODE_CHARS.length())));
             }
-            code = sb.toString();
-        } while (seniorProfileRepository.existsByFamilyCode(code));
-        return code;
+            String code = sb.toString();
+            if (!seniorProfileRepository.existsByFamilyCode(code)) {
+                return code;
+            }
+        }
+        throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "가족코드 생성에 실패했습니다.");
     }
 
     private void saveAllProfiles(List<SeniorProfile> profiles) {
