@@ -12,7 +12,6 @@ import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
-import com.widyu.mypage.dto.response.InviteCodeResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -92,21 +91,12 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @GetMapping("/seniors/{seniorId}/family-code")
-    public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode(@PathVariable Long seniorId) {
+    @GetMapping("/family-code")
+    public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode() {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2022")
                 .message("가족코드 조회 성공")
-                .body(guardianMyPageService.getFamilyCode(seniorId));
-    }
-
-    @Override
-    @GetMapping("/seniors/{seniorId}/invite-code")
-    public ApiResponseTemplate<InviteCodeResponse> getInviteCode(@PathVariable Long seniorId) {
-        return ApiResponseTemplate.ok()
-                .code("MYPAGE_2023")
-                .message("초대코드 조회 성공")
-                .body(guardianMyPageService.getInviteCode(seniorId));
+                .body(guardianMyPageService.getFamilyCode());
     }
 
     @Override

@@ -536,7 +536,6 @@ body: 없음
     "seniorId": 1,
     "profileImage": "https://s3.amazonaws.com/widyu/profile/abc.png",
     "name": "오일남",
-    "birthDate": "19680605",
     "phoneNumber": "01012345678",
     "address": "서울시 강서구",
     "detailAddress": "101호",
@@ -547,23 +546,19 @@ body: 없음
 
 ---
 
-### MYPAGE_2022 | 시니어 가족코드 조회 (보호자용)
+### MYPAGE_2022 | 가족코드 조회 (보호자용)
 
 🥔 특이사항
 
-연결된 시니어의 가족코드(6자리 영문 대문자 + 숫자)를 조회합니다.
+보호자가 속한 가족의 가족코드(6자리 영문 대문자 + 숫자)를 조회합니다.
 다른 보호자를 가족에 초대할 때 이 코드를 공유합니다.
-가족으로 연결되지 않은 시니어 조회 시 403 에러가 발생합니다.
+가족에 연결되지 않은 상태에서 조회 시 404 에러가 발생합니다.
 
 📤 Request
 
 ```
-GET /api/v1/mypage/guardian/seniors/{seniorId}/family-code
+GET /api/v1/mypage/guardian/family-code
 ```
-
-| path param | 타입 | 설명 |
-|------------|------|------|
-| seniorId | Long | 조회할 시니어의 Member ID |
 
 body: 없음
 
@@ -575,40 +570,6 @@ body: 없음
   "message": "가족코드 조회 성공",
   "data": {
     "familyCode": "AB12CD"
-  }
-}
-```
-
----
-
-### MYPAGE_2023 | 시니어 초대코드 조회 (보호자용)
-
-🥔 특이사항
-
-연결된 시니어의 초대코드(7자리 숫자)를 조회합니다.
-시니어 앱 로그인 시 사용하는 코드입니다.
-가족으로 연결되지 않은 시니어 조회 시 403 에러가 발생합니다.
-
-📤 Request
-
-```
-GET /api/v1/mypage/guardian/seniors/{seniorId}/invite-code
-```
-
-| path param | 타입 | 설명 |
-|------------|------|------|
-| seniorId | Long | 조회할 시니어의 Member ID |
-
-body: 없음
-
-📥 Response
-
-```json
-{
-  "code": "MYPAGE_2023",
-  "message": "초대코드 조회 성공",
-  "data": {
-    "inviteCode": "1234567"
   }
 }
 ```
