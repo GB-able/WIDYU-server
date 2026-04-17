@@ -33,9 +33,6 @@ public class SeniorProfile extends BaseTimeEntity {
     @JoinColumn(name = "member_id", nullable = false, unique = true)
     private Member member;
 
-    @Column(name = "birth_date")
-    private String birthDate;
-
     private String address;
 
     @Column(name = "detail_address")
@@ -57,10 +54,9 @@ public class SeniorProfile extends BaseTimeEntity {
     private List<FamilyConnection> familyConnections = new ArrayList<>();
 
     @Builder(access = AccessLevel.PRIVATE)
-    private SeniorProfile(Member member, String birthDate, String address, String detailAddress,
+    private SeniorProfile(Member member, String address, String detailAddress,
                           String inviteCode, String familyCode, Long points, Integer defaultWalkGoal) {
         this.member = member;
-        this.birthDate = birthDate;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
@@ -69,11 +65,10 @@ public class SeniorProfile extends BaseTimeEntity {
         this.defaultWalkGoal = defaultWalkGoal;
     }
 
-    public static SeniorProfile createSeniorProfile(Member member, String birthDate, String address,
+    public static SeniorProfile createSeniorProfile(Member member, String address,
                                                     String detailAddress, String inviteCode, String familyCode) {
         return SeniorProfile.builder()
                 .member(member)
-                .birthDate(birthDate)
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)

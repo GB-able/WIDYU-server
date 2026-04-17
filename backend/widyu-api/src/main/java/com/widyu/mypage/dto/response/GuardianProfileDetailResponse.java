@@ -6,7 +6,6 @@ import java.util.List;
 public record GuardianProfileDetailResponse(
         String profileImage,
         String name,
-        String birthDate,
         String phoneNumber,
         String email,
         List<String> socialProviders
@@ -27,7 +26,6 @@ public record GuardianProfileDetailResponse(
         return new GuardianProfileDetailResponse(
                 member.getProfileImage(),
                 member.getName(),
-                member.getBirthDate(),
                 member.getPhoneNumber(),
                 email,
                 providers

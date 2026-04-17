@@ -6,7 +6,6 @@ import com.widyu.member.SeniorProfile;
 public record SeniorProfileDetailResponse(
         String profileImage,
         String name,
-        String birthDate,
         String phoneNumber,
         String address,
         String detailAddress,
@@ -16,7 +15,6 @@ public record SeniorProfileDetailResponse(
         return new SeniorProfileDetailResponse(
                 member.getProfileImage(),
                 member.getName(),
-                seniorProfile.getBirthDate(),
                 member.getPhoneNumber(),
                 seniorProfile.getAddress(),
                 seniorProfile.getDetailAddress(),
