@@ -2,6 +2,7 @@ package com.widyu.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -52,16 +53,21 @@ class SmsServiceTest {
 
     @Test
     @DisplayName("유효한 전화번호로 SMS 전송 시 인증 코드를 저장하고 메시지를 전송한다")
-    void sendVerificationSms_validPhone_savesCodeAndSendsMessage() throws Exception {
+    void 유효한_전화번호로_SMS_전송_시_인증코드_저장하고_메시지_전송() throws Exception {
+        // given - 유효한 전화번호와 이름
+
+        // when
         smsService.sendVerificationSms("01012345678", "홍길동");
 
+        // then
         verify(verificationCodeRepository).save(any(VerificationCode.class));
         verify(mockMessageService).send(any(Message.class));
     }
 
     @Test
     @DisplayName("전화번호가 null이면 BusinessException을 던진다")
-    void sendVerificationSms_nullPhone_throwsBusinessException() {
+    void 전화번호가_null이면_예외가_발생한다() {
+        // when & then
         assertThatThrownBy(() -> smsService.sendVerificationSms(null, "홍길동"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_REQUIRED);
@@ -69,7 +75,8 @@ class SmsServiceTest {
 
     @Test
     @DisplayName("전화번호가 빈 문자열이면 BusinessException을 던진다")
-    void sendVerificationSms_emptyPhone_throwsBusinessException() {
+    void 전화번호가_빈_문자열이면_예외가_발생한다() {
+        // when & then
         assertThatThrownBy(() -> smsService.sendVerificationSms("   ", "홍길동"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_REQUIRED);
@@ -78,7 +85,8 @@ class SmsServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"0201234567", "1234567890", "010123456789", "abc", "01023456"})
     @DisplayName("유효하지 않은 전화번호 형식이면 BusinessException을 던진다")
-    void sendVerificationSms_invalidPhoneFormat_throwsBusinessException(String phone) {
+    void 유효하지_않은_전화번호_형식이면_예외가_발생한다(String phone) {
+        // when & then
         assertThatThrownBy(() -> smsService.sendVerificationSms(phone, "홍길동"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_PHONE_NUMBER);
@@ -87,16 +95,21 @@ class SmsServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"01012345678", "01112345678", "01612345678", "01712345678", "01812345678", "01912345678"})
     @DisplayName("01X로 시작하는 유효한 전화번호 형식은 정상 처리된다")
-    void sendVerificationSms_validPhoneFormats_success(String phone) throws Exception {
+    void 유효한_전화번호_형식은_정상_처리된다(String phone) throws Exception {
+        // when
         smsService.sendVerificationSms(phone, "홍길동");
+
+        // then
         verify(mockMessageService).send(any(Message.class));
     }
 
     @Test
     @DisplayName("SMS 전송 중 일반 예외 발생 시 BusinessException을 던진다")
-    void sendVerificationSms_generalException_throwsBusinessException() throws Exception {
+    void SMS_전송_중_예외_발생_시_예외가_발생한다() throws Exception {
+        // given
         doThrow(new RuntimeException("네트워크 오류")).when(mockMessageService).send(any(Message.class));
 
+        // when & then
         assertThatThrownBy(() -> smsService.sendVerificationSms("01012345678", "홍길동"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SMS_SEND_FAILED);
@@ -104,12 +117,15 @@ class SmsServiceTest {
 
     @Test
     @DisplayName("저장되는 VerificationCode에 전화번호와 이름이 포함된다")
-    void sendVerificationSms_savedVerificationCodeContainsPhoneAndName() throws Exception {
+    void 저장되는_인증코드에_전화번호와_이름이_포함된다() throws Exception {
+        // given
         String phone = "01099998888";
         String name = "김철수";
 
+        // when
         smsService.sendVerificationSms(phone, name);
 
+        // then
         verify(verificationCodeRepository).save(
                 org.mockito.ArgumentMatchers.argThat(
                         vc -> vc.getPhoneNumber().equals(phone) && vc.getName().equals(name)

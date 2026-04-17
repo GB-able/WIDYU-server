@@ -2,8 +2,8 @@ package com.widyu.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.widyu.auth.TemporaryMember;
 import com.widyu.auth.dto.TemporaryTokenDto;
@@ -37,25 +37,30 @@ class TemporaryTokenServiceTest {
 
     @Test
     @DisplayName("요청 헤더에 임시 토큰이 있으면 토큰을 반환한다")
-    void extractFrom_validHeader_returnsToken() {
+    void 헤더에_임시토큰이_있으면_토큰을_반환한다() {
+        // given
         String expectedToken = "temp-token-value";
         try (MockedStatic<JwtUtil> jwtUtilMock = Mockito.mockStatic(JwtUtil.class)) {
             jwtUtilMock.when(() -> JwtUtil.extractTemporaryTokenFromHeader(httpServletRequest))
                     .thenReturn(expectedToken);
 
+            // when
             String result = temporaryTokenService.extractFrom(httpServletRequest);
 
+            // then
             assertThat(result).isEqualTo(expectedToken);
         }
     }
 
     @Test
     @DisplayName("요청 헤더에 임시 토큰이 없으면 BusinessException을 던진다")
-    void extractFrom_missingHeader_throwsBusinessException() {
+    void 헤더에_임시토큰이_없으면_예외가_발생한다() {
+        // given
         try (MockedStatic<JwtUtil> jwtUtilMock = Mockito.mockStatic(JwtUtil.class)) {
             jwtUtilMock.when(() -> JwtUtil.extractTemporaryTokenFromHeader(httpServletRequest))
                     .thenReturn(null);
 
+            // when & then
             assertThatThrownBy(() -> temporaryTokenService.extractFrom(httpServletRequest))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TEMPORARY_TOKEN);
@@ -64,24 +69,29 @@ class TemporaryTokenServiceTest {
 
     @Test
     @DisplayName("유효한 임시 토큰 파싱 시 TemporaryTokenDto를 반환한다")
-    void parseAndValidate_validToken_returnsDto() {
+    void 유효한_임시토큰_파싱_시_Dto를_반환한다() {
+        // given
         String token = "valid-temp-token";
         TemporaryTokenDto expectedDto = new TemporaryTokenDto(
                 "temp-member-id", MemberRole.USER, token, 1800L
         );
-        when(jwtTokenProvider.retrieveTemporaryToken(token)).thenReturn(expectedDto);
+        given(jwtTokenProvider.retrieveTemporaryToken(token)).willReturn(expectedDto);
 
+        // when
         TemporaryTokenDto result = temporaryTokenService.parseAndValidate(token);
 
+        // then
         assertThat(result).isEqualTo(expectedDto);
     }
 
     @Test
     @DisplayName("임시 토큰 파싱 결과가 null이면 BusinessException을 던진다")
-    void parseAndValidate_nullResult_throwsBusinessException() {
+    void 임시토큰_파싱_결과가_null이면_예외가_발생한다() {
+        // given
         String token = "invalid-temp-token";
-        when(jwtTokenProvider.retrieveTemporaryToken(token)).thenReturn(null);
+        given(jwtTokenProvider.retrieveTemporaryToken(token)).willReturn(null);
 
+        // when & then
         assertThatThrownBy(() -> temporaryTokenService.parseAndValidate(token))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_TEMPORARY_TOKEN);
@@ -89,21 +99,26 @@ class TemporaryTokenServiceTest {
 
     @Test
     @DisplayName("존재하는 임시 회원 ID로 조회 시 임시 회원을 반환한다")
-    void loadTemporaryMemberOrThrow_existingMember_returnsMember() {
+    void 존재하는_임시회원_조회_시_임시회원을_반환한다() {
+        // given
         String memberId = "temp-member-uuid";
         TemporaryMember tempMember = TemporaryMember.createTemporaryMember("홍길동", "01012345678");
-        when(temporaryMemberRepository.findById(memberId)).thenReturn(Optional.of(tempMember));
+        given(temporaryMemberRepository.findById(memberId)).willReturn(Optional.of(tempMember));
 
+        // when
         TemporaryMember result = temporaryTokenService.loadTemporaryMemberOrThrow(memberId);
 
+        // then
         assertThat(result).isEqualTo(tempMember);
     }
 
     @Test
     @DisplayName("존재하지 않는 임시 회원 ID로 조회 시 BusinessException을 던진다")
-    void loadTemporaryMemberOrThrow_notFound_throwsBusinessException() {
-        when(temporaryMemberRepository.findById("non-existing-id")).thenReturn(Optional.empty());
+    void 존재하지_않는_임시회원_조회_시_예외가_발생한다() {
+        // given
+        given(temporaryMemberRepository.findById("non-existing-id")).willReturn(Optional.empty());
 
+        // when & then
         assertThatThrownBy(() -> temporaryTokenService.loadTemporaryMemberOrThrow("non-existing-id"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
@@ -111,11 +126,14 @@ class TemporaryTokenServiceTest {
 
     @Test
     @DisplayName("임시 회원 삭제 시 레포지토리의 deleteById를 호출한다")
-    void deleteTemporaryMember_callsRepository() {
+    void 임시회원_삭제_시_레포지토리_deleteById를_호출한다() {
+        // given
         String memberId = "temp-member-uuid";
 
+        // when
         temporaryTokenService.deleteTemporaryMember(memberId);
 
+        // then
         verify(temporaryMemberRepository).deleteById(memberId);
     }
 }

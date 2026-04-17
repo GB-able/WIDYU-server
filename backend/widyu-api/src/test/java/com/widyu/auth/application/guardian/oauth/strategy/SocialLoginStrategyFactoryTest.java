@@ -2,11 +2,10 @@ package com.widyu.auth.application.guardian.oauth.strategy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.BDDMockito.given;
 
 import com.widyu.auth.OAuthProvider;
 import com.widyu.global.error.BusinessException;
-import com.widyu.global.error.ErrorCode;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,67 +26,85 @@ class SocialLoginStrategyFactoryTest {
 
     @BeforeEach
     void setUp() {
-        when(kakaoStrategy.getSupportedProvider()).thenReturn(OAuthProvider.KAKAO);
-        when(naverStrategy.getSupportedProvider()).thenReturn(OAuthProvider.NAVER);
-        when(appleStrategy.getSupportedProvider()).thenReturn(OAuthProvider.APPLE);
+        given(kakaoStrategy.getSupportedProvider()).willReturn(OAuthProvider.KAKAO);
+        given(naverStrategy.getSupportedProvider()).willReturn(OAuthProvider.NAVER);
+        given(appleStrategy.getSupportedProvider()).willReturn(OAuthProvider.APPLE);
 
         factory = new SocialLoginStrategyFactory(List.of(kakaoStrategy, naverStrategy, appleStrategy));
     }
 
     @Test
     @DisplayName("KAKAO provider로 조회 시 카카오 전략을 반환한다")
-    void getStrategy_kakaoProvider_returnsKakaoStrategy() {
+    void KAKAO_provider로_조회_시_카카오_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy(OAuthProvider.KAKAO);
+
+        // then
         assertThat(strategy).isEqualTo(kakaoStrategy);
     }
 
     @Test
     @DisplayName("NAVER provider로 조회 시 네이버 전략을 반환한다")
-    void getStrategy_naverProvider_returnsNaverStrategy() {
+    void NAVER_provider로_조회_시_네이버_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy(OAuthProvider.NAVER);
+
+        // then
         assertThat(strategy).isEqualTo(naverStrategy);
     }
 
     @Test
     @DisplayName("APPLE provider로 조회 시 애플 전략을 반환한다")
-    void getStrategy_appleProvider_returnsAppleStrategy() {
+    void APPLE_provider로_조회_시_애플_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy(OAuthProvider.APPLE);
+
+        // then
         assertThat(strategy).isEqualTo(appleStrategy);
     }
 
     @Test
     @DisplayName("문자열 'kakao'로 조회 시 카카오 전략을 반환한다")
-    void getStrategy_kakaoString_returnsKakaoStrategy() {
+    void 문자열_kakao로_조회_시_카카오_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy("kakao");
+
+        // then
         assertThat(strategy).isEqualTo(kakaoStrategy);
     }
 
     @Test
     @DisplayName("문자열 'naver'로 조회 시 네이버 전략을 반환한다")
-    void getStrategy_naverString_returnsNaverStrategy() {
+    void 문자열_naver로_조회_시_네이버_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy("naver");
+
+        // then
         assertThat(strategy).isEqualTo(naverStrategy);
     }
 
     @Test
     @DisplayName("문자열 'apple'로 조회 시 애플 전략을 반환한다")
-    void getStrategy_appleString_returnsAppleStrategy() {
+    void 문자열_apple로_조회_시_애플_전략을_반환한다() {
+        // when
         SocialLoginStrategy strategy = factory.getStrategy("apple");
+
+        // then
         assertThat(strategy).isEqualTo(appleStrategy);
     }
 
     @Test
     @DisplayName("지원하지 않는 provider로 조회 시 BusinessException을 던진다")
-    void getStrategy_unsupportedProvider_throwsBusinessException() {
-        // given - 지원하지 않는 provider 문자열 (OAuthProvider.from() 에서 예외 발생)
+    void 지원하지_않는_provider로_조회_시_예외가_발생한다() {
+        // when & then
         assertThatThrownBy(() -> factory.getStrategy("github"))
-                .isInstanceOf(Exception.class);
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
-    @DisplayName("팩토리 초기화 시 등록된 전략 수가 3개다")
-    void constructor_registersAllThreeStrategies() {
-        // 팩토리가 3개 전략 모두를 지원하는지 검증
+    @DisplayName("팩토리 초기화 시 세 가지 전략이 모두 등록된다")
+    void 팩토리_초기화_시_세_가지_전략이_모두_등록된다() {
+        // when & then
         assertThat(factory.getStrategy(OAuthProvider.KAKAO)).isNotNull();
         assertThat(factory.getStrategy(OAuthProvider.NAVER)).isNotNull();
         assertThat(factory.getStrategy(OAuthProvider.APPLE)).isNotNull();

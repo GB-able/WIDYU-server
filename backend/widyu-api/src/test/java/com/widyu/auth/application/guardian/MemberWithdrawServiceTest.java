@@ -1,10 +1,10 @@
 package com.widyu.auth.application.guardian;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.widyu.auth.application.guardian.oauth.strategy.SocialLoginStrategy;
 import com.widyu.auth.application.guardian.oauth.strategy.SocialLoginStrategyFactory;
@@ -41,12 +41,12 @@ class MemberWithdrawServiceTest {
 
     @Test
     @DisplayName("소셜 계정이 없는 회원 탈퇴 시 리프레시 토큰 삭제 및 회원 정보를 저장한다")
-    void withdrawMember_noSocialAccounts_deletesTokenAndSavesMember() {
+    void 소셜계정_없는_회원_탈퇴_시_토큰_삭제하고_회원_저장() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
         ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
-        when(memberUtil.getCurrentMember()).thenReturn(member);
+        given(memberUtil.getCurrentMember()).willReturn(member);
 
         // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("서비스 불만족"));
@@ -58,26 +58,26 @@ class MemberWithdrawServiceTest {
 
     @Test
     @DisplayName("카카오 계정이 있는 회원 탈퇴 시 카카오 탈퇴 API를 호출한다")
-    void withdrawMember_withKakaoAccount_callsKakaoWithdraw() {
+    void 카카오_계정_보유_회원_탈퇴_시_카카오_탈퇴_API_호출() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
         SocialAccount kakaoAccount = SocialAccount.createSocialAccount("k@k.com", "kakao", "kakao-id", member);
         ReflectionTestUtils.setField(member, "socialAccounts", List.of(kakaoAccount));
 
-        when(memberUtil.getCurrentMember()).thenReturn(member);
-        when(strategyFactory.getStrategy("kakao")).thenReturn(kakaoStrategy);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(strategyFactory.getStrategy("kakao")).willReturn(kakaoStrategy);
 
         // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
 
-        // then - 카카오는 accessToken null로 호출
+        // then
         verify(kakaoStrategy).withdrawSocialAccount(null, "kakao-id");
     }
 
     @Test
     @DisplayName("애플 계정(리프레시 토큰 있음) 탈퇴 시 리프레시 토큰으로 탈퇴 API를 호출한다")
-    void withdrawMember_withAppleAccountAndRefreshToken_callsAppleWithdraw() {
+    void 애플_계정_보유_회원_탈퇴_시_리프레시토큰으로_탈퇴_API_호출() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
@@ -86,8 +86,8 @@ class MemberWithdrawServiceTest {
         );
         ReflectionTestUtils.setField(member, "socialAccounts", List.of(appleAccount));
 
-        when(memberUtil.getCurrentMember()).thenReturn(member);
-        when(strategyFactory.getStrategy("apple")).thenReturn(appleStrategy);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(strategyFactory.getStrategy("apple")).willReturn(appleStrategy);
 
         // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
@@ -98,16 +98,16 @@ class MemberWithdrawServiceTest {
 
     @Test
     @DisplayName("카카오 탈퇴 실패 시에도 전체 탈퇴 흐름(토큰 삭제, 회원 저장)은 계속 진행된다")
-    void withdrawMember_kakaoWithdrawFails_continuesWithdraw() {
+    void 카카오_탈퇴_실패_시에도_전체_탈퇴_흐름이_계속된다() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
         SocialAccount kakaoAccount = SocialAccount.createSocialAccount("k@k.com", "kakao", "kakao-id", member);
         ReflectionTestUtils.setField(member, "socialAccounts", List.of(kakaoAccount));
 
-        when(memberUtil.getCurrentMember()).thenReturn(member);
-        when(strategyFactory.getStrategy("kakao")).thenReturn(kakaoStrategy);
-        doThrow(new RuntimeException("카카오 서버 오류")).when(kakaoStrategy).withdrawSocialAccount(any(), any());
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(strategyFactory.getStrategy("kakao")).willReturn(kakaoStrategy);
+        willThrow(new RuntimeException("카카오 서버 오류")).given(kakaoStrategy).withdrawSocialAccount(any(), any());
 
         // when - 예외가 전파되지 않아야 함
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
@@ -119,7 +119,7 @@ class MemberWithdrawServiceTest {
 
     @Test
     @DisplayName("리프레시 토큰이 없는 애플 계정은 탈퇴 API를 호출하지 않는다")
-    void withdrawMember_appleAccountWithoutRefreshToken_doesNotCallWithdraw() {
+    void 리프레시토큰_없는_애플_계정은_탈퇴_API_호출하지_않는다() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
@@ -128,7 +128,7 @@ class MemberWithdrawServiceTest {
         );
         ReflectionTestUtils.setField(member, "socialAccounts", List.of(appleAccountNoToken));
 
-        when(memberUtil.getCurrentMember()).thenReturn(member);
+        given(memberUtil.getCurrentMember()).willReturn(member);
 
         // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
@@ -139,17 +139,17 @@ class MemberWithdrawServiceTest {
 
     @Test
     @DisplayName("회원 탈퇴 시 개인정보가 마스킹된다")
-    void withdrawMember_masksPersonalInfo() {
+    void 회원_탈퇴_시_개인정보가_마스킹된다() {
         // given
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "id", 1L);
         ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
-        when(memberUtil.getCurrentMember()).thenReturn(member);
+        given(memberUtil.getCurrentMember()).willReturn(member);
 
         // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
 
-        // then - 마스킹 후 이름이 원래 값이 아님
+        // then
         verify(memberRepository).save(
                 org.mockito.ArgumentMatchers.argThat(
                         m -> !"홍길동".equals(m.getName())

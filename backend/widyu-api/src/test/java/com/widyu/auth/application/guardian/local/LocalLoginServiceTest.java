@@ -3,15 +3,14 @@ package com.widyu.auth.application.guardian.local;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.widyu.auth.TemporaryMember;
 import com.widyu.auth.dto.request.EmailCheckRequest;
 import com.widyu.auth.dto.request.LocalGuardianSignInRequest;
 import com.widyu.auth.dto.response.LocalSignupResponse;
-import com.widyu.auth.dto.response.SignUpUserInfo;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -47,7 +46,7 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("신규 이메일로 회원가입 시 새 멤버를 생성하고 토큰을 반환한다")
-    void signupGuardianWithLocal_newEmail_createsNewMemberAndReturnsToken() {
+    void 신규_이메일로_회원가입_시_새_멤버를_생성하고_토큰을_반환한다() {
         // given
         TemporaryMember temp = TemporaryMember.createTemporaryMember("홍길동", "01012345678");
         String email = "test@test.com";
@@ -56,14 +55,14 @@ class LocalLoginServiceTest {
         ReflectionTestUtils.setField(newMember, "id", 1L);
         TokenPairResponse tokenPair = TokenPairResponse.of(1L, "access-token", "refresh-token");
 
-        when(localAccountRepository.existsByEmail(email)).thenReturn(false);
-        when(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동")).thenReturn(Optional.empty());
-        when(memberRepository.save(any(Member.class))).thenReturn(newMember);
-        when(passwordEncoder.encode(rawPassword)).thenReturn("encoded-password");
-        when(localAccountRepository.save(any(LocalAccount.class))).thenReturn(
+        given(localAccountRepository.existsByEmail(email)).willReturn(false);
+        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동")).willReturn(Optional.empty());
+        given(memberRepository.save(any(Member.class))).willReturn(newMember);
+        given(passwordEncoder.encode(rawPassword)).willReturn("encoded-password");
+        given(localAccountRepository.save(any(LocalAccount.class))).willReturn(
                 LocalAccount.createLocalAccount(newMember, email, "encoded-password")
         );
-        when(jwtTokenProvider.generateTokenPair(any(), any(), any())).thenReturn(tokenPair);
+        given(jwtTokenProvider.generateTokenPair(any(), any(), any())).willReturn(tokenPair);
 
         // when
         LocalSignupResponse result = localLoginService.signupGuardianWithLocal(temp, email, rawPassword);
@@ -77,7 +76,7 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("기존 전화번호+이름의 멤버가 있으면 새 멤버를 생성하지 않고 재사용한다")
-    void signupGuardianWithLocal_existingMemberByPhone_reusesExistingMember() {
+    void 기존_전화번호_이름의_멤버가_있으면_기존_멤버를_재사용한다() {
         // given
         TemporaryMember temp = TemporaryMember.createTemporaryMember("홍길동", "01012345678");
         String email = "new@test.com";
@@ -85,14 +84,14 @@ class LocalLoginServiceTest {
         ReflectionTestUtils.setField(existingMember, "id", 1L);
         TokenPairResponse tokenPair = TokenPairResponse.of(1L, "access", "refresh");
 
-        when(localAccountRepository.existsByEmail(email)).thenReturn(false);
-        when(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동"))
-                .thenReturn(Optional.of(existingMember));
-        when(passwordEncoder.encode(any())).thenReturn("encoded");
-        when(localAccountRepository.save(any())).thenReturn(
+        given(localAccountRepository.existsByEmail(email)).willReturn(false);
+        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동"))
+                .willReturn(Optional.of(existingMember));
+        given(passwordEncoder.encode(any())).willReturn("encoded");
+        given(localAccountRepository.save(any())).willReturn(
                 LocalAccount.createLocalAccount(existingMember, email, "encoded")
         );
-        when(jwtTokenProvider.generateTokenPair(any(), any(), any())).thenReturn(tokenPair);
+        given(jwtTokenProvider.generateTokenPair(any(), any(), any())).willReturn(tokenPair);
 
         // when
         localLoginService.signupGuardianWithLocal(temp, email, "password");
@@ -103,11 +102,11 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("이미 등록된 이메일로 회원가입 시 BusinessException을 던진다")
-    void signupGuardianWithLocal_duplicateEmail_throwsBusinessException() {
+    void 중복_이메일로_회원가입_시_예외가_발생한다() {
         // given
         TemporaryMember temp = TemporaryMember.createTemporaryMember("홍길동", "01012345678");
         String email = "existing@test.com";
-        when(localAccountRepository.existsByEmail(email)).thenReturn(true);
+        given(localAccountRepository.existsByEmail(email)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> localLoginService.signupGuardianWithLocal(temp, email, "password"))
@@ -117,27 +116,33 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("등록되지 않은 이메일 확인 시 true를 반환한다")
-    void isEmailRegistered_notRegistered_returnsTrue() {
-        when(localAccountRepository.existsByEmail("new@test.com")).thenReturn(false);
+    void 미등록_이메일_확인_시_true를_반환한다() {
+        // given
+        given(localAccountRepository.existsByEmail("new@test.com")).willReturn(false);
 
+        // when
         boolean result = localLoginService.isEmailRegistered(new EmailCheckRequest("new@test.com"));
 
+        // then
         assertThat(result).isTrue();
     }
 
     @Test
     @DisplayName("이미 등록된 이메일 확인 시 false를 반환한다")
-    void isEmailRegistered_registered_returnsFalse() {
-        when(localAccountRepository.existsByEmail("existing@test.com")).thenReturn(true);
+    void 등록된_이메일_확인_시_false를_반환한다() {
+        // given
+        given(localAccountRepository.existsByEmail("existing@test.com")).willReturn(true);
 
+        // when
         boolean result = localLoginService.isEmailRegistered(new EmailCheckRequest("existing@test.com"));
 
+        // then
         assertThat(result).isFalse();
     }
 
     @Test
     @DisplayName("올바른 이메일과 비밀번호로 로그인 시 토큰 쌍을 반환한다")
-    void signIn_validCredentials_returnsTokenPair() {
+    void 올바른_이메일과_비밀번호로_로그인_시_토큰쌍을_반환한다() {
         // given
         String email = "test@test.com";
         String rawPassword = "password123!";
@@ -146,9 +151,9 @@ class LocalLoginServiceTest {
         LocalAccount localAccount = LocalAccount.createLocalAccount(member, email, "encoded-password");
         TokenPairResponse expectedToken = TokenPairResponse.of(1L, "access", "refresh");
 
-        when(localAccountRepository.findByEmail(email)).thenReturn(Optional.of(localAccount));
-        when(passwordEncoder.matches(rawPassword, "encoded-password")).thenReturn(true);
-        when(jwtTokenProvider.generateTokenPair(any(), any(), any())).thenReturn(expectedToken);
+        given(localAccountRepository.findByEmail(email)).willReturn(Optional.of(localAccount));
+        given(passwordEncoder.matches(rawPassword, "encoded-password")).willReturn(true);
+        given(jwtTokenProvider.generateTokenPair(any(), any(), any())).willReturn(expectedToken);
 
         // when
         TokenPairResponse result = localLoginService.signIn(new LocalGuardianSignInRequest(email, rawPassword));
@@ -159,9 +164,11 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("등록되지 않은 이메일로 로그인 시 BusinessException을 던진다")
-    void signIn_emailNotFound_throwsBusinessException() {
-        when(localAccountRepository.findByEmail("notfound@test.com")).thenReturn(Optional.empty());
+    void 등록되지_않은_이메일로_로그인_시_예외가_발생한다() {
+        // given
+        given(localAccountRepository.findByEmail("notfound@test.com")).willReturn(Optional.empty());
 
+        // when & then
         assertThatThrownBy(() -> localLoginService.signIn(
                 new LocalGuardianSignInRequest("notfound@test.com", "password")))
                 .isInstanceOf(BusinessException.class)
@@ -170,14 +177,14 @@ class LocalLoginServiceTest {
 
     @Test
     @DisplayName("잘못된 비밀번호로 로그인 시 BusinessException을 던진다")
-    void signIn_wrongPassword_throwsBusinessException() {
+    void 잘못된_비밀번호로_로그인_시_예외가_발생한다() {
         // given
         String email = "test@test.com";
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         LocalAccount localAccount = LocalAccount.createLocalAccount(member, email, "encoded-password");
 
-        when(localAccountRepository.findByEmail(email)).thenReturn(Optional.of(localAccount));
-        when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
+        given(localAccountRepository.findByEmail(email)).willReturn(Optional.of(localAccount));
+        given(passwordEncoder.matches("wrong-password", "encoded-password")).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> localLoginService.signIn(new LocalGuardianSignInRequest(email, "wrong-password")))

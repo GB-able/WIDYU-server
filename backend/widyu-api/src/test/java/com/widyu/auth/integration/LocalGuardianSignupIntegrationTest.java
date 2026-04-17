@@ -2,8 +2,6 @@ package com.widyu.auth.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 import com.widyu.auth.TemporaryMember;
 import com.widyu.auth.application.SmsService;
