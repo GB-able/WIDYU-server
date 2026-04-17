@@ -80,7 +80,6 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getName()).willReturn("한토마");
-        given(member.getBirthDate()).willReturn("19900101");
         given(member.getPhoneNumber()).willReturn("01011112222");
         given(member.getProfileImage()).willReturn("image.png");
         given(member.getLocalAccount()).willReturn(localAccount);
@@ -104,7 +103,6 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getName()).willReturn("한토마");
-        given(member.getBirthDate()).willReturn(null);
         given(member.getPhoneNumber()).willReturn("01011112222");
         given(member.getProfileImage()).willReturn(null);
         given(member.getLocalAccount()).willReturn(null);

@@ -97,7 +97,7 @@ class SeniorMyPageServiceTest {
     // ======================== 프로필 설정 조회 ========================
 
     @Test
-    @DisplayName("프로필 설정을 조회하면 이름, 생년월일, 전화번호, 주소, 초대코드를 반환한다")
+    @DisplayName("프로필 설정을 조회하면 이름, 전화번호, 주소, 초대코드를 반환한다")
     void 프로필_설정_조회() {
         // given
         Member member = mock(Member.class);
@@ -108,7 +108,6 @@ class SeniorMyPageServiceTest {
         given(member.getName()).willReturn("오일남");
         given(member.getPhoneNumber()).willReturn("01012345678");
         given(member.getProfileImage()).willReturn("image.png");
-        given(seniorProfile.getBirthDate()).willReturn("19680605");
         given(seniorProfile.getAddress()).willReturn("서울시 강서구");
         given(seniorProfile.getDetailAddress()).willReturn("101호");
         given(seniorProfile.getInviteCode()).willReturn("1234567");
@@ -118,7 +117,6 @@ class SeniorMyPageServiceTest {
 
         // then
         assertThat(response.name()).isEqualTo("오일남");
-        assertThat(response.birthDate()).isEqualTo("19680605");
         assertThat(response.inviteCode()).isEqualTo("1234567");
     }
 
