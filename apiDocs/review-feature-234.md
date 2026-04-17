@@ -136,7 +136,7 @@ private String generateUniqueFamilyCode() {
 
 ## 미해결 항목 (후속 검토)
 
-- [ ] `updateSeniorPhone()` 방장 권한 검증 여부 — 기획 확인 필요
+- [x] `updateSeniorPhone()` 방장 권한 검증 여부 — 기획 확인 결과 방장/일반 보호자 모두 수정 가능, 현재 구현 유지
 - [x] `AlbumUnlockService` 타입 검증 순서 수정 — 시니어 타입 검증을 중복 해금 체크 앞으로 이동
 - [x] `generateUniqueFamilyCode()` 재시도 로직 추가 — 최대 5회 시도 후 `INTERNAL_SERVER_ERROR`, static 상수 클래스 상단으로 이동
 
