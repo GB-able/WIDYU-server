@@ -2,6 +2,7 @@ package com.widyu.mypage.controller.docs;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
+import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
@@ -84,6 +85,16 @@ public interface GuardianMyPageDocs {
     ApiResponseTemplate<Void> updateSeniorProfileImage(
             @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
             ProfileImageUploadRequest request);
+
+    @Operation(summary = "시니어 초대코드 수정", description = "방장만 호출 가능. 시니어 로그인에 사용되는 7자리 초대코드를 수정합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "이미 사용 중인 초대코드"),
+            @ApiResponse(responseCode = "403", description = "방장만 수정 가능")
+    })
+    ApiResponseTemplate<Void> updateSeniorInviteCode(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            UpdateInviteCodeRequest request);
 
     @Operation(summary = "가족 멤버 목록 조회", description = "현재 로그인한 보호자가 속한 가족의 멤버 목록과 방장 여부를 조회합니다.")
     @ApiResponses({

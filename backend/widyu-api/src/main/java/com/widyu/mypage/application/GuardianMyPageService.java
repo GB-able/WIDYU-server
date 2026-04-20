@@ -9,6 +9,7 @@ import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -107,6 +108,17 @@ public class GuardianMyPageService {
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
         assertIsLeader(seniorProfile.getId(), guardian.getId());
         MyPageProfileService.updateMemberProfileImage(s3Service, seniorProfile.getMember(), image);
+    }
+
+    @Transactional
+    public void updateSeniorInviteCode(Long seniorId, UpdateInviteCodeRequest request) {
+        Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        assertIsLeader(seniorProfile.getId(), guardian.getId());
+        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다.");
+        }
+        seniorProfile.updateInviteCode(request.inviteCode());
     }
 
     public FamilyMemberListResponse getFamilyMembers() {
