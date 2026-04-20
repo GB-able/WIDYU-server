@@ -133,12 +133,12 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @GetMapping("/family/{seniorId}/members")
-    public ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers(@PathVariable Long seniorId) {
+    @GetMapping("/family/members")
+    public ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers() {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2019")
                 .message("가족 멤버 목록 조회 성공")
-                .body(guardianMyPageService.getFamilyMembers(seniorId));
+                .body(guardianMyPageService.getFamilyMembers());
     }
 
     @Override

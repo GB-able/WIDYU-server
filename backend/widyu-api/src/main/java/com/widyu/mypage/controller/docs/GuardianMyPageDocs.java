@@ -73,10 +73,12 @@ public interface GuardianMyPageDocs {
             @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
             ProfileImageUploadRequest request);
 
-    @Operation(summary = "가족 멤버 목록 조회", description = "특정 시니어 가족의 보호자 목록과 방장 여부를 조회합니다.")
-    @ApiResponses({@ApiResponse(responseCode = "200", description = "조회 성공")})
-    ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers(
-            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId);
+    @Operation(summary = "가족 멤버 목록 조회", description = "현재 로그인한 보호자가 속한 가족의 멤버 목록과 방장 여부를 조회합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "연결된 가족 없음")
+    })
+    ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers();
 
     @Operation(summary = "방장 변경", description = "방장만 호출 가능. 다른 보호자를 방장으로 변경합니다.")
     @ApiResponses({

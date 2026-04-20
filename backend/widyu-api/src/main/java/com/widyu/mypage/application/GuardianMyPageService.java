@@ -100,12 +100,17 @@ public class GuardianMyPageService {
         MyPageProfileService.updateMemberProfileImage(s3Service, seniorProfile.getMember(), image);
     }
 
-    public FamilyMemberListResponse getFamilyMembers(Long seniorId) {
+    public FamilyMemberListResponse getFamilyMembers() {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        List<FamilyConnection> guardianConnections = familyConnectionRepository
+                .findAllByGuardianIdWithSeniorAndMember(guardian.getId());
+        if (guardianConnections.isEmpty()) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다.");
+        }
+        Long seniorProfileId = guardianConnections.get(0).getSenior().getId();
 
         List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorIdWithGuardian(seniorProfile.getId());
+                .findAllBySeniorIdWithGuardian(seniorProfileId);
 
         return FamilyMemberListResponse.of(connections, guardian.getId());
     }
