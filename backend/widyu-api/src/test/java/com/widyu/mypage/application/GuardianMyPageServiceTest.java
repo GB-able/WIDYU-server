@@ -19,6 +19,7 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.SocialAccount;
 import com.widyu.member.repository.FamilyConnectionRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
@@ -325,10 +326,54 @@ class GuardianMyPageServiceTest {
         verify(seniorMember).updatePhoneNumber("01099998888");
     }
 
+    // ======================== 시니어 이름 수정 ========================
+
+    @Test
+    @DisplayName("방장이 시니어 이름을 수정하면 시니어 회원 엔티티의 이름이 변경된다")
+    void 시니어_이름_수정() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Member seniorMember = mock(Member.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+
+        // when
+        guardianMyPageService.updateSeniorName(10L, new UpdateNameRequest("오일남"));
+
+        // then
+        verify(seniorMember).updateName("오일남");
+    }
+
+    @Test
+    @DisplayName("방장이 아닌 보호자가 시니어 이름을 수정하려 하면 예외가 발생한다")
+    void 시니어_이름_수정_방장이_아닌_경우() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updateSeniorName(10L, new UpdateNameRequest("오일남")))
+                .isInstanceOf(BusinessException.class);
+    }
+
     // ======================== 시니어 프로필 이미지 수정 ========================
 
     @Test
-    @DisplayName("시니어 기존 프로필 이미지가 있을 때 새 이미지로 교체하면 기존 이미지가 S3에서 삭제된다")
+    @DisplayName("방장이 시니어 기존 프로필 이미지가 있을 때 새 이미지로 교체하면 기존 이미지가 S3에서 삭제된다")
     void 시니어_프로필_이미지_수정_기존이미지_삭제() {
         // given
         Member guardian = mock(Member.class);
@@ -340,6 +385,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
         given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn("https://s3.old-senior.png");
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
@@ -356,7 +402,7 @@ class GuardianMyPageServiceTest {
     }
 
     @Test
-    @DisplayName("시니어 기존 프로필 이미지가 없을 때 새 이미지를 등록하면 S3 삭제 없이 업로드만 진행된다")
+    @DisplayName("방장이 시니어 기존 프로필 이미지가 없을 때 새 이미지를 등록하면 S3 삭제 없이 업로드만 진행된다")
     void 시니어_프로필_이미지_수정_기존이미지_없음() {
         // given
         Member guardian = mock(Member.class);
@@ -368,6 +414,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
         given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn(null);
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
@@ -381,6 +428,27 @@ class GuardianMyPageServiceTest {
         // then
         verify(s3Service, never()).deleteFile(anyString());
         verify(seniorMember).updateProfileImage("https://s3.new-senior.png");
+    }
+
+    @Test
+    @DisplayName("방장이 아닌 보호자가 시니어 프로필 이미지를 수정하려 하면 예외가 발생한다")
+    void 시니어_프로필_이미지_수정_방장이_아닌_경우() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updateSeniorProfileImage(10L, image))
+                .isInstanceOf(BusinessException.class);
     }
 
     // ======================== 시니어 주소 수정 ========================
@@ -412,6 +480,7 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_목록_조회_방장인_경우() {
         // given
         Member guardian = mock(Member.class);
+        FamilyConnection guardianConnection = mock(FamilyConnection.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         FamilyConnection leaderConnection = mock(FamilyConnection.class);
         FamilyConnection memberConnection = mock(FamilyConnection.class);
@@ -420,9 +489,10 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
+                .willReturn(List.of(guardianConnection));
+        given(guardianConnection.getSenior()).willReturn(seniorProfile);
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
         given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
                 .willReturn(List.of(leaderConnection, memberConnection));
 
@@ -437,7 +507,7 @@ class GuardianMyPageServiceTest {
         given(memberConnection.isLeader()).willReturn(false);
 
         // when
-        FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers(10L);
+        FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers();
 
         // then
         assertThat(response.isCurrentUserLeader()).isTrue();
@@ -449,6 +519,7 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_목록_조회_방장이_아닌_경우() {
         // given
         Member guardian = mock(Member.class);
+        FamilyConnection guardianConnection = mock(FamilyConnection.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         FamilyConnection leaderConnection = mock(FamilyConnection.class);
         FamilyConnection memberConnection = mock(FamilyConnection.class);
@@ -457,9 +528,10 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(2L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(2L))
+                .willReturn(List.of(guardianConnection));
+        given(guardianConnection.getSenior()).willReturn(seniorProfile);
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 2L)).willReturn(true);
         given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
                 .willReturn(List.of(leaderConnection, memberConnection));
 
@@ -474,13 +546,29 @@ class GuardianMyPageServiceTest {
         given(memberConnection.isLeader()).willReturn(false);
 
         // when
-        FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers(10L);
+        FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers();
 
         // then
         assertThat(response.isCurrentUserLeader()).isFalse();
         assertThat(response.members()).hasSize(2);
         assertThat(response.members().get(0).name()).isEqualTo("한채희");
         assertThat(response.members().get(1).name()).isEqualTo("한토마");
+    }
+
+    @Test
+    @DisplayName("가족에 연결되지 않은 상태에서 가족 멤버 목록을 조회하면 예외가 발생한다")
+    void 가족_멤버_목록_조회_가족연결_없음() {
+        // given
+        Member guardian = mock(Member.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
+                .willReturn(List.of());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.getFamilyMembers())
+                .isInstanceOf(BusinessException.class);
     }
 
     // ======================== 방장 변경 ========================
@@ -605,5 +693,68 @@ class GuardianMyPageServiceTest {
 
         // then
         verify(familyConnectionRepository).delete(targetConnection);
+    }
+
+    // ======================== 시니어 초대코드 수정 ========================
+
+    @Test
+    @DisplayName("방장이 중복되지 않는 초대코드로 수정하면 시니어 프로필의 초대코드가 변경된다")
+    void 시니어_초대코드_수정() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(false);
+
+        // when
+        guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234"));
+
+        // then
+        verify(seniorProfile).updateInviteCode("ABC1234");
+    }
+
+    @Test
+    @DisplayName("방장이 아닌 보호자가 초대코드를 수정하려 하면 예외가 발생한다")
+    void 시니어_초대코드_수정_방장이_아닌_경우() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 초대코드로 수정하려 하면 예외가 발생한다")
+    void 시니어_초대코드_수정_중복_코드() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
+                .isInstanceOf(BusinessException.class);
     }
 }
