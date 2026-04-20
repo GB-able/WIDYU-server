@@ -317,6 +317,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
         given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
 
         // when
@@ -465,6 +466,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
         given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
 
         // when
         guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호"));
