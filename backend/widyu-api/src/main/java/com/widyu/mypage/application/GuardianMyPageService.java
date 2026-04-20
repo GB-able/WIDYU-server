@@ -84,6 +84,7 @@ public class GuardianMyPageService {
     public void updateSeniorPhone(Long seniorId, UpdatePhoneRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        assertIsLeader(seniorProfile.getId(), guardian.getId());
         seniorProfile.getMember().updatePhoneNumber(request.phoneNumber());
     }
 
@@ -91,6 +92,7 @@ public class GuardianMyPageService {
     public void updateSeniorAddress(Long seniorId, UpdateSeniorAddressRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        assertIsLeader(seniorProfile.getId(), guardian.getId());
         seniorProfile.updateAddress(request.address(), request.detailAddress());
     }
 
