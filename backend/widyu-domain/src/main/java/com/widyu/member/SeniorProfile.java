@@ -106,4 +106,8 @@ public class SeniorProfile extends BaseTimeEntity {
         this.address = address;
         this.detailAddress = detailAddress;
     }
+
+    public void updateInviteCode(String inviteCode) {
+        this.inviteCode = inviteCode;
+    }
 }

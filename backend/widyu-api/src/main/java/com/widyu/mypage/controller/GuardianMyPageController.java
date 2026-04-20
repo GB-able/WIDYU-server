@@ -4,6 +4,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.application.GuardianMyPageService;
 import com.widyu.mypage.controller.docs.GuardianMyPageDocs;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
+import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
@@ -100,6 +101,17 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
+    @PatchMapping("/seniors/{seniorId}/name")
+    public ApiResponseTemplate<Void> updateSeniorName(@PathVariable Long seniorId,
+                                                       @RequestBody @Valid UpdateNameRequest request) {
+        guardianMyPageService.updateSeniorName(seniorId, request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2023")
+                .message("시니어 이름 수정 성공")
+                .build();
+    }
+
+    @Override
     @PatchMapping("/seniors/{seniorId}/phone")
     public ApiResponseTemplate<Void> updateSeniorPhone(@PathVariable Long seniorId,
                                                         @RequestBody @Valid UpdatePhoneRequest request) {
@@ -133,12 +145,23 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @GetMapping("/family/{seniorId}/members")
-    public ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers(@PathVariable Long seniorId) {
+    @PatchMapping("/seniors/{seniorId}/invite-code")
+    public ApiResponseTemplate<Void> updateSeniorInviteCode(@PathVariable Long seniorId,
+                                                             @RequestBody @Valid UpdateInviteCodeRequest request) {
+        guardianMyPageService.updateSeniorInviteCode(seniorId, request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2024")
+                .message("시니어 초대코드 수정 성공")
+                .build();
+    }
+
+    @Override
+    @GetMapping("/family/members")
+    public ApiResponseTemplate<FamilyMemberListResponse> getFamilyMembers() {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2019")
                 .message("가족 멤버 목록 조회 성공")
-                .body(guardianMyPageService.getFamilyMembers(seniorId));
+                .body(guardianMyPageService.getFamilyMembers());
     }
 
     @Override
