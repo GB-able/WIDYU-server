@@ -94,9 +94,18 @@ public class GuardianMyPageService {
     }
 
     @Transactional
+    public void updateSeniorName(Long seniorId, UpdateNameRequest request) {
+        Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        assertIsLeader(seniorProfile.getId(), guardian.getId());
+        seniorProfile.getMember().updateName(request.name());
+    }
+
+    @Transactional
     public void updateSeniorProfileImage(Long seniorId, MultipartFile image) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        assertIsLeader(seniorProfile.getId(), guardian.getId());
         MyPageProfileService.updateMemberProfileImage(s3Service, seniorProfile.getMember(), image);
     }
 
@@ -156,6 +165,12 @@ public class GuardianMyPageService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다."));
 
         familyConnectionRepository.delete(connection);
+    }
+
+    private void assertIsLeader(Long seniorProfileId, Long guardianId) {
+        if (!familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(seniorProfileId, guardianId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "방장만 수정할 수 있습니다.");
+        }
     }
 
     private SeniorProfile getSeniorProfileWithAccessCheck(Long seniorMemberId, Long guardianId) {

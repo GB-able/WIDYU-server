@@ -55,6 +55,15 @@ public interface GuardianMyPageDocs {
     })
     ApiResponseTemplate<FamilyCodeResponse> getFamilyCode();
 
+    @Operation(summary = "시니어 이름 수정", description = "방장만 호출 가능. 시니어의 이름을 수정합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "403", description = "방장만 수정 가능")
+    })
+    ApiResponseTemplate<Void> updateSeniorName(
+            @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
+            UpdateNameRequest request);
+
     @Operation(summary = "시니어 전화번호 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
     ApiResponseTemplate<Void> updateSeniorPhone(
@@ -67,8 +76,11 @@ public interface GuardianMyPageDocs {
             @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
             UpdateSeniorAddressRequest request);
 
-    @Operation(summary = "시니어 프로필 이미지 수정")
-    @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
+    @Operation(summary = "시니어 프로필 이미지 수정", description = "방장만 호출 가능.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "403", description = "방장만 수정 가능")
+    })
     ApiResponseTemplate<Void> updateSeniorProfileImage(
             @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long seniorId,
             ProfileImageUploadRequest request);

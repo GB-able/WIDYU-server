@@ -100,6 +100,17 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
+    @PatchMapping("/seniors/{seniorId}/name")
+    public ApiResponseTemplate<Void> updateSeniorName(@PathVariable Long seniorId,
+                                                       @RequestBody @Valid UpdateNameRequest request) {
+        guardianMyPageService.updateSeniorName(seniorId, request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2023")
+                .message("시니어 이름 수정 성공")
+                .build();
+    }
+
+    @Override
     @PatchMapping("/seniors/{seniorId}/phone")
     public ApiResponseTemplate<Void> updateSeniorPhone(@PathVariable Long seniorId,
                                                         @RequestBody @Valid UpdatePhoneRequest request) {
