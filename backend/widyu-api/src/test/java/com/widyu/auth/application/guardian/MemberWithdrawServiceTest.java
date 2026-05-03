@@ -109,7 +109,7 @@ class MemberWithdrawServiceTest {
         given(strategyFactory.getStrategy("kakao")).willReturn(kakaoStrategy);
         willThrow(new RuntimeException("카카오 서버 오류")).given(kakaoStrategy).withdrawSocialAccount(any(), any());
 
-        // when - 예외가 전파되지 않아야 함
+        // when
         memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
 
         // then
