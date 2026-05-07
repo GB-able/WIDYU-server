@@ -71,7 +71,7 @@ public class HealthScheduleService {
 
         // 시니어 프로필 조회
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(request.memberId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         // 보호자-시니어 연결 확인
         boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(
@@ -139,7 +139,7 @@ public class HealthScheduleService {
         } else if (currentMember.getType() == MemberType.GUARDIAN) {
             // 보호자는 연결된 시니어의 일정만 접근 가능
             SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(healthSchedule.getMember().getId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
             boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(
                     seniorProfile.getId(), currentMember.getId()
@@ -179,7 +179,7 @@ public class HealthScheduleService {
 
         // 시니어 프로필 조회
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         // 보호자-시니어 연결 확인
         boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(
@@ -222,7 +222,7 @@ public class HealthScheduleService {
 
         // 시니어 프로필 조회
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         // 보호자-시니어 연결 확인
         boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(

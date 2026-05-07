@@ -315,14 +315,14 @@ public interface AlbumDocs {
                     )
             ),
             @ApiResponse(
-                    responseCode = "400",
+                    responseCode = "404",
                     description = "앨범을 찾을 수 없음",
                     content = @Content(
                             examples = @ExampleObject(
                                     name = "앨범 없음",
                                     value = """
                                             {
-                                              "code": "REQ_4000",
+                                              "code": "ALBUM_4040",
                                               "message": "앨범을 찾을 수 없습니다.",
                                               "data": null
                                             }
@@ -391,14 +391,14 @@ public interface AlbumDocs {
                     )
             ),
             @ApiResponse(
-                    responseCode = "400",
+                    responseCode = "404",
                     description = "앨범을 찾을 수 없음",
                     content = @Content(
                             examples = @ExampleObject(
                                     name = "앨범 없음",
                                     value = """
                                             {
-                                              "code": "REQ_4000",
+                                              "code": "ALBUM_4040",
                                               "message": "앨범을 찾을 수 없습니다.",
                                               "data": null
                                             }
@@ -460,30 +460,34 @@ public interface AlbumDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "이미 좋아요한 앨범이거나 앨범을 찾을 수 없음",
+                    description = "이미 좋아요한 앨범",
                     content = @Content(
-                            examples = {
-                                    @ExampleObject(
-                                            name = "이미 좋아요한 앨범",
-                                            value = """
-                                                    {
-                                                      "code": "ALBUM_4001",
-                                                      "message": "이미 좋아요한 앨범입니다.",
-                                                      "data": null
-                                                    }
-                                                    """
-                                    ),
-                                    @ExampleObject(
-                                            name = "앨범을 찾을 수 없음",
-                                            value = """
-                                                    {
-                                                      "code": "ALBUM_4040",
-                                                      "message": "앨범을 찾을 수 없습니다.",
-                                                      "data": null
-                                                    }
-                                                    """
-                                    )
-                            }
+                            examples = @ExampleObject(
+                                    name = "이미 좋아요한 앨범",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4001",
+                                              "message": "이미 좋아요한 앨범입니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "앨범 없음",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4040",
+                                              "message": "앨범을 찾을 수 없습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
                     )
             )
     })
@@ -522,30 +526,34 @@ public interface AlbumDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "좋아요하지 않은 앨범이거나 앨범을 찾을 수 없음",
+                    description = "좋아요하지 않은 앨범",
                     content = @Content(
-                            examples = {
-                                    @ExampleObject(
-                                            name = "좋아요하지 않은 앨범",
-                                            value = """
-                                                    {
-                                                      "code": "ALBUM_4002",
-                                                      "message": "좋아요하지 않은 앨범입니다.",
-                                                      "data": null
-                                                    }
-                                                    """
-                                    ),
-                                    @ExampleObject(
-                                            name = "앨범을 찾을 수 없음",
-                                            value = """
-                                                    {
-                                                      "code": "ALBUM_4040",
-                                                      "message": "앨범을 찾을 수 없습니다.",
-                                                      "data": null
-                                                    }
-                                                    """
-                                    )
-                            }
+                            examples = @ExampleObject(
+                                    name = "좋아요하지 않은 앨범",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4002",
+                                              "message": "좋아요하지 않은 앨범입니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "앨범을 찾을 수 없음",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "앨범 없음",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_4040",
+                                              "message": "앨범을 찾을 수 없습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
                     )
             )
     })
@@ -742,8 +750,8 @@ public interface AlbumDocs {
                                     name = "해금 필요",
                                     value = """
                                             {
-                                              "code": "AUTH_4030",
-                                              "message": "앨범을 조회하려면 해금이 필요합니다.",
+                                              "code": "ALBUM_4031",
+                                              "message": "앨범을 보려면 해금이 필요합니다.",
                                               "data": null
                                             }
                                             """
@@ -810,7 +818,7 @@ public interface AlbumDocs {
                                             name = "본인 앨범 해금 시도",
                                             value = """
                                                     {
-                                                      "code": "ALBUM_4003",
+                                                      "code": "ALBUM_UNLOCK_4002",
                                                       "message": "본인의 앨범은 해금할 수 없습니다.",
                                                       "data": null
                                                     }
@@ -820,7 +828,7 @@ public interface AlbumDocs {
                                             name = "이미 해금된 앨범",
                                             value = """
                                                     {
-                                                      "code": "ALBUM_4004",
+                                                      "code": "ALBUM_UNLOCK_4001",
                                                       "message": "이미 해금된 앨범입니다.",
                                                       "data": null
                                                     }
@@ -830,13 +838,29 @@ public interface AlbumDocs {
                                             name = "포인트 부족",
                                             value = """
                                                     {
-                                                      "code": "POINT_4001",
-                                                      "message": "포인트가 부족합니다. 필요 포인트: 50, 현재 포인트: 30",
+                                                      "code": "ALBUM_UNLOCK_4003",
+                                                      "message": "포인트가 부족하여 해금할 수 없습니다.",
                                                       "data": null
                                                     }
                                                     """
                                     )
                             }
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "권한 없음 (시니어 전용 기능)",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "시니어 전용",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_UNLOCK_4030",
+                                              "message": "시니어 회원만 앨범을 해금할 수 있습니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
                     )
             ),
             @ApiResponse(

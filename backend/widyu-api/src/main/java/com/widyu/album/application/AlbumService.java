@@ -53,7 +53,7 @@ public class AlbumService {
         Member currentMember = memberUtil.getCurrentMember();
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "앨범을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
         if (!album.getMember().getId().equals(currentMember.getId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "본인의 앨범만 수정할 수 있습니다.");
@@ -70,7 +70,7 @@ public class AlbumService {
         Member currentMember = memberUtil.getCurrentMember();
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "앨범을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
         if (!album.getMember().getId().equals(currentMember.getId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "본인의 앨범만 삭제할 수 있습니다.");

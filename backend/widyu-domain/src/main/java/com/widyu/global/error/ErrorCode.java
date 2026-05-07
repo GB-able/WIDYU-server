@@ -63,6 +63,7 @@ public enum ErrorCode {
 
     // 회원 관련
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4041", "회원을 찾을 수 없습니다."),
+    SENIOR_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4042", "시니어 프로필을 찾을 수 없습니다."),
 
     // fcm 관련
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),
@@ -89,8 +90,10 @@ public enum ErrorCode {
     ALBUM_COMMENT_PARENT_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "ALBUM_COMMENT_4003", "삭제되거나 비활성화된 댓글에는 대댓글을 작성할 수 없습니다."),
     
     // 앨범 해금 관련
+    ALBUM_UNLOCK_REQUIRED(HttpStatus.FORBIDDEN, "ALBUM_4031", "앨범을 보려면 해금이 필요합니다."),
     ALBUM_ALREADY_UNLOCKED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4001", "이미 해금된 앨범입니다."),
     ALBUM_UNLOCK_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4002", "본인의 앨범은 해금할 수 없습니다."),
+    ALBUM_UNLOCK_SENIOR_ONLY(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4030", "시니어 회원만 앨범을 해금할 수 있습니다."),
     ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
 
     // 결제 관련
@@ -111,7 +114,7 @@ public enum ErrorCode {
     // 서버 오류
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "SRV_5000", "서버 내부 오류가 발생했습니다."),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SRV_5030", "현재 서비스를 사용할 수 없습니다."),
-    NOT_FOUND(HttpStatus.SERVICE_UNAVAILABLE, "SRV_5040", "찾을 수 없습니다");
+    NOT_FOUND(HttpStatus.NOT_FOUND, "SRV_4040", "찾을 수 없습니다");
     ;
 
     private final HttpStatus httpStatus;

@@ -30,7 +30,7 @@ public class AlbumPermissionService {
             }
 
             // 나머지는 거부
-            default -> throw new BusinessException(ErrorCode.FORBIDDEN, "앨범 해금이 필요합니다.");
+            default -> throw new BusinessException(ErrorCode.ALBUM_UNLOCK_REQUIRED);
         }
     }
 }
