@@ -104,7 +104,7 @@ class AlbumUnlockServiceTest {
     }
 
     @Test
-    @DisplayName("가디언 타입 회원이 해금 시도 시 BusinessException을 던진다")
+    @DisplayName("가디언 타입 회원이 해금 시도 시 ALBUM_UNLOCK_SENIOR_ONLY 예외를 던진다")
     void 가디언_타입_회원이_해금_시도_시_예외가_발생한다() {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "가디언", "01099999999");
@@ -121,7 +121,31 @@ class AlbumUnlockServiceTest {
         // when & then
         assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_UNLOCK_SENIOR_ONLY);
+    }
+
+    @Test
+    @DisplayName("시니어 프로필이 없는 경우 SENIOR_PROFILE_NOT_FOUND 예외를 던진다")
+    void 시니어_프로필이_없으면_예외가_발생한다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        ReflectionTestUtils.setField(senior, "type", MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        Member albumOwner = mock(Member.class);
+        given(albumOwner.getId()).willReturn(2L);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(albumOwner);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENIOR_PROFILE_NOT_FOUND);
     }
 
     @Test

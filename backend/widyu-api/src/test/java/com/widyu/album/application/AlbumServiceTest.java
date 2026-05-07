@@ -124,7 +124,7 @@ class AlbumServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 앨범 수정 시 BusinessException을 던진다")
+    @DisplayName("존재하지 않는 앨범 수정 시 ALBUM_NOT_FOUND 예외를 던진다")
     void 존재하지_않는_앨범_수정_시_예외가_발생한다() {
         // given
         Member currentMember = mock(Member.class);
@@ -134,7 +134,21 @@ class AlbumServiceTest {
         // when & then
         assertThatThrownBy(() -> albumService.updateAlbum(999L, new com.widyu.album.dto.request.AlbumUpdateRequest("수정")))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 앨범 삭제 시 ALBUM_NOT_FOUND 예외를 던진다")
+    void 존재하지_않는_앨범_삭제_시_예외가_발생한다() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(albumRepository.findByIdAndStatus(999L, Status.ACTIVE)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> albumService.deleteAlbum(999L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_NOT_FOUND);
     }
 
     @Test

@@ -48,11 +48,11 @@ public class AlbumUnlockService {
 
         // 2. 시니어 타입 검증
         if (currentMember.getType() != MemberType.SENIOR) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 앨범을 해금할 수 있습니다.");
+            throw new BusinessException(ErrorCode.ALBUM_UNLOCK_SENIOR_ONLY);
         }
 
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(currentMember.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         // 3. 이미 해금된 앨범인지 확인
         if (albumUnlockRepository.existsByAlbumAndMember(album, currentMember)) {

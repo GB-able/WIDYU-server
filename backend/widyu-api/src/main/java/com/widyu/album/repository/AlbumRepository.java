@@ -36,6 +36,12 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     Optional<LocalDateTime> findLastUploadDateByMember(@Param("member") Member member, @Param("status") Status status);
 
     long countByMemberId(Long id);
+
+    @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :since")
+    long countNewAlbums(@Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.member != :member AND a.id NOT IN (SELECT au.album.id FROM AlbumUnlock au WHERE au.member = :member)")
+    long countLockedAlbumsForMember(@Param("member") Member member);
     
     @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date ORDER BY a.createdAt DESC, a.id DESC")
     org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("date") LocalDate date, Pageable pageable);

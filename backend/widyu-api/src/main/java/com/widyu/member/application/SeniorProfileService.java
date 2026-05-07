@@ -40,7 +40,7 @@ public class SeniorProfileService {
 
         SeniorProfile seniorProfile = currentMember.getSeniorProfile();
         if (seniorProfile == null) {
-            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "시니어 프로필을 찾을 수 없습니다.");
+            throw new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND);
         }
 
         log.info("시니어 포인트 조회: memberId={}, points={}", currentMember.getId(), seniorProfile.getPoints());
@@ -73,8 +73,7 @@ public class SeniorProfileService {
         }
 
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND,
-                        "시니어 프로필을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         seniorProfile.addPoints(points);
         pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, "포인트 적립"));
