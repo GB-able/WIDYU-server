@@ -53,6 +53,7 @@ class LocalGuardianSignupIntegrationTest {
     // Redis 레포지토리는 H2 테스트 환경에서 MockBean으로 대체
     @MockBean private VerificationCodeRepository verificationCodeRepository;
     @MockBean private TemporaryMemberRepository temporaryMemberRepository;
+    @MockBean private com.widyu.auth.repository.RefreshTokenRepository refreshTokenRepository;
     // 외부 서비스 MockBean
     @MockBean private S3Client s3Client;
     @MockBean private SmsService smsService;
