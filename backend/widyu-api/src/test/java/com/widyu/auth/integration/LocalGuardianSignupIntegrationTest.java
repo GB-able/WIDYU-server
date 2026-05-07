@@ -57,6 +57,8 @@ class LocalGuardianSignupIntegrationTest {
     // 외부 서비스 MockBean
     @MockBean private S3Client s3Client;
     @MockBean private SmsService smsService;
+    @MockBean private net.bramp.ffmpeg.FFmpeg ffmpeg;
+    @MockBean private net.bramp.ffmpeg.FFprobe ffprobe;
 
     @AfterEach
     void tearDown() {
