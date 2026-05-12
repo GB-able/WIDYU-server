@@ -9,8 +9,8 @@ import lombok.Getter;
 public enum NotificationSettingGroup {
     GOAL("목표 관련 알림", FcmCategory.TARGET, FcmCategory.HEALTH_SCHEDULE, FcmCategory.WALK, FcmCategory.MEDICINE_SCHEDULE),
     ALBUM("앨범 관련 알림", FcmCategory.ALBUM),
-    HOME("안전/소통 관련 알림", FcmCategory.SAFE_ZONE, FcmCategory.HEART_MESSAGE),
-    ETC("기타 알림");
+    HOME("안전/소통 관련 알림", FcmCategory.SAFE_ZONE),
+    ETC("기타 알림", FcmCategory.ETC);
 
     private final String description;
     private final FcmCategory[] categories;
