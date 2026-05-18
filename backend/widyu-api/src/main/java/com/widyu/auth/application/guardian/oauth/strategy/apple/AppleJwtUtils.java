@@ -76,7 +76,8 @@ public class AppleJwtUtils {
             
             return keyFactory.generatePrivate(keySpec);
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            throw new BusinessException(ErrorCode.APPLE_PRIVATE_KEY_PARSING_FAILED, e.getMessage());
+            log.error("Apple 개인 키 파싱 실패", e);
+            throw new BusinessException(ErrorCode.APPLE_PRIVATE_KEY_PARSING_FAILED);
         }
     }
 }
