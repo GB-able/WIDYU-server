@@ -21,24 +21,28 @@ public interface AlbumCalendarRepository extends JpaRepository<Album, Long> {
         AND (
             a.member.id = :memberId
             OR a.member.id IN (
-                SELECT fc1.senior.member.id FROM FamilyConnection fc1
-                WHERE fc1.guardian.id = :memberId
-            )
-            OR a.member.id IN (
-                SELECT fc2.guardian.id FROM FamilyConnection fc2
-                WHERE fc2.senior.member.id = :memberId
-            )
-            OR a.member.id IN (
-                SELECT fc3.guardian.id FROM FamilyConnection fc3
-                WHERE fc3.senior.id IN (
-                    SELECT fc4.senior.id FROM FamilyConnection fc4
-                    WHERE fc4.guardian.id = :memberId
+                SELECT sp1.member.id FROM SeniorProfile sp1
+                WHERE sp1.family.id IN (
+                    SELECT fm1.family.id FROM FamilyMembership fm1 WHERE fm1.guardian.id = :memberId
                 )
+            )
+            OR a.member.id IN (
+                SELECT fm2.guardian.id FROM FamilyMembership fm2
+                WHERE fm2.family.id IN (
+                    SELECT sp2.family.id FROM SeniorProfile sp2 WHERE sp2.member.id = :memberId
+                )
+            )
+            OR a.member.id IN (
+                SELECT fm3.guardian.id FROM FamilyMembership fm3
+                WHERE fm3.family.id IN (
+                    SELECT fm4.family.id FROM FamilyMembership fm4 WHERE fm4.guardian.id = :memberId
+                )
+                AND fm3.guardian.id <> :memberId
             )
         )
         ORDER BY a.id DESC
         LIMIT :limit
         """)
-    List<Album> findFamilyAlbumsByDateRangeWithCursor(Long memberId, LocalDateTime start, LocalDateTime end, 
+    List<Album> findFamilyAlbumsByDateRangeWithCursor(Long memberId, LocalDateTime start, LocalDateTime end,
                                                      Long cursor, int limit, Status status);
 }

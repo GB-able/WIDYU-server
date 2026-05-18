@@ -17,10 +17,12 @@ import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.goal.DailyGoalStatus;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.SeniorProfile;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineCategory;
 import com.widyu.medicine.MedicineSchedule;
@@ -50,7 +52,8 @@ public class GoalHomeService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
     private final MedicineScheduleRepository medicineScheduleRepository;
     private final MedicationProofRepository medicationProofRepository;
     private final WalkRepository walkRepository;
@@ -61,10 +64,17 @@ public class GoalHomeService {
     public FamilyListResponse getFamilyList() {
         Member currentMember = memberUtil.getCurrentMember();
 
-        List<FamilyConnection> familyConnections =
-                familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(currentMember.getId());
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(currentMember.getId())
+                .orElse(null);
 
-        List<FamilyMemberResponse> families = familyConnections.stream()
+        if (myMembership == null) {
+            return FamilyListResponse.of(List.of());
+        }
+
+        List<SeniorProfile> seniors = seniorProfileRepository
+                .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+
+        List<FamilyMemberResponse> families = seniors.stream()
                 .map(FamilyMemberResponse::from)
                 .toList();
 
@@ -475,16 +485,18 @@ public class GoalHomeService {
 
     private Member getMember(Long memberId) {
         if (memberId == null) {
-            // 보호자의 경우 첫 번째 연결된 시니어 반환
             Member currentMember = memberUtil.getCurrentMember();
-            List<FamilyConnection> connections = familyConnectionRepository
-                    .findAllByGuardianIdWithSeniorAndMember(currentMember.getId());
+            FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(currentMember.getId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "연결된 부모님이 없습니다."));
 
-            if (connections.isEmpty()) {
+            List<SeniorProfile> seniors = seniorProfileRepository
+                    .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+
+            if (seniors.isEmpty()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "연결된 부모님이 없습니다.");
             }
 
-            return connections.get(0).getSenior().getMember();
+            return seniors.get(0).getMember();
         }
 
         return memberRepository.findById(memberId)

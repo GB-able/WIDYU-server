@@ -1,7 +1,6 @@
 package com.widyu.mypage.dto.response;
 
-import com.widyu.member.FamilyConnection;
-import com.widyu.member.Member;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.SeniorProfile;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,36 +19,37 @@ public record FamilyMemberListResponse(
     ) {}
 
     public static FamilyMemberListResponse of(
-            List<FamilyConnection> connections,
-            SeniorProfile seniorProfile,
+            List<FamilyMembership> memberships,
+            List<SeniorProfile> seniors,
             Long currentGuardianId
     ) {
-        boolean isCurrentUserLeader = connections.stream()
-                .anyMatch(c -> c.getGuardian().getId().equals(currentGuardianId) && c.isLeader());
+        boolean isCurrentUserLeader = memberships.stream()
+                .anyMatch(m -> m.getGuardian().getId().equals(currentGuardianId) && m.isLeader());
 
-        Member seniorMember = seniorProfile.getMember();
-        FamilyMemberItem seniorItem = new FamilyMemberItem(
-                seniorMember.getId(),
-                seniorMember.getName(),
-                seniorMember.getProfileImage(),
-                false,
-                false,
-                true
-        );
+        List<FamilyMemberItem> seniorItems = seniors.stream()
+                .map(sp -> new FamilyMemberItem(
+                        sp.getMember().getId(),
+                        sp.getMember().getName(),
+                        sp.getMember().getProfileImage(),
+                        false,
+                        false,
+                        true
+                ))
+                .toList();
 
-        List<FamilyMemberItem> guardianItems = connections.stream()
-                .map(c -> new FamilyMemberItem(
-                        c.getGuardian().getId(),
-                        c.getGuardian().getName(),
-                        c.getGuardian().getProfileImage(),
-                        c.isLeader(),
-                        c.getGuardian().getId().equals(currentGuardianId),
+        List<FamilyMemberItem> guardianItems = memberships.stream()
+                .map(m -> new FamilyMemberItem(
+                        m.getGuardian().getId(),
+                        m.getGuardian().getName(),
+                        m.getGuardian().getProfileImage(),
+                        m.isLeader(),
+                        m.getGuardian().getId().equals(currentGuardianId),
                         false
                 ))
                 .toList();
 
         List<FamilyMemberItem> allMembers = new ArrayList<>();
-        allMembers.add(seniorItem);
+        allMembers.addAll(seniorItems);
         allMembers.addAll(guardianItems);
 
         return new FamilyMemberListResponse(isCurrentUserLeader, allMembers);

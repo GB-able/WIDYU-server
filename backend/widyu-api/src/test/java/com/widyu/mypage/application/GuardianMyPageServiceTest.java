@@ -12,12 +12,13 @@ import static org.mockito.Mockito.verify;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.LocalAccount;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.SocialAccount;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
@@ -44,7 +45,7 @@ class GuardianMyPageServiceTest {
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
-    @Mock private FamilyConnectionRepository familyConnectionRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
 
     @InjectMocks
@@ -183,8 +184,8 @@ class GuardianMyPageServiceTest {
     void 연결된_시니어_목록_조회() {
         // given
         Member guardian = mock(Member.class);
-        FamilyConnection connection1 = mock(FamilyConnection.class);
-        FamilyConnection connection2 = mock(FamilyConnection.class);
+        FamilyMembership guardianMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
         SeniorProfile profile1 = mock(SeniorProfile.class);
         SeniorProfile profile2 = mock(SeniorProfile.class);
         Member senior1 = mock(Member.class);
@@ -192,16 +193,17 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
-                .willReturn(List.of(connection1, connection2));
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(guardianMembership));
+        given(guardianMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(10L))
+                .willReturn(List.of(profile1, profile2));
 
-        given(connection1.getSenior()).willReturn(profile1);
         given(profile1.getMember()).willReturn(senior1);
         given(senior1.getId()).willReturn(10L);
         given(senior1.getName()).willReturn("송애순");
         given(senior1.getProfileImage()).willReturn("img1.png");
 
-        given(connection2.getSenior()).willReturn(profile2);
         given(profile2.getMember()).willReturn(senior2);
         given(senior2.getId()).willReturn(20L);
         given(senior2.getName()).willReturn("오일남");
@@ -230,7 +232,7 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getId()).willReturn(10L);
         given(seniorMember.getName()).willReturn("오일남");
@@ -255,7 +257,7 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(false);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.getSeniorProfile(10L))
@@ -269,15 +271,14 @@ class GuardianMyPageServiceTest {
     void 가족코드_조회() {
         // given
         Member guardian = mock(Member.class);
-        FamilyConnection connection = mock(FamilyConnection.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
-                .willReturn(List.of(connection));
-        given(connection.getSenior()).willReturn(seniorProfile);
-        given(seniorProfile.getFamilyCode()).willReturn("AB12CD");
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(family.getFamilyCode()).willReturn("AB12CD");
 
         // when
         FamilyCodeResponse response = guardianMyPageService.getFamilyCode();
@@ -294,8 +295,7 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
-                .willReturn(List.of());
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.getFamilyCode())
@@ -316,8 +316,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
 
         // when
@@ -341,8 +341,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
 
         // when
@@ -363,8 +363,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorName(10L, new UpdateNameRequest("오일남")))
@@ -385,8 +385,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn("https://s3.old-senior.png");
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
@@ -414,8 +414,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn(null);
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
@@ -442,8 +442,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
 
         MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
 
@@ -465,8 +465,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
 
         // when
         guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호"));
@@ -482,38 +482,39 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_목록_조회_방장인_경우() {
         // given
         Member guardian = mock(Member.class);
-        FamilyConnection guardianConnection = mock(FamilyConnection.class);
+        FamilyMembership guardiansMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         Member seniorMember = mock(Member.class);
-        FamilyConnection leaderConnection = mock(FamilyConnection.class);
-        FamilyConnection memberConnection = mock(FamilyConnection.class);
+        FamilyMembership leaderMembership = mock(FamilyMembership.class);
+        FamilyMembership memberMembership = mock(FamilyMembership.class);
         Member leaderGuardian = mock(Member.class);
         Member memberGuardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
-                .willReturn(List.of(guardianConnection));
-        given(guardianConnection.getSenior()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(guardiansMembership));
+        given(guardiansMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(10L)).willReturn(List.of(seniorProfile));
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getId()).willReturn(99L);
         given(seniorMember.getName()).willReturn("부모님");
         given(seniorMember.getProfileImage()).willReturn("senior.png");
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
-                .willReturn(List.of(leaderConnection, memberConnection));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
+                .willReturn(List.of(leaderMembership, memberMembership));
 
-        given(leaderConnection.getGuardian()).willReturn(leaderGuardian);
+        given(leaderMembership.getGuardian()).willReturn(leaderGuardian);
         given(leaderGuardian.getId()).willReturn(1L);
         given(leaderGuardian.getName()).willReturn("한채희");
         given(leaderGuardian.getProfileImage()).willReturn(null);
-        given(leaderConnection.isLeader()).willReturn(true);
+        given(leaderMembership.isLeader()).willReturn(true);
 
-        given(memberConnection.getGuardian()).willReturn(memberGuardian);
+        given(memberMembership.getGuardian()).willReturn(memberGuardian);
         given(memberGuardian.getId()).willReturn(2L);
         given(memberGuardian.getName()).willReturn("한토마");
         given(memberGuardian.getProfileImage()).willReturn(null);
-        given(memberConnection.isLeader()).willReturn(false);
+        given(memberMembership.isLeader()).willReturn(false);
 
         // when
         FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers();
@@ -532,38 +533,39 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_목록_조회_방장이_아닌_경우() {
         // given
         Member guardian = mock(Member.class);
-        FamilyConnection guardianConnection = mock(FamilyConnection.class);
+        FamilyMembership guardiansMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         Member seniorMember = mock(Member.class);
-        FamilyConnection leaderConnection = mock(FamilyConnection.class);
-        FamilyConnection memberConnection = mock(FamilyConnection.class);
+        FamilyMembership leaderMembership = mock(FamilyMembership.class);
+        FamilyMembership memberMembership = mock(FamilyMembership.class);
         Member leaderGuardian = mock(Member.class);
         Member memberGuardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(2L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(2L))
-                .willReturn(List.of(guardianConnection));
-        given(guardianConnection.getSenior()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.findByGuardianId(2L)).willReturn(Optional.of(guardiansMembership));
+        given(guardiansMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(10L)).willReturn(List.of(seniorProfile));
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getId()).willReturn(99L);
         given(seniorMember.getName()).willReturn("부모님");
         given(seniorMember.getProfileImage()).willReturn("senior.png");
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
-                .willReturn(List.of(leaderConnection, memberConnection));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
+                .willReturn(List.of(leaderMembership, memberMembership));
 
-        given(leaderConnection.getGuardian()).willReturn(leaderGuardian);
+        given(leaderMembership.getGuardian()).willReturn(leaderGuardian);
         given(leaderGuardian.getId()).willReturn(1L);
         given(leaderGuardian.getName()).willReturn("한채희");
         given(leaderGuardian.getProfileImage()).willReturn(null);
-        given(leaderConnection.isLeader()).willReturn(true);
+        given(leaderMembership.isLeader()).willReturn(true);
 
-        given(memberConnection.getGuardian()).willReturn(memberGuardian);
+        given(memberMembership.getGuardian()).willReturn(memberGuardian);
         given(memberGuardian.getId()).willReturn(2L);
         given(memberGuardian.getName()).willReturn("한토마");
         given(memberGuardian.getProfileImage()).willReturn(null);
-        given(memberConnection.isLeader()).willReturn(false);
+        given(memberMembership.isLeader()).willReturn(false);
 
         // when
         FamilyMemberListResponse response = guardianMyPageService.getFamilyMembers();
@@ -587,8 +589,7 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllByGuardianIdWithSeniorAndMember(1L))
-                .willReturn(List.of());
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.getFamilyMembers())
@@ -603,8 +604,9 @@ class GuardianMyPageServiceTest {
         // given
         Member guardian = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection currentLeader = mock(FamilyConnection.class);
-        FamilyConnection newLeader = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership currentMembership = mock(FamilyMembership.class);
+        FamilyMembership newMembership = mock(FamilyMembership.class);
         Member currentGuardian = mock(Member.class);
         Member newGuardianMember = mock(Member.class);
 
@@ -612,22 +614,24 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
-                .willReturn(List.of(currentLeader, newLeader));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
+                .willReturn(List.of(currentMembership, newMembership));
 
-        given(currentLeader.getGuardian()).willReturn(currentGuardian);
+        given(currentMembership.getGuardian()).willReturn(currentGuardian);
         given(currentGuardian.getId()).willReturn(1L);
-        given(newLeader.getGuardian()).willReturn(newGuardianMember);
+        given(newMembership.getGuardian()).willReturn(newGuardianMember);
         given(newGuardianMember.getId()).willReturn(2L);
 
         // when
         guardianMyPageService.changeLeader(10L, 2L);
 
         // then
-        verify(newLeader).setLeader(true);
-        verify(currentLeader).setLeader(false);
+        verify(newMembership).setLeader(true);
+        verify(currentMembership).setLeader(false);
     }
 
     @Test
@@ -636,18 +640,21 @@ class GuardianMyPageServiceTest {
         // given
         Member guardian = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection connection = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
         Member connectedGuardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
-                .willReturn(List.of(connection));
-        given(connection.getGuardian()).willReturn(connectedGuardian);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
+                .willReturn(List.of(membership));
+        given(membership.getGuardian()).willReturn(connectedGuardian);
         given(connectedGuardian.getId()).willReturn(2L);
 
         // when & then
@@ -666,8 +673,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.changeLeader(10L, 2L))
@@ -687,8 +694,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.deleteFamilyMember(10L, 1L))
@@ -701,22 +708,25 @@ class GuardianMyPageServiceTest {
         // given
         Member guardian = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection targetConnection = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership targetMembership = mock(FamilyMembership.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.findBySeniorIdAndGuardianId(100L, 2L))
-                .willReturn(Optional.of(targetConnection));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(familyMembershipRepository.findByFamilyIdAndGuardianId(10L, 2L))
+                .willReturn(Optional.of(targetMembership));
 
         // when
         guardianMyPageService.deleteFamilyMember(10L, 2L);
 
         // then
-        verify(familyConnectionRepository).delete(targetConnection);
+        verify(familyMembershipRepository).delete(targetMembership);
     }
 
     // ======================== 시니어 초대코드 수정 ========================
@@ -732,8 +742,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(false);
 
         // when
@@ -754,8 +764,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(false);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
@@ -773,8 +783,8 @@ class GuardianMyPageServiceTest {
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianId(100L, 1L)).willReturn(true);
-        given(familyConnectionRepository.existsBySeniorIdAndGuardianIdAndIsLeaderTrue(100L, 1L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(true);
 
         // when & then

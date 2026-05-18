@@ -127,8 +127,8 @@ Cross-cutting concerns and shared infrastructure in `com.widyu.global`:
 
 - **`member`** - User management with Senior/Guardian roles
     - `Member` entity with `MemberType` enum (SENIOR/GUARDIAN)
-    - `SeniorProfile` with invite codes for family connections
-    - `FamilyConnection` links guardians to seniors
+    - `Family` (group entity) + `FamilyMembership` (guardian↔family, unique per guardian) + `SeniorProfile` (senior↔family via FK)
+    - One guardian belongs to exactly one family; one family can have multiple seniors and guardians
 
 - **`album`** - Photo/video sharing with social interactions
     - Album CRUD with media upload (S3)
@@ -262,9 +262,9 @@ Environment-specific YAML files:
     - Caregivers, grandparents, family members
     - Connect to seniors by entering invite code
 
-- **Family Connection**: `FamilyConnection` entity links guardian to `SeniorProfile`
-    - Validated via `@ValidateFamilyAccess` annotation on controller methods
-    - Guardians can only access seniors they're connected to
+- **Family Access**: `FamilyMembership` links guardian to `Family`; `SeniorProfile.family` FK links senior to `Family`
+    - Validated via `@ValidateFamilyAccess` annotation — JPQL cross-join checks guardian's family contains the senior
+    - Guardians can only access seniors in the same family
 
 ### Album System
 - **Content Types**: Photos and videos with thumbnail generation (FFmpeg)

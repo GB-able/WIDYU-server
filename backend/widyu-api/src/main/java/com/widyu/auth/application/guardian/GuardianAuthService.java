@@ -27,6 +27,7 @@ import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.auth.dto.response.UserProfile;
 import com.widyu.member.Member;
 import com.widyu.member.SocialAccount;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +48,7 @@ public class GuardianAuthService {
     private final MemberWithdrawService memberWithdrawService;
     private final LogoutService logoutService;
     private final MemberUtil memberUtil;
+    private final FamilyMembershipRepository familyMembershipRepository;
 
     @Transactional
     public void sendSmsVerification(final SmsVerificationRequest request) {
@@ -163,9 +165,7 @@ public class GuardianAuthService {
     }
 
     private boolean hasParentProfiles(Member member) {
-        // familyConnections 확인 (시니어와의 연결 여부)
-        return member.getFamilyConnections() != null &&
-                !member.getFamilyConnections().isEmpty();
+        return familyMembershipRepository.findByGuardianId(member.getId()).isPresent();
     }
 
     @Transactional(readOnly = true)

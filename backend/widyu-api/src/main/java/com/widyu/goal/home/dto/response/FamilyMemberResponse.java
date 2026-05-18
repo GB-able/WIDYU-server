@@ -1,17 +1,17 @@
 package com.widyu.goal.home.dto.response;
 
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.SeniorProfile;
 
 public record FamilyMemberResponse(
         Long memberId,
         String name,
         String profileImage
 ) {
-    public static FamilyMemberResponse from(FamilyConnection familyConnection) {
+    public static FamilyMemberResponse from(SeniorProfile seniorProfile) {
         return new FamilyMemberResponse(
-                familyConnection.getSenior().getMember().getId(),
-                familyConnection.getSenior().getMember().getName(),
-                familyConnection.getSenior().getMember().getProfileImage()
+                seniorProfile.getMember().getId(),
+                seniorProfile.getMember().getName(),
+                seniorProfile.getMember().getProfileImage()
         );
     }
 }

@@ -76,7 +76,7 @@ public interface HealthScheduleDocs {
 
     @Operation(
             summary = "보호자가 시니어 건강 일정 생성",
-            description = "보호자가 연결된 시니어의 건강 일정을 생성합니다. FamilyConnection 검증을 통해 권한을 확인합니다."
+            description = "보호자가 연결된 시니어의 건강 일정을 생성합니다. FamilyMembership 검증을 통해 권한을 확인합니다."
     )
     @RequestBody(
             description = "건강 일정 생성 정보",

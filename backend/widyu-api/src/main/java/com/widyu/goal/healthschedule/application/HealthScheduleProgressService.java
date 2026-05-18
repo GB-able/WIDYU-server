@@ -9,7 +9,7 @@ import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,7 +26,7 @@ public class HealthScheduleProgressService {
 
     private final HealthScheduleRepository healthScheduleRepository;
     private final SeniorProfileRepository seniorProfileRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final MemberUtil memberUtil;
 
     /**
@@ -57,8 +57,8 @@ public class HealthScheduleProgressService {
             SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(healthSchedule.getMember().getId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
-            boolean isConnected = familyConnectionRepository.existsBySeniorIdAndGuardianId(
-                    seniorProfile.getId(), currentMember.getId()
+            boolean isConnected = familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(
+                    currentMember.getId(), seniorProfile.getId()
             );
 
             if (!isConnected) {
