@@ -484,6 +484,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         FamilyConnection guardianConnection = mock(FamilyConnection.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Member seniorMember = mock(Member.class);
         FamilyConnection leaderConnection = mock(FamilyConnection.class);
         FamilyConnection memberConnection = mock(FamilyConnection.class);
         Member leaderGuardian = mock(Member.class);
@@ -495,17 +496,23 @@ class GuardianMyPageServiceTest {
                 .willReturn(List.of(guardianConnection));
         given(guardianConnection.getSenior()).willReturn(seniorProfile);
         given(seniorProfile.getId()).willReturn(100L);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(seniorMember.getId()).willReturn(99L);
+        given(seniorMember.getName()).willReturn("부모님");
+        given(seniorMember.getProfileImage()).willReturn("senior.png");
         given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
                 .willReturn(List.of(leaderConnection, memberConnection));
 
         given(leaderConnection.getGuardian()).willReturn(leaderGuardian);
         given(leaderGuardian.getId()).willReturn(1L);
         given(leaderGuardian.getName()).willReturn("한채희");
+        given(leaderGuardian.getProfileImage()).willReturn(null);
         given(leaderConnection.isLeader()).willReturn(true);
 
         given(memberConnection.getGuardian()).willReturn(memberGuardian);
         given(memberGuardian.getId()).willReturn(2L);
         given(memberGuardian.getName()).willReturn("한토마");
+        given(memberGuardian.getProfileImage()).willReturn(null);
         given(memberConnection.isLeader()).willReturn(false);
 
         // when
@@ -513,7 +520,11 @@ class GuardianMyPageServiceTest {
 
         // then
         assertThat(response.isCurrentUserLeader()).isTrue();
-        assertThat(response.members()).hasSize(2);
+        assertThat(response.members()).hasSize(3);
+        assertThat(response.members().get(0).isSenior()).isTrue();
+        assertThat(response.members().get(0).name()).isEqualTo("부모님");
+        assertThat(response.members().get(1).isCurrent()).isTrue();
+        assertThat(response.members().get(2).isCurrent()).isFalse();
     }
 
     @Test
@@ -523,6 +534,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         FamilyConnection guardianConnection = mock(FamilyConnection.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Member seniorMember = mock(Member.class);
         FamilyConnection leaderConnection = mock(FamilyConnection.class);
         FamilyConnection memberConnection = mock(FamilyConnection.class);
         Member leaderGuardian = mock(Member.class);
@@ -534,17 +546,23 @@ class GuardianMyPageServiceTest {
                 .willReturn(List.of(guardianConnection));
         given(guardianConnection.getSenior()).willReturn(seniorProfile);
         given(seniorProfile.getId()).willReturn(100L);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(seniorMember.getId()).willReturn(99L);
+        given(seniorMember.getName()).willReturn("부모님");
+        given(seniorMember.getProfileImage()).willReturn("senior.png");
         given(familyConnectionRepository.findAllBySeniorIdWithGuardian(100L))
                 .willReturn(List.of(leaderConnection, memberConnection));
 
         given(leaderConnection.getGuardian()).willReturn(leaderGuardian);
         given(leaderGuardian.getId()).willReturn(1L);
         given(leaderGuardian.getName()).willReturn("한채희");
+        given(leaderGuardian.getProfileImage()).willReturn(null);
         given(leaderConnection.isLeader()).willReturn(true);
 
         given(memberConnection.getGuardian()).willReturn(memberGuardian);
         given(memberGuardian.getId()).willReturn(2L);
         given(memberGuardian.getName()).willReturn("한토마");
+        given(memberGuardian.getProfileImage()).willReturn(null);
         given(memberConnection.isLeader()).willReturn(false);
 
         // when
@@ -552,9 +570,13 @@ class GuardianMyPageServiceTest {
 
         // then
         assertThat(response.isCurrentUserLeader()).isFalse();
-        assertThat(response.members()).hasSize(2);
-        assertThat(response.members().get(0).name()).isEqualTo("한채희");
-        assertThat(response.members().get(1).name()).isEqualTo("한토마");
+        assertThat(response.members()).hasSize(3);
+        assertThat(response.members().get(0).isSenior()).isTrue();
+        assertThat(response.members().get(0).name()).isEqualTo("부모님");
+        assertThat(response.members().get(1).name()).isEqualTo("한채희");
+        assertThat(response.members().get(1).isCurrent()).isFalse();
+        assertThat(response.members().get(2).name()).isEqualTo("한토마");
+        assertThat(response.members().get(2).isCurrent()).isTrue();
     }
 
     @Test

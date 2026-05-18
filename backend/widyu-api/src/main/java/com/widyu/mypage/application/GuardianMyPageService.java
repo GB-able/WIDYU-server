@@ -130,12 +130,12 @@ public class GuardianMyPageService {
         if (guardianConnections.isEmpty()) {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다.");
         }
-        Long seniorProfileId = guardianConnections.get(0).getSenior().getId();
+        SeniorProfile seniorProfile = guardianConnections.get(0).getSenior();
 
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorIdWithGuardian(seniorProfileId);
+        List<FamilyConnection> allConnections = familyConnectionRepository
+                .findAllBySeniorIdWithGuardian(seniorProfile.getId());
 
-        return FamilyMemberListResponse.of(connections, guardian.getId());
+        return FamilyMemberListResponse.of(allConnections, seniorProfile, guardian.getId());
     }
 
     @Transactional
