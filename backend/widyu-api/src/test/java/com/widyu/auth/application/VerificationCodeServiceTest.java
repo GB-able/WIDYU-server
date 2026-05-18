@@ -119,7 +119,8 @@ class VerificationCodeServiceTest {
 
         // when
         assertThatThrownBy(() -> verificationCodeService.verifyAndIssueTemporaryToken(phone, "000000"))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SMS_VERIFICATION_CODE_MISMATCH);
 
         // then
         verify(temporaryMemberRepository, never()).save(any());
