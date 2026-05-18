@@ -4,11 +4,11 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -33,7 +33,7 @@ public class SeniorMyPageService {
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
     private final PointHistoryRepository pointHistoryRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
 
     public SeniorInfoResponse getSeniorInfo() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
@@ -50,7 +50,7 @@ public class SeniorMyPageService {
     public FamilyCodeResponse getFamilyCode() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
-        return FamilyCodeResponse.of(seniorProfile.getFamilyCode());
+        return FamilyCodeResponse.of(seniorProfile.getFamily().getFamilyCode());
     }
 
     public SeniorProfileDetailResponse getProfileDetail() {
@@ -89,10 +89,10 @@ public class SeniorMyPageService {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
 
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorIdWithGuardian(seniorProfile.getId());
+        List<FamilyMembership> memberships = familyMembershipRepository
+                .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
 
-        return EmergencyContactResponse.of(connections);
+        return EmergencyContactResponse.of(memberships);
     }
 
     @Transactional
@@ -100,15 +100,15 @@ public class SeniorMyPageService {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
 
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorIdWithGuardian(seniorProfile.getId());
+        List<FamilyMembership> memberships = familyMembershipRepository
+                .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
 
-        boolean guardianFound = connections.stream()
-                .anyMatch(c -> c.getGuardian().getId().equals(guardianId));
+        boolean guardianFound = memberships.stream()
+                .anyMatch(m -> m.getGuardian().getId().equals(guardianId));
         if (!guardianFound) {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다.");
         }
 
-        connections.forEach(c -> c.setRepresentative(c.getGuardian().getId().equals(guardianId)));
+        memberships.forEach(m -> m.setRepresentative(m.getGuardian().getId().equals(guardianId)));
     }
 }

@@ -1,6 +1,6 @@
 package com.widyu.member.dto.response;
 
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 
@@ -23,19 +23,19 @@ public record SeniorProfileResponse(
             String profileImage,
             String nickname
     ) {
-        public static GuardianInfo from(FamilyConnection connection) {
-            Member guardian = connection.getGuardian();
+        public static GuardianInfo from(FamilyMembership membership) {
+            Member guardian = membership.getGuardian();
             return new GuardianInfo(
                     guardian.getId(),
                     guardian.getName(),
                     guardian.getProfileImage(),
-                    connection.getNickname()
+                    membership.getNickname()
             );
         }
     }
 
-    public static SeniorProfileResponse from(SeniorProfile seniorProfile) {
-        List<GuardianInfo> guardianInfos = seniorProfile.getFamilyConnections().stream()
+    public static SeniorProfileResponse from(SeniorProfile seniorProfile, List<FamilyMembership> memberships) {
+        List<GuardianInfo> guardianInfos = memberships.stream()
                 .map(GuardianInfo::from)
                 .toList();
 

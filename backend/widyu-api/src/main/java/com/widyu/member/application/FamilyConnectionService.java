@@ -1,12 +1,14 @@
 package com.widyu.member.application;
 
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.dto.request.FamilyJoinRequest;
 import com.widyu.member.dto.response.FamilyJoinResponse;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.dto.request.FamilyJoinRequest;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -16,14 +18,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FamilyConnectionService {
 
     private final MemberUtil memberUtil;
+    private final FamilyRepository familyRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
 
     @Transactional
     public FamilyJoinResponse joinFamily(FamilyJoinRequest request) {
@@ -33,17 +38,22 @@ public class FamilyConnectionService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "보호자 회원만 초대코드로 가족에 참여할 수 있습니다.");
         }
 
-        SeniorProfile seniorProfile = seniorProfileRepository.findByFamilyCode(request.familyCode())
+        Family family = familyRepository.findByFamilyCode(request.familyCode())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_NOT_FOUND, request.familyCode()));
 
-        if (familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorProfile.getId(), currentMember.getId())) {
-            throw new BusinessException(ErrorCode.ALREADY_CONNECTED_TO_FAMILY, "이미 해당 가족에 연결되어 있습니다.");
+        if (familyMembershipRepository.findByGuardianId(currentMember.getId()).isPresent()) {
+            throw new BusinessException(ErrorCode.ALREADY_CONNECTED_TO_FAMILY, "이미 가족에 소속되어 있습니다.");
         }
 
-        FamilyConnection connection = FamilyConnection.createConnection(seniorProfile, currentMember);
-        familyConnectionRepository.save(connection);
+        boolean hasLeader = familyMembershipRepository.existsByFamilyIdAndIsLeaderTrue(family.getId());
+        FamilyMembership membership = hasLeader
+                ? FamilyMembership.createMembership(family, currentMember)
+                : FamilyMembership.createLeaderMembership(family, currentMember);
+        familyMembershipRepository.save(membership);
 
-        log.info("가족 연결 완료: guardianId={}, seniorId={}", currentMember.getId(), seniorProfile.getId());
-        return FamilyJoinResponse.from(seniorProfile);
+        List<SeniorProfile> seniors = seniorProfileRepository.findAllByFamilyIdWithMember(family.getId());
+
+        log.info("가족 연결 완료: guardianId={}, familyId={}", currentMember.getId(), family.getId());
+        return FamilyJoinResponse.from(family, seniors);
     }
 }

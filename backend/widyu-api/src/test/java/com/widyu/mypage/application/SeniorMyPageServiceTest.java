@@ -12,14 +12,14 @@ import static org.mockito.Mockito.verify;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.PointHistory;
 import com.widyu.member.PointHistoryType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.PointHistoryRepository;
-import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.response.EmergencyContactResponse;
@@ -42,9 +42,8 @@ class SeniorMyPageServiceTest {
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
-    @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private PointHistoryRepository pointHistoryRepository;
-    @Mock private FamilyConnectionRepository familyConnectionRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
 
     @InjectMocks
     private SeniorMyPageService seniorMyPageService;
@@ -82,10 +81,12 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Family family = mock(Family.class);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getFamilyCode()).willReturn("AB12CD");
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getFamilyCode()).willReturn("AB12CD");
 
         // when
         FamilyCodeResponse response = seniorMyPageService.getFamilyCode();
@@ -240,16 +241,18 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection repConnection = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership repMembership = mock(FamilyMembership.class);
         Member guardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(1L))
-                .willReturn(List.of(repConnection));
-        given(repConnection.getGuardian()).willReturn(guardian);
-        given(repConnection.isRepresentative()).willReturn(true);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(1L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(1L))
+                .willReturn(List.of(repMembership));
+        given(repMembership.getGuardian()).willReturn(guardian);
+        given(repMembership.isRepresentative()).willReturn(true);
         given(guardian.getId()).willReturn(10L);
         given(guardian.getName()).willReturn("한토마");
         given(guardian.getPhoneNumber()).willReturn("01011112222");
@@ -269,16 +272,18 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection connection = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
         Member guardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(1L))
-                .willReturn(List.of(connection));
-        given(connection.getGuardian()).willReturn(guardian);
-        given(connection.isRepresentative()).willReturn(false);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(1L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(1L))
+                .willReturn(List.of(membership));
+        given(membership.getGuardian()).willReturn(guardian);
+        given(membership.isRepresentative()).willReturn(false);
         given(guardian.getId()).willReturn(10L);
         given(guardian.getName()).willReturn("한토마");
         given(guardian.getPhoneNumber()).willReturn("01011112222");
@@ -299,15 +304,17 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection target = mock(FamilyConnection.class);
-        FamilyConnection other = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership target = mock(FamilyMembership.class);
+        FamilyMembership other = mock(FamilyMembership.class);
         Member targetGuardian = mock(Member.class);
         Member otherGuardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(1L))
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(1L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(1L))
                 .willReturn(List.of(target, other));
         given(target.getGuardian()).willReturn(targetGuardian);
         given(targetGuardian.getId()).willReturn(10L);
@@ -328,15 +335,17 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
-        FamilyConnection connection = mock(FamilyConnection.class);
+        Family family = mock(Family.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
         Member guardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getId()).willReturn(1L);
-        given(familyConnectionRepository.findAllBySeniorIdWithGuardian(1L))
-                .willReturn(List.of(connection));
-        given(connection.getGuardian()).willReturn(guardian);
+        given(seniorProfile.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(1L);
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(1L))
+                .willReturn(List.of(membership));
+        given(membership.getGuardian()).willReturn(guardian);
         given(guardian.getId()).willReturn(20L);
 
         // when & then

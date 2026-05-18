@@ -15,13 +15,15 @@ import com.widyu.auth.dto.request.LocalGuardianSignupRequest;
 import com.widyu.auth.dto.response.CurrentMemberResponse;
 import com.widyu.auth.dto.response.LocalSignupResponse;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.LocalAccount;
 import com.widyu.member.Member;
 import com.widyu.member.MemberRole;
 import com.widyu.member.SocialAccount;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +43,7 @@ class GuardianAuthServiceTest {
     @Mock private MemberWithdrawService memberWithdrawService;
     @Mock private LogoutService logoutService;
     @Mock private MemberUtil memberUtil;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
 
     @InjectMocks
     private GuardianAuthService guardianAuthService;
@@ -78,12 +81,13 @@ class GuardianAuthServiceTest {
         // given
         Member currentMember = mock(Member.class);
         given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(currentMember.getId()).willReturn(1L);
 
         LocalAccount localAccount = mock(LocalAccount.class);
         given(localAccount.getEmail()).willReturn("test@test.com");
         given(currentMember.getLocalAccount()).willReturn(localAccount);
         given(currentMember.getSocialAccounts()).willReturn(List.of());
-        given(currentMember.getFamilyConnections()).willReturn(List.of());
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
         given(currentMember.getName()).willReturn("홍길동");
         given(currentMember.getPhoneNumber()).willReturn("01012341234");
 
@@ -102,6 +106,7 @@ class GuardianAuthServiceTest {
         // given
         Member currentMember = mock(Member.class);
         given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(currentMember.getId()).willReturn(1L);
 
         SocialAccount kakaoAccount = mock(SocialAccount.class);
         given(kakaoAccount.getProvider()).willReturn("kakao");
@@ -109,7 +114,7 @@ class GuardianAuthServiceTest {
 
         given(currentMember.getLocalAccount()).willReturn(null);
         given(currentMember.getSocialAccounts()).willReturn(List.of(kakaoAccount));
-        given(currentMember.getFamilyConnections()).willReturn(List.of());
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
         given(currentMember.getName()).willReturn("홍길동");
         given(currentMember.getPhoneNumber()).willReturn("01012341234");
 
@@ -128,11 +133,12 @@ class GuardianAuthServiceTest {
         // given
         Member currentMember = mock(Member.class);
         given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(currentMember.getId()).willReturn(1L);
 
-        FamilyConnection connection = mock(FamilyConnection.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
         given(currentMember.getLocalAccount()).willReturn(null);
         given(currentMember.getSocialAccounts()).willReturn(List.of());
-        given(currentMember.getFamilyConnections()).willReturn(List.of(connection));
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(currentMember.getName()).willReturn("홍길동");
         given(currentMember.getPhoneNumber()).willReturn("01012341234");
 

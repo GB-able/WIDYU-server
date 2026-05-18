@@ -16,8 +16,10 @@ import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.member.repository.MemberRepository;
-import com.widyu.member.repository.FamilyConnectionRepository;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.member.FamilyMembership;
+import com.widyu.member.SeniorProfile;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
@@ -53,7 +55,8 @@ public class FcmService {
     private final NotificationSettingService notificationSettingService;
     private final AlbumViewRepository albumViewRepository;
     private final MemberRepository memberRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
     private static final String API_URL = "https://fcm.googleapis.com/v1/projects/widyu-d384f/messages:send";
 
@@ -200,21 +203,27 @@ public class FcmService {
     public ToastResDto getToastNotification() {
         Member member = memberUtil.getCurrentMember();
 
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllByGuardianId(member.getId());
-        if (connections.isEmpty()) {
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(member.getId())
+                .orElse(null);
+        if (myMembership == null) {
+            return null;
+        }
+
+        List<SeniorProfile> seniors = seniorProfileRepository
+                .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+        if (seniors.isEmpty()) {
             return null;
         }
 
         int[] thresholds = {0, 2, 4, 6};
 
         for (int threshold : thresholds) {
-            for (FamilyConnection connection : connections) {
-                long unviewedCount = calculateUnviewedCount(member.getId(), connection);
+            for (SeniorProfile senior : seniors) {
+                long unviewedCount = calculateUnviewedCount(member.getId(), senior);
 
                 if ((threshold == 0 && unviewedCount == 0) ||
                     (threshold > 0 && unviewedCount > 0 && unviewedCount <= threshold)) {
-                    return createToastMessage(connection.getSenior().getMember().getName(), unviewedCount);
+                    return createToastMessage(senior.getMember().getName(), unviewedCount);
                 }
             }
         }
@@ -222,11 +231,9 @@ public class FcmService {
         return null;
     }
 
-    private long calculateUnviewedCount(Long guardianId, FamilyConnection connection) {
-        Long seniorMemberId = connection.getSenior().getMember().getId();
-        // 내가 올린 전체 앨범 수
+    private long calculateUnviewedCount(Long guardianId, SeniorProfile senior) {
+        Long seniorMemberId = senior.getMember().getId();
         long totalCount = albumViewRepository.countTotalAlbumsByParent(guardianId);
-        // 시니어가 내 앨범을 본 수
         long viewedCount = albumViewRepository.countViewedAlbumsByGuardianAndParent(seniorMemberId, guardianId);
 
         return totalCount - viewedCount;

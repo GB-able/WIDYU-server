@@ -9,7 +9,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.heart.dto.request.HeartMessageRequest;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ public class HeartMessageService {
 
     private final MemberUtil memberUtil;
     private final MemberRepository memberRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final FcmService fcmService;
 
     @Transactional
@@ -51,12 +51,12 @@ public class HeartMessageService {
     private void validateFamilyConnection(Member sender, Member receiver) {
         if (sender.getType() == MemberType.GUARDIAN && receiver.getType() == MemberType.SENIOR) {
             Long seniorProfileId = receiver.getSeniorProfile().getId();
-            if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorProfileId, sender.getId())) {
+            if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(sender.getId(), seniorProfileId)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
         } else if (sender.getType() == MemberType.SENIOR && receiver.getType() == MemberType.GUARDIAN) {
             Long seniorProfileId = sender.getSeniorProfile().getId();
-            if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorProfileId, receiver.getId())) {
+            if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(receiver.getId(), seniorProfileId)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
         } else {

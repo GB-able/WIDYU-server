@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.auth.dto.request.SeniorSignInRequest;
@@ -15,10 +16,13 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.List;
@@ -37,7 +41,8 @@ class SeniorAuthServiceTest {
 
     @Mock private MemberRepository memberRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
-    @Mock private FamilyConnectionRepository familyConnectionRepository;
+    @Mock private FamilyRepository familyRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private MemberUtil memberUtil;
 
@@ -59,11 +64,15 @@ class SeniorAuthServiceTest {
         Member seniorMember1 = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
         Member seniorMember2 = Member.createMember(MemberType.SENIOR, "할머니", "01033334444");
 
+        Family family = Family.createFamily("ABC123");
+        ReflectionTestUtils.setField(family, "id", 1L);
+
         given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(familyRepository.existsByFamilyCode(anyString())).willReturn(false);
+        given(familyRepository.save(any(Family.class))).willReturn(family);
         given(memberRepository.saveAll(anyList())).willReturn(List.of(seniorMember1, seniorMember2));
-        given(seniorProfileRepository.existsByFamilyCode(anyString())).willReturn(false);
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
-        given(familyConnectionRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         // when
         seniorAuthService.seniorSignUpBulk(requests);
@@ -71,7 +80,26 @@ class SeniorAuthServiceTest {
         // then
         verify(memberRepository).saveAll(anyList());
         verify(seniorProfileRepository).saveAll(anyList());
-        verify(familyConnectionRepository).saveAll(anyList());
+        verify(familyMembershipRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 가족에 소속된 보호자가 시니어 등록을 시도하면 BusinessException을 던진다")
+    void 이미_가족에_소속된_보호자가_시니어_등록_시_예외가_발생한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
+        ReflectionTestUtils.setField(guardian, "id", 1L);
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(mock(FamilyMembership.class)));
+
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", "01011112222", "서울", "101호", "1234567")
+        );
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_CONNECTED_TO_FAMILY);
     }
 
     @Test
@@ -109,8 +137,11 @@ class SeniorAuthServiceTest {
         Member seniorMember = Member.createMember(MemberType.SENIOR, "부모님", phone);
         ReflectionTestUtils.setField(seniorMember, "id", 2L);
 
+        Family family = Family.createFamily("ABC123");
+        ReflectionTestUtils.setField(family, "id", 1L);
+
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                seniorMember, "서울", "101호", inviteCode, "ABC123"
+                seniorMember, family, "서울", "101호", inviteCode
         );
         TokenPairResponse expectedToken = TokenPairResponse.of(2L, "access", "refresh");
 
@@ -145,8 +176,7 @@ class SeniorAuthServiceTest {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
         given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(memberRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
-        given(seniorProfileRepository.existsByFamilyCode(anyString())).willReturn(true);
+        given(familyRepository.existsByFamilyCode(anyString())).willReturn(true);
 
         List<SeniorSignUpRequest> requests = List.of(
                 new SeniorSignUpRequest("부모님", "01011112222", "서울", "101호", "1234567")
@@ -163,8 +193,12 @@ class SeniorAuthServiceTest {
     void 시니어_일괄_등록_시_요청_개수만큼_멤버가_생성된다() {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
+        Family family = Family.createFamily("XYZ789");
+        ReflectionTestUtils.setField(family, "id", 1L);
+
         given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(seniorProfileRepository.existsByFamilyCode(anyString())).willReturn(false);
+        given(familyRepository.existsByFamilyCode(anyString())).willReturn(false);
+        given(familyRepository.save(any(Family.class))).willReturn(family);
 
         List<SeniorSignUpRequest> requests = List.of(
                 new SeniorSignUpRequest("부모님", "01011112222", "서울", "101호", "1234567"),
@@ -177,7 +211,7 @@ class SeniorAuthServiceTest {
             return members;
         });
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
-        given(familyConnectionRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
         // when
         seniorAuthService.seniorSignUpBulk(requests);

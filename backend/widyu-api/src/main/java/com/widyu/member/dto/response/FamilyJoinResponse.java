@@ -1,17 +1,27 @@
 package com.widyu.member.dto.response;
 
+import com.widyu.member.Family;
 import com.widyu.member.SeniorProfile;
+import java.util.List;
 
 public record FamilyJoinResponse(
-        Long memberId,
-        String seniorName,
-        String seniorProfileImage
+        String familyCode,
+        List<SeniorInfo> seniors
 ) {
-    public static FamilyJoinResponse from(SeniorProfile seniorProfile) {
-        return new FamilyJoinResponse(
-                seniorProfile.getMember().getId(),
-                seniorProfile.getMember().getName(),
-                seniorProfile.getMember().getProfileImage()
-        );
+    public record SeniorInfo(
+            Long memberId,
+            String name,
+            String profileImage
+    ) {}
+
+    public static FamilyJoinResponse from(Family family, List<SeniorProfile> seniors) {
+        List<SeniorInfo> seniorInfos = seniors.stream()
+                .map(sp -> new SeniorInfo(
+                        sp.getMember().getId(),
+                        sp.getMember().getName(),
+                        sp.getMember().getProfileImage()
+                ))
+                .toList();
+        return new FamilyJoinResponse(family.getFamilyCode(), seniorInfos);
     }
 }

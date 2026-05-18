@@ -7,18 +7,18 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,7 +36,8 @@ public class SeniorAuthService {
 
     private final MemberRepository memberRepository;
     private final SeniorProfileRepository seniorProfileRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyRepository familyRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberUtil memberUtil;
 
@@ -46,14 +47,20 @@ public class SeniorAuthService {
 
         validateRequestsNotEmpty(requests);
 
+        if (familyMembershipRepository.findByGuardianId(guardian.getId()).isPresent()) {
+            throw new BusinessException(ErrorCode.ALREADY_CONNECTED_TO_FAMILY, "이미 가족에 소속되어 있습니다.");
+        }
+
+        Family family = createAndSaveFamily();
+
         List<Member> members = buildMembersFromRequests(requests);
         saveAllMembers(members);
 
-        List<SeniorProfile> profiles = buildProfilesFromRequests(requests, members);
+        List<SeniorProfile> profiles = buildProfilesFromRequests(requests, members, family);
         saveAllProfiles(profiles);
 
-        List<FamilyConnection> connections = buildConnectionsFromRequests(requests, profiles, guardian);
-        saveAllConnections(connections);
+        FamilyMembership leaderMembership = FamilyMembership.createLeaderMembership(family, guardian);
+        familyMembershipRepository.save(leaderMembership);
     }
 
     @Transactional
@@ -66,6 +73,12 @@ public class SeniorAuthService {
         if (requests == null || requests.isEmpty()) {
             throw new BusinessException(ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
         }
+    }
+
+    private Family createAndSaveFamily() {
+        String familyCode = generateUniqueFamilyCode();
+        Family family = Family.createFamily(familyCode);
+        return familyRepository.save(family);
     }
 
     private List<Member> buildMembersFromRequests(List<SeniorSignUpRequest> requests) {
@@ -82,30 +95,28 @@ public class SeniorAuthService {
         memberRepository.saveAll(members);
     }
 
-    private List<SeniorProfile> buildProfilesFromRequests(List<SeniorSignUpRequest> requests, List<Member> members) {
-        Set<String> usedCodesInBatch = new HashSet<>();
+    private List<SeniorProfile> buildProfilesFromRequests(List<SeniorSignUpRequest> requests,
+                                                           List<Member> members, Family family) {
         List<SeniorProfile> profiles = new ArrayList<>(requests.size());
         for (int i = 0; i < requests.size(); i++) {
             SeniorSignUpRequest req = requests.get(i);
             Member member = members.get(i);
-            String familyCode = generateUniqueFamilyCode(usedCodesInBatch);
-            usedCodesInBatch.add(familyCode);
             SeniorProfile profile = SeniorProfile.createSeniorProfile(
                     member,
+                    family,
                     req.address(),
                     req.detailAddress(),
-                    req.inviteCode(),
-                    familyCode
+                    req.inviteCode()
             );
             profiles.add(profile);
         }
         return profiles;
     }
 
-    private String generateUniqueFamilyCode(Set<String> usedInBatch) {
+    private String generateUniqueFamilyCode() {
         for (int attempt = 0; attempt < FAMILY_CODE_MAX_ATTEMPTS; attempt++) {
             String code = generateCode();
-            if (!usedInBatch.contains(code) && !seniorProfileRepository.existsByFamilyCode(code)) {
+            if (!familyRepository.existsByFamilyCode(code)) {
                 return code;
             }
         }
@@ -124,27 +135,6 @@ public class SeniorAuthService {
         seniorProfileRepository.saveAll(profiles);
     }
 
-    private List<FamilyConnection> buildConnectionsFromRequests(
-            List<SeniorSignUpRequest> requests,
-            List<SeniorProfile> profiles,
-            Member guardian) {
-        List<FamilyConnection> connections = new ArrayList<>(requests.size());
-        for (int i = 0; i < requests.size(); i++) {
-            SeniorProfile profile = profiles.get(i);
-
-            FamilyConnection connection = FamilyConnection.createLeaderConnection(
-                    profile,
-                    guardian
-            );
-            connections.add(connection);
-        }
-        return connections;
-    }
-
-    private void saveAllConnections(List<FamilyConnection> connections) {
-        familyConnectionRepository.saveAll(connections);
-    }
-
     private SeniorProfile findByInviteCodeAndPhoneNumber(String inviteCode, String phoneNumber) {
         return seniorProfileRepository.findByInviteCodeAndMemberPhoneNumber(inviteCode, phoneNumber)
                 .orElseThrow(() -> {
@@ -154,7 +144,6 @@ public class SeniorAuthService {
     }
 
     private TokenPairResponse generateTokenPairForMember(Member member) {
-        // 시니어는 초대코드로 로그인하므로 "senior"를 loginType으로 사용
         return jwtTokenProvider.generateTokenPair(member.getId(), member.getRole(), "senior");
     }
 }

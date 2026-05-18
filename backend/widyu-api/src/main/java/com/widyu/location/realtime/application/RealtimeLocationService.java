@@ -12,10 +12,10 @@ import com.widyu.location.realtime.dto.StayInfo;
 import com.widyu.location.realtime.dto.TrackedSeniorResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RealtimeLocationService {
 
     private final SeniorLocationRepository seniorLocationRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final ParentLocationRepository parentLocationRepository;
     private final SimpMessagingTemplate messagingTemplate;
@@ -119,17 +119,19 @@ public class RealtimeLocationService {
      * 보호자가 추적 가능한 시니어 목록 조회
      */
     public List<TrackedSeniorResponse> getTrackedSeniors(Long guardianId) {
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(guardianId)
+                .orElse(null);
 
-        // 가족 연결 정보 조회 (Senior와 Member join fetch)
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllByGuardianIdWithSeniorAndMember(guardianId);
+        if (myMembership == null) {
+            return List.of();
+        }
 
-        // DTO로 변환
-        List<TrackedSeniorResponse> seniors = connections.stream()
+        List<SeniorProfile> seniors = seniorProfileRepository
+                .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+
+        return seniors.stream()
                 .map(TrackedSeniorResponse::from)
                 .toList();
-
-        return seniors;
     }
 
     /**
@@ -143,10 +145,7 @@ public class RealtimeLocationService {
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
 
-        Long seniorId = seniorProfile.getId();
-
-        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
-        if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
+        if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(guardianId, seniorProfile.getId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
@@ -190,10 +189,7 @@ public class RealtimeLocationService {
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
 
-        Long seniorId = seniorProfile.getId();
-
-        // 권한 검증: 가족 연결 확인 (SeniorProfile.id로)
-        if (!familyConnectionRepository.existsBySeniorIdAndGuardianId(seniorId, guardianId)) {
+        if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(guardianId, seniorProfile.getId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 

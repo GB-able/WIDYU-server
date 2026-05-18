@@ -27,10 +27,12 @@
 
 ### `member` — 회원
 - `Member` 엔티티 + `MemberType` enum (SENIOR/GUARDIAN), `MemberRole` enum (ADMIN/USER/TEMPORARY)
-- `SeniorProfile`: 코드 2종 보유
-  - `inviteCode` (7자): 보호자가 시니어에 연결할 때 입력, 방장(시니어 본인)만 수정 가능
-  - `familyCode` (6자): 가족 코드 (별도 용도)
-- `FamilyConnection`: 보호자-시니어 연결
+- **가족 도메인 모델** (다중 시니어 지원):
+  - `Family`: 가족 그룹 엔티티. `familyCode` (6자) 보유. 시니어 등록 시 자동 생성
+  - `FamilyMembership`: 보호자-가족 연결. `isLeader`(방장), `isRepresentative`(대표 비상연락처), `nickname` 보유
+  - `SeniorProfile`: 시니어 프로필. `Family` FK로 소속 가족 참조. `inviteCode` (7자) 보유
+  - **핵심 제약**: 회원 1명은 가족 1개에만 소속 (시니어: `SeniorProfile.family` FK; 보호자: `FamilyMembership` unique)
+  - 가족 1개에 시니어 여러 명 + 보호자 여러 명 연결 가능
 - `PointHistory`: 포인트 적립(EARN) / 사용(USE) 내역 기록
 
 ### `mypage` — 마이페이지
@@ -162,9 +164,9 @@ spring:
 - Temporary Token: 회원가입 플로우 1회용, Redis `TemporaryMember`로 저장
 
 ### 회원 역할
-- **시니어(Senior)**: 앨범 생성, 포인트 관리, 7자리 초대코드로 보호자 초대 (UI에서는 "부모"로 표현)
-- **보호자(Guardian)**: 앨범 조회·상호작용, 포인트로 프리미엄 콘텐츠 잠금해제
-- **FamilyConnection**: 보호자-`SeniorProfile` 연결 — `@ValidateFamilyAccess`로 서버 검증
+- **시니어(Senior)**: 앨범 생성, 포인트 관리, 7자리 초대코드로 보호자 초대 (UI에서는 "부모"로 표현). `SeniorProfile.family` FK로 가족 소속
+- **보호자(Guardian)**: 앨범 조회·상호작용, 포인트로 프리미엄 콘텐츠 잠금해제. `FamilyMembership`으로 가족 소속
+- **가족 접근 검증**: `@ValidateFamilyAccess` AOP — `FamilyMembership` ↔ `SeniorProfile.family` JPQL 크로스 조인으로 보호자의 시니어 접근 권한 확인
 
 ### 앨범 시스템
 

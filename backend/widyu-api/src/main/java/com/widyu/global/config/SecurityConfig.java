@@ -49,6 +49,8 @@ public class SecurityConfig {
                                         ).permitAll()
                                         // Actuator 엔드포인트 허용 (Prometheus 메트릭 수집)
                                         .requestMatchers("/actuator/**").permitAll()
+                                        // 관리자 API
+                                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                                         // 그 외 모든 요청은 인증 필요
                                         .anyRequest()
                                         .authenticated())

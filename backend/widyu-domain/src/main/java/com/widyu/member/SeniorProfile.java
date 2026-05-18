@@ -1,7 +1,6 @@
 package com.widyu.member;
 
 import com.widyu.global.entity.BaseTimeEntity;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -9,11 +8,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,6 +30,10 @@ public class SeniorProfile extends BaseTimeEntity {
     @JoinColumn(name = "member_id", nullable = false, unique = true)
     private Member member;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "family_id", nullable = false)
+    private Family family;
+
     private String address;
 
     @Column(name = "detail_address")
@@ -41,38 +42,32 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(name = "invite_code", nullable = false, unique = true, length = 7)
     private String inviteCode;
 
-    @Column(name = "family_code", nullable = false, unique = true, length = 6)
-    private String familyCode;
-
     @Column(nullable = false)
     private Long points = 0L;
 
     @Column(name = "default_walk_goal")
     private Integer defaultWalkGoal;
 
-    @OneToMany(mappedBy = "senior", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FamilyConnection> familyConnections = new ArrayList<>();
-
     @Builder(access = AccessLevel.PRIVATE)
-    private SeniorProfile(Member member, String address, String detailAddress,
-                          String inviteCode, String familyCode, Long points, Integer defaultWalkGoal) {
+    private SeniorProfile(Member member, Family family, String address, String detailAddress,
+                          String inviteCode, Long points, Integer defaultWalkGoal) {
         this.member = member;
+        this.family = family;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
-        this.familyCode = familyCode;
         this.points = points;
         this.defaultWalkGoal = defaultWalkGoal;
     }
 
-    public static SeniorProfile createSeniorProfile(Member member, String address,
-                                                    String detailAddress, String inviteCode, String familyCode) {
+    public static SeniorProfile createSeniorProfile(Member member, Family family, String address,
+                                                    String detailAddress, String inviteCode) {
         return SeniorProfile.builder()
                 .member(member)
+                .family(family)
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
-                .familyCode(familyCode)
                 .points(100L)
                 .defaultWalkGoal(null)
                 .build();

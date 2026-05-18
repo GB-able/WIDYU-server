@@ -208,7 +208,7 @@ assertThatThrownBy(() -> service.someMethod(invalidArg))
 
 5. **크로스 도메인 로직**: `@EventListener` 이벤트 방식으로 도메인 간 결합 제거
 
-6. **인가**: `@ValidateFamilyAccess`로 가디언-시니어 접근 제어 (자동 family connection 검증)
+6. **인가**: `@ValidateFamilyAccess`로 가디언-시니어 접근 제어 (FamilyMembership ↔ SeniorProfile.family 크로스 조인으로 자동 검증)
 
 7. **임시 데이터**: Redis `@RedisHash` + `@TimeToLive` 사용 (인증코드, 임시토큰, OAuth state 등)
 

@@ -1,6 +1,6 @@
 package com.widyu.mypage.dto.response;
 
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.SeniorProfile;
 import java.util.List;
 
 public record ConnectedSeniorResponse(
@@ -11,18 +11,18 @@ public record ConnectedSeniorResponse(
             String profileImage,
             String name
     ) {
-        public static SeniorItem from(FamilyConnection connection) {
+        public static SeniorItem from(SeniorProfile seniorProfile) {
             return new SeniorItem(
-                    connection.getSenior().getMember().getId(),
-                    connection.getSenior().getMember().getProfileImage(),
-                    connection.getSenior().getMember().getName()
+                    seniorProfile.getMember().getId(),
+                    seniorProfile.getMember().getProfileImage(),
+                    seniorProfile.getMember().getName()
             );
         }
     }
 
-    public static ConnectedSeniorResponse from(List<FamilyConnection> connections) {
+    public static ConnectedSeniorResponse from(List<SeniorProfile> seniors) {
         return new ConnectedSeniorResponse(
-                connections.stream().map(SeniorItem::from).toList()
+                seniors.stream().map(SeniorItem::from).toList()
         );
     }
 }

@@ -6,10 +6,10 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +25,8 @@ public class SafeZoneNotificationListener {
 
     private final FcmService fcmService;
     private final MemberRepository memberRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
 
-    /**
-     * 시니어가 안전구역을 이탈했을 때 보호자들에게 알림 전송
-     */
     @EventListener
     public void handleSafeZoneExit(SafeZoneExitEvent event) {
         Member seniorMember = memberRepository.findById(event.seniorMemberId())
@@ -41,16 +38,17 @@ public class SafeZoneNotificationListener {
             return;
         }
 
-        List<FamilyConnection> connections = familyConnectionRepository.findAllBySeniorId(seniorProfile.getId());
-        if (connections.isEmpty()) {
-            log.debug("안전구역 이탈 알림 스킵: 연결된 보호자가 없습니다. seniorId={}", seniorProfile.getId());
+        List<FamilyMembership> memberships = familyMembershipRepository
+                .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
+        if (memberships.isEmpty()) {
+            log.debug("안전구역 이탈 알림 스킵: 연결된 보호자가 없습니다. familyId={}", seniorProfile.getFamily().getId());
             return;
         }
 
         String title = seniorMember.getName() + "님이 안전구역을 벗어났어요";
         String content = "현재 위치를 확인해주세요.";
 
-        for (FamilyConnection connection : connections) {
+        for (FamilyMembership membership : memberships) {
             FcmSendDto dto = FcmSendDto.builder()
                     .title(title)
                     .content(content)
@@ -59,9 +57,9 @@ public class SafeZoneNotificationListener {
                     .image(seniorMember.getProfileImage())
                     .build();
 
-            fcmService.sendMessageToUser(connection.getGuardian().getId(), dto);
+            fcmService.sendMessageToUser(membership.getGuardian().getId(), dto);
             log.info("안전구역 이탈 알림 전송 - seniorMemberId: {}, guardianMemberId: {}",
-                    seniorMember.getId(), connection.getGuardian().getId());
+                    seniorMember.getId(), membership.getGuardian().getId());
         }
     }
 }

@@ -6,8 +6,8 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.global.entity.Status;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
-import com.widyu.member.FamilyConnection;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.FamilyMembership;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.medicine.MedicineSchedule;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,7 +30,7 @@ public class MedicineScheduleNotificationListener {
     private final FcmService fcmService;
     private final MedicineScheduleRepository medicineScheduleRepository;
     private final MedicationProofRepository medicationProofRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
 
     /**
      * 매 분마다 실행하여 의약품 복용 알림 발송
@@ -142,21 +142,20 @@ public class MedicineScheduleNotificationListener {
             return;
         }
 
-        Long seniorProfileId = schedule.getMember().getSeniorProfile().getId();
+        Long familyId = schedule.getMember().getSeniorProfile().getFamily().getId();
 
-        // 연결된 보호자 조회
-        List<FamilyConnection> connections = familyConnectionRepository
-                .findAllBySeniorId(seniorProfileId);
+        List<FamilyMembership> memberships = familyMembershipRepository
+                .findAllByFamilyIdWithGuardian(familyId);
 
-        if (connections.isEmpty()) {
-            log.debug("보호자 알림 스킵: 연결된 보호자가 없습니다. seniorId={}", seniorProfileId);
+        if (memberships.isEmpty()) {
+            log.debug("보호자 알림 스킵: 연결된 보호자가 없습니다. familyId={}", familyId);
             return;
         }
 
         String title = schedule.getMember().getName() + "님이 약을 복용하지 않았어요";
         String content = "3회 알림에도 복용 인증을 하지 않았습니다. 확인해주세요.";
 
-        for (FamilyConnection connection : connections) {
+        for (FamilyMembership membership : memberships) {
             FcmSendDto dto = new FcmSendDto(
                     title,
                     content,
@@ -165,10 +164,10 @@ public class MedicineScheduleNotificationListener {
                     schedule.getMember().getProfileImage()
             );
 
-            fcmService.sendMessageToUser(connection.getGuardian().getId(), dto);
+            fcmService.sendMessageToUser(membership.getGuardian().getId(), dto);
 
-            log.info("보호자 미인증 알림 발송: seniorId={}, guardianId={}, scheduleId={}, alarmTime={}",
-                    seniorMemberId, connection.getGuardian().getId(),
+            log.info("보호자 미인증 알림 발송: seniorMemberId={}, guardianId={}, scheduleId={}, alarmTime={}",
+                    seniorMemberId, membership.getGuardian().getId(),
                     schedule.getId(), schedule.getAlarmTime());
         }
     }

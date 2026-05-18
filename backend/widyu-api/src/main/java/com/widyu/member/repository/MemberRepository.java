@@ -1,6 +1,8 @@
 package com.widyu.member.repository;
 
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -12,4 +14,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, MemberRep
     Optional<Member> findByPhoneNumberAndNameAndLocalAccount_Email(String phoneNumber, String name, String email);
     Optional<Member> findBySocialAccounts_Email(String email);
     Optional<Member> findBySocialAccounts_EmailAndSocialAccounts_Provider(String email, String provider);
+    long countByType(MemberType type);
+    long countByCreatedAtAfter(LocalDateTime dateTime);
 }

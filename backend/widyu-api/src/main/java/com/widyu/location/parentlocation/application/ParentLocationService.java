@@ -9,10 +9,12 @@ import com.widyu.location.parentlocation.dto.response.LocationInfo;
 import com.widyu.location.parentlocation.dto.response.ParentLocationResponse;
 import com.widyu.location.parentlocation.dto.response.SeniorWithLocationsResponse;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
-import com.widyu.member.FamilyConnection;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
-import com.widyu.member.repository.FamilyConnectionRepository;
+import com.widyu.member.SeniorProfile;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,18 +29,26 @@ public class ParentLocationService {
 
     private final ParentLocationRepository parentLocationRepository;
     private final MemberRepository memberRepository;
-    private final FamilyConnectionRepository familyConnectionRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
 
     public List<SeniorWithLocationsResponse> findAllByGuardianId() {
         Long guardianId = memberUtil.getCurrentMember().getId();
 
-        List<FamilyConnection> familyConnections = familyConnectionRepository
-                .findAllByGuardianIdWithSeniorAndMember(guardianId);
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(guardianId)
+                .orElse(null);
 
-        return familyConnections.stream()
-                .map(fc -> {
-                    Member senior = fc.getSenior().getMember();
+        if (myMembership == null) {
+            return List.of();
+        }
+
+        List<SeniorProfile> seniors = seniorProfileRepository
+                .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+
+        return seniors.stream()
+                .map(sp -> {
+                    Member senior = sp.getMember();
                     List<LocationInfo> locations = parentLocationRepository.findAllByMember(senior)
                             .stream()
                             .map(LocationInfo::of)

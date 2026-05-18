@@ -19,19 +19,19 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "family_connection")
-public class FamilyConnection extends BaseTimeEntity {
+@Table(name = "family_membership")
+public class FamilyMembership extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "senior_id", nullable = false)
-    private SeniorProfile senior;
+    @JoinColumn(name = "family_id", nullable = false)
+    private Family family;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "guardian_id", nullable = false)
+    @JoinColumn(name = "guardian_id", nullable = false, unique = true)
     private Member guardian;
 
     @Column(name = "connected_at")
@@ -46,9 +46,9 @@ public class FamilyConnection extends BaseTimeEntity {
     private boolean isLeader = false;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private FamilyConnection(SeniorProfile senior, Member guardian, LocalDateTime connectedAt, String nickname,
-                             boolean isRepresentative, boolean isLeader) {
-        this.senior = senior;
+    private FamilyMembership(Family family, Member guardian, LocalDateTime connectedAt, String nickname,
+                              boolean isRepresentative, boolean isLeader) {
+        this.family = family;
         this.guardian = guardian;
         this.connectedAt = connectedAt;
         this.nickname = nickname;
@@ -56,9 +56,9 @@ public class FamilyConnection extends BaseTimeEntity {
         this.isLeader = isLeader;
     }
 
-    public static FamilyConnection createConnection(SeniorProfile senior, Member guardian) {
-        return FamilyConnection.builder()
-                .senior(senior)
+    public static FamilyMembership createMembership(Family family, Member guardian) {
+        return FamilyMembership.builder()
+                .family(family)
                 .guardian(guardian)
                 .connectedAt(LocalDateTime.now())
                 .isRepresentative(false)
@@ -66,9 +66,9 @@ public class FamilyConnection extends BaseTimeEntity {
                 .build();
     }
 
-    public static FamilyConnection createLeaderConnection(SeniorProfile senior, Member guardian) {
-        return FamilyConnection.builder()
-                .senior(senior)
+    public static FamilyMembership createLeaderMembership(Family family, Member guardian) {
+        return FamilyMembership.builder()
+                .family(family)
                 .guardian(guardian)
                 .connectedAt(LocalDateTime.now())
                 .isRepresentative(false)
