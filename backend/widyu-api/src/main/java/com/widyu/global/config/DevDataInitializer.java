@@ -41,9 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
  * 보호자 로그인: POST /api/v1/auth/guardians/sign-in/local  { email, password }
  * 시니어 로그인:  POST /api/v1/auth/seniors/sign-in          { inviteCode, phoneNumber }
  *
- * 관리자 로그인: POST /api/v1/auth/guardians/sign-in/local  { email, password }
- *   admin@widyu.dev  Test1234!
- *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │  가족 A (familyCode: AAAA01)                                             │
  * │  보호자A1  test_guardian_a1@widyu.dev  Test1234!  leader / representative │
@@ -64,7 +61,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class DevDataInitializer implements CommandLineRunner {
 
     private static final String SEED_MARKER_EMAIL = "test_guardian_a1@widyu.dev";
-    private static final String ADMIN_EMAIL = "admin@widyu.dev";
     private static final String DEFAULT_PASSWORD = "Test1234!";
 
     private final MemberRepository memberRepository;
@@ -82,12 +78,6 @@ public class DevDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        String encodedPassword = passwordEncoder.encode(DEFAULT_PASSWORD);
-
-        if (!localAccountRepository.existsByEmail(ADMIN_EMAIL)) {
-            seedAdmin(encodedPassword);
-        }
-
         if (localAccountRepository.existsByEmail(SEED_MARKER_EMAIL)) {
             if (albumRepository.count() == 0) {
                 log.info("[DevDataInitializer] 회원 데이터는 있으나 샘플 데이터 누락 — 보충합니다.");
@@ -99,6 +89,7 @@ public class DevDataInitializer implements CommandLineRunner {
         }
 
         log.info("[DevDataInitializer] 시드 데이터 초기화 시작...");
+        String encodedPassword = passwordEncoder.encode(DEFAULT_PASSWORD);
 
         List<Member> familyAseniors = seedFamilyA(encodedPassword);
         List<Member> familyBseniors = seedFamilyB(encodedPassword);
@@ -143,14 +134,6 @@ public class DevDataInitializer implements CommandLineRunner {
         seedAlbums(seniorA1, seniorA2, seniorB1);
 
         log.info("[DevDataInitializer] 샘플 데이터 보충 완료");
-    }
-
-    // ===== 관리자 =====
-
-    @Transactional
-    protected void seedAdmin(String encodedPassword) {
-        Member admin = memberRepository.save(Member.createAdminMember("관리자", "01000000000"));
-        localAccountRepository.save(LocalAccount.createLocalAccount(admin, "admin@widyu.dev", encodedPassword));
     }
 
     // ===== 회원 / 가족 =====

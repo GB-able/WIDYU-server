@@ -90,16 +90,6 @@ public class Member extends BaseTimeEntity {
                 .build();
     }
 
-    public static Member createAdminMember(final String name, final String phoneNumber) {
-        return Member.builder()
-                .role(MemberRole.ADMIN)
-                .type(MemberType.GUARDIAN)
-                .name(name)
-                .phoneNumber(phoneNumber)
-                .status(Status.ACTIVE)
-                .build();
-    }
-
     public void markSocialAsNotFirst(String provider, String oauthId) {
         this.getSocialAccounts().stream()
                 .filter(sa -> provider.equals(sa.getProvider()) && oauthId.equals(sa.getOauthId()))
