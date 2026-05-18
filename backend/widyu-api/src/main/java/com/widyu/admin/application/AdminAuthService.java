@@ -1,0 +1,40 @@
+package com.widyu.admin.application;
+
+import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.member.LocalAccount;
+import com.widyu.member.Member;
+import com.widyu.member.MemberRole;
+import com.widyu.member.repository.LocalAccountRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AdminAuthService {
+
+    private final LocalAccountRepository localAccountRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Transactional(readOnly = true)
+    public TokenPairResponse login(String email, String password) {
+        LocalAccount localAccount = localAccountRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_EMAIL));
+
+        if (!passwordEncoder.matches(password, localAccount.getPassword())) {
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD);
+        }
+
+        Member member = localAccount.getMember();
+        if (member.getRole() != MemberRole.ADMIN) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        return jwtTokenProvider.generateTokenPair(member.getId(), member.getRole(), "local");
+    }
+}
