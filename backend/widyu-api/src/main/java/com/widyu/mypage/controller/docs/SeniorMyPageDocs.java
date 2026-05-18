@@ -79,5 +79,5 @@ public interface SeniorMyPageDocs {
             @ApiResponse(responseCode = "200", description = "대표 번호 변경 성공"),
             @ApiResponse(responseCode = "404", description = "가족 구성원을 찾을 수 없음")
     })
-    ApiResponseTemplate<Void> updateRepresentativeContact(Long guardianId);
+    ApiResponseTemplate<Void> updateRepresentativeContact(Long memberId);
 }

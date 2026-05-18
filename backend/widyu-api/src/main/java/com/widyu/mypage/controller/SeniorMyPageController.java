@@ -112,9 +112,9 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     }
 
     @Override
-    @PatchMapping("/emergency-contact/{guardianId}")
-    public ApiResponseTemplate<Void> updateRepresentativeContact(@PathVariable Long guardianId) {
-        seniorMyPageService.updateRepresentativeContact(guardianId);
+    @PatchMapping("/emergency-contact/{memberId}")
+    public ApiResponseTemplate<Void> updateRepresentativeContact(@PathVariable Long memberId) {
+        seniorMyPageService.updateRepresentativeContact(memberId);
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2009")
                 .message("대표 비상연락처 변경 성공")

@@ -65,9 +65,9 @@ public class GuardianMyPageService {
         return ConnectedSeniorResponse.from(seniors);
     }
 
-    public SeniorProfileForGuardianResponse getSeniorProfile(Long seniorId) {
+    public SeniorProfileForGuardianResponse getSeniorProfile(Long memberId) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         return SeniorProfileForGuardianResponse.of(seniorProfile.getMember(), seniorProfile);
     }
 
@@ -78,41 +78,41 @@ public class GuardianMyPageService {
     }
 
     @Transactional
-    public void updateSeniorPhone(Long seniorId, UpdatePhoneRequest request) {
+    public void updateSeniorPhone(Long memberId, UpdatePhoneRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         seniorProfile.getMember().updatePhoneNumber(request.phoneNumber());
     }
 
     @Transactional
-    public void updateSeniorAddress(Long seniorId, UpdateSeniorAddressRequest request) {
+    public void updateSeniorAddress(Long memberId, UpdateSeniorAddressRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         seniorProfile.updateAddress(request.address(), request.detailAddress());
     }
 
     @Transactional
-    public void updateSeniorName(Long seniorId, UpdateNameRequest request) {
+    public void updateSeniorName(Long memberId, UpdateNameRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         seniorProfile.getMember().updateName(request.name());
     }
 
     @Transactional
-    public void updateSeniorProfileImage(Long seniorId, MultipartFile image) {
+    public void updateSeniorProfileImage(Long memberId, MultipartFile image) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         MyPageProfileService.updateMemberProfileImage(s3Service, seniorProfile.getMember(), image);
     }
 
     @Transactional
-    public void updateSeniorInviteCode(Long seniorId, UpdateInviteCodeRequest request) {
+    public void updateSeniorInviteCode(Long memberId, UpdateInviteCodeRequest request) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다.");
@@ -132,43 +132,43 @@ public class GuardianMyPageService {
     }
 
     @Transactional
-    public void changeLeader(Long seniorId, Long targetGuardianId) {
+    public void changeLeader(Long targetMemberId) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(guardian.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다."));
 
-        if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(
-                guardian.getId(), seniorProfile.getId())) {
+        if (!myMembership.isLeader()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "방장만 방장을 변경할 수 있습니다.");
         }
 
         List<FamilyMembership> memberships = familyMembershipRepository
-                .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
+                .findAllByFamilyIdWithGuardian(myMembership.getFamily().getId());
 
         boolean targetFound = memberships.stream()
-                .anyMatch(m -> m.getGuardian().getId().equals(targetGuardianId));
+                .anyMatch(m -> m.getGuardian().getId().equals(targetMemberId));
         if (!targetFound) {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다.");
         }
 
-        memberships.forEach(m -> m.setLeader(m.getGuardian().getId().equals(targetGuardianId)));
+        memberships.forEach(m -> m.setLeader(m.getGuardian().getId().equals(targetMemberId)));
     }
 
     @Transactional
-    public void deleteFamilyMember(Long seniorId, Long targetGuardianId) {
+    public void deleteFamilyMember(Long targetMemberId) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
-        SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(seniorId, guardian.getId());
+        FamilyMembership myMembership = familyMembershipRepository.findByGuardianId(guardian.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다."));
 
-        if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(
-                guardian.getId(), seniorProfile.getId())) {
+        if (!myMembership.isLeader()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "방장만 멤버를 삭제할 수 있습니다.");
         }
 
-        if (guardian.getId().equals(targetGuardianId)) {
+        if (guardian.getId().equals(targetMemberId)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "본인을 삭제할 수 없습니다.");
         }
 
         FamilyMembership membership = familyMembershipRepository
-                .findByFamilyIdAndGuardianId(seniorProfile.getFamily().getId(), targetGuardianId)
+                .findByFamilyIdAndGuardianId(myMembership.getFamily().getId(), targetMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다."));
 
         familyMembershipRepository.delete(membership);
@@ -187,8 +187,8 @@ public class GuardianMyPageService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "연결된 가족이 없습니다."));
     }
 
-    private SeniorProfile getSeniorProfileWithAccessCheck(Long seniorMemberId, Long guardianId) {
-        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(seniorMemberId)
+    private SeniorProfile getSeniorProfileWithAccessCheck(Long memberId, Long guardianId) {
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
         if (!familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(guardianId, seniorProfile.getId())) {

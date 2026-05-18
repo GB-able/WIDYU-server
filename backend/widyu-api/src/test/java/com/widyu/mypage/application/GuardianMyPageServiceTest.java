@@ -603,7 +603,7 @@ class GuardianMyPageServiceTest {
     void 방장_변경() {
         // given
         Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
         Family family = mock(Family.class);
         FamilyMembership currentMembership = mock(FamilyMembership.class);
         FamilyMembership newMembership = mock(FamilyMembership.class);
@@ -612,22 +612,19 @@ class GuardianMyPageServiceTest {
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfile.getFamily()).willReturn(family);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
         given(family.getId()).willReturn(10L);
         given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
                 .willReturn(List.of(currentMembership, newMembership));
-
         given(currentMembership.getGuardian()).willReturn(currentGuardian);
         given(currentGuardian.getId()).willReturn(1L);
         given(newMembership.getGuardian()).willReturn(newGuardianMember);
         given(newGuardianMember.getId()).willReturn(2L);
 
         // when
-        guardianMyPageService.changeLeader(10L, 2L);
+        guardianMyPageService.changeLeader(2L);
 
         // then
         verify(newMembership).setLeader(true);
@@ -639,18 +636,16 @@ class GuardianMyPageServiceTest {
     void 방장_변경_가족_구성원이_아닌_경우() {
         // given
         Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
         Family family = mock(Family.class);
         FamilyMembership membership = mock(FamilyMembership.class);
         Member connectedGuardian = mock(Member.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfile.getFamily()).willReturn(family);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
         given(family.getId()).willReturn(10L);
         given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
                 .willReturn(List.of(membership));
@@ -658,7 +653,7 @@ class GuardianMyPageServiceTest {
         given(connectedGuardian.getId()).willReturn(2L);
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.changeLeader(10L, 999L))
+        assertThatThrownBy(() -> guardianMyPageService.changeLeader(999L))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -667,17 +662,15 @@ class GuardianMyPageServiceTest {
     void 방장_변경_방장이_아닌_경우() {
         // given
         Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.changeLeader(10L, 2L))
+        assertThatThrownBy(() -> guardianMyPageService.changeLeader(2L))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -688,17 +681,15 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_삭제_본인_삭제_시도() {
         // given
         Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.deleteFamilyMember(10L, 1L))
+        assertThatThrownBy(() -> guardianMyPageService.deleteFamilyMember(1L))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -707,23 +698,21 @@ class GuardianMyPageServiceTest {
     void 가족_멤버_삭제() {
         // given
         Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
         Family family = mock(Family.class);
         FamilyMembership targetMembership = mock(FamilyMembership.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfile.getFamily()).willReturn(family);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
         given(family.getId()).willReturn(10L);
         given(familyMembershipRepository.findByFamilyIdAndGuardianId(10L, 2L))
                 .willReturn(Optional.of(targetMembership));
 
         // when
-        guardianMyPageService.deleteFamilyMember(10L, 2L);
+        guardianMyPageService.deleteFamilyMember(2L);
 
         // then
         verify(familyMembershipRepository).delete(targetMembership);

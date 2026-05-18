@@ -96,7 +96,7 @@ public class SeniorMyPageService {
     }
 
     @Transactional
-    public void updateRepresentativeContact(Long guardianId) {
+    public void updateRepresentativeContact(Long memberId) {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
 
@@ -104,11 +104,11 @@ public class SeniorMyPageService {
                 .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
 
         boolean guardianFound = memberships.stream()
-                .anyMatch(m -> m.getGuardian().getId().equals(guardianId));
+                .anyMatch(m -> m.getGuardian().getId().equals(memberId));
         if (!guardianFound) {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다.");
         }
 
-        memberships.forEach(m -> m.setRepresentative(m.getGuardian().getId().equals(guardianId)));
+        memberships.forEach(m -> m.setRepresentative(m.getGuardian().getId().equals(memberId)));
     }
 }
