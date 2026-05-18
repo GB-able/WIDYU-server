@@ -84,7 +84,7 @@ class SeniorAuthServiceTest {
         // when & then
         assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(List.of()))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
     }
 
     @Test
@@ -97,7 +97,7 @@ class SeniorAuthServiceTest {
         // when & then
         assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(null))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
     }
 
     @Test
@@ -137,6 +137,25 @@ class SeniorAuthServiceTest {
                 new SeniorSignInRequest("0000000", "01011112222")))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("가족 코드 생성 최대 시도 초과 시 BusinessException을 던진다")
+    void 가족코드_생성_최대_시도_초과_시_예외가_발생한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(memberRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(seniorProfileRepository.existsByFamilyCode(anyString())).willReturn(true);
+
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", "01011112222", "서울", "101호", "1234567")
+        );
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FAMILY_CODE_GENERATION_FAILED);
     }
 
     @Test

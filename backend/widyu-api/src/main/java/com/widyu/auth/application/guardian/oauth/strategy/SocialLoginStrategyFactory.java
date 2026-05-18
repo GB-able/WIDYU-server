@@ -31,7 +31,7 @@ public class SocialLoginStrategyFactory {
         SocialLoginStrategy strategy = strategies.get(provider);
         if (strategy == null) {
             log.error("지원하지 않는 OAuth 제공자입니다: {}", provider);
-            throw new BusinessException(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER, provider.name());
+            throw new BusinessException(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER);
         }
         return strategy;
     }

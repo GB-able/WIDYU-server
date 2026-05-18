@@ -20,9 +20,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SeniorAuthService {
@@ -62,7 +64,7 @@ public class SeniorAuthService {
 
     private void validateRequestsNotEmpty(List<SeniorSignUpRequest> requests) {
         if (requests == null || requests.isEmpty()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, ": 요청 리스트가 비어 있습니다.");
+            throw new BusinessException(ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
         }
     }
 
@@ -107,7 +109,7 @@ public class SeniorAuthService {
                 return code;
             }
         }
-        throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "가족코드 생성에 실패했습니다.");
+        throw new BusinessException(ErrorCode.FAMILY_CODE_GENERATION_FAILED);
     }
 
     private String generateCode() {
@@ -145,7 +147,10 @@ public class SeniorAuthService {
 
     private SeniorProfile findByInviteCodeAndPhoneNumber(String inviteCode, String phoneNumber) {
         return seniorProfileRepository.findByInviteCodeAndMemberPhoneNumber(inviteCode, phoneNumber)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_CODE_NOT_FOUND, inviteCode));
+                .orElseThrow(() -> {
+                    log.warn("초대코드로 시니어 프로필을 찾을 수 없습니다. inviteCode: {}", inviteCode);
+                    return new BusinessException(ErrorCode.INVITE_CODE_NOT_FOUND);
+                });
     }
 
     private TokenPairResponse generateTokenPairForMember(Member member) {

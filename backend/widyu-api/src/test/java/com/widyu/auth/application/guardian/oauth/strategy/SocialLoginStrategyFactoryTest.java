@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.widyu.auth.OAuthProvider;
 import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -114,7 +115,8 @@ class SocialLoginStrategyFactoryTest {
 
         // when & then
         assertThatThrownBy(() -> factory.getStrategy("github"))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNSUPPORTED_OAUTH_PROVIDER);
     }
 
     @Test

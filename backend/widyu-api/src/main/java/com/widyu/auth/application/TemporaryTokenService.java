@@ -36,7 +36,7 @@ public class TemporaryTokenService {
 
     public TemporaryMember loadTemporaryMemberOrThrow(String temporaryMemberId) {
         return temporaryMemberRepository.findById(temporaryMemberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.TEMPORARY_MEMBER_NOT_FOUND));
     }
 
     public void deleteTemporaryMember(String temporaryMemberId) {

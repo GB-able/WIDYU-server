@@ -33,6 +33,8 @@ public enum ErrorCode {
     INVITE_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "PARENT_4040", "초대코드를 찾을 수 없습니다."),
     INVITE_CODE_DUPLICATED_IN_REQUEST(HttpStatus.BAD_REQUEST, "PARENT_4002", "요청 내 중복된 초대코드가 있습니다."),
     ALREADY_CONNECTED_TO_FAMILY(HttpStatus.BAD_REQUEST, "PARENT_4003", "이미 해당 가족에 연결되어 있습니다."),
+    SENIOR_SIGNUP_REQUEST_EMPTY(HttpStatus.BAD_REQUEST, "PARENT_4004", "시니어 등록 요청 목록이 비어 있습니다."),
+    FAMILY_CODE_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PARENT_5001", "가족 코드 생성에 실패했습니다."),
 
     // 문자 인증
     SMS_VERIFICATION_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "SMS_4040", "문자 인증 코드가 존재하지 않습니다."),
@@ -64,6 +66,7 @@ public enum ErrorCode {
     // 회원 관련
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4041", "회원을 찾을 수 없습니다."),
     SENIOR_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4042", "시니어 프로필을 찾을 수 없습니다."),
+    TEMPORARY_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_4041", "임시 회원을 찾을 수 없습니다."),
 
     // fcm 관련
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),

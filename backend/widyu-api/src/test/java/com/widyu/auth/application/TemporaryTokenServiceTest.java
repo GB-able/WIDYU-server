@@ -121,7 +121,7 @@ class TemporaryTokenServiceTest {
         // when & then
         assertThatThrownBy(() -> temporaryTokenService.loadTemporaryMemberOrThrow("non-existing-id"))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TEMPORARY_MEMBER_NOT_FOUND);
     }
 
     @Test
