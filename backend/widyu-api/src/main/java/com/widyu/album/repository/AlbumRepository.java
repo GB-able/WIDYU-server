@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -42,6 +43,16 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
 
     @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.member != :member AND a.id NOT IN (SELECT au.album.id FROM AlbumUnlock au WHERE au.member = :member)")
     long countLockedAlbumsForMember(@Param("member") Member member);
+
+    @Query("SELECT a FROM Album a JOIN FETCH a.member WHERE a.status != 'DELETED' ORDER BY a.id DESC")
+    Page<Album> findAllForAdmin(Pageable pageable);
+
+    long countByStatus(Status status);
+
+    List<Album> findTop3ByMemberIdAndStatusNotOrderByIdDesc(Long memberId, Status status);
+
+    @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :start AND a.createdAt < :end")
+    long countActiveAlbumsCreatedBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
     @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date ORDER BY a.createdAt DESC, a.id DESC")
     org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("date") LocalDate date, Pageable pageable);
