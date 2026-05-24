@@ -51,21 +51,17 @@ const IS_DEV = import.meta.env.MODE === 'development'
 export default function Sidebar() {
   return (
     <aside className="w-56 fixed top-12 left-0 bottom-0 bg-gray-900 flex flex-col overflow-y-auto">
-      {IS_DEV ? (
-        // 개발 서버: 개발자 툴만 표시
-        <nav className="flex-1 py-3">
-          <NavSection label="개발" items={devNav} />
-        </nav>
-      ) : (
-        // 운영 서버: 전체 메뉴
-        <>
-          <nav className="flex-1 py-3 space-y-1">
-            <NavSection items={mainNav} />
+      <nav className="flex-1 py-3 space-y-1">
+        <NavSection items={mainNav} />
+        <div className="mx-4 border-t border-gray-700" />
+        <NavSection label="서비스 관리" items={serviceNav} />
+        {IS_DEV && (
+          <>
             <div className="mx-4 border-t border-gray-700" />
-            <NavSection label="서비스 관리" items={serviceNav} />
-          </nav>
-        </>
-      )}
+            <NavSection label="개발" items={devNav} />
+          </>
+        )}
+      </nav>
     </aside>
   )
 }

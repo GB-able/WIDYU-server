@@ -34,26 +34,17 @@ export default function App() {
               </PrivateRoute>
             }
           >
-            {IS_DEV ? (
-              // 개발 서버: 개발자 툴만
-              <>
-                <Route index element={<Navigate to="/devtools" replace />} />
-                <Route path="devtools" element={<DevToolsPage />} />
-                <Route path="*" element={<Navigate to="/devtools" replace />} />
-              </>
-            ) : (
-              // 운영 서버: 전체 대시보드
-              <>
-                <Route index element={<DashboardPage />} />
-                <Route path="members" element={<MembersPage />} />
-                <Route path="families" element={<FamiliesPage />} />
-                <Route path="albums" element={<AlbumsPage />} />
-                <Route path="payments" element={<PaymentsPage />} />
-                <Route path="notifications" element={<NotificationsPage />} />
-                <Route path="logs" element={<LogsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </>
-            )}
+            <>
+              <Route index element={<DashboardPage />} />
+              <Route path="members" element={<MembersPage />} />
+              <Route path="families" element={<FamiliesPage />} />
+              <Route path="albums" element={<AlbumsPage />} />
+              <Route path="payments" element={<PaymentsPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="logs" element={<LogsPage />} />
+              {IS_DEV && <Route path="devtools" element={<DevToolsPage />} />}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
           </Route>
         </Routes>
       </BrowserRouter>
