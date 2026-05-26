@@ -18,6 +18,8 @@ spring:
       - medicine
       - actuator
       - ai
+      - juso
+
 admin:
   email: ${ADMIN_EMAIL}
   password: ${ADMIN_PASSWORD}

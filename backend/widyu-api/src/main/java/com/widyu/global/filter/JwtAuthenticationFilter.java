@@ -2,7 +2,9 @@ package com.widyu.global.filter;
 
 import static com.widyu.global.constant.SecurityConstant.TOKEN_PREFIX;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.auth.dto.AccessTokenDto;
+import com.widyu.global.error.BusinessException;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.member.MemberRole;
@@ -11,11 +13,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Optional;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +31,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doFilterInternal(
@@ -38,16 +43,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String accessTokenHeaderValue = extractAccessTokenFromHeader(request);
 
         if (accessTokenHeaderValue != null) {
-            AccessTokenDto accessTokenDto =
-                    jwtTokenProvider.retrieveAccessToken(accessTokenHeaderValue);
-            if (accessTokenDto != null) {
+            try {
+                AccessTokenDto accessTokenDto = jwtTokenProvider.retrieveAccessToken(accessTokenHeaderValue);
                 setAuthenticationToContext(accessTokenDto.memberId(), accessTokenDto.memberRole());
-                filterChain.doFilter(request, response);
+            } catch (BusinessException e) {
+                writeErrorResponse(response, e);
                 return;
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void writeErrorResponse(HttpServletResponse response, BusinessException e) throws IOException {
+        response.setStatus(e.getErrorCode().getHttpStatus().value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        objectMapper.writeValue(response.getWriter(), Map.of(
+                "code", e.getErrorCode().getCode(),
+                "message", e.getErrorCode().getMessage()
+        ));
     }
 
     private void setAuthenticationToContext(final Long memberId, final MemberRole memberRole) {

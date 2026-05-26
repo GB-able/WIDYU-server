@@ -72,6 +72,9 @@ services:
       # Medicine API (공통)
       MEDICINE_API_SERVICE_KEY: ${MEDICINE_API_KEY}
 
+      # Juso API (공통)
+      JUSO_CONFM_KEY: ${JUSO_CONFM_KEY}
+
       # Admin (공통)
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}

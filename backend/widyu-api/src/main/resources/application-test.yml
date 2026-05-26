@@ -42,3 +42,8 @@ logging:
 admin:
   email: test-admin@test.com
   password: test-admin-password
+
+juso:
+  api:
+    url: https://business.juso.go.kr/addrlink
+    confm-key: test-juso-key
