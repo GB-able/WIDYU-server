@@ -16,9 +16,12 @@ import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.LocalAccount;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.SocialAccount;
 import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
@@ -47,6 +50,8 @@ class GuardianMyPageServiceTest {
     @Mock private S3Service s3Service;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
+    @Mock private MemberRepository memberRepository;
+    @Mock private PointHistoryRepository pointHistoryRepository;
 
     @InjectMocks
     private GuardianMyPageService guardianMyPageService;
@@ -700,6 +705,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         FamilyMembership myMembership = mock(FamilyMembership.class);
         Family family = mock(Family.class);
+        Member targetMember = mock(Member.class);
         FamilyMembership targetMembership = mock(FamilyMembership.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -708,6 +714,8 @@ class GuardianMyPageServiceTest {
         given(myMembership.isLeader()).willReturn(true);
         given(myMembership.getFamily()).willReturn(family);
         given(family.getId()).willReturn(10L);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(targetMember));
+        given(targetMember.getType()).willReturn(MemberType.GUARDIAN);
         given(familyMembershipRepository.findByFamilyIdAndGuardianId(10L, 2L))
                 .willReturn(Optional.of(targetMembership));
 
