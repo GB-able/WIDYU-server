@@ -7,8 +7,11 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
@@ -37,6 +40,8 @@ public class GuardianMyPageService {
     private final S3Service s3Service;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
+    private final MemberRepository memberRepository;
+    private final PointHistoryRepository pointHistoryRepository;
 
     public GuardianInfoResponse getGuardianInfo() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
@@ -167,11 +172,33 @@ public class GuardianMyPageService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "본인을 삭제할 수 없습니다.");
         }
 
+        Member target = memberRepository.findById(targetMemberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        if (target.getType() == MemberType.SENIOR) {
+            deleteSeniorFromFamily(targetMemberId, myMembership.getFamily().getId());
+        } else {
+            deleteGuardianFromFamily(targetMemberId, myMembership.getFamily().getId());
+        }
+    }
+
+    private void deleteGuardianFromFamily(Long targetMemberId, Long familyId) {
         FamilyMembership membership = familyMembershipRepository
-                .findByFamilyIdAndGuardianId(myMembership.getFamily().getId(), targetMemberId)
+                .findByFamilyIdAndGuardianId(familyId, targetMemberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다."));
+        familyMembershipRepository.delete(membership);
+    }
+
+    private void deleteSeniorFromFamily(Long targetMemberId, Long familyId) {
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(targetMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다."));
 
-        familyMembershipRepository.delete(membership);
+        if (!seniorProfile.getFamily().getId().equals(familyId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어에 접근 권한이 없습니다.");
+        }
+
+        pointHistoryRepository.deleteBySeniorProfileId(seniorProfile.getId());
+        seniorProfileRepository.delete(seniorProfile);
     }
 
     private void assertIsLeader(SeniorProfile seniorProfile, Long guardianId) {
