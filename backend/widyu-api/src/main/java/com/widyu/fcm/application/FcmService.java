@@ -185,6 +185,28 @@ public class FcmService {
         }
     }
 
+    @Transactional
+    public int sendTestMessageToUser(Long memberId, FcmSendDto fcmSendDto) {
+        int sent = 0;
+        try {
+            List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(memberId);
+            for (MemberFcmToken tokenEntity : tokens) {
+                String message = makeMessage(tokenEntity.getToken(), fcmSendDto);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setBearerAuth(getAccessToken());
+                HttpEntity<String> entity = new HttpEntity<>(message, headers);
+                RestTemplate restTemplate = new RestTemplate();
+                restTemplate.getMessageConverters().add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+                ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
+                if (response.getStatusCode() == HttpStatus.OK) sent++;
+            }
+        } catch (IOException e) {
+            log.error("Failed to send admin test FCM to user {}: {}", memberId, e.getMessage());
+        }
+        return sent;
+    }
+
     public List<FcmCategoryResponse> getNotificationCategories() {
         Member member = memberUtil.getCurrentMember();
 
