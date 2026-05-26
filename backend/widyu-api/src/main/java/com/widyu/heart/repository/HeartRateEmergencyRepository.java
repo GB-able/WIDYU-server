@@ -1,6 +1,7 @@
 package com.widyu.heart.repository;
 
 import com.widyu.heart.HeartRateEmergency;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,5 @@ public interface HeartRateEmergencyRepository extends JpaRepository<HeartRateEme
     Optional<HeartRateEmergency> findFirstByMemberIdOrderByMeasuredAtAsc(Long memberId);
 
     long countByMemberId(Long memberId);
+    long countByMeasuredAtAfter(LocalDateTime measuredAt);
 }

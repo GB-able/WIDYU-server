@@ -78,6 +78,8 @@ public class DevDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        String encodedPassword = passwordEncoder.encode(DEFAULT_PASSWORD);
+
         if (localAccountRepository.existsByEmail(SEED_MARKER_EMAIL)) {
             if (albumRepository.count() == 0) {
                 log.info("[DevDataInitializer] 회원 데이터는 있으나 샘플 데이터 누락 — 보충합니다.");
@@ -89,7 +91,6 @@ public class DevDataInitializer implements CommandLineRunner {
         }
 
         log.info("[DevDataInitializer] 시드 데이터 초기화 시작...");
-        String encodedPassword = passwordEncoder.encode(DEFAULT_PASSWORD);
 
         List<Member> familyAseniors = seedFamilyA(encodedPassword);
         List<Member> familyBseniors = seedFamilyB(encodedPassword);
