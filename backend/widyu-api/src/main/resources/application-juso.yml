@@ -1,0 +1,4 @@
+juso:
+  api:
+    url: https://business.juso.go.kr/addrlink
+    confm-key: ${JUSO_CONFM_KEY}
