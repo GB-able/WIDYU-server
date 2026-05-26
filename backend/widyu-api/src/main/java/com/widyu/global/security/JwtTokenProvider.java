@@ -55,9 +55,10 @@ public class JwtTokenProvider {
     public AccessTokenDto retrieveAccessToken(String accessTokenValue) {
         try {
             return jwtUtil.parseAccessToken(accessTokenValue);
+        } catch (ExpiredJwtException e) {
+            throw new BusinessException(ErrorCode.EXPIRED_ACCESS_TOKEN);
         } catch (Exception e) {
-            log.debug("Access Token 파싱 실패: {}", e.getMessage());
-            return null;
+            throw new BusinessException(ErrorCode.INVALID_ACCESS_TOKEN);
         }
     }
 
