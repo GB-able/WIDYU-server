@@ -46,7 +46,7 @@ out/
 # Firebase secrets
 src/main/resources/firebase/
 *.json
-!admin/package-lock.json
+!admin/*.json
 
 # claude
 CLAUDE.mdDocs
