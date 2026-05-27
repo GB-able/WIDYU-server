@@ -27,6 +27,7 @@ import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.PointHistoryResponse;
 import com.widyu.mypage.dto.response.SeniorInfoResponse;
 import com.widyu.mypage.dto.response.SeniorProfileDetailResponse;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -109,6 +110,7 @@ class SeniorMyPageServiceTest {
         given(member.getName()).willReturn("오일남");
         given(member.getPhoneNumber()).willReturn("01012345678");
         given(member.getProfileImage()).willReturn("image.png");
+        given(seniorProfile.getBirthDate()).willReturn(LocalDate.of(1950, 1, 1));
         given(seniorProfile.getAddress()).willReturn("서울시 강서구");
         given(seniorProfile.getDetailAddress()).willReturn("101호");
         given(seniorProfile.getInviteCode()).willReturn("1234567");
@@ -118,6 +120,7 @@ class SeniorMyPageServiceTest {
 
         // then
         assertThat(response.name()).isEqualTo("오일남");
+        assertThat(response.birthDate()).isEqualTo(LocalDate.of(1950, 1, 1));
         assertThat(response.inviteCode()).isEqualTo("1234567");
     }
 

@@ -106,7 +106,8 @@ public class SeniorAuthService {
                     family,
                     req.address(),
                     req.detailAddress(),
-                    req.inviteCode()
+                    req.inviteCode(),
+                    req.birthDate()
             );
             profiles.add(profile);
         }

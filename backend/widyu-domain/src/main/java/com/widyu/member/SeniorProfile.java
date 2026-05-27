@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -42,6 +43,9 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(name = "invite_code", nullable = false, unique = true, length = 7)
     private String inviteCode;
 
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
     @Column(nullable = false)
     private Long points = 0L;
 
@@ -50,24 +54,26 @@ public class SeniorProfile extends BaseTimeEntity {
 
     @Builder(access = AccessLevel.PRIVATE)
     private SeniorProfile(Member member, Family family, String address, String detailAddress,
-                          String inviteCode, Long points, Integer defaultWalkGoal) {
+                          String inviteCode, LocalDate birthDate, Long points, Integer defaultWalkGoal) {
         this.member = member;
         this.family = family;
         this.address = address;
         this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
+        this.birthDate = birthDate;
         this.points = points;
         this.defaultWalkGoal = defaultWalkGoal;
     }
 
     public static SeniorProfile createSeniorProfile(Member member, Family family, String address,
-                                                    String detailAddress, String inviteCode) {
+                                                    String detailAddress, String inviteCode, LocalDate birthDate) {
         return SeniorProfile.builder()
                 .member(member)
                 .family(family)
                 .address(address)
                 .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
+                .birthDate(birthDate)
                 .points(100L)
                 .defaultWalkGoal(null)
                 .build();

@@ -17,7 +17,7 @@ public interface SeniorAuthDocs {
 
     @Operation(
             summary = "시니어 일괄 회원가입",
-            description = "보호자가 시니어를 일괄 등록합니다. 각 시니어는 초대코드를 받아 로그인할 수 있습니다."
+            description = "보호자가 시니어를 일괄 등록합니다. 각 시니어는 이름, 생년월일, 전화번호, 주소, 초대코드를 저장하고 초대코드로 로그인할 수 있습니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "시니어 일괄 회원가입 성공"),
