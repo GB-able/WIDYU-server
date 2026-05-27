@@ -33,6 +33,7 @@ import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -241,6 +242,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getId()).willReturn(10L);
         given(seniorMember.getName()).willReturn("오일남");
+        given(seniorProfile.getBirthDate()).willReturn(LocalDate.of(1950, 1, 1));
         given(seniorProfile.getInviteCode()).willReturn("1234567");
 
         // when
@@ -248,6 +250,7 @@ class GuardianMyPageServiceTest {
 
         // then
         assertThat(response.name()).isEqualTo("오일남");
+        assertThat(response.birthDate()).isEqualTo(LocalDate.of(1950, 1, 1));
         assertThat(response.inviteCode()).isEqualTo("1234567");
     }
 

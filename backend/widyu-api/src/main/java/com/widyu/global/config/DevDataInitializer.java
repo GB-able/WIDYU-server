@@ -156,8 +156,10 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(m1);
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
-        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(s1, family, "서울시 강남구", "101호", "AAAS001"));
-        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(s2, family, "서울시 강남구", "202호", "AAAS002"));
+        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
+                s1, family, "서울시 강남구", "101호", "AAAS001", LocalDate.of(1948, 3, 12)));
+        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
+                s2, family, "서울시 강남구", "202호", "AAAS002", LocalDate.of(1952, 11, 5)));
 
         return List.of(s1, s2);
     }
@@ -178,7 +180,8 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(m1);
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
-        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(s1, family, "부산시 해운대구", "303호", "BBBS001"));
+        seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
+                s1, family, "부산시 해운대구", "303호", "BBBS001", LocalDate.of(1945, 7, 21)));
 
         return List.of(s1);
     }
