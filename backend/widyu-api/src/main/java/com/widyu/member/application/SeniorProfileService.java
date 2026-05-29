@@ -67,6 +67,11 @@ public class SeniorProfileService {
 
     @Transactional
     public void addPointsToMember(Long memberId, Long points) {
+        addPointsToMember(memberId, points, "포인트 적립");
+    }
+
+    @Transactional
+    public void addPointsToMember(Long memberId, Long points, String description) {
         if (points == null || points <= 0) {
             log.warn("유효하지 않은 포인트 적립 시도: memberId={}, points={}", memberId, points);
             return;
@@ -76,8 +81,28 @@ public class SeniorProfileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         seniorProfile.addPoints(points);
-        pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, "포인트 적립"));
+        pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, description));
         log.info("포인트 적립 완료: memberId={}, addedPoints={}, totalPoints={}",
+                memberId, points, seniorProfile.getPoints());
+    }
+
+    @Transactional
+    public void deductPointsFromMember(Long memberId, Long points, String description) {
+        if (points == null || points <= 0) {
+            log.warn("유효하지 않은 포인트 차감 시도: memberId={}, points={}", memberId, points);
+            return;
+        }
+
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
+
+        if (!seniorProfile.hasEnoughPoints(points)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "결제 취소에 필요한 포인트가 부족합니다.");
+        }
+
+        seniorProfile.deductPoints(points);
+        pointHistoryRepository.save(PointHistory.use(seniorProfile, points, description));
+        log.info("포인트 차감 완료: memberId={}, deductedPoints={}, totalPoints={}",
                 memberId, points, seniorProfile.getPoints());
     }
 }

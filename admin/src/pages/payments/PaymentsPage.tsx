@@ -8,7 +8,7 @@ interface PaymentItem {
   memberName: string
   orderName: string
   amount: number
-  status: 'READY' | 'DONE' | 'CANCELED'
+  status: 'READY' | 'DONE' | 'PARTIAL_CANCELED' | 'CANCELED'
   paymentMethod: string
   approvedAt: string | null
   canceledAt: string | null
@@ -26,9 +26,15 @@ interface PageResponse<T> {
 const STATUS_STYLE: Record<string, string> = {
   DONE: 'bg-green-100 text-green-700',
   READY: 'bg-yellow-100 text-yellow-700',
+  PARTIAL_CANCELED: 'bg-orange-100 text-orange-700',
   CANCELED: 'bg-red-100 text-red-600',
 }
-const STATUS_LABEL: Record<string, string> = { DONE: '승인', READY: '대기', CANCELED: '취소' }
+const STATUS_LABEL: Record<string, string> = {
+  DONE: '승인',
+  READY: '대기',
+  PARTIAL_CANCELED: '부분 취소',
+  CANCELED: '취소',
+}
 
 function toKRW(amount: number) {
   return amount.toLocaleString('ko-KR') + '원'
@@ -111,7 +117,7 @@ export default function PaymentsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {p.status === 'CANCELED'
+                    {p.status === 'CANCELED' || p.status === 'PARTIAL_CANCELED'
                       ? <span className="text-red-400">{formatDateTime(p.canceledAt)} 취소</span>
                       : formatDateTime(p.approvedAt)
                     }

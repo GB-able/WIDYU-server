@@ -12,6 +12,8 @@ public class PaymentLoggingInterceptor implements RequestInterceptor {
     @Override
     public void apply(RequestTemplate template) {
         logger.info("Payment Request: {} {}", template.method(), template.url());
-        logger.info("Payment Request Body: {}", new String(template.body()));
+        if (template.body() != null) {
+            logger.info("Payment Request Body: [redacted, {} bytes]", template.body().length);
+        }
     }
 }

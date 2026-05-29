@@ -1,10 +1,28 @@
 package com.widyu.pay;
 
 import com.widyu.member.Member;
-import jakarta.persistence.*;
-import lombok.*;
-
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 @Entity
 @Getter
@@ -17,30 +35,26 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // PG사에서 제공하는 결제 키
     @Column(unique = true, nullable = false)
     private String paymentKey;
 
-    // 주문 관련 정보
     private String orderId;
     private String orderName;
     private int amount;
+    private int canceledAmount;
+    private int canceledPointAmount;
 
-    // 결제 상태
     @Enumerated(EnumType.STRING)
     private PaymentStatus status;
 
-    // 결제 시각 정보
-    private ZonedDateTime requestedAt; // 결제 요청 시각
-    private ZonedDateTime approvedAt;  // 결제 승인 시각
+    private ZonedDateTime requestedAt;
+    private ZonedDateTime approvedAt;
 
-    // 취소 관련 필드
-    private String cancelReason;       // 취소 사유
-    private ZonedDateTime canceledAt;  // 취소된 시각
+    private String cancelReason;
+    private ZonedDateTime canceledAt;
 
-    private boolean cultureExpense;    // 문화비 여부
+    private boolean cultureExpense;
 
-    // 결제 수단별 상세 매핑 (1:1 관계)
     @OneToOne(mappedBy = "payment", cascade = CascadeType.ALL)
     private PaymentCard card;
 
@@ -53,11 +67,18 @@ public class Payment {
     @OneToOne(mappedBy = "payment", cascade = CascadeType.ALL)
     private PaymentEasyPay easyPay;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_order_id", unique = true)
+    private PaymentOrder paymentOrder;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PaymentCancel> cancellations = new ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
-    // -------------------- 연관관계 편의 메서드 --------------------
     public void assignCard(PaymentCard card) {
         this.card = card;
         if (card != null) {
@@ -86,10 +107,36 @@ public class Payment {
         }
     }
 
-    public void cancel(String reason) {
-        this.status = PaymentStatus.CANCELED; // 상태 변경
-        this.cancelReason = reason;        // 취소 사유 저장
-        this.canceledAt = ZonedDateTime.now(); // 취소 시간 기록
-        this.approvedAt = null;            // 더 이상 승인 상태가 아님
+    public void assignPaymentOrder(PaymentOrder paymentOrder) {
+        this.paymentOrder = paymentOrder;
+    }
+
+    public void addCancellation(PaymentCancel cancellation) {
+        this.cancellations.add(cancellation);
+        cancellation.assignPayment(this);
+    }
+
+    public boolean isOwnedBy(Long memberId) {
+        return member != null && Objects.equals(member.getId(), memberId);
+    }
+
+    public boolean isCanceled() {
+        return this.status == PaymentStatus.CANCELED;
+    }
+
+    public boolean matches(String orderId, int amount) {
+        return Objects.equals(this.orderId, orderId) && this.amount == amount;
+    }
+
+    public int getRemainingAmount() {
+        return this.amount - this.canceledAmount;
+    }
+
+    public void cancel(int cancelAmount, int cancelPointAmount, String reason, ZonedDateTime canceledAt) {
+        this.canceledAmount += cancelAmount;
+        this.canceledPointAmount += cancelPointAmount;
+        this.cancelReason = reason;
+        this.canceledAt = canceledAt;
+        this.status = this.canceledAmount >= this.amount ? PaymentStatus.CANCELED : PaymentStatus.PARTIAL_CANCELED;
     }
 }
