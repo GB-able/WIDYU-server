@@ -1,23 +1,27 @@
 package com.widyu.pay.dto.mapper;
 
-import com.widyu.member.Member;
-import com.widyu.pay.dto.response.PaymentConfirmResponse;
 import com.widyu.pay.Payment;
 import com.widyu.pay.PaymentCard;
 import com.widyu.pay.PaymentEasyPay;
+import com.widyu.pay.PaymentOrder;
 import com.widyu.pay.PaymentStatus;
 import com.widyu.pay.PaymentTransfer;
 import com.widyu.pay.PaymentVirtualAccount;
+import com.widyu.pay.dto.response.PaymentConfirmResponse;
+import com.widyu.member.Member;
 
 public class PaymentMapper {
 
-    public static Payment toEntity(PaymentConfirmResponse dto, Member member) {
+    public static Payment toEntity(PaymentConfirmResponse dto, Member member, PaymentOrder paymentOrder) {
         Payment payment = Payment.builder()
                 .member(member)
+                .paymentOrder(paymentOrder)
                 .paymentKey(dto.getPaymentKey())
                 .orderId(dto.getOrderId())
                 .orderName(dto.getOrderName())
                 .amount(dto.getAmount())
+                .canceledAmount(0)
+                .canceledPointAmount(0)
                 .status(dto.getStatus() != null ? dto.getStatus() : PaymentStatus.DONE)
                 .requestedAt(dto.getRequestedAt())
                 .approvedAt(dto.getApprovedAt())

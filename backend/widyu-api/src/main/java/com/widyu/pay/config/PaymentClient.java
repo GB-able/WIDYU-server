@@ -1,7 +1,7 @@
 package com.widyu.pay.config;
 
 import com.widyu.pay.dto.request.CancelRequest;
-import com.widyu.pay.dto.request.PaymentConfirmRequest;
+import com.widyu.pay.dto.request.PaymentGatewayConfirmRequest;
 import com.widyu.pay.dto.response.PaymentConfirmResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
@@ -13,10 +13,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface PaymentClient {
 
     @PostMapping(value = "/confirm", consumes = MediaType.APPLICATION_JSON_VALUE)
-    PaymentConfirmResponse confirmPayment(@RequestBody PaymentConfirmRequest paymentConfirmRequest);
+    PaymentConfirmResponse confirmPayment(@RequestBody PaymentGatewayConfirmRequest paymentConfirmRequest);
 
     @PostMapping(value = "/{paymentKey}/cancel", consumes = MediaType.APPLICATION_JSON_VALUE)
     PaymentConfirmResponse cancelPayment(@PathVariable("paymentKey") String paymentKey,
                                          @RequestBody CancelRequest cancelRequest);
 }
-

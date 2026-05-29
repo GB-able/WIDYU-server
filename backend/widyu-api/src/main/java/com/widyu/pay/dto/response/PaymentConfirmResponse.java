@@ -1,11 +1,13 @@
 package com.widyu.pay.dto.response;
 
 import com.widyu.pay.Payment;
+import com.widyu.pay.PaymentCancel;
 import com.widyu.pay.PaymentCard;
 import com.widyu.pay.PaymentEasyPay;
 import com.widyu.pay.PaymentStatus;
 import com.widyu.pay.PaymentTransfer;
 import com.widyu.pay.PaymentVirtualAccount;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -25,8 +27,12 @@ public class PaymentConfirmResponse {
     private PaymentStatus status;
     private ZonedDateTime requestedAt;
     private ZonedDateTime approvedAt;
+    private int canceledAmount;
+    private int canceledPointAmount;
+    private int remainingAmount;
     private boolean useEscrow;
     private boolean cultureExpense;
+    private List<CancelHistory> cancellations;
 
     // 세부 결제 수단
     private Card card;
@@ -70,6 +76,16 @@ public class PaymentConfirmResponse {
         private boolean expired;
     }
 
+    @Getter
+    @NoArgsConstructor
+    public static class CancelHistory {
+        private int cancelAmount;
+        private int cancelPointAmount;
+        private String cancelReason;
+        private Long requestedByMemberId;
+        private ZonedDateTime canceledAt;
+    }
+
     // ---------------------- 정적 팩토리 메서드 ----------------------
     public static PaymentConfirmResponse from(Payment payment) {
         PaymentConfirmResponse response = new PaymentConfirmResponse();
@@ -81,7 +97,13 @@ public class PaymentConfirmResponse {
         response.status = payment.getStatus();
         response.requestedAt = payment.getRequestedAt();
         response.approvedAt = payment.getApprovedAt();
+        response.canceledAmount = payment.getCanceledAmount();
+        response.canceledPointAmount = payment.getCanceledPointAmount();
+        response.remainingAmount = payment.getRemainingAmount();
         response.cultureExpense = payment.isCultureExpense();
+        response.cancellations = payment.getCancellations().stream()
+                .map(PaymentConfirmResponse::mapCancelHistory)
+                .toList();
 
         // 카드 결제 매핑
         if (payment.getCard() != null) {
@@ -128,6 +150,16 @@ public class PaymentConfirmResponse {
         }
 
         return response;
+    }
+
+    private static CancelHistory mapCancelHistory(PaymentCancel paymentCancel) {
+        CancelHistory cancelHistory = new CancelHistory();
+        cancelHistory.cancelAmount = paymentCancel.getCancelAmount();
+        cancelHistory.cancelPointAmount = paymentCancel.getCancelPointAmount();
+        cancelHistory.cancelReason = paymentCancel.getCancelReason();
+        cancelHistory.requestedByMemberId = paymentCancel.getRequestedByMemberId();
+        cancelHistory.canceledAt = paymentCancel.getCanceledAt();
+        return cancelHistory;
     }
 
 }
