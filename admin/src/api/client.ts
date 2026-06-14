@@ -36,7 +36,7 @@ client.interceptors.response.use(
     const refreshToken = localStorage.getItem('admin_refresh_token')
     if (!refreshToken) {
       localStorage.removeItem('admin_token')
-      window.location.href = '/login'
+      window.location.href = import.meta.env.BASE_URL + 'login'
       return Promise.reject(error)
     }
 
@@ -72,7 +72,7 @@ client.interceptors.response.use(
       rejectQueue(refreshError)
       localStorage.removeItem('admin_token')
       localStorage.removeItem('admin_refresh_token')
-      window.location.href = '/login'
+      window.location.href = import.meta.env.BASE_URL + 'login'
       return Promise.reject(refreshError)
     } finally {
       isRefreshing = false
