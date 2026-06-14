@@ -20,6 +20,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Build admin SPA
+        run: |
+          cd admin
+          npm ci
+          npm run build
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -83,6 +96,10 @@ jobs:
           rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
             scripts/ \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/scripts/
+
+          rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
+            admin/dist/ \
+            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/admin/dist/
 
           # rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
           #   monitoring/ \

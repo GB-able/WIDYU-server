@@ -66,6 +66,24 @@ docker run -p 5000:5000 rchagnhoon/widyu-ai-ver2:latest
   - Docker Hub 레지스트리 캐시(`cache-from`/`cache-to`)로 빌드 후 `latest`·`sha` 태그 push
   - EC2에 compose 파일 `rsync` 후 `--no-deps --force-recreate widyu-api` 배포 (DB·Redis 유지)
 
+## Admin Dashboard (admin/)
+
+`admin/` 디렉터리는 React + TypeScript 기반 운영 모니터링 대시보드입니다. Spring Boot 백엔드와 별개로 동작하는 SPA입니다.
+
+**Tech Stack**: React 19, TypeScript, Vite, Tailwind CSS, React Query, React Router, Recharts, Zustand
+
+**Pages**: Dashboard (KPI·경고 카드·주간 추이 차트), Members, Families, Albums, Payments, Notifications, Logs, DevTools (개발 환경 전용)
+
+**Dev**:
+```bash
+cd admin
+npm install
+npm run dev   # localhost:5173
+npm run build # dist/ 생성
+```
+
+**인증**: authStore(Zustand)에 JWT 저장, PrivateRoute로 보호. 백엔드 `/api/admin/login` 연동.
+
 ## Application Architecture
 
 ### Multi-Module Structure
