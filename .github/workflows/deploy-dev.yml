@@ -129,5 +129,8 @@ jobs:
             echo "🚀 Deploying widyu-api (monitoring containers stay running)..."
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps --force-recreate widyu-api
 
+            echo "🔄 Reloading nginx config..."
+            docker exec widyu-nginx-dev nginx -s reload
+
             # echo "🔧 Ensuring monitoring stack is running..."
             # docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d prometheus grafana loki promtail node-exporter
