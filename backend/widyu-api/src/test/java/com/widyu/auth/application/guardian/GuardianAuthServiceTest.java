@@ -95,6 +95,7 @@ class GuardianAuthServiceTest {
         CurrentMemberResponse response = guardianAuthService.getCurrentMemberInfo();
 
         // then
+        assertThat(response.phoneNumber()).isEqualTo("01012341234");
         assertThat(response.email()).isEqualTo("test@test.com");
         assertThat(response.providers()).contains("local");
         assertThat(response.hasParents()).isFalse();

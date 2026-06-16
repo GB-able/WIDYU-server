@@ -11,7 +11,7 @@ public record CurrentMemberResponse(
         String name,
         
         @Schema(description = "전화번호", example = "01012341234")
-        String phone,
+        String phoneNumber,
         
         @Schema(description = "이메일", example = "abc@abc.com")
         String email,
@@ -22,7 +22,7 @@ public record CurrentMemberResponse(
         @Schema(description = "부모 계정 보유 여부", example = "true")
         boolean hasParents
 ) {
-    public static CurrentMemberResponse of(String name, String phone, String email, List<String> providers, boolean hasParents) {
-        return new CurrentMemberResponse(name, phone, email, providers, hasParents);
+    public static CurrentMemberResponse of(String name, String phoneNumber, String email, List<String> providers, boolean hasParents) {
+        return new CurrentMemberResponse(name, phoneNumber, email, providers, hasParents);
     }
 }

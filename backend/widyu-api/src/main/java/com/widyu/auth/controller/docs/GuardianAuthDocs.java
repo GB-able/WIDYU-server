@@ -656,7 +656,7 @@ public interface GuardianAuthDocs {
                                       "message": "현재 회원 정보 조회 성공",
                                       "data": {
                                         "name": "ghdrlfehd",
-                                        "phone": "01012341234",
+                                        "phoneNumber": "01012341234",
                                         "email": "abc@abc.com",
                                         "providers": ["kakao"],
                                         "hasParents": true
