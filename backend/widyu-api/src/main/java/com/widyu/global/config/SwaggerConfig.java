@@ -142,4 +142,12 @@ public class SwaggerConfig {
                 .pathsToMatch("/api/v1/mypage/**")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi homeApi() {
+        return GroupedOpenApi.builder()
+                .group("홈 API")
+                .pathsToMatch("/api/v1/home/**")
+                .build();
+    }
 }

@@ -45,13 +45,13 @@ import org.springframework.transaction.annotation.Transactional;
  * │  가족 A (familyCode: AAAA01)                                             │
  * │  보호자A1  test_guardian_a1@widyu.dev  Test1234!  leader / representative │
  * │  보호자A2  test_guardian_a2@widyu.dev  Test1234!                          │
- * │  시니어A1  inviteCode: AAAS001  phone: 01011110003                        │
- * │  시니어A2  inviteCode: AAAS002  phone: 01011110004                        │
+ * │  시니어A1  inviteCode: 1110001  phone: 01011110003                        │
+ * │  시니어A2  inviteCode: 1110002  phone: 01011110004                        │
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │  가족 B (familyCode: BBBB01)                                             │
  * │  보호자B1  test_guardian_b1@widyu.dev  Test1234!  leader / representative │
  * │  보호자B2  test_guardian_b2@widyu.dev  Test1234!                          │
- * │  시니어B1  inviteCode: BBBS001  phone: 01022220003                        │
+ * │  시니어B1  inviteCode: 2220001  phone: 01022220003                        │
  * └──────────────────────────────────────────────────────────────────────────┘
  */
 @Slf4j
@@ -157,9 +157,9 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s1, family, "서울시 강남구", "101호", "AAAS001", LocalDate.of(1948, 3, 12)));
+                s1, family, "서울시 강남구", "101호", "1110001", LocalDate.of(1948, 3, 12)));
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s2, family, "서울시 강남구", "202호", "AAAS002", LocalDate.of(1952, 11, 5)));
+                s2, family, "서울시 강남구", "202호", "1110002", LocalDate.of(1952, 11, 5)));
 
         return List.of(s1, s2);
     }
@@ -181,7 +181,7 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s1, family, "부산시 해운대구", "303호", "BBBS001", LocalDate.of(1945, 7, 21)));
+                s1, family, "부산시 해운대구", "303호", "2220001", LocalDate.of(1945, 7, 21)));
 
         return List.of(s1);
     }

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Pattern;
 
 public record ParentSignInRequest(
         @NotBlank(message = "초대코드는 필수입니다.")
-        @Pattern(regexp = "^\\d{7}$", message = "초대코드는 숫자 7자리여야 합니다.")
+        @Pattern(regexp = "^\\d{7}$", message = "초대코드는 숫자만 7자리로 입력해주세요.")
         String inviteCode,
 
         @NotBlank(message = "전화번호는 필수입니다.")
