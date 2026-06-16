@@ -63,4 +63,10 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
             @Param("date") LocalDate date,
             Pageable pageable
     );
+
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' ORDER BY (a.likeCount * 3 + a.commentCount * 2) DESC, a.createdAt DESC")
+    org.springframework.data.domain.Slice<Long> findTopScoredAlbumIds(Pageable pageable);
+
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.member.id IN :memberIds ORDER BY (a.likeCount * 3 + a.commentCount * 2) DESC, a.createdAt DESC")
+    org.springframework.data.domain.Slice<Long> findTopScoredAlbumIdsByMemberIds(@Param("memberIds") List<Long> memberIds, Pageable pageable);
 }
