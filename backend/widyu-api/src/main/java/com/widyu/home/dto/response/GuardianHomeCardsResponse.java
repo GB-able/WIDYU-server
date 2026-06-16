@@ -8,6 +8,7 @@ import com.widyu.heart.HeartRateStatus;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.walk.Walk;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -31,9 +32,10 @@ public record GuardianHomeCardsResponse(
 ) {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+    private static final long WEARING_THRESHOLD_SECONDS = 30;
 
     public record HeartRateInfo(
-            @Schema(description = "착용 여부", example = "true")
+            @Schema(description = "워치 착용 여부 (최근 30초 이내 심박 데이터 수신 시 true)", example = "true")
             boolean isWearing,
 
             @Schema(description = "심박수 상태", example = "NORMAL")
@@ -43,12 +45,23 @@ public record GuardianHomeCardsResponse(
             Integer bpm
     ) {
         public static HeartRateInfo from(HeartRateResult result) {
-            boolean wearing = result.getStatus() != HeartRateStatus.UNKNOWN;
+            boolean wearing = isRecentlyMeasured(result);
+            if (!wearing) {
+                return unknown();
+            }
             return new HeartRateInfo(wearing, result.getStatus(), result.getHeartRate());
         }
 
         public static HeartRateInfo unknown() {
             return new HeartRateInfo(false, HeartRateStatus.UNKNOWN, null);
+        }
+
+        private static boolean isRecentlyMeasured(HeartRateResult result) {
+            if (result.getStatus() == HeartRateStatus.UNKNOWN || result.getMeasuredAt() == null) {
+                return false;
+            }
+            long seconds = Duration.between(result.getMeasuredAt(), LocalDateTime.now()).getSeconds();
+            return seconds >= 0 && seconds <= WEARING_THRESHOLD_SECONDS;
         }
     }
 

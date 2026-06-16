@@ -24,8 +24,9 @@ public interface HomeDocs {
 
                     **null 반환 케이스:**
                     - medicine: 등록된 약 스케줄 없음
-                    - healthSchedule: 1개월 이내 예정된 건강 일정 없음
+                    - healthSchedule: 1개월 이내 예정된 건강 일정 없음 (가장 가까운 일정 반환)
                     - walk: 오늘 걷기 데이터 및 기본 목표 없음
+                    - albums: 가족 앨범 없음 (빈 배열 반환)
 
                     **권한:**
                     - 시니어 본인만 가능
