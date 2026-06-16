@@ -15,6 +15,7 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
+import com.widyu.home.dto.response.GuardianSeniorListResponse;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.FamilyMembership;
@@ -76,6 +77,18 @@ public class GuardianHomeService {
                 getHealthScheduleInfo(senior, today),
                 getWalkInfo(senior, today)
         );
+    }
+
+    public GuardianSeniorListResponse getFamilySeniors() {
+        Member guardian = memberUtil.getCurrentMember();
+        if (guardian.getType() != MemberType.GUARDIAN) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "보호자만 접근 가능합니다.");
+        }
+
+        return familyMembershipRepository.findByGuardianId(guardian.getId())
+                .map(membership -> seniorProfileRepository.findAllByFamilyIdWithMember(membership.getFamily().getId()))
+                .map(GuardianSeniorListResponse::from)
+                .orElseGet(GuardianSeniorListResponse::empty);
     }
 
     private Member resolveSenior(Long memberId, Member guardian) {

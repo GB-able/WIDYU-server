@@ -2,6 +2,7 @@ package com.widyu.home.controller.docs;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
+import com.widyu.home.dto.response.GuardianSeniorListResponse;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -59,4 +60,24 @@ public interface HomeDocs {
             @Parameter(description = "시니어 ID - null이면 첫 번째 연결 시니어 자동 선택")
             Long memberId
     );
+
+    @Operation(
+            summary = "보호자 - 가족 시니어 목록 조회",
+            description = """
+                    보호자 홈에서 선택 가능한 가족 시니어 목록을 조회합니다.
+
+                    **응답 필드:**
+                    - memberId: 시니어 회원 ID
+                    - name: 시니어 이름
+                    - profileImage: 시니어 프로필 이미지 URL
+
+                    연결된 가족이 없으면 빈 배열을 반환합니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "401", description = "인증 실패"),
+            @ApiResponse(responseCode = "403", description = "보호자만 접근 가능")
+    })
+    ApiResponseTemplate<GuardianSeniorListResponse> getGuardianSeniors();
 }

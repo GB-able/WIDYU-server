@@ -6,6 +6,7 @@ import com.widyu.home.application.GuardianHomeService;
 import com.widyu.home.application.SeniorHomeService;
 import com.widyu.home.controller.docs.HomeDocs;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
+import com.widyu.home.dto.response.GuardianSeniorListResponse;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +42,16 @@ public class HomeController implements HomeDocs {
         return ApiResponseTemplate.ok()
                 .code("HOME_2002")
                 .message("보호자 홈 카드 조회 성공")
+                .body(response);
+    }
+
+    @Override
+    @GetMapping("/guardian/seniors")
+    public ApiResponseTemplate<GuardianSeniorListResponse> getGuardianSeniors() {
+        GuardianSeniorListResponse response = guardianHomeService.getFamilySeniors();
+        return ApiResponseTemplate.ok()
+                .code("HOME_2001")
+                .message("보호자 가족 시니어 목록 조회 성공")
                 .body(response);
     }
 }
