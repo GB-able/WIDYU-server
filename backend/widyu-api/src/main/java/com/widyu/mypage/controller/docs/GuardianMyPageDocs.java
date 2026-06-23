@@ -1,5 +1,6 @@
 package com.widyu.mypage.controller.docs;
 
+import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
@@ -32,6 +33,34 @@ public interface GuardianMyPageDocs {
     @Operation(summary = "보호자 이름 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
     ApiResponseTemplate<Void> updateName(UpdateNameRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경 - SMS 인증 발송",
+            description = """
+                    새 전화번호로 SMS 인증코드를 발송합니다.
+
+                    **검증:**
+                    - 이미 다른 회원이 사용 중인 전화번호이면 400 오류
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
+            @ApiResponse(responseCode = "400", description = "이미 사용 중인 전화번호 또는 잘못된 형식")
+    })
+    ApiResponseTemplate<Void> sendPhoneChangeSms(UpdatePhoneRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경 - 인증코드 검증 및 변경",
+            description = """
+                    SMS 인증코드를 검증하고 전화번호를 변경합니다.
+                    인증 성공 시 즉시 전화번호가 업데이트되며 인증코드는 삭제됩니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "전화번호 변경 성공"),
+            @ApiResponse(responseCode = "400", description = "인증코드 불일치 또는 만료")
+    })
+    ApiResponseTemplate<Void> verifyAndUpdatePhone(SmsCodeRequest request);
 
     @Operation(summary = "보호자 프로필 이미지 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})

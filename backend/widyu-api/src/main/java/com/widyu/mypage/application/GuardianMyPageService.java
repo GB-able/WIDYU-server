@@ -1,5 +1,8 @@
 package com.widyu.mypage.application;
 
+import com.widyu.auth.application.SmsService;
+import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
@@ -15,8 +18,8 @@ import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
-import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
+import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
@@ -38,6 +41,8 @@ public class GuardianMyPageService {
 
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
+    private final SmsService smsService;
+    private final VerificationCodeRepository verificationCodeRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberRepository memberRepository;
@@ -61,6 +66,37 @@ public class GuardianMyPageService {
     @Transactional
     public void updateProfileImage(MultipartFile image) {
         MyPageProfileService.updateCurrentMemberProfileImage(memberUtil, s3Service, image);
+    }
+
+    @Transactional
+    public void sendPhoneChangeSms(UpdatePhoneRequest request) {
+        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
+        String newPhone = request.phoneNumber();
+
+        memberRepository.findByPhoneNumber(newPhone).ifPresent(existing -> {
+            if (!existing.getId().equals(currentMember.getId())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
+            }
+        });
+
+        smsService.sendVerificationSms(newPhone, currentMember.getName());
+    }
+
+    @Transactional
+    public void verifyAndUpdatePhone(SmsCodeRequest request) {
+        String newPhone = request.phoneNumber();
+
+        boolean codeMatches = verificationCodeRepository.findById(newPhone)
+                .map(v -> v.getCode().equals(request.code()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.SMS_VERIFICATION_CODE_NOT_FOUND));
+
+        if (!codeMatches) {
+            throw new BusinessException(ErrorCode.SMS_VERIFICATION_CODE_MISMATCH);
+        }
+
+        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
+        currentMember.updatePhoneNumber(newPhone);
+        verificationCodeRepository.deleteById(newPhone);
     }
 
     public ConnectedSeniorResponse getConnectedSeniors() {
