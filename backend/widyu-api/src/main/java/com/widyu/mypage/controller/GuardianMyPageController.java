@@ -4,6 +4,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.application.GuardianMyPageService;
 import com.widyu.mypage.controller.docs.GuardianMyPageDocs;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -70,6 +72,26 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2013")
                 .message("프로필 이미지 수정 성공")
+                .build();
+    }
+
+    @Override
+    @PostMapping("/phone/sms/send")
+    public ApiResponseTemplate<Void> sendPhoneChangeSms(@RequestBody @Valid UpdatePhoneRequest request) {
+        guardianMyPageService.sendPhoneChangeSms(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2025")
+                .message("전화번호 변경 인증 문자가 전송되었습니다.")
+                .build();
+    }
+
+    @Override
+    @PatchMapping("/phone")
+    public ApiResponseTemplate<Void> verifyAndUpdatePhone(@RequestBody @Valid SmsCodeRequest request) {
+        guardianMyPageService.verifyAndUpdatePhone(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2026")
+                .message("전화번호 변경이 완료되었습니다.")
                 .build();
     }
 
