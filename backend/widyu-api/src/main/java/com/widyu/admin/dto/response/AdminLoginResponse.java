@@ -1,10 +1,10 @@
 package com.widyu.admin.dto.response;
 
-import com.widyu.auth.dto.response.TokenPairResponse;
-
-public record AdminLoginResponse(TokenPairResponse result) {
-
-    public static AdminLoginResponse of(TokenPairResponse tokenPair) {
-        return new AdminLoginResponse(tokenPair);
+public record AdminLoginResponse(
+        Long memberId,
+        String accessToken
+) {
+    public static AdminLoginResponse of(Long memberId, String accessToken) {
+        return new AdminLoginResponse(memberId, accessToken);
     }
 }

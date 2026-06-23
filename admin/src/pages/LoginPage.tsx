@@ -7,7 +7,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const setTokens = useAuthStore((s) => s.setTokens)
+  const setToken = useAuthStore((s) => s.setToken)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -15,7 +15,7 @@ export default function LoginPage() {
     setError('')
     try {
       const { data } = await client.post('/auth/admin/login', { email, password })
-      setTokens(data.result.accessToken, data.result.refreshToken)
+      setToken(data.accessToken)
       navigate('/')
     } catch {
       setError('이메일 또는 비밀번호가 올바르지 않습니다.')
