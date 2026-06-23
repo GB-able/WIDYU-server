@@ -219,7 +219,7 @@ public class GuardianHomeService {
     }
 
     private GuardianHomeCardsResponse.HealthScheduleInfo getHealthScheduleInfo(Member senior, LocalDate today) {
-        return healthScheduleRepository.findByMemberIdAndDate(senior.getId(), today)
+        return healthScheduleRepository.findByMemberIdAndDate(senior.getId(), today.atStartOfDay(), today.plusDays(1).atStartOfDay())
                 .stream()
                 .min(Comparator.comparing(HealthSchedule::getScheduledAt))
                 .map(GuardianHomeCardsResponse.HealthScheduleInfo::from)
