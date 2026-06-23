@@ -1,6 +1,6 @@
 package com.widyu.mypage.application;
 
-import com.widyu.auth.application.SmsService;
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
@@ -41,7 +41,6 @@ public class GuardianMyPageService {
 
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
-    private final SmsService smsService;
     private final VerificationCodeRepository verificationCodeRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
@@ -69,17 +68,26 @@ public class GuardianMyPageService {
     }
 
     @Transactional
-    public void sendPhoneChangeSms(UpdatePhoneRequest request) {
-        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
-        String newPhone = request.phoneNumber();
+    public void addSenior(SeniorSignUpRequest request) {
+        Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
+        Family family = getGuardianFamily(guardian.getId());
 
-        memberRepository.findByPhoneNumber(newPhone).ifPresent(existing -> {
-            if (!existing.getId().equals(currentMember.getId())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
-            }
-        });
+        if (memberRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
+        }
+        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
+            throw new BusinessException(ErrorCode.INVITE_CODE_DUPLICATED);
+        }
 
-        smsService.sendVerificationSms(newPhone, currentMember.getName());
+        Member seniorMember = Member.createMember(MemberType.SENIOR, request.name(), request.phoneNumber());
+        memberRepository.save(seniorMember);
+
+        SeniorProfile profile = SeniorProfile.createSeniorProfile(
+                seniorMember, family,
+                request.address(), request.detailAddress(),
+                request.inviteCode(), request.birthDate()
+        );
+        seniorProfileRepository.save(profile);
     }
 
     @Transactional
