@@ -18,7 +18,9 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,8 @@ public class SeniorAuthService {
             throw new BusinessException(ErrorCode.ALREADY_CONNECTED_TO_FAMILY, "이미 가족에 소속되어 있습니다.");
         }
 
+        validateInviteCodesUnique(requests);
+
         Family family = createAndSaveFamily();
 
         List<Member> members = buildMembersFromRequests(requests);
@@ -73,6 +77,19 @@ public class SeniorAuthService {
         if (requests == null || requests.isEmpty()) {
             throw new BusinessException(ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
         }
+    }
+
+    private void validateInviteCodesUnique(List<SeniorSignUpRequest> requests) {
+        List<String> codes = requests.stream().map(SeniorSignUpRequest::inviteCode).toList();
+        Set<String> uniqueCodes = new HashSet<>(codes);
+        if (uniqueCodes.size() != codes.size()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "배치 내에 중복된 초대코드가 있습니다.");
+        }
+        codes.forEach(code -> {
+            if (seniorProfileRepository.existsByInviteCode(code)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다: " + code);
+            }
+        });
     }
 
     private Family createAndSaveFamily() {
