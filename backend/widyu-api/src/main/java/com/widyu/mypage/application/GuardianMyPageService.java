@@ -155,7 +155,7 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
-        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
+        if (seniorProfileRepository.existsByInviteCodeAndIdNot(request.inviteCode(), seniorProfile.getId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다.");
         }
         seniorProfile.updateInviteCode(request.inviteCode());
