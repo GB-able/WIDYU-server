@@ -1,10 +1,11 @@
 package com.widyu.mypage.controller;
 
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.application.GuardianMyPageService;
 import com.widyu.mypage.controller.docs.GuardianMyPageDocs;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
-import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -76,12 +77,12 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @PostMapping("/phone/sms/send")
-    public ApiResponseTemplate<Void> sendPhoneChangeSms(@RequestBody @Valid UpdatePhoneRequest request) {
-        guardianMyPageService.sendPhoneChangeSms(request);
+    @PostMapping("/seniors")
+    public ApiResponseTemplate<Void> addSenior(@RequestBody @Valid SeniorSignUpRequest request) {
+        guardianMyPageService.addSenior(request);
         return ApiResponseTemplate.ok()
-                .code("MYPAGE_2025")
-                .message("전화번호 변경 인증 문자가 전송되었습니다.")
+                .code("MYPAGE_2027")
+                .message("부모님 추가 성공")
                 .build();
     }
 
