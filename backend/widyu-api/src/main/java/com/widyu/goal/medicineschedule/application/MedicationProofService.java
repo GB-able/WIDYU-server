@@ -3,6 +3,7 @@ package com.widyu.goal.medicineschedule.application;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
@@ -11,6 +12,7 @@ import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +27,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class MedicationProofService {
 
     private static final int ALLOWED_TIME_WINDOW_MINUTES = 30;
+    private static final String PROOF_IMAGE_DIRECTORY = "medication-proof";
 
     private final MedicationProofRepository medicationProofRepository;
     private final MedicineScheduleRepository medicineScheduleRepository;
     private final MemberUtil memberUtil;
+    private final S3Service s3Service;
 
     @Transactional
     public void verifyMedication(Long scheduleId, List<MultipartFile> images) {
@@ -70,20 +74,32 @@ public class MedicationProofService {
                     "오늘은 이미 해당 약 복용을 인증했습니다.");
         }
 
-        // TODO: S3 업로드 로직 추가 필요
-        // 현재는 임시로 빈 URL 리스트 사용
-        List<String> imageUrls = List.of();
-
-        // 이미지 파일이 있다면 업로드 처리 (추후 S3 서비스 연동)
-        if (images != null && !images.isEmpty()) {
-            // imageUrls = s3Service.uploadFiles(images);
-            log.warn("이미지 업로드 기능은 아직 구현되지 않았습니다. 이미지 개수: {}", images.size());
-        }
+        List<String> imageUrls = uploadProofImages(images, currentMember.getId());
 
         MedicationProof proof = MedicationProof.create(schedule, currentMember, imageUrls);
         medicationProofRepository.save(proof);
 
         log.info("약 복용 인증 완료: scheduleId={}, memberId={}, verifiedAt={}",
                 scheduleId, currentMember.getId(), now);
+    }
+
+    private List<String> uploadProofImages(List<MultipartFile> images, Long memberId) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> uploadedUrls = new ArrayList<>();
+        try {
+            for (MultipartFile image : images) {
+                String directory = PROOF_IMAGE_DIRECTORY + "/" + memberId;
+                String filePath = s3Service.generateFilePath(directory, image.getOriginalFilename());
+                String url = s3Service.uploadFile(image, filePath);
+                uploadedUrls.add(url);
+            }
+            return uploadedUrls;
+        } catch (Exception e) {
+            uploadedUrls.forEach(s3Service::deleteFile);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "복용 인증 이미지 업로드에 실패했습니다.");
+        }
     }
 }
