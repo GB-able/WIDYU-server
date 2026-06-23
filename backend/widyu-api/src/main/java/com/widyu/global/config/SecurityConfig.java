@@ -30,8 +30,8 @@ public class SecurityConfig {
                 .sessionManagement(
                         session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // SockJS의 iframe fallback을 위한 frameOptions 설정
-        http.headers(headers -> headers.frameOptions(frame -> frame.disable())); // [수정] sameOrigin 대신 disable로 변경
+        // SockJS iframe fallback: sameOrigin으로 클릭재킹 방어 유지
+        http.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
 
         // 요청 경로에 대한 인가 설정
         http.authorizeHttpRequests(
