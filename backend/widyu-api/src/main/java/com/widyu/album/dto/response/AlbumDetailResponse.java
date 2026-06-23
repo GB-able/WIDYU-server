@@ -91,6 +91,8 @@ public record AlbumDetailResponse(
         }
     }
 
+    private static final int ALBUM_UNLOCK_PRICE = 50;
+
     public static AlbumDetailResponse from(Album album, Long currentUserId, List<Member> viewers,
                                            List<AlbumComment> comments) {
         return new AlbumDetailResponse(
@@ -103,7 +105,7 @@ public record AlbumDetailResponse(
                 album.getCreatedAt(),
                 AuthorInfo.from(album.getMember()),
                 viewers.stream().map(ViewerInfo::from).toList(),
-                50, // 게시물 해금 가격 임시 고정
+                ALBUM_UNLOCK_PRICE,
                 comments.stream()
                         .map(comment -> CommentInfo.from(comment, currentUserId))
                         .toList(),

@@ -207,9 +207,8 @@ public class HealthScheduleService {
     public List<HealthScheduleDetailWithRewardResponse> getHealthSchedulesByDateForMe(LocalDate date) {
         Member currentMember = memberUtil.getCurrentMember();
 
-        // 특정 날짜의 일정 조회
         List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndDate(
-                currentMember.getId(), date
+                currentMember.getId(), date.atStartOfDay(), date.plusDays(1).atStartOfDay()
         );
 
         return schedules.stream()
@@ -220,11 +219,9 @@ public class HealthScheduleService {
     public List<HealthScheduleDetailResponse> getHealthSchedulesByDateForSenior(Long memberId, LocalDate date) {
         Member currentMember = memberUtil.getCurrentMember();
 
-        // 시니어 프로필 조회
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
-        // 보호자-시니어 연결 확인
         boolean isConnected = familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(
                 currentMember.getId(), seniorProfile.getId()
         );
@@ -233,9 +230,8 @@ public class HealthScheduleService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 일정을 조회할 권한이 없습니다.");
         }
 
-        // 특정 날짜의 일정 조회
         List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndDate(
-                memberId, date
+                memberId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()
         );
 
         return schedules.stream()
