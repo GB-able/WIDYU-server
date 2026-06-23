@@ -54,13 +54,14 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :start AND a.createdAt < :end")
     long countActiveAlbumsCreatedBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date ORDER BY a.createdAt DESC, a.id DESC")
-    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("date") LocalDate date, Pageable pageable);
-    
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND DATE(a.createdAt) = :date AND a.id < :lastPostId ORDER BY a.id DESC")
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay ORDER BY a.createdAt DESC, a.id DESC")
+    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("startOfNextDay") LocalDateTime startOfNextDay, Pageable pageable);
+
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay AND a.id < :lastPostId ORDER BY a.id DESC")
     org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdByDate(
             @Param("lastPostId") Long lastPostId,
-            @Param("date") LocalDate date,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("startOfNextDay") LocalDateTime startOfNextDay,
             Pageable pageable
     );
 

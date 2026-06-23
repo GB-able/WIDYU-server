@@ -11,6 +11,7 @@ import com.widyu.member.Member;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.util.MemberUtil;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -95,9 +96,11 @@ public class AlbumFeedService {
 
     private Slice<Long> findAlbumIdSlice(Long lastPostId, LocalDate date, Pageable pageable) {
         if (date != null) {
+            LocalDateTime startOfDay = date.atStartOfDay();
+            LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
             return (lastPostId != null)
-                    ? albumRepository.findAlbumIdsAfterPostIdByDate(lastPostId, date, pageable)
-                    : albumRepository.findLatestAlbumIdsByDate(date, pageable);
+                    ? albumRepository.findAlbumIdsAfterPostIdByDate(lastPostId, startOfDay, startOfNextDay, pageable)
+                    : albumRepository.findLatestAlbumIdsByDate(startOfDay, startOfNextDay, pageable);
         } else {
             return (lastPostId != null)
                     ? albumRepository.findAlbumIdsAfterPostId(lastPostId, pageable)

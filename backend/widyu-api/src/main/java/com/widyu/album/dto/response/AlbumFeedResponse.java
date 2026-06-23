@@ -4,6 +4,7 @@ import com.widyu.album.Album;
 import com.widyu.album.MediaType;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 public record AlbumFeedResponse(
         Long albumId,
@@ -30,10 +31,16 @@ public record AlbumFeedResponse(
     ) {}
 
     public static AlbumFeedResponse from(Album album, Boolean canEdit, List<ViewerInfo> viewers) {
+        String primaryVideoDuration = album.getDurations().stream()
+                .filter(Objects::nonNull)
+                .findFirst()
+                .map(d -> String.format("%d:%02d", d / 60, d % 60))
+                .orElse(null);
+
         return new AlbumFeedResponse(
                 album.getId(),
                 album.getMember().getName(),
-                null, // TODO: 프로필 이미지 구현 시 추가
+                album.getMember().getProfileImage(),
                 album.getContent(),
                 album.getMediaUrls(),
                 album.getThumbnailUrls(),
@@ -47,7 +54,7 @@ public record AlbumFeedResponse(
                 viewers,
                 album.getCreatedAt(),
                 canEdit,
-                null // TODO: 비디오 지속시간 구현 시 추가
+                primaryVideoDuration
         );
     }
 }
