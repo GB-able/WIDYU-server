@@ -2,6 +2,7 @@ import axios from 'axios'
 
 const client = axios.create({
   baseURL: '/api/v1',
+  withCredentials: true, // HttpOnly 쿠키 자동 전송
 })
 
 client.interceptors.request.use((config) => {
@@ -33,13 +34,6 @@ client.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const refreshToken = localStorage.getItem('admin_refresh_token')
-    if (!refreshToken) {
-      localStorage.removeItem('admin_token')
-      window.location.href = import.meta.env.BASE_URL + 'login'
-      return Promise.reject(error)
-    }
-
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         refreshQueue.push({
@@ -56,13 +50,11 @@ client.interceptors.response.use(
     isRefreshing = true
 
     try {
-      const { data } = await axios.post('/api/v1/auth/reissue', { refreshToken })
-      const newAccessToken: string = data.data.accessToken
-      const newRefreshToken: string = data.data.refreshToken
+      // refresh token은 HttpOnly 쿠키로 자동 전송됨 (withCredentials)
+      const { data } = await axios.post('/api/v1/auth/admin/refresh', null, { withCredentials: true })
+      const newAccessToken: string = data.accessToken
 
       localStorage.setItem('admin_token', newAccessToken)
-      localStorage.setItem('admin_refresh_token', newRefreshToken)
-
       client.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`
       flushQueue(newAccessToken)
 
@@ -71,7 +63,6 @@ client.interceptors.response.use(
     } catch (refreshError) {
       rejectQueue(refreshError)
       localStorage.removeItem('admin_token')
-      localStorage.removeItem('admin_refresh_token')
       window.location.href = import.meta.env.BASE_URL + 'login'
       return Promise.reject(refreshError)
     } finally {

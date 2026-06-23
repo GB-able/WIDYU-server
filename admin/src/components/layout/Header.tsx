@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import SearchModal from '../SearchModal'
+import client from '../../api/client'
 
 const ENV_MAP: Record<string, { label: string; style: string }> = {
   production: { label: 'PROD', style: 'bg-red-500 text-white' },
@@ -18,13 +19,17 @@ function EnvBadge() {
 }
 
 export default function Header() {
-  const logout = useAuthStore((s) => s.logout)
+  const clearToken = useAuthStore((s) => s.clearToken)
   const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      await client.post('/auth/admin/logout')
+    } finally {
+      clearToken()
+      navigate('/login')
+    }
   }
 
   useEffect(() => {

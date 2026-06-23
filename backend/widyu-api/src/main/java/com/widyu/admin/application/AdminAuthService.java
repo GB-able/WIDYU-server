@@ -3,6 +3,7 @@ package com.widyu.admin.application;
 import com.widyu.admin.AdminAction;
 import com.widyu.admin.AdminAuditLog;
 import com.widyu.admin.repository.AdminAuditLogRepository;
+import com.widyu.auth.dto.RefreshTokenDto;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -44,5 +45,14 @@ public class AdminAuthService {
                 AdminAuditLog.of(member.getId(), member.getName(), AdminAction.ADMIN_LOGIN, null, null, null)
         );
         return tokens;
+    }
+
+    @Transactional
+    public TokenPairResponse refresh(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "리프레시 토큰이 없습니다.");
+        }
+        RefreshTokenDto refreshTokenDto = jwtTokenProvider.retrieveRefreshToken(refreshToken);
+        return jwtTokenProvider.generateTokenPair(refreshTokenDto.memberId(), MemberRole.ADMIN, "local");
     }
 }
