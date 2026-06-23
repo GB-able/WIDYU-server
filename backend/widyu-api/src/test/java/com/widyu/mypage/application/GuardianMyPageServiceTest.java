@@ -744,7 +744,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(false);
+        given(seniorProfileRepository.existsByInviteCodeAndIdNot("ABC1234", 100L)).willReturn(false);
 
         // when
         guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234"));
@@ -785,7 +785,7 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(true);
+        given(seniorProfileRepository.existsByInviteCodeAndIdNot("ABC1234", 100L)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
