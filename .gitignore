@@ -49,8 +49,12 @@ src/main/resources/firebase/
 !admin/*.json
 
 # claude
-CLAUDE.mdDocs
+.claude/
 apiDocs/
+
+# local artifacts
+dump.rdb
+LEGACY_IMPROVEMENTS.md
 
 # test resources (large files)
 **/src/test/resources/video/test_large.mp4

@@ -14,9 +14,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public interface HomeDocs {
 
     @Operation(
-            summary = "시니어 - 홈 카드 4종 통합 조회",
+            summary = "시니어 - 홈 카드 통합 조회",
             description = """
-                    시니어 홈 화면의 카드 4종(약복용·앨범·건강달력·걷기)을 한 번에 조회합니다.
+                    시니어 홈 화면의 카드 5종(심박수·약복용·앨범·건강달력·걷기)을 한 번에 조회합니다.
 
                     **앨범 점수 산정 방식:**
                     - 기본 점수 = (좋아요 수 × 3) + (댓글 수 × 2)
