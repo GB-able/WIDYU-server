@@ -839,7 +839,7 @@ class GuardianMyPageServiceTest {
         guardianMyPageService.deleteFamilyMember(2L);
 
         // then
-        verify(seniorProfileRepository).delete(targetSeniorProfile);
+        verify(seniorProfileRepository).deleteByIdDirectly(200L);
     }
 
     @Test
