@@ -9,6 +9,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.widyu.auth.VerificationCode;
+import com.widyu.auth.application.SmsService;
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
@@ -49,6 +54,8 @@ class GuardianMyPageServiceTest {
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
+    @Mock private SmsService smsService;
+    @Mock private VerificationCodeRepository verificationCodeRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberRepository memberRepository;
@@ -181,6 +188,102 @@ class GuardianMyPageServiceTest {
         // then
         verify(s3Service, never()).deleteFile(anyString());
         verify(member).updateProfileImage("https://s3.new.png");
+    }
+
+    // ======================== 부모님(시니어) 추가 ========================
+
+    @Test
+    @DisplayName("정상적인 요청으로 부모님을 추가하면 시니어 회원과 프로필이 저장된다")
+    void 부모님_추가() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "101호", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
+        given(seniorProfileRepository.existsByInviteCode("1234567")).willReturn(false);
+
+        // when
+        guardianMyPageService.addSenior(request);
+
+        // then
+        verify(memberRepository).save(any(Member.class));
+        verify(seniorProfileRepository).save(any(SeniorProfile.class));
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 전화번호로 부모님을 추가하려 하면 예외가 발생한다")
+    void 부모님_추가_전화번호_중복() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member existingMember = mock(Member.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "101호", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.of(existingMember));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 초대코드로 부모님을 추가하려 하면 예외가 발생한다")
+    void 부모님_추가_초대코드_중복() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "101호", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
+        given(seniorProfileRepository.existsByInviteCode("1234567")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("가족에 연결되지 않은 보호자가 부모님을 추가하려 하면 예외가 발생한다")
+    void 부모님_추가_가족연결_없음() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "101호", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
+                .isInstanceOf(BusinessException.class);
     }
 
     // ======================== 연결된 시니어 목록 조회 ========================
@@ -789,6 +892,90 @@ class GuardianMyPageServiceTest {
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 보호자 전화번호 변경 - SMS 발송 ========================
+
+    @Test
+    @DisplayName("사용 중이지 않은 번호로 요청하면 SMS 인증코드가 발송된다")
+    void 전화번호_변경_SMS_발송() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberRepository.findByPhoneNumber("01099998888")).willReturn(Optional.empty());
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(currentMember.getName()).willReturn("한토마");
+
+        // when
+        guardianMyPageService.sendPhoneChangeSms(new UpdatePhoneRequest("01099998888"));
+
+        // then
+        verify(smsService).sendVerificationSms("01099998888", "한토마");
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 번호로 SMS 발송을 요청하면 예외가 발생한다")
+    void 전화번호_변경_SMS_발송_중복_번호() {
+        // given
+        Member existingMember = mock(Member.class);
+        given(memberRepository.findByPhoneNumber("01099998888")).willReturn(Optional.of(existingMember));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.sendPhoneChangeSms(new UpdatePhoneRequest("01099998888")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 보호자 전화번호 변경 - 인증코드 검증 ========================
+
+    @Test
+    @DisplayName("올바른 인증코드로 검증하면 전화번호가 변경되고 인증코드가 삭제된다")
+    void 전화번호_변경_인증코드_검증_성공() {
+        // given
+        Member currentMember = mock(Member.class);
+        VerificationCode verificationCode = VerificationCode.builder()
+                .phoneNumber("01099998888")
+                .code("123456")
+                .name("한토마")
+                .ttl(180)
+                .build();
+
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+
+        // when
+        guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456"));
+
+        // then
+        verify(currentMember).updatePhoneNumber("01099998888");
+        verify(verificationCodeRepository).deleteById("01099998888");
+    }
+
+    @Test
+    @DisplayName("인증코드가 불일치하면 예외가 발생한다")
+    void 전화번호_변경_인증코드_불일치() {
+        // given
+        VerificationCode verificationCode = VerificationCode.builder()
+                .phoneNumber("01099998888")
+                .code("999999")
+                .name("한토마")
+                .ttl(180)
+                .build();
+
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("인증코드가 만료되어 없으면 예외가 발생한다")
+    void 전화번호_변경_인증코드_만료() {
+        // given
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456")))
                 .isInstanceOf(BusinessException.class);
     }
 }
