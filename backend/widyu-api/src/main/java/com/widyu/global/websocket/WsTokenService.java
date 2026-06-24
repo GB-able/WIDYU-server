@@ -1,32 +1,35 @@
 package com.widyu.global.websocket;
 
-import com.widyu.auth.WsConnectionToken;
-import com.widyu.auth.repository.WsConnectionTokenRepository;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
+import java.time.Duration;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class WsTokenService {
 
-    private final WsConnectionTokenRepository wsConnectionTokenRepository;
+    private static final String KEY_PREFIX = "ws-token:";
+    private static final Duration TTL = Duration.ofSeconds(30);
+
+    private final StringRedisTemplate redisTemplate;
     private final MemberUtil memberUtil;
 
     public String issueToken() {
         Member member = memberUtil.getCurrentMember();
-        WsConnectionToken token = WsConnectionToken.create(member.getId());
-        wsConnectionTokenRepository.save(token);
-        return token.getId();
+        String tokenId = UUID.randomUUID().toString();
+        redisTemplate.opsForValue().set(KEY_PREFIX + tokenId, String.valueOf(member.getId()), TTL);
+        return tokenId;
     }
 
     public Long validateAndConsume(String tokenId) {
-        WsConnectionToken token = wsConnectionTokenRepository.findById(tokenId).orElse(null);
-        if (token == null) {
+        String memberId = redisTemplate.opsForValue().getAndDelete(KEY_PREFIX + tokenId);
+        if (memberId == null) {
             return null;
         }
-        wsConnectionTokenRepository.delete(token);
-        return token.getMemberId();
+        return Long.parseLong(memberId);
     }
 }
