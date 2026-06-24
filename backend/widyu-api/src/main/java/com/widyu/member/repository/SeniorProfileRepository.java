@@ -17,10 +17,6 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
 
     boolean existsByMemberId(Long memberId);
 
-    boolean existsByInviteCode(String inviteCode);
-
-    boolean existsByInviteCodeAndIdNot(String inviteCode, Long id);
-
     @Query("SELECT sp FROM SeniorProfile sp WHERE sp.inviteCode = :inviteCode AND sp.member.phoneNumber = :phoneNumber")
     Optional<SeniorProfile> findByInviteCodeAndMemberPhoneNumber(@Param("inviteCode") String inviteCode,
                                                                    @Param("phoneNumber") String phoneNumber);
