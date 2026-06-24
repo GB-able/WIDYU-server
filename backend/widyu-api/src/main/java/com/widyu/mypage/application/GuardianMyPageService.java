@@ -271,7 +271,7 @@ public class GuardianMyPageService {
         }
 
         pointHistoryRepository.deleteBySeniorProfileId(seniorProfile.getId());
-        seniorProfileRepository.delete(seniorProfile);
+        seniorProfileRepository.deleteByIdDirectly(seniorProfile.getId());
     }
 
     private void assertIsLeader(SeniorProfile seniorProfile, Long guardianId) {
