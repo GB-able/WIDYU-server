@@ -1,5 +1,6 @@
 package com.widyu.mypage.application;
 
+import com.widyu.auth.application.SmsService;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.auth.repository.VerificationCodeRepository;
@@ -41,6 +42,7 @@ public class GuardianMyPageService {
 
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
+    private final SmsService smsService;
     private final VerificationCodeRepository verificationCodeRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
@@ -88,6 +90,15 @@ public class GuardianMyPageService {
                 request.inviteCode(), request.birthDate()
         );
         seniorProfileRepository.save(profile);
+    }
+
+    @Transactional
+    public void sendPhoneChangeSms(UpdatePhoneRequest request) {
+        if (memberRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
+        }
+        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
+        smsService.sendVerificationSms(request.phoneNumber(), currentMember.getName());
     }
 
     @Transactional

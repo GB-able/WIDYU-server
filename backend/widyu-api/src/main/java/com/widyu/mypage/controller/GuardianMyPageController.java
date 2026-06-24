@@ -87,6 +87,16 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
+    @PostMapping("/phone/sms")
+    public ApiResponseTemplate<Void> sendPhoneChangeSms(@RequestBody @Valid UpdatePhoneRequest request) {
+        guardianMyPageService.sendPhoneChangeSms(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2025")
+                .message("인증 SMS가 발송되었습니다.")
+                .build();
+    }
+
+    @Override
     @PatchMapping("/phone")
     public ApiResponseTemplate<Void> verifyAndUpdatePhone(@RequestBody @Valid SmsCodeRequest request) {
         guardianMyPageService.verifyAndUpdatePhone(request);
