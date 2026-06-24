@@ -729,6 +729,66 @@ class GuardianMyPageServiceTest {
         verify(familyMembershipRepository).delete(targetMembership);
     }
 
+    @Test
+    @DisplayName("방장이 시니어를 삭제할 때 가족에 시니어가 2명 이상이면 삭제에 성공한다")
+    void 가족_멤버_삭제_시니어_2명_이상() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member targetMember = mock(Member.class);
+        SeniorProfile targetSeniorProfile = mock(SeniorProfile.class);
+        SeniorProfile otherSeniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(targetMember));
+        given(targetMember.getType()).willReturn(MemberType.SENIOR);
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(targetSeniorProfile));
+        given(targetSeniorProfile.getFamily()).willReturn(family);
+        given(targetSeniorProfile.getId()).willReturn(200L);
+        given(seniorProfileRepository.findAllByFamilyIdWithLock(10L))
+                .willReturn(List.of(targetSeniorProfile, otherSeniorProfile));
+
+        // when
+        guardianMyPageService.deleteFamilyMember(2L);
+
+        // then
+        verify(seniorProfileRepository).delete(targetSeniorProfile);
+    }
+
+    @Test
+    @DisplayName("방장이 시니어를 삭제할 때 마지막 시니어이면 예외가 발생한다")
+    void 가족_멤버_삭제_마지막_시니어_삭제_불가() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member targetMember = mock(Member.class);
+        SeniorProfile targetSeniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(targetMember));
+        given(targetMember.getType()).willReturn(MemberType.SENIOR);
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(targetSeniorProfile));
+        given(targetSeniorProfile.getFamily()).willReturn(family);
+        given(seniorProfileRepository.findAllByFamilyIdWithLock(10L))
+                .willReturn(List.of(targetSeniorProfile));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.deleteFamilyMember(2L))
+                .isInstanceOf(BusinessException.class);
+    }
+
     // ======================== 시니어 초대코드 수정 ========================
 
     @Test

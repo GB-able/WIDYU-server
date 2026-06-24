@@ -241,6 +241,11 @@ public class GuardianMyPageService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어에 접근 권한이 없습니다.");
         }
 
+        List<SeniorProfile> familySeniors = seniorProfileRepository.findAllByFamilyIdWithLock(familyId);
+        if (familySeniors.size() <= 1) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "가족에 시니어가 최소 1명은 있어야 합니다.");
+        }
+
         pointHistoryRepository.deleteBySeniorProfileId(seniorProfile.getId());
         seniorProfileRepository.delete(seniorProfile);
     }
