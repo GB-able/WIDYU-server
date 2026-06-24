@@ -44,6 +44,16 @@ public interface GuardianMyPageDocs {
     ApiResponseTemplate<Void> addSenior(SeniorSignUpRequest request);
 
     @Operation(
+            summary = "보호자 전화번호 변경 - 인증 SMS 발송",
+            description = "변경할 전화번호로 SMS 인증코드를 발송합니다. 이미 사용 중인 번호면 400을 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
+            @ApiResponse(responseCode = "400", description = "이미 사용 중인 전화번호")
+    })
+    ApiResponseTemplate<Void> sendPhoneChangeSms(UpdatePhoneRequest request);
+
+    @Operation(
             summary = "보호자 전화번호 변경 - 인증코드 검증 및 변경",
             description = """
                     SMS 인증코드를 검증하고 전화번호를 변경합니다.
