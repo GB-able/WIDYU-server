@@ -9,10 +9,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.widyu.auth.PhoneChangeVerified;
 import com.widyu.auth.VerificationCode;
 import com.widyu.auth.application.SmsService;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.PhoneChangeVerifiedRepository;
 import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
@@ -56,6 +58,7 @@ class GuardianMyPageServiceTest {
     @Mock private S3Service s3Service;
     @Mock private SmsService smsService;
     @Mock private VerificationCodeRepository verificationCodeRepository;
+    @Mock private PhoneChangeVerifiedRepository phoneChangeVerifiedRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberRepository memberRepository;
@@ -928,10 +931,9 @@ class GuardianMyPageServiceTest {
     // ======================== 보호자 전화번호 변경 - 인증코드 검증 ========================
 
     @Test
-    @DisplayName("올바른 인증코드로 검증하면 전화번호가 변경되고 인증코드가 삭제된다")
+    @DisplayName("올바른 인증코드로 검증하면 인증 완료 상태가 Redis에 저장된다")
     void 전화번호_변경_인증코드_검증_성공() {
         // given
-        Member currentMember = mock(Member.class);
         VerificationCode verificationCode = VerificationCode.builder()
                 .phoneNumber("01099998888")
                 .code("123456")
@@ -940,14 +942,13 @@ class GuardianMyPageServiceTest {
                 .build();
 
         given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
-        given(memberUtil.getCurrentMember()).willReturn(currentMember);
 
         // when
-        guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456"));
+        guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456"));
 
         // then
-        verify(currentMember).updatePhoneNumber("01099998888");
         verify(verificationCodeRepository).deleteById("01099998888");
+        verify(phoneChangeVerifiedRepository).save(any(PhoneChangeVerified.class));
     }
 
     @Test
@@ -964,7 +965,7 @@ class GuardianMyPageServiceTest {
         given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456")))
+        assertThatThrownBy(() -> guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456")))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -975,7 +976,41 @@ class GuardianMyPageServiceTest {
         given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.verifyAndUpdatePhone(new SmsCodeRequest("01099998888", "123456")))
+        assertThatThrownBy(() -> guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 보호자 전화번호 변경 ========================
+
+    @Test
+    @DisplayName("인증이 완료된 번호로 변경 요청하면 전화번호가 업데이트된다")
+    void 전화번호_변경() {
+        // given
+        Member currentMember = mock(Member.class);
+        PhoneChangeVerified verified = PhoneChangeVerified.builder()
+                .phoneNumber("01099998888")
+                .ttl(300)
+                .build();
+
+        given(phoneChangeVerifiedRepository.findById("01099998888")).willReturn(Optional.of(verified));
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+
+        // when
+        guardianMyPageService.updatePhone(new UpdatePhoneRequest("01099998888"));
+
+        // then
+        verify(currentMember).updatePhoneNumber("01099998888");
+        verify(phoneChangeVerifiedRepository).deleteById("01099998888");
+    }
+
+    @Test
+    @DisplayName("인증이 완료되지 않은 번호로 변경 요청하면 예외가 발생한다")
+    void 전화번호_변경_인증_미완료() {
+        // given
+        given(phoneChangeVerifiedRepository.findById("01099998888")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updatePhone(new UpdatePhoneRequest("01099998888")))
                 .isInstanceOf(BusinessException.class);
     }
 }

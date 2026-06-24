@@ -1,8 +1,10 @@
 package com.widyu.mypage.application;
 
+import com.widyu.auth.PhoneChangeVerified;
 import com.widyu.auth.application.SmsService;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.PhoneChangeVerifiedRepository;
 import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -40,10 +42,13 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class GuardianMyPageService {
 
+    private static final long PHONE_CHANGE_VERIFIED_TTL_SECONDS = 300;
+
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
     private final SmsService smsService;
     private final VerificationCodeRepository verificationCodeRepository;
+    private final PhoneChangeVerifiedRepository phoneChangeVerifiedRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberRepository memberRepository;
@@ -102,7 +107,7 @@ public class GuardianMyPageService {
     }
 
     @Transactional
-    public void verifyAndUpdatePhone(SmsCodeRequest request) {
+    public void verifyPhoneChangeCode(SmsCodeRequest request) {
         String newPhone = request.phoneNumber();
 
         boolean codeMatches = verificationCodeRepository.findById(newPhone)
@@ -113,9 +118,23 @@ public class GuardianMyPageService {
             throw new BusinessException(ErrorCode.SMS_VERIFICATION_CODE_MISMATCH);
         }
 
+        verificationCodeRepository.deleteById(newPhone);
+        phoneChangeVerifiedRepository.save(PhoneChangeVerified.builder()
+                .phoneNumber(newPhone)
+                .ttl(PHONE_CHANGE_VERIFIED_TTL_SECONDS)
+                .build());
+    }
+
+    @Transactional
+    public void updatePhone(UpdatePhoneRequest request) {
+        String newPhone = request.phoneNumber();
+
+        phoneChangeVerifiedRepository.findById(newPhone)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "전화번호 인증이 완료되지 않았습니다."));
+
         Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
         currentMember.updatePhoneNumber(newPhone);
-        verificationCodeRepository.deleteById(newPhone);
+        phoneChangeVerifiedRepository.deleteById(newPhone);
     }
 
     public ConnectedSeniorResponse getConnectedSeniors() {

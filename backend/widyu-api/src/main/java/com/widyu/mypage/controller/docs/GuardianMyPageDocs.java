@@ -54,17 +54,24 @@ public interface GuardianMyPageDocs {
     ApiResponseTemplate<Void> sendPhoneChangeSms(UpdatePhoneRequest request);
 
     @Operation(
-            summary = "보호자 전화번호 변경 - 인증코드 검증 및 변경",
-            description = """
-                    SMS 인증코드를 검증하고 전화번호를 변경합니다.
-                    인증 성공 시 즉시 전화번호가 업데이트되며 인증코드는 삭제됩니다.
-                    """
+            summary = "보호자 전화번호 변경 - 인증코드 검증",
+            description = "SMS 인증코드를 검증합니다. 성공 시 5분간 유효한 인증 완료 상태가 Redis에 저장됩니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "인증 성공"),
+            @ApiResponse(responseCode = "400", description = "인증코드 불일치 또는 만료")
+    })
+    ApiResponseTemplate<Void> verifyPhoneChangeCode(SmsCodeRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경",
+            description = "인증이 완료된 전화번호로 변경합니다. 인증 완료 후 5분 이내에 호출해야 합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "전화번호 변경 성공"),
-            @ApiResponse(responseCode = "400", description = "인증코드 불일치 또는 만료")
+            @ApiResponse(responseCode = "400", description = "인증이 완료되지 않은 번호")
     })
-    ApiResponseTemplate<Void> verifyAndUpdatePhone(SmsCodeRequest request);
+    ApiResponseTemplate<Void> updatePhone(UpdatePhoneRequest request);
 
     @Operation(summary = "보호자 프로필 이미지 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})

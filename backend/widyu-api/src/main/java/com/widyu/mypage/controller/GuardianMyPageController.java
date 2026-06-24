@@ -97,11 +97,21 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
     }
 
     @Override
-    @PatchMapping("/phone")
-    public ApiResponseTemplate<Void> verifyAndUpdatePhone(@RequestBody @Valid SmsCodeRequest request) {
-        guardianMyPageService.verifyAndUpdatePhone(request);
+    @PostMapping("/phone/verify")
+    public ApiResponseTemplate<Void> verifyPhoneChangeCode(@RequestBody @Valid SmsCodeRequest request) {
+        guardianMyPageService.verifyPhoneChangeCode(request);
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2026")
+                .message("인증이 완료되었습니다.")
+                .build();
+    }
+
+    @Override
+    @PatchMapping("/phone")
+    public ApiResponseTemplate<Void> updatePhone(@RequestBody @Valid UpdatePhoneRequest request) {
+        guardianMyPageService.updatePhone(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2028")
                 .message("전화번호 변경이 완료되었습니다.")
                 .build();
     }
