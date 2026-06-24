@@ -212,7 +212,6 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.getFamily()).willReturn(family);
         given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
-        given(seniorProfileRepository.existsByInviteCode("1234567")).willReturn(false);
 
         // when
         guardianMyPageService.addSenior(request);
@@ -240,30 +239,6 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.getFamily()).willReturn(family);
         given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.of(existingMember));
-
-        // when & then
-        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
-                .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    @DisplayName("이미 사용 중인 초대코드로 부모님을 추가하려 하면 예외가 발생한다")
-    void 부모님_추가_초대코드_중복() {
-        // given
-        Member guardian = mock(Member.class);
-        FamilyMembership membership = mock(FamilyMembership.class);
-        Family family = mock(Family.class);
-        SeniorSignUpRequest request = new SeniorSignUpRequest(
-                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
-        );
-
-        given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(guardian.getId()).willReturn(1L);
-        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
-        given(membership.getFamily()).willReturn(family);
-        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
-        given(seniorProfileRepository.existsByInviteCode("1234567")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
@@ -910,7 +885,6 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(false);
 
         // when
         guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234"));
@@ -932,26 +906,6 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
-
-        // when & then
-        assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
-                .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    @DisplayName("이미 사용 중인 초대코드로 수정하려 하면 예외가 발생한다")
-    void 시니어_초대코드_수정_중복_코드() {
-        // given
-        Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
-
-        given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))

@@ -82,9 +82,6 @@ public class GuardianMyPageService {
         if (memberRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
         }
-        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
-            throw new BusinessException(ErrorCode.INVITE_CODE_DUPLICATED);
-        }
 
         Member seniorMember = Member.createMember(MemberType.SENIOR, request.name(), request.phoneNumber());
         memberRepository.save(seniorMember);
@@ -193,9 +190,6 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
-        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다.");
-        }
         seniorProfile.updateInviteCode(request.inviteCode());
     }
 
