@@ -10,15 +10,21 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.addressbookmark.application.GeocodingService;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
+import com.widyu.global.entity.Status;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -53,6 +59,8 @@ public class GuardianMyPageService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberRepository memberRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final ParentLocationRepository parentLocationRepository;
+    private final GeocodingService geocodingService;
 
     public GuardianInfoResponse getGuardianInfo() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
@@ -92,6 +100,20 @@ public class GuardianMyPageService {
                 request.inviteCode(), request.birthDate()
         );
         seniorProfileRepository.save(profile);
+        saveHomeParentLocation(seniorMember, request.address());
+    }
+
+    private void saveHomeParentLocation(Member seniorMember, String address) {
+        GeocodingResponse geo = geocodingService.geocode(address);
+        parentLocationRepository.save(ParentLocation.builder()
+                .member(seniorMember)
+                .locationType(LocationType.HOME)
+                .placeAddress(address)
+                .latitude(geo.latitude())
+                .longitude(geo.longitude())
+                .name("집")
+                .status(Status.ACTIVE)
+                .build());
     }
 
     @Transactional
@@ -166,7 +188,25 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
+        Member seniorMember = seniorProfile.getMember();
         seniorProfile.updateAddress(request.address());
+        GeocodingResponse geo = geocodingService.geocode(request.address());
+        parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME)
+                .ifPresentOrElse(
+                        location -> location.update(
+                                LocationType.HOME, request.address(),
+                                geo.latitude(), geo.longitude(), location.getName()
+                        ),
+                        () -> parentLocationRepository.save(ParentLocation.builder()
+                                .member(seniorMember)
+                                .locationType(LocationType.HOME)
+                                .placeAddress(request.address())
+                                .latitude(geo.latitude())
+                                .longitude(geo.longitude())
+                                .name("집")
+                                .status(Status.ACTIVE)
+                                .build())
+                );
     }
 
     @Transactional

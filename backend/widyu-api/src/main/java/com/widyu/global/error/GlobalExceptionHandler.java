@@ -6,6 +6,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 @Slf4j
 @RestControllerAdvice
@@ -55,6 +57,22 @@ public class GlobalExceptionHandler {
         final String message = String.format("%s (%s)", trimTrailingPeriod(defaultMsg), field);
 
         log.error("Validation error for field {}: {}", field, defaultMsg);
+
+        return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleHandlerMethodValidationException(
+            final HandlerMethodValidationException e
+    ) {
+        String message = e.getAllValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(error -> error.getDefaultMessage())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("요청 값이 유효하지 않습니다");
+
+        log.error("Validation error: {}", message);
 
         return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
     }

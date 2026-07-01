@@ -19,10 +19,16 @@ public class GeocodingService {
     private String clientId;
 
     public GeocodingResponse geocode(String address) {
-        KakaoGeocodingResponse response = kakaoGeocodingClient.geocode("KakaoAK " + clientId, address);
+        KakaoGeocodingResponse response;
+        try {
+            response = kakaoGeocodingClient.geocode("KakaoAK " + clientId, address);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "주소 좌표 변환 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+        }
 
         if (response.documents() == null || response.documents().isEmpty()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "좌표를 찾을 수 없는 주소입니다.");
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "입력한 주소의 좌표를 찾을 수 없습니다. 정확한 도로명주소를 입력해 주세요.");
         }
 
         return GeocodingResponse.from(response.documents().get(0));

@@ -19,6 +19,9 @@ import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.addressbookmark.application.GeocodingService;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.LocalAccount;
@@ -34,6 +37,8 @@ import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
@@ -63,6 +68,8 @@ class GuardianMyPageServiceTest {
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private PointHistoryRepository pointHistoryRepository;
+    @Mock private ParentLocationRepository parentLocationRepository;
+    @Mock private GeocodingService geocodingService;
 
     @InjectMocks
     private GuardianMyPageService guardianMyPageService;
@@ -212,6 +219,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.getFamily()).willReturn(family);
         given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
+        given(geocodingService.geocode("서울시 강남구")).willReturn(new GeocodingResponse("37.55", "126.85"));
 
         // when
         guardianMyPageService.addSenior(request);
@@ -219,6 +227,7 @@ class GuardianMyPageServiceTest {
         // then
         verify(memberRepository).save(any(Member.class));
         verify(seniorProfileRepository).save(any(SeniorProfile.class));
+        verify(parentLocationRepository).save(any(com.widyu.parentlocation.ParentLocation.class));
     }
 
     @Test
@@ -544,10 +553,39 @@ class GuardianMyPageServiceTest {
     // ======================== 시니어 주소 수정 ========================
 
     @Test
-    @DisplayName("시니어 주소를 수정하면 시니어 프로필의 주소가 변경된다")
+    @DisplayName("시니어 주소를 수정하면 시니어 프로필 주소와 HOME 안심구역 좌표가 갱신된다")
     void 시니어_주소_수정() {
         // given
         Member guardian = mock(Member.class);
+        Member seniorMember = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        ParentLocation homeLocation = mock(ParentLocation.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.of(homeLocation));
+
+        // when
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
+
+        // then
+        verify(seniorProfile).updateAddress("서울시 강서구");
+        verify(homeLocation).update(LocationType.HOME, "서울시 강서구", "37.55", "126.85", homeLocation.getName());
+    }
+
+    @Test
+    @DisplayName("시니어 주소를 수정할 때 HOME 안심구역이 없으면 새로 생성된다")
+    void 시니어_주소_수정_HOME_최초_생성() {
+        // given
+        Member guardian = mock(Member.class);
+        Member seniorMember = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -556,12 +594,16 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.empty());
 
         // when
         guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
 
         // then
-        verify(seniorProfile).updateAddress("서울시 강서구");
+        verify(parentLocationRepository).save(any(ParentLocation.class));
     }
 
     // ======================== 가족 멤버 목록 조회 ========================
