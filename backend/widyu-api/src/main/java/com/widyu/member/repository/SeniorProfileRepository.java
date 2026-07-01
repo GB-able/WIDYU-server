@@ -18,7 +18,7 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
 
     boolean existsByMemberId(Long memberId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM SeniorProfile sp WHERE sp.id = :id")
     void deleteByIdDirectly(@Param("id") Long id);
 

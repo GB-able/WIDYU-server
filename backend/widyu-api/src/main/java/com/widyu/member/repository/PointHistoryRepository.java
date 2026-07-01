@@ -11,7 +11,7 @@ public interface PointHistoryRepository extends JpaRepository<PointHistory, Long
 
     List<PointHistory> findAllBySeniorProfileIdOrderByCreatedAtDesc(Long seniorProfileId);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("DELETE FROM PointHistory p WHERE p.seniorProfile.id = :seniorProfileId")
     void deleteBySeniorProfileId(@Param("seniorProfileId") Long seniorProfileId);
 }

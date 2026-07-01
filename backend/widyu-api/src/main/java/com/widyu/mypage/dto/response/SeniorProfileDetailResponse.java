@@ -10,7 +10,6 @@ public record SeniorProfileDetailResponse(
         LocalDate birthDate,
         String phoneNumber,
         String address,
-        String detailAddress,
         String inviteCode
 ) {
     public static SeniorProfileDetailResponse of(Member member, SeniorProfile seniorProfile) {
@@ -20,7 +19,6 @@ public record SeniorProfileDetailResponse(
                 seniorProfile.getBirthDate(),
                 member.getPhoneNumber(),
                 seniorProfile.getAddress(),
-                seniorProfile.getDetailAddress(),
                 seniorProfile.getInviteCode()
         );
     }

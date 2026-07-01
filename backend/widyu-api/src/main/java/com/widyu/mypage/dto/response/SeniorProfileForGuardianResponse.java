@@ -11,7 +11,6 @@ public record SeniorProfileForGuardianResponse(
         LocalDate birthDate,
         String phoneNumber,
         String address,
-        String detailAddress,
         String inviteCode
 ) {
     public static SeniorProfileForGuardianResponse of(Member seniorMember, SeniorProfile seniorProfile) {
@@ -22,7 +21,6 @@ public record SeniorProfileForGuardianResponse(
                 seniorProfile.getBirthDate(),
                 seniorMember.getPhoneNumber(),
                 seniorProfile.getAddress(),
-                seniorProfile.getDetailAddress(),
                 seniorProfile.getInviteCode()
         );
     }

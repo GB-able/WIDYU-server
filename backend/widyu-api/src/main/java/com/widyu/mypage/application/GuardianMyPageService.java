@@ -88,7 +88,7 @@ public class GuardianMyPageService {
 
         SeniorProfile profile = SeniorProfile.createSeniorProfile(
                 seniorMember, family,
-                null, request.detailAddress(),
+                null,
                 request.inviteCode(), request.birthDate()
         );
         seniorProfileRepository.save(profile);
@@ -166,7 +166,7 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
-        seniorProfile.updateAddress(request.address(), request.detailAddress());
+        seniorProfile.updateAddress(request.address());
     }
 
     @Transactional

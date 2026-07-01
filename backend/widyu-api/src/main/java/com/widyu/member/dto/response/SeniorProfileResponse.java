@@ -11,7 +11,6 @@ public record SeniorProfileResponse(
         String name,
         String profileImage,
         String address,
-        String detailAddress,
         String inviteCode,
         Long points,
         List<GuardianInfo> guardians
@@ -44,7 +43,6 @@ public record SeniorProfileResponse(
                 seniorProfile.getMember().getName(),
                 seniorProfile.getMember().getProfileImage(),
                 seniorProfile.getAddress(),
-                seniorProfile.getDetailAddress(),
                 seniorProfile.getInviteCode(),
                 seniorProfile.getPoints(),
                 guardianInfos
