@@ -74,7 +74,7 @@ class GuardianHomeServiceTest {
         Member otherSenior = Member.createMember(MemberType.SENIOR, "다른가족부모님", "01055556666");
         Family otherFamily = Family.createFamily("OTHER1");
         SeniorProfile otherProfile = SeniorProfile.createSeniorProfile(
-                otherSenior, otherFamily, "서울시", null, "9990001", null);
+                otherSenior, otherFamily, "서울시", "9990001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(memberRepository.findById(42L)).willReturn(Optional.of(otherSenior));
@@ -95,7 +95,7 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
@@ -122,7 +122,7 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
@@ -149,7 +149,7 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
@@ -176,7 +176,7 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         MedicineSchedule schedule1 = mock(MedicineSchedule.class);
         MedicineSchedule schedule2 = mock(MedicineSchedule.class);

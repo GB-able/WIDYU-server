@@ -204,7 +204,7 @@ class GuardianMyPageServiceTest {
         Family family = mock(Family.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "서울시 강남구", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -231,7 +231,7 @@ class GuardianMyPageServiceTest {
         Member existingMember = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "서울시 강남구", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -252,7 +252,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "서울시 강남구", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -558,10 +558,10 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
 
         // when
-        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호"));
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
 
         // then
-        verify(seniorProfile).updateAddress("서울시 강서구", "101호");
+        verify(seniorProfile).updateAddress("서울시 강서구");
     }
 
     // ======================== 가족 멤버 목록 조회 ========================

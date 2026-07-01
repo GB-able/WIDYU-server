@@ -112,7 +112,6 @@ class SeniorMyPageServiceTest {
         given(member.getProfileImage()).willReturn("image.png");
         given(seniorProfile.getBirthDate()).willReturn(LocalDate.of(1950, 1, 1));
         given(seniorProfile.getAddress()).willReturn("서울시 강서구");
-        given(seniorProfile.getDetailAddress()).willReturn("101호");
         given(seniorProfile.getInviteCode()).willReturn("1234567");
 
         // when
