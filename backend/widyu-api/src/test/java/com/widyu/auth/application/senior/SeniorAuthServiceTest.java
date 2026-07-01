@@ -58,8 +58,8 @@ class SeniorAuthServiceTest {
         ReflectionTestUtils.setField(guardian, "id", 1L);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "1234567"),
-                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "7654321")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567"),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321")
         );
 
         Member seniorMember1 = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
@@ -94,7 +94,7 @@ class SeniorAuthServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(mock(FamilyMembership.class)));
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
         );
 
         // when & then
@@ -180,7 +180,7 @@ class SeniorAuthServiceTest {
         given(familyRepository.existsByFamilyCode(anyString())).willReturn(true);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
         );
 
         // when & then
@@ -202,8 +202,8 @@ class SeniorAuthServiceTest {
         given(familyRepository.save(any(Family.class))).willReturn(family);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "1234567"),
-                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "7654321")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567"),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "부산", "7654321")
         );
 
         given(memberRepository.saveAll(anyList())).willAnswer(inv -> {

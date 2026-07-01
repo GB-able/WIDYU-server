@@ -104,7 +104,7 @@ public class SeniorAuthService {
             SeniorProfile profile = SeniorProfile.createSeniorProfile(
                     member,
                     family,
-                    null,
+                    req.address(),
                     req.inviteCode(),
                     req.birthDate()
             );

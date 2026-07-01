@@ -25,6 +25,10 @@ public record SeniorSignUpRequest(
         )
         String phoneNumber,
 
+        @NotBlank(message = "주소는 필수입니다.")
+        @Size(max = 200, message = "주소는 최대 200자입니다.")
+        String address,
+
         @NotBlank(message = "초대코드는 필수입니다.")
         @Pattern(regexp = "^\\d{7}$", message = "초대코드는 숫자만 7자리로 입력해주세요.")
         String inviteCode

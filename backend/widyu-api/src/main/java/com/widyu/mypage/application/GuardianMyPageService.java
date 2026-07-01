@@ -88,7 +88,7 @@ public class GuardianMyPageService {
 
         SeniorProfile profile = SeniorProfile.createSeniorProfile(
                 seniorMember, family,
-                null,
+                request.address(),
                 request.inviteCode(), request.birthDate()
         );
         seniorProfileRepository.save(profile);

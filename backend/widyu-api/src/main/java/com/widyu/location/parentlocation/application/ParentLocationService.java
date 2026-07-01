@@ -15,6 +15,7 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
 import com.widyu.parentlocation.ParentLocation;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -60,6 +61,10 @@ public class ParentLocationService {
 
     @Transactional
     public void create(ParentLocationCreateRequest request) {
+        if (request.locationType() == LocationType.HOME) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
+        }
+
         Member seniorMember = memberRepository.findById(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
 
@@ -83,11 +88,19 @@ public class ParentLocationService {
 
     @Transactional
     public void update(Long parentLocationId, ParentLocationUpdateRequest request) {
+        if (request.locationType() == LocationType.HOME) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
+        }
+
         Member seniorMember = memberRepository.findById(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
 
         ParentLocation location = parentLocationRepository.findByIdAndMember(parentLocationId, seniorMember)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 장소입니다."));
+
+        if (location.getLocationType() == LocationType.HOME) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
+        }
 
         location.update(
                 request.locationType(),
