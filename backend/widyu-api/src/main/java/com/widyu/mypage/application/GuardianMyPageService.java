@@ -19,6 +19,7 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -29,6 +30,9 @@ import com.widyu.mypage.dto.response.FamilyMemberListResponse;
 import com.widyu.mypage.dto.response.GuardianInfoResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
+import com.widyu.global.entity.Status;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +57,7 @@ public class GuardianMyPageService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberRepository memberRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final ParentLocationRepository parentLocationRepository;
 
     public GuardianInfoResponse getGuardianInfo() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
@@ -167,6 +172,29 @@ public class GuardianMyPageService {
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
         seniorProfile.updateAddress(request.address(), request.detailAddress());
+        syncHomeParentLocation(seniorProfile.getMember(), request);
+    }
+
+    private void syncHomeParentLocation(Member seniorMember, UpdateSeniorAddressRequest request) {
+        parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME)
+                .ifPresentOrElse(
+                        location -> location.update(
+                                LocationType.HOME,
+                                request.address(),
+                                request.latitude(),
+                                request.longitude(),
+                                location.getName()
+                        ),
+                        () -> parentLocationRepository.save(ParentLocation.builder()
+                                .member(seniorMember)
+                                .locationType(LocationType.HOME)
+                                .placeAddress(request.address())
+                                .latitude(request.latitude())
+                                .longitude(request.longitude())
+                                .name("집")
+                                .status(Status.ACTIVE)
+                                .build())
+                );
     }
 
     @Transactional
