@@ -10,10 +10,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "Address Search", description = "주소 검색 API (도로명주소 공공 API)")
+@Tag(name = "Address Search", description = "주소 검색 API (도로명주소 공공 API + Kakao 좌표 변환)")
 public interface AddressSearchDocs {
 
-    @Operation(summary = "주소 검색", description = "키워드로 도로명주소를 검색합니다.")
+    @Operation(
+            summary = "주소 검색",
+            description = "키워드로 도로명주소를 검색합니다. 각 결과에 Kakao Local API로 변환한 위도·경도가 포함됩니다. 좌표 변환에 실패한 항목은 latitude/longitude가 null로 반환됩니다."
+    )
     @ApiResponse(
             responseCode = "200",
             description = "주소 검색 성공",
@@ -32,7 +35,9 @@ public interface AddressSearchDocs {
                                             "bdNm": "MBC",
                                             "siNm": "서울특별시",
                                             "sggNm": "마포구",
-                                            "emdNm": "상암동"
+                                            "emdNm": "상암동",
+                                            "latitude": "37.5666103",
+                                            "longitude": "126.9783882"
                                         }
                                     ],
                                     "totalCount": 1,
