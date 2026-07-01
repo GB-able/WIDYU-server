@@ -219,6 +219,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.getFamily()).willReturn(family);
         given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
+        given(geocodingService.geocode("서울시 강남구")).willReturn(new GeocodingResponse("37.55", "126.85"));
 
         // when
         guardianMyPageService.addSenior(request);
@@ -226,6 +227,7 @@ class GuardianMyPageServiceTest {
         // then
         verify(memberRepository).save(any(Member.class));
         verify(seniorProfileRepository).save(any(SeniorProfile.class));
+        verify(parentLocationRepository).save(any(com.widyu.parentlocation.ParentLocation.class));
     }
 
     @Test

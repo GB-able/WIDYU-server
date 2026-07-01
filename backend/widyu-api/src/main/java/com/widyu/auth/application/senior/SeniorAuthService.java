@@ -77,20 +77,22 @@ public class SeniorAuthService {
         for (int i = 0; i < requests.size(); i++) {
             String address = requests.get(i).address();
             Member member = members.get(i);
+            GeocodingResponse geo;
             try {
-                GeocodingResponse geo = geocodingService.geocode(address);
-                parentLocationRepository.save(ParentLocation.builder()
-                        .member(member)
-                        .locationType(LocationType.HOME)
-                        .placeAddress(address)
-                        .latitude(geo.latitude())
-                        .longitude(geo.longitude())
-                        .name("집")
-                        .status(Status.ACTIVE)
-                        .build());
+                geo = geocodingService.geocode(address);
             } catch (Exception e) {
                 log.warn("HOME 안심구역 좌표 변환 실패, 추후 마이페이지에서 수정 필요: {}", address);
+                continue;
             }
+            parentLocationRepository.save(ParentLocation.builder()
+                    .member(member)
+                    .locationType(LocationType.HOME)
+                    .placeAddress(address)
+                    .latitude(geo.latitude())
+                    .longitude(geo.longitude())
+                    .name("집")
+                    .status(Status.ACTIVE)
+                    .build());
         }
     }
 
