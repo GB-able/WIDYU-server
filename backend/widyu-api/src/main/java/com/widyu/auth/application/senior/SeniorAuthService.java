@@ -77,13 +77,7 @@ public class SeniorAuthService {
         for (int i = 0; i < requests.size(); i++) {
             String address = requests.get(i).address();
             Member member = members.get(i);
-            GeocodingResponse geo;
-            try {
-                geo = geocodingService.geocode(address);
-            } catch (Exception e) {
-                log.warn("HOME 안심구역 좌표 변환 실패, 추후 마이페이지에서 수정 필요: {}", address);
-                continue;
-            }
+            GeocodingResponse geo = geocodingService.geocode(address);
             parentLocationRepository.save(ParentLocation.builder()
                     .member(member)
                     .locationType(LocationType.HOME)

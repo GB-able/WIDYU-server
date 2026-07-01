@@ -124,8 +124,8 @@ class SeniorAuthServiceTest {
     }
 
     @Test
-    @DisplayName("시니어 일괄 등록 시 지오코딩 실패해도 가입은 성공하고 HOME 저장은 건너뛴다")
-    void 시니어_일괄_등록_시_지오코딩_실패해도_가입은_성공한다() {
+    @DisplayName("시니어 일괄 등록 시 지오코딩 실패하면 가입도 실패한다")
+    void 시니어_일괄_등록_시_지오코딩_실패하면_가입도_실패한다() {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
         ReflectionTestUtils.setField(guardian, "id", 1L);
@@ -144,13 +144,12 @@ class SeniorAuthServiceTest {
         given(memberRepository.saveAll(anyList())).willReturn(List.of(seniorMember));
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
         given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(geocodingService.geocode(anyString())).willThrow(new BusinessException(ErrorCode.BAD_REQUEST, "좌표 없음"));
+        given(geocodingService.geocode(anyString()))
+                .willThrow(new BusinessException(ErrorCode.BAD_REQUEST, "입력한 주소의 좌표를 찾을 수 없습니다. 정확한 도로명주소를 입력해 주세요."));
 
-        // when
-        seniorAuthService.seniorSignUpBulk(requests);
-
-        // then
-        verify(memberRepository).saveAll(anyList());
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class);
         verify(parentLocationRepository, org.mockito.Mockito.never()).save(any());
     }
 
