@@ -30,6 +30,7 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
@@ -63,6 +64,7 @@ class GuardianMyPageServiceTest {
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private PointHistoryRepository pointHistoryRepository;
+    @Mock private ParentLocationRepository parentLocationRepository;
 
     @InjectMocks
     private GuardianMyPageService guardianMyPageService;
@@ -550,15 +552,19 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
 
+        Member seniorMember = mock(Member.class);
+
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(guardian.getId()).willReturn(1L);
         given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(parentLocationRepository.findByMemberAndLocationType(any(), any())).willReturn(Optional.empty());
 
         // when
-        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호"));
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호", "37.5665", "126.9780"));
 
         // then
         verify(seniorProfile).updateAddress("서울시 강서구", "101호");
