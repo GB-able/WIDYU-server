@@ -5,15 +5,21 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.goal.addressbookmark.client.JusoApiClient;
 import com.widyu.goal.addressbookmark.dto.external.JusoApiResponse;
 import com.widyu.goal.addressbookmark.dto.response.AddressSearchResponse;
+import com.widyu.goal.addressbookmark.dto.response.AddressSearchResponse.AddressItem;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AddressSearchService {
 
     private final JusoApiClient jusoApiClient;
+    private final GeocodingService geocodingService;
 
     @Value("${juso.api.confm-key}")
     private String confmKey;
@@ -26,6 +32,27 @@ public class AddressSearchService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "주소 검색 실패: " + common.errorMessage());
         }
 
-        return AddressSearchResponse.of(response);
+        List<JusoApiResponse.JusoItem> jusoItems = response.results().juso();
+        List<AddressItem> addresses = (jusoItems == null) ? List.of() : jusoItems.stream()
+                .map(item -> {
+                    String latitude = null;
+                    String longitude = null;
+                    try {
+                        GeocodingResponse geo = geocodingService.geocode(item.roadAddr());
+                        latitude = geo.latitude();
+                        longitude = geo.longitude();
+                    } catch (Exception e) {
+                        log.warn("좌표 변환 실패: {}", item.roadAddr());
+                    }
+                    return AddressItem.from(item, latitude, longitude);
+                })
+                .toList();
+
+        return new AddressSearchResponse(
+                addresses,
+                AddressSearchResponse.parseIntSafe(common.totalCount()),
+                AddressSearchResponse.parseIntSafe(common.currentPage()),
+                AddressSearchResponse.parseIntSafe(common.countPerPage())
+        );
     }
 }

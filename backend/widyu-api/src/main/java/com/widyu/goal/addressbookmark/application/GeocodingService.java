@@ -15,11 +15,11 @@ public class GeocodingService {
 
     private final KakaoGeocodingClient kakaoGeocodingClient;
 
-    @Value("${oauth.kakao.admin-key:}")
-    private String adminKey;
+    @Value("${oauth.kakao.client-id}")
+    private String clientId;
 
     public GeocodingResponse geocode(String address) {
-        KakaoGeocodingResponse response = kakaoGeocodingClient.geocode("KakaoAK " + adminKey, address);
+        KakaoGeocodingResponse response = kakaoGeocodingClient.geocode("KakaoAK " + clientId, address);
 
         if (response.documents() == null || response.documents().isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "좌표를 찾을 수 없는 주소입니다.");

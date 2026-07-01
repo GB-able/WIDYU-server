@@ -28,7 +28,7 @@ class GeocodingServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(geocodingService, "adminKey", "test-admin-key");
+        ReflectionTestUtils.setField(geocodingService, "clientId", "test-client-id");
     }
 
     @Test
@@ -38,7 +38,7 @@ class GeocodingServiceTest {
         KakaoGeocodingResponse response = new KakaoGeocodingResponse(
                 List.of(new KakaoGeocodingResponse.Document("126.9783882", "37.5666103"))
         );
-        given(kakaoGeocodingClient.geocode("KakaoAK test-admin-key", "서울특별시 마포구 성암로 301")).willReturn(response);
+        given(kakaoGeocodingClient.geocode("KakaoAK test-client-id", "서울특별시 마포구 성암로 301")).willReturn(response);
 
         // when
         GeocodingResponse result = geocodingService.geocode("서울특별시 마포구 성암로 301");
@@ -52,7 +52,7 @@ class GeocodingServiceTest {
     @DisplayName("검색 결과가 없으면 BusinessException이 발생한다")
     void 검색_결과_없으면_예외가_발생한다() {
         // given
-        given(kakaoGeocodingClient.geocode("KakaoAK test-admin-key", "존재하지않는주소")).willReturn(
+        given(kakaoGeocodingClient.geocode("KakaoAK test-client-id","존재하지않는주소")).willReturn(
                 new KakaoGeocodingResponse(List.of())
         );
 
@@ -65,7 +65,7 @@ class GeocodingServiceTest {
     @DisplayName("documents가 null이면 BusinessException이 발생한다")
     void documents가_null이면_예외가_발생한다() {
         // given
-        given(kakaoGeocodingClient.geocode("KakaoAK test-admin-key", "null주소")).willReturn(
+        given(kakaoGeocodingClient.geocode("KakaoAK test-client-id","null주소")).willReturn(
                 new KakaoGeocodingResponse(null)
         );
 
