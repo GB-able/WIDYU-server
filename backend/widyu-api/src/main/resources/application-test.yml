@@ -51,3 +51,7 @@ juso:
 kakao:
   geocoding:
     url: https://dapi.kakao.com
+
+oauth:
+  kakao:
+    client-id: test-kakao-client-id
