@@ -204,7 +204,7 @@ class GuardianMyPageServiceTest {
         Family family = mock(Family.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "101호", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -231,7 +231,7 @@ class GuardianMyPageServiceTest {
         Member existingMember = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "101호", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -252,7 +252,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "101호", "1234567"
+                "101호", "1234567"
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
