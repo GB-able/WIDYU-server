@@ -10,10 +10,6 @@ oauth:
     client-id: ${OAUTH_KAKAO_CLIENT_ID}
     redirect-uri: ${OAUTH_KAKAO_REDIRECT_URI}
     admin-key: ${OAUTH_KAKAO_ADMIN_KEY}
-
-kakao:
-  geocoding:
-    url: https://dapi.kakao.com
   apple:
     ios-client-id: ${OAUTH_APPLE_IOS_CLIENT_ID}
     android-client-id: ${OAUTH_APPLE_ANDROID_CLIENT_ID}
@@ -26,3 +22,7 @@ kakao:
     package-name: ${OAUTH_ANDROID_PACKAGE}
     schemes:
       apple: ${OAUTH_ANDROID_SCHEME_APPLE}
+
+kakao:
+  geocoding:
+    url: https://dapi.kakao.com
