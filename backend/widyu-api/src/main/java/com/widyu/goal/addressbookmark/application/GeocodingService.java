@@ -15,7 +15,7 @@ public class GeocodingService {
 
     private final KakaoGeocodingClient kakaoGeocodingClient;
 
-    @Value("${oauth.kakao.admin-key}")
+    @Value("${oauth.kakao.admin-key:}")
     private String adminKey;
 
     public GeocodingResponse geocode(String address) {
