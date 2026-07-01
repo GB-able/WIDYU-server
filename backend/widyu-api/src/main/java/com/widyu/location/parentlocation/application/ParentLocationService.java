@@ -83,6 +83,10 @@ public class ParentLocationService {
         ParentLocation location = parentLocationRepository.findByIdAndMember(parentLocationId, seniorMember)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "이미 삭제된 장소입니다."));
 
+        if (location.getLocationType() == LocationType.HOME) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
+        }
+
         parentLocationRepository.delete(location);
     }
 
