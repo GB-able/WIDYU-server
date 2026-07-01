@@ -47,3 +47,7 @@ juso:
   api:
     url: https://business.juso.go.kr/addrlink
     confm-key: test-juso-key
+
+kakao:
+  geocoding:
+    url: https://dapi.kakao.com
