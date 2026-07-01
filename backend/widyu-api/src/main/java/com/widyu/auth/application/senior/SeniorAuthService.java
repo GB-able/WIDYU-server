@@ -3,10 +3,14 @@ package com.widyu.auth.application.senior;
 import com.widyu.auth.dto.request.SeniorSignInRequest;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.addressbookmark.application.GeocodingService;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
@@ -16,6 +20,8 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +44,8 @@ public class SeniorAuthService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final FamilyRepository familyRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
+    private final ParentLocationRepository parentLocationRepository;
+    private final GeocodingService geocodingService;
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberUtil memberUtil;
 
@@ -61,6 +69,29 @@ public class SeniorAuthService {
 
         FamilyMembership leaderMembership = FamilyMembership.createLeaderMembership(family, guardian);
         familyMembershipRepository.save(leaderMembership);
+
+        saveHomeParentLocations(requests, members);
+    }
+
+    private void saveHomeParentLocations(List<SeniorSignUpRequest> requests, List<Member> members) {
+        for (int i = 0; i < requests.size(); i++) {
+            String address = requests.get(i).address();
+            Member member = members.get(i);
+            try {
+                GeocodingResponse geo = geocodingService.geocode(address);
+                parentLocationRepository.save(ParentLocation.builder()
+                        .member(member)
+                        .locationType(LocationType.HOME)
+                        .placeAddress(address)
+                        .latitude(geo.latitude())
+                        .longitude(geo.longitude())
+                        .name("집")
+                        .status(Status.ACTIVE)
+                        .build());
+            } catch (Exception e) {
+                log.warn("HOME 안심구역 좌표 변환 실패, 추후 마이페이지에서 수정 필요: {}", address);
+            }
+        }
     }
 
     @Transactional
