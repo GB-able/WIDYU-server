@@ -22,28 +22,21 @@ allprojects {
 
 subprojects {
     apply plugin: 'java'
-    apply plugin: 'org.springframework.boot'
     apply plugin: 'io.spring.dependency-management'
-    
+
     group = 'widyu.com'
     version = '0.0.1-SNAPSHOT'
-    
+
     java {
         toolchain {
             languageVersion = JavaLanguageVersion.of(21)
         }
     }
-    
+
     dependencyManagement {
         imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:3.3.5"
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.1"
         }
-    }
-}
-
-// 루트 프로젝트는 실행 가능한 JAR가 아니므로 bootJar 비활성화
-tasks.whenTaskAdded { task ->
-    if (task.name == 'bootJar') {
-        task.enabled = false
     }
 }

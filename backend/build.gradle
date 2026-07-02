@@ -1,9 +1,4 @@
 // 부모 모듈 - 실행되지 않음
-bootJar {
-    enabled = false
-}
-
 jar {
-    enabled = true
-    archiveClassifier = ''
+    enabled = false
 }
