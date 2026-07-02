@@ -37,11 +37,16 @@ services:
     container_name: widyu-api-dev
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      # JVM Options (개발 환경) - Dockerfile ENV JAVA_OPTS 기본값을 완전히 대체
       JAVA_OPTS: >
+        -XX:+UseContainerSupport
         -Xms512m
         -Xmx1024m
         -XX:+UseG1GC
         -XX:MaxGCPauseMillis=200
+        -Dfile.encoding=UTF-8
+        -Duser.timezone=Asia/Seoul
+        -Djava.security.egd=file:/dev/./urandom
     ports:
       - "8080:8080"
     depends_on:
