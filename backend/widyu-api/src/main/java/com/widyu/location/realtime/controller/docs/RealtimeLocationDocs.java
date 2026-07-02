@@ -34,12 +34,16 @@ public interface RealtimeLocationDocs {
                         {
                           "memberId": 1,
                           "name": "김시니어",
-                          "profileImage": "https://example.com/profile1.jpg"
+                          "profileImage": "https://example.com/profile1.jpg",
+                          "latitude": 37.5665,
+                          "longitude": 126.9780
                         },
                         {
                           "memberId": 2,
                           "name": "박시니어",
-                          "profileImage": "https://example.com/profile2.jpg"
+                          "profileImage": "https://example.com/profile2.jpg",
+                          "latitude": null,
+                          "longitude": null
                         }
                       ]
                     }
@@ -56,9 +60,14 @@ public interface RealtimeLocationDocs {
 
                     **체류 시간**: 같은 위치(30m 반경 내)에 머문 시간을 분 단위로 제공합니다.
 
-                    **위치 타입**:
-                    - `HOME`: 등록된 집 위치에 있음
-                    - `OTHER`: 외출 중
+                    **위치 타입 (locationType)**:
+                    - `HOME`: 등록된 집 안심구역 내
+                    - `OTHER`: 등록된 기타 안심구역 내
+                    - `null`: 등록된 안심구역 밖
+
+                    **위치 이름 (locationName)**:
+                    - 안심구역 내에 있을 때 해당 장소의 이름 (예: "집", "병원")
+                    - 안심구역 밖이면 `null`
                     """
     )
     @ApiResponse(
@@ -80,7 +89,8 @@ public interface RealtimeLocationDocs {
                         "updatedAt": "2024-01-12T14:30:00",
                         "stayStartTime": "2024-01-12T13:45:00",
                         "stayDurationMinutes": 45,
-                        "locationType": "HOME"
+                        "locationType": "HOME",
+                        "locationName": "집"
                       }
                     }
                     """
