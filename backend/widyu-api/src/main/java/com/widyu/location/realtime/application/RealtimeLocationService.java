@@ -281,8 +281,8 @@ public class RealtimeLocationService {
         List<ParentLocation> safeZones = parentLocationRepository.findAllByMember(member);
 
         for (ParentLocation safeZone : safeZones) {
-            double zoneLat = Double.parseDouble(safeZone.getLatitude());
-            double zoneLng = Double.parseDouble(safeZone.getLongitude());
+            double zoneLat = safeZone.getLatitude();
+            double zoneLng = safeZone.getLongitude();
 
             boolean isWithinSafeZone = GeoUtils.isWithinRadius(lat, lng, zoneLat, zoneLng, SAFE_ZONE_RADIUS_METERS);
 

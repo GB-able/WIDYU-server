@@ -12,8 +12,8 @@ public record HealthScheduleCreateForSeniorRequest(
         String scheduleName,
 
         String placeAddress,
-        String latitude,
-        String longitude,
+        Double latitude,
+        Double longitude,
 
         @NotNull(message = "일정 날짜는 필수입니다.")
         LocalDateTime scheduledAt

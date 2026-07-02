@@ -80,7 +80,7 @@ class SeniorAuthServiceTest {
         given(memberRepository.saveAll(anyList())).willReturn(List.of(seniorMember1, seniorMember2));
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
         given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse(37.55, 126.85));
 
         // when
         seniorAuthService.seniorSignUpBulk(requests);
@@ -114,7 +114,7 @@ class SeniorAuthServiceTest {
         given(memberRepository.saveAll(anyList())).willReturn(List.of(seniorMember1, seniorMember2));
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
         given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse(37.55, 126.85));
 
         // when
         seniorAuthService.seniorSignUpBulk(requests);
@@ -282,7 +282,7 @@ class SeniorAuthServiceTest {
         });
         given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
         given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
-        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode(anyString())).willReturn(new GeocodingResponse(37.55, 126.85));
 
         // when
         seniorAuthService.seniorSignUpBulk(requests);

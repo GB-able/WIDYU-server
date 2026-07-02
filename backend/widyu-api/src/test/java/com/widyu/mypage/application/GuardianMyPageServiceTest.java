@@ -219,7 +219,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.getFamily()).willReturn(family);
         given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
-        given(geocodingService.geocode("서울시 강남구")).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode("서울시 강남구")).willReturn(new GeocodingResponse(37.55, 126.85));
 
         // when
         guardianMyPageService.addSenior(request);
@@ -568,7 +568,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
-        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse(37.55, 126.85));
         given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
                 .willReturn(Optional.of(homeLocation));
 
@@ -577,7 +577,7 @@ class GuardianMyPageServiceTest {
 
         // then
         verify(seniorProfile).updateAddress("서울시 강서구");
-        verify(homeLocation).update(LocationType.HOME, "서울시 강서구", "37.55", "126.85", homeLocation.getName());
+        verify(homeLocation).update(LocationType.HOME, "서울시 강서구", 37.55, 126.85, homeLocation.getName());
     }
 
     @Test
@@ -595,7 +595,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
         given(seniorProfile.getMember()).willReturn(seniorMember);
-        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse("37.55", "126.85"));
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse(37.55, 126.85));
         given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
                 .willReturn(Optional.empty());
 

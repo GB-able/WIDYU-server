@@ -11,10 +11,10 @@ public record ParentLocationUpdateRequest(
     LocationType locationType,
     @NotBlank(message = "장소 주소는 필수입니다.")
     String placeAddress,
-    @NotBlank(message = "위도는 필수입니다.")
-    String latitude,
-    @NotBlank(message = "경도는 필수입니다.")
-    String longitude,
+    @NotNull(message = "위도는 필수입니다.")
+    Double latitude,
+    @NotNull(message = "경도는 필수입니다.")
+    Double longitude,
     String name
 ) {
 }

@@ -3,10 +3,13 @@ package com.widyu.goal.addressbookmark.dto.response;
 import com.widyu.goal.addressbookmark.dto.external.KakaoGeocodingResponse;
 
 public record GeocodingResponse(
-        String latitude,
-        String longitude
+        Double latitude,
+        Double longitude
 ) {
     public static GeocodingResponse from(KakaoGeocodingResponse.Document document) {
-        return new GeocodingResponse(document.latitude(), document.longitude());
+        return new GeocodingResponse(
+                Double.parseDouble(document.latitude()),
+                Double.parseDouble(document.longitude())
+        );
     }
 }

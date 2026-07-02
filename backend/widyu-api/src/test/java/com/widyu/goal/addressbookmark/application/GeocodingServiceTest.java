@@ -44,8 +44,8 @@ class GeocodingServiceTest {
         GeocodingResponse result = geocodingService.geocode("서울특별시 마포구 성암로 301");
 
         // then
-        assertThat(result.latitude()).isEqualTo("37.5666103");
-        assertThat(result.longitude()).isEqualTo("126.9783882");
+        assertThat(result.latitude()).isEqualTo(37.5666103);
+        assertThat(result.longitude()).isEqualTo(126.9783882);
     }
 
     @Test
