@@ -6,9 +6,10 @@ public record StayInfo(
     Double latitude,
     Double longitude,
     LocalDateTime startTime,
-    String locationType
+    String locationType,
+    String locationName
 ) {
-    public static StayInfo of(Double latitude, Double longitude, String locationType) {
-        return new StayInfo(latitude, longitude, LocalDateTime.now(), locationType);
+    public static StayInfo of(Double latitude, Double longitude, String locationType, String locationName) {
+        return new StayInfo(latitude, longitude, LocalDateTime.now(), locationType, locationName);
     }
 }
