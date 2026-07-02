@@ -16,8 +16,9 @@ services:
       MYSQL_USERNAME: ${RDS_USERNAME}
       MYSQL_PASSWORD: ${RDS_PASSWORD}
 
-      # JVM Options (운영 환경)
+      # JVM Options (운영 환경) - Dockerfile ENV JAVA_OPTS 기본값을 완전히 대체
       JAVA_OPTS: >
+        -XX:+UseContainerSupport
         -Xms1024m
         -Xmx2048m
         -XX:+UseG1GC
@@ -26,6 +27,7 @@ services:
         -XX:HeapDumpPath=/app/logs/heap_dump.hprof
         -Dfile.encoding=UTF-8
         -Duser.timezone=Asia/Seoul
+        -Djava.security.egd=file:/dev/./urandom
 
     ports:
       - "8080:8080"
