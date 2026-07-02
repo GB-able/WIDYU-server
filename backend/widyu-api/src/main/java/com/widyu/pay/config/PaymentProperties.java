@@ -1,4 +1,4 @@
-package com.widyu.pay.dto.request;
+package com.widyu.pay.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
