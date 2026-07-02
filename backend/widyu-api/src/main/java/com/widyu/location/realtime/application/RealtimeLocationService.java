@@ -20,9 +20,13 @@ import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import java.time.LocalDateTime;
+import org.springframework.scheduling.annotation.Scheduled;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -102,7 +106,8 @@ public class RealtimeLocationService {
                 request.latitude(),
                 request.longitude(),
                 stayInfo.startTime(),
-                stayInfo.locationType()
+                stayInfo.locationType(),
+                stayInfo.locationName()
         );
 
         // 7. 시니어별 방으로 브로드캐스트 (memberId 기준)
@@ -129,8 +134,32 @@ public class RealtimeLocationService {
         List<SeniorProfile> seniors = seniorProfileRepository
                 .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
 
+        List<Long> seniorMemberIds = seniors.stream()
+                .map(s -> s.getMember().getId())
+                .toList();
+
+        Map<Long, SeniorLocation> locationMap = seniorLocationRepository
+                .findAllBySeniorIdIn(seniorMemberIds)
+                .stream()
+                .collect(Collectors.toMap(SeniorLocation::getSeniorId, l -> l));
+
         return seniors.stream()
-                .map(TrackedSeniorResponse::from)
+                .map(senior -> {
+                    Long memberId = senior.getMember().getId();
+                    SeniorLocation location = locationMap.get(memberId);
+
+                    if (location != null) {
+                        return TrackedSeniorResponse.of(senior, location.getLatitude(), location.getLongitude());
+                    }
+
+                    String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
+                    Object stayObj = redisTemplate.opsForValue().get(stayKey);
+                    if (stayObj instanceof StayInfo stayInfo) {
+                        return TrackedSeniorResponse.of(senior, stayInfo.latitude(), stayInfo.longitude());
+                    }
+
+                    return TrackedSeniorResponse.of(senior, null, null);
+                })
                 .toList();
     }
 
@@ -149,11 +178,6 @@ public class RealtimeLocationService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어의 위치를 조회할 권한이 없습니다.");
         }
 
-        // Redis에서 조회 (memberId 기준)
-        SeniorLocation location = seniorLocationRepository.findBySeniorId(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
-                                                          "최근 위치 정보가 없습니다."));
-
         Member seniorMember = seniorProfile.getMember();
 
         // 체류 시간 및 위치 타입 정보 조회 (memberId 기준)
@@ -161,20 +185,41 @@ public class RealtimeLocationService {
         Object stayObj = redisTemplate.opsForValue().get(stayKey);
         LocalDateTime stayStartTime = LocalDateTime.now();
         String locationType = null;
+        StayInfo stayInfo = null;
 
-        if (stayObj instanceof StayInfo stayInfo) {
+        if (stayObj instanceof StayInfo info) {
+            stayInfo = info;
             stayStartTime = stayInfo.startTime();
             locationType = stayInfo.locationType();
         }
+
+        // SeniorLocation(5분 TTL) 우선 조회, 만료 시 StayInfo(24시간 TTL)로 fallback
+        Optional<SeniorLocation> locationOpt = seniorLocationRepository.findBySeniorId(memberId);
+
+        double latitude;
+        double longitude;
+
+        if (locationOpt.isPresent()) {
+            latitude = locationOpt.get().getLatitude();
+            longitude = locationOpt.get().getLongitude();
+        } else if (stayInfo != null) {
+            latitude = stayInfo.latitude();
+            longitude = stayInfo.longitude();
+        } else {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "최근 위치 정보가 없습니다.");
+        }
+
+        String locationName = stayInfo != null ? stayInfo.locationName() : null;
 
         return LocationUpdateResponse.of(
                 memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
-                location.getLatitude(),
-                location.getLongitude(),
+                latitude,
+                longitude,
                 stayStartTime,
-                locationType
+                locationType,
+                locationName
         );
     }
 
@@ -256,13 +301,15 @@ public class RealtimeLocationService {
             }
         }
 
-        // 새로운 위치로 이동 → 위치 타입 계산
-        String locationType = determineLocationType(member, newLat, newLng);
+        // 새로운 위치로 이동 → 안전구역 매칭
+        ParentLocation matchedZone = determineMatchingSafeZone(member, newLat, newLng);
+        String locationType = matchedZone != null ? matchedZone.getLocationType().name() : null;
+        String locationName = matchedZone != null ? matchedZone.getName() : null;
 
         // 안전구역 이탈 감지 및 알림 전송
         checkAndSendSafeZoneExitAlert(member, previousLocationType, locationType);
 
-        StayInfo newStay = StayInfo.of(newLat, newLng, locationType);
+        StayInfo newStay = StayInfo.of(newLat, newLng, locationType, locationName);
         redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
         log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
                 stayKey, newStay.startTime(), locationType);
@@ -277,17 +324,14 @@ public class RealtimeLocationService {
      * - OTHER 안전구역 내 → OTHER
      * - 어떤 안전구역에도 없으면 → null
      */
-    private String determineLocationType(Member member, Double lat, Double lng) {
+    private ParentLocation determineMatchingSafeZone(Member member, Double lat, Double lng) {
         List<ParentLocation> safeZones = parentLocationRepository.findAllByMember(member);
 
         for (ParentLocation safeZone : safeZones) {
-            double zoneLat = safeZone.getLatitude();
-            double zoneLng = safeZone.getLongitude();
-
-            boolean isWithinSafeZone = GeoUtils.isWithinRadius(lat, lng, zoneLat, zoneLng, SAFE_ZONE_RADIUS_METERS);
-
+            boolean isWithinSafeZone = GeoUtils.isWithinRadius(
+                    lat, lng, safeZone.getLatitude(), safeZone.getLongitude(), SAFE_ZONE_RADIUS_METERS);
             if (isWithinSafeZone) {
-                return safeZone.getLocationType().name();
+                return safeZone;
             }
         }
 
@@ -353,5 +397,22 @@ public class RealtimeLocationService {
 
     private int getIntOrDefault(Object value, int defaultValue) {
         return value instanceof Number n ? n.intValue() : defaultValue;
+    }
+
+    /**
+     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)를 갱신해
+     * 시니어가 정지 중이어도 위치 데이터가 만료되지 않도록 유지한다.
+     */
+    @Scheduled(fixedRate = 240_000)
+    public void refreshLocationTtl() {
+        Iterable<SeniorLocation> activeLocations = seniorLocationRepository.findAll();
+        for (SeniorLocation location : activeLocations) {
+            if (location == null) {
+                continue;
+            }
+            seniorLocationRepository.save(location);
+            String stayKey = LOCATION_STAY_KEY_PREFIX + location.getSeniorId();
+            redisTemplate.expire(stayKey, STAY_TTL_SECONDS, TimeUnit.SECONDS);
+        }
     }
 }
