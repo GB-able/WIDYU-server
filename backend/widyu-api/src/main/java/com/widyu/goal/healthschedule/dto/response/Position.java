@@ -1,10 +1,10 @@
 package com.widyu.goal.healthschedule.dto.response;
 
 public record Position(
-        String lat,
-        String lon
+        Double lat,
+        Double lon
 ) {
-    public static Position of(String latitude, String longitude) {
+    public static Position of(Double latitude, Double longitude) {
         return new Position(latitude, longitude);
     }
 }

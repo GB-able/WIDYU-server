@@ -15,8 +15,8 @@ public class ParentLocationResponse {
     private String memberName;
     private LocationType locationType;
     private String placeAddress;
-    private String latitude;
-    private String longitude;
+    private Double latitude;
+    private Double longitude;
 
     public static ParentLocationResponse of(ParentLocation parentLocation) {
         return ParentLocationResponse.builder()

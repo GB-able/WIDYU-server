@@ -13,8 +13,8 @@ public class LocationInfo {
     private Long parentLocationId;
     private LocationType locationType;
     private String placeAddress;
-    private String latitude;
-    private String longitude;
+    private Double latitude;
+    private Double longitude;
     private String name;
 
     public static LocationInfo of(ParentLocation parentLocation) {

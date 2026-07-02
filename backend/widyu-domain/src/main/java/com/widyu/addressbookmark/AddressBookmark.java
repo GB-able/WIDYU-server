@@ -46,9 +46,9 @@ public class AddressBookmark extends BaseTimeEntity {
 
     private String name;
 
-    private String latitude;
+    private Double latitude;
 
-    private String longitude;
+    private Double longitude;
 
     private String road;
 

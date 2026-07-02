@@ -242,12 +242,12 @@ public class DevDataInitializer implements CommandLineRunner {
         healthScheduleRepository.save(HealthSchedule.create(
                 senior, "건강검진",
                 "서울시 강남구 테헤란로 123 강남세브란스병원",
-                "37.5013", "127.0262", now.plusWeeks(2)
+                37.5013, 127.0262, now.plusWeeks(2)
         ));
         healthScheduleRepository.save(HealthSchedule.create(
                 senior, "치과 정기검진",
                 "서울시 강남구 역삼동 456 연세치과",
-                "37.4979", "127.0276", now.plusMonths(1)
+                37.4979, 127.0276, now.plusMonths(1)
         ));
     }
 

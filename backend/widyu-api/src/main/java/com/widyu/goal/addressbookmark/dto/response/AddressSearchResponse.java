@@ -17,10 +17,10 @@ public record AddressSearchResponse(
             String siNm,
             String sggNm,
             String emdNm,
-            String latitude,
-            String longitude
+            Double latitude,
+            Double longitude
     ) {
-        public static AddressItem from(JusoApiResponse.JusoItem item, String latitude, String longitude) {
+        public static AddressItem from(JusoApiResponse.JusoItem item, Double latitude, Double longitude) {
             return new AddressItem(
                     item.roadAddr(),
                     item.jibunAddr(),

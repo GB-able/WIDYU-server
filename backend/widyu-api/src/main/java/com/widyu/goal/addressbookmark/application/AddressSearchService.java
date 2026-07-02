@@ -35,8 +35,8 @@ public class AddressSearchService {
         List<JusoApiResponse.JusoItem> jusoItems = response.results().juso();
         List<AddressItem> addresses = (jusoItems == null) ? List.of() : jusoItems.stream()
                 .map(item -> {
-                    String latitude = null;
-                    String longitude = null;
+                    Double latitude = null;
+                    Double longitude = null;
                     try {
                         GeocodingResponse geo = geocodingService.geocode(item.roadAddr());
                         latitude = geo.latitude();
