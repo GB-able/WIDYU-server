@@ -36,8 +36,8 @@ public interface AddressSearchDocs {
                                             "siNm": "서울특별시",
                                             "sggNm": "마포구",
                                             "emdNm": "상암동",
-                                            "latitude": "37.5666103",
-                                            "longitude": "126.9783882"
+                                            "latitude": 37.5666103,
+                                            "longitude": 126.9783882
                                         }
                                     ],
                                     "totalCount": 1,

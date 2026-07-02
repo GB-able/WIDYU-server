@@ -33,8 +33,8 @@ public interface ParentLocationDocs {
                       "memberId": 1,
                       "locationType": "HOME",
                       "placeAddress": "서울특별시 강남구 테헤란로 123",
-                      "latitude": "37.5012",
-                      "longitude": "127.0396",
+                      "latitude": 37.5012,
+                      "longitude": 127.0396,
                       "name": "우리집"
                     }
                     """
@@ -109,16 +109,16 @@ public interface ParentLocationDocs {
                               "parentLocationId": 1,
                               "locationType": "HOME",
                               "placeAddress": "서울특별시 강남구 테헤란로 123",
-                              "latitude": "37.5012",
-                              "longitude": "127.0396",
+                              "latitude": 37.5012,
+                              "longitude": 127.0396,
                               "name": "우리집"
                             },
                             {
                               "parentLocationId": 2,
                               "locationType": "OTHER",
                               "placeAddress": "서울특별시 마포구 월드컵북로 123",
-                              "latitude": "37.5665",
-                              "longitude": "126.9780",
+                              "latitude": 37.5665,
+                              "longitude": 126.9780,
                               "name": "병원"
                             }
                           ]
@@ -131,8 +131,8 @@ public interface ParentLocationDocs {
                               "parentLocationId": 3,
                               "locationType": "HOME",
                               "placeAddress": "서울특별시 송파구 올림픽로 456",
-                              "latitude": "37.5145",
-                              "longitude": "127.1059",
+                              "latitude": 37.5145,
+                              "longitude": 127.1059,
                               "name": "집"
                             }
                           ]
@@ -161,8 +161,8 @@ public interface ParentLocationDocs {
                       "memberId": 1,
                       "locationType": "HOME",
                       "placeAddress": "서울특별시 강남구 테헤란로 456",
-                      "latitude": "37.5015",
-                      "longitude": "127.0400",
+                      "latitude": 37.5015,
+                      "longitude": 127.0400,
                       "name": "새집"
                     }
                     """
