@@ -13,6 +13,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -30,8 +34,19 @@ public class SecurityConfig {
                 .sessionManagement(
                         session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // SockJS의 iframe fallback을 위한 frameOptions 설정
-        http.headers(headers -> headers.frameOptions(frame -> frame.disable())); // [수정] sameOrigin 대신 disable로 변경
+        // SockJS iframe fallback 경로에만 SAMEORIGIN, 그 외 전체 DENY
+        AntPathRequestMatcher sockJsIframe = new AntPathRequestMatcher("/ws/location/iframe.html");
+        http.headers(headers -> headers
+                .frameOptions(frame -> frame.disable())
+                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                        sockJsIframe,
+                        new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)
+                ))
+                .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                        new NegatedRequestMatcher(sockJsIframe),
+                        new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.DENY)
+                ))
+        );
 
         // 요청 경로에 대한 인가 설정
         http.authorizeHttpRequests(
