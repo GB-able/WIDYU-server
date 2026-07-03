@@ -11,8 +11,8 @@ public record AddressBookmarkCreateRequest(
         @NotBlank(message = "지번 주소는 필수입니다.")
         String address,
         String name,
-        String latitude,
-        String longitude,
+        Double latitude,
+        Double longitude,
         String road,
         String jibun
 ) {

@@ -16,34 +16,26 @@ public record AddressSearchResponse(
             String bdNm,
             String siNm,
             String sggNm,
-            String emdNm
-    ) {}
-
-    public static AddressSearchResponse of(JusoApiResponse apiResponse) {
-        JusoApiResponse.Common common = apiResponse.results().common();
-        List<JusoApiResponse.JusoItem> jusoItems = apiResponse.results().juso();
-
-        List<AddressItem> addresses = (jusoItems == null) ? List.of() : jusoItems.stream()
-                .map(j -> new AddressItem(
-                        j.roadAddr(),
-                        j.jibunAddr(),
-                        j.zipNo(),
-                        j.bdNm(),
-                        j.siNm(),
-                        j.sggNm(),
-                        j.emdNm()
-                ))
-                .toList();
-
-        return new AddressSearchResponse(
-                addresses,
-                parseIntSafe(common.totalCount()),
-                parseIntSafe(common.currentPage()),
-                parseIntSafe(common.countPerPage())
-        );
+            String emdNm,
+            Double latitude,
+            Double longitude
+    ) {
+        public static AddressItem from(JusoApiResponse.JusoItem item, Double latitude, Double longitude) {
+            return new AddressItem(
+                    item.roadAddrPart1(),
+                    item.jibunAddr(),
+                    item.zipNo(),
+                    item.bdNm(),
+                    item.siNm(),
+                    item.sggNm(),
+                    item.emdNm(),
+                    latitude,
+                    longitude
+            );
+        }
     }
 
-    private static int parseIntSafe(String value) {
+    public static int parseIntSafe(String value) {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {

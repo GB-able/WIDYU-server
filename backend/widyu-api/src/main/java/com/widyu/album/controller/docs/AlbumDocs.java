@@ -199,7 +199,7 @@ public interface AlbumDocs {
     })
     ApiResponseTemplate<CursorPage<AlbumFeedResponse>> getAlbumFeed(
             @Parameter(description = "마지막으로 조회한 앨범 ID (무한 스크롤용)", example = "123")
-            @RequestParam(value = "cursor", required = false) Long cursor,
+            @RequestParam(value = "cursor", required = false) String cursor,
             @Parameter(description = "캘린더용 날짜 파라미터 (yyyy-MM-dd 형식)", example = "2024-12-21")
             @RequestParam(value = "date", required = false) String date
     );
@@ -264,7 +264,7 @@ public interface AlbumDocs {
     })
     ApiResponseTemplate<CursorPage<AlbumMediaResponse>> getMediaFeed(
             @Parameter(description = "마지막으로 조회한 postId (무한 스크롤용)", example = "123")
-            @RequestParam(value = "lastPostId", required = false) Long lastPostId
+            @RequestParam(value = "cursor", required = false) String cursor
     );
 
     // ========== 앨범 수정 ==========
@@ -631,13 +631,12 @@ public interface AlbumDocs {
                     
                     **권한:**
                     - 보호자: 모든 앨범 조회 가능
-                    - 부모: 해금한 앨범만 조회 가능 (price: 50)
-                    - 현재는 임시로 모든 사용자 조회 가능
-                    
+                    - 부모(시니어): 본인 앨범 또는 해금한 앨범 조회 가능 (해금 비용: 50포인트)
+
                     **포함 정보:**
                     - 게시물 기본 정보 (내용, 미디어, 통계)
                     - 작성자 정보
-                    - 조회자 목록 (최대 표시 수 미정)
+                    - 조회자 목록
                     - 댓글 및 대댓글 (계층 구조)
                     """
     )

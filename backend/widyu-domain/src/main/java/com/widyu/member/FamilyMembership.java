@@ -34,7 +34,7 @@ public class FamilyMembership extends BaseTimeEntity {
     @JoinColumn(name = "guardian_id", nullable = false, unique = true)
     private Member guardian;
 
-    @Column(name = "connected_at")
+    @Column(name = "connected_at", nullable = false)
     private LocalDateTime connectedAt;
 
     private String nickname;

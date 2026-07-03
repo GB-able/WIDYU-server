@@ -33,16 +33,21 @@ public class AlbumFileService {
     private static final String ALBUM_VIDEO_PREFIX = "albums/videos";
     private static final String THUMBNAIL_PREFIX = "albums/thumbnails";
 
-    /**
-     * 업로드 결과(미디어 URL/썸네일 URL/길이)
-     */
     public static record UploadResult(List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations) {
     }
 
-    /**
-     * 단일 비디오 업로드 결과
-     */
     public static record VideoUploadResult(String videoUrl, String thumbnailUrl, Integer duration) {
+    }
+
+    public static record AsyncUploadPreparation(
+            List<String> mediaUrls,
+            List<String> thumbnailUrls,
+            List<Integer> durations,
+            List<AlbumVideoProcessingService.VideoEntry> videoEntries
+    ) {
+        public boolean hasVideos() {
+            return !videoEntries.isEmpty();
+        }
     }
 
     /**
@@ -194,6 +199,50 @@ public class AlbumFileService {
 
     public List<String> uploadMediaFiles(List<MultipartFile> mediaFiles, Long memberId) {
         return uploadMediaFilesWithThumbnails(mediaFiles, memberId).mediaUrls();
+    }
+
+    public AsyncUploadPreparation prepareForAsyncUpload(List<MultipartFile> mediaFiles, Long memberId) {
+        mediaPolicy.validate(mediaFiles);
+
+        List<String> mediaUrls = new ArrayList<>();
+        List<String> thumbnailUrls = new ArrayList<>();
+        List<Integer> durations = new ArrayList<>();
+        List<AlbumVideoProcessingService.VideoEntry> videoEntries = new ArrayList<>();
+
+        List<String> uploadedPhotoUrls = new ArrayList<>();
+
+        try {
+            for (int i = 0; i < mediaFiles.size(); i++) {
+                MultipartFile file = mediaFiles.get(i);
+                String contentType = file.getContentType();
+
+                if (contentType == null) {
+                    throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+                }
+
+                if (contentType.startsWith("image/")) {
+                    String url = uploadAlbumPhoto(file, memberId);
+                    uploadedPhotoUrls.add(url);
+                    mediaUrls.add(url);
+                    thumbnailUrls.add(null);
+                    durations.add(null);
+                } else if (contentType.startsWith("video/")) {
+                    File tempFile = toTempFile(file);
+                    videoEntries.add(new AlbumVideoProcessingService.VideoEntry(i, tempFile, file.getOriginalFilename(), contentType));
+                    mediaUrls.add("");
+                    thumbnailUrls.add(null);
+                    durations.add(null);
+                } else {
+                    throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+                }
+            }
+        } catch (Exception e) {
+            cleanupUploadedFiles(uploadedPhotoUrls);
+            if (e instanceof BusinessException be) throw be;
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+
+        return new AsyncUploadPreparation(mediaUrls, thumbnailUrls, durations, videoEntries);
     }
 
     private void validateInternalImage(MultipartFile file) {

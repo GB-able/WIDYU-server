@@ -157,9 +157,9 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s1, family, "서울시 강남구", "101호", "1110001", LocalDate.of(1948, 3, 12)));
+                s1, family, "서울시 강남구", "1110001", LocalDate.of(1948, 3, 12)));
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s2, family, "서울시 강남구", "202호", "1110002", LocalDate.of(1952, 11, 5)));
+                s2, family, "서울시 강남구", "1110002", LocalDate.of(1952, 11, 5)));
 
         return List.of(s1, s2);
     }
@@ -181,7 +181,7 @@ public class DevDataInitializer implements CommandLineRunner {
         familyMembershipRepository.save(FamilyMembership.createMembership(family, g2));
 
         seniorProfileRepository.save(SeniorProfile.createSeniorProfile(
-                s1, family, "부산시 해운대구", "303호", "2220001", LocalDate.of(1945, 7, 21)));
+                s1, family, "부산시 해운대구", "2220001", LocalDate.of(1945, 7, 21)));
 
         return List.of(s1);
     }
@@ -242,12 +242,12 @@ public class DevDataInitializer implements CommandLineRunner {
         healthScheduleRepository.save(HealthSchedule.create(
                 senior, "건강검진",
                 "서울시 강남구 테헤란로 123 강남세브란스병원",
-                "37.5013", "127.0262", now.plusWeeks(2)
+                37.5013, 127.0262, now.plusWeeks(2)
         ));
         healthScheduleRepository.save(HealthSchedule.create(
                 senior, "치과 정기검진",
                 "서울시 강남구 역삼동 456 연세치과",
-                "37.4979", "127.0276", now.plusMonths(1)
+                37.4979, 127.0276, now.plusMonths(1)
         ));
     }
 

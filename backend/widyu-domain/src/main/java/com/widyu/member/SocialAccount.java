@@ -29,8 +29,10 @@ public class SocialAccount {
 
     private String email;
 
+    @Column(nullable = false)
     private String provider;
 
+    @Column(nullable = false)
     private String oauthId;
 
     @Column(name = "refresh_token", length = 1000)

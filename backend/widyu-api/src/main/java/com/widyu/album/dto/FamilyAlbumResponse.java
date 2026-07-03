@@ -50,7 +50,7 @@ public record FamilyAlbumResponse(
             return new AuthorInfo(
                     member.getId(),
                     member.getName(),
-                    null  // TODO: 프로필 이미지 필드가 추가되면 수정
+                    member.getProfileImage()
             );
         }
     }
@@ -64,7 +64,7 @@ public record FamilyAlbumResponse(
             return new ViewerInfo(
                     member.getId(),
                     member.getName(),
-                    null  // TODO: 프로필 이미지 필드가 추가되면 수정
+                    member.getProfileImage()
             );
         }
     }

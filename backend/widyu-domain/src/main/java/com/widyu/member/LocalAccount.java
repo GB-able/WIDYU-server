@@ -36,8 +36,10 @@ public class LocalAccount {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+    @Column(nullable = false)
     private String email;
 
+    @Column(nullable = false)
     private String password;
 
     @Column(name = "is_first")

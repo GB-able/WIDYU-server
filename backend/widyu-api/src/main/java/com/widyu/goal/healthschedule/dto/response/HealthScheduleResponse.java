@@ -7,8 +7,8 @@ public record HealthScheduleResponse(
         String scheduleName,
         LocalDateTime scheduledAt,
         String placeAddress,
-        String latitude,
-        String longitude
+        Double latitude,
+        Double longitude
 ) {
 
     public static HealthScheduleResponse from(HealthSchedule healthSchedule) {

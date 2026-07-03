@@ -1,22 +1,34 @@
 package com.widyu.mypage.application;
 
+import com.widyu.auth.PhoneChangeVerified;
+import com.widyu.auth.application.SmsService;
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.PhoneChangeVerifiedRepository;
+import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.addressbookmark.application.GeocodingService;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
+import com.widyu.global.entity.Status;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
-import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
+import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
@@ -36,12 +48,19 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class GuardianMyPageService {
 
+    private static final long PHONE_CHANGE_VERIFIED_TTL_SECONDS = 300;
+
     private final MemberUtil memberUtil;
     private final S3Service s3Service;
+    private final SmsService smsService;
+    private final VerificationCodeRepository verificationCodeRepository;
+    private final PhoneChangeVerifiedRepository phoneChangeVerifiedRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberRepository memberRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final ParentLocationRepository parentLocationRepository;
+    private final GeocodingService geocodingService;
 
     public GuardianInfoResponse getGuardianInfo() {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
@@ -61,6 +80,80 @@ public class GuardianMyPageService {
     @Transactional
     public void updateProfileImage(MultipartFile image) {
         MyPageProfileService.updateCurrentMemberProfileImage(memberUtil, s3Service, image);
+    }
+
+    @Transactional
+    public void addSenior(SeniorSignUpRequest request) {
+        Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
+        Family family = getGuardianFamily(guardian.getId());
+
+        if (memberRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
+        }
+
+        Member seniorMember = Member.createMember(MemberType.SENIOR, request.name(), request.phoneNumber());
+        memberRepository.save(seniorMember);
+
+        SeniorProfile profile = SeniorProfile.createSeniorProfile(
+                seniorMember, family,
+                request.address(),
+                request.inviteCode(), request.birthDate()
+        );
+        seniorProfileRepository.save(profile);
+        saveHomeParentLocation(seniorMember, request.address());
+    }
+
+    private void saveHomeParentLocation(Member seniorMember, String address) {
+        GeocodingResponse geo = geocodingService.geocode(address);
+        parentLocationRepository.save(ParentLocation.builder()
+                .member(seniorMember)
+                .locationType(LocationType.HOME)
+                .placeAddress(address)
+                .latitude(geo.latitude())
+                .longitude(geo.longitude())
+                .name("집")
+                .status(Status.ACTIVE)
+                .build());
+    }
+
+    @Transactional
+    public void sendPhoneChangeSms(UpdatePhoneRequest request) {
+        if (memberRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 전화번호입니다.");
+        }
+        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
+        smsService.sendVerificationSms(request.phoneNumber(), currentMember.getName());
+    }
+
+    @Transactional
+    public void verifyPhoneChangeCode(SmsCodeRequest request) {
+        String newPhone = request.phoneNumber();
+
+        boolean codeMatches = verificationCodeRepository.findById(newPhone)
+                .map(v -> v.getCode().equals(request.code()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.SMS_VERIFICATION_CODE_NOT_FOUND));
+
+        if (!codeMatches) {
+            throw new BusinessException(ErrorCode.SMS_VERIFICATION_CODE_MISMATCH);
+        }
+
+        verificationCodeRepository.deleteById(newPhone);
+        phoneChangeVerifiedRepository.save(PhoneChangeVerified.builder()
+                .phoneNumber(newPhone)
+                .ttl(PHONE_CHANGE_VERIFIED_TTL_SECONDS)
+                .build());
+    }
+
+    @Transactional
+    public void updatePhone(UpdatePhoneRequest request) {
+        String newPhone = request.phoneNumber();
+
+        phoneChangeVerifiedRepository.findById(newPhone)
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "전화번호 인증이 완료되지 않았습니다."));
+
+        Member currentMember = MyPageProfileService.getCurrentMember(memberUtil);
+        currentMember.updatePhoneNumber(newPhone);
+        phoneChangeVerifiedRepository.deleteById(newPhone);
     }
 
     public ConnectedSeniorResponse getConnectedSeniors() {
@@ -95,7 +188,25 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
-        seniorProfile.updateAddress(request.address(), request.detailAddress());
+        Member seniorMember = seniorProfile.getMember();
+        seniorProfile.updateAddress(request.address());
+        GeocodingResponse geo = geocodingService.geocode(request.address());
+        parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME)
+                .ifPresentOrElse(
+                        location -> location.update(
+                                LocationType.HOME, request.address(),
+                                geo.latitude(), geo.longitude(), location.getName()
+                        ),
+                        () -> parentLocationRepository.save(ParentLocation.builder()
+                                .member(seniorMember)
+                                .locationType(LocationType.HOME)
+                                .placeAddress(request.address())
+                                .latitude(geo.latitude())
+                                .longitude(geo.longitude())
+                                .name("집")
+                                .status(Status.ACTIVE)
+                                .build())
+                );
     }
 
     @Transactional
@@ -119,9 +230,6 @@ public class GuardianMyPageService {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
         assertIsLeader(seniorProfile, guardian.getId());
-        if (seniorProfileRepository.existsByInviteCode(request.inviteCode())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 사용 중인 초대코드입니다.");
-        }
         seniorProfile.updateInviteCode(request.inviteCode());
     }
 
@@ -197,8 +305,13 @@ public class GuardianMyPageService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어에 접근 권한이 없습니다.");
         }
 
+        List<SeniorProfile> familySeniors = seniorProfileRepository.findAllByFamilyIdWithLock(familyId);
+        if (familySeniors.size() <= 1) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "가족에 시니어가 최소 1명은 있어야 합니다.");
+        }
+
         pointHistoryRepository.deleteBySeniorProfileId(seniorProfile.getId());
-        seniorProfileRepository.delete(seniorProfile);
+        seniorProfileRepository.deleteByIdDirectly(seniorProfile.getId());
     }
 
     private void assertIsLeader(SeniorProfile seniorProfile, Long guardianId) {

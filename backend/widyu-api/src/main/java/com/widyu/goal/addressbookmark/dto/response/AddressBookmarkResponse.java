@@ -13,8 +13,8 @@ public class AddressBookmarkResponse {
     private String roadAddress;
     private String address;
     private String name;
-    private String latitude;
-    private String longitude;
+    private Double latitude;
+    private Double longitude;
     private String road;
     private String jibun;
 

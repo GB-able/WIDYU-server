@@ -44,10 +44,10 @@ public class HealthSchedule extends BaseTimeEntity {
     private String placeAddress;
 
     @Column(name = "latitude")
-    private String latitude;
+    private Double latitude;
 
     @Column(name = "longitude")
-    private String longitude;
+    private Double longitude;
 
     @Column(name = "scheduled_at", nullable = false)
     private LocalDateTime scheduledAt;
@@ -67,8 +67,8 @@ public class HealthSchedule extends BaseTimeEntity {
     private Status status = Status.ACTIVE;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private HealthSchedule(Member member, String scheduleName, String placeAddress, String latitude,
-                          String longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus,
+    private HealthSchedule(Member member, String scheduleName, String placeAddress, Double latitude,
+                          Double longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus,
                           Integer rewardPoint, Boolean isReward, Status status) {
         this.member = member;
         this.scheduleName = scheduleName;
@@ -82,8 +82,8 @@ public class HealthSchedule extends BaseTimeEntity {
         this.status = status != null ? status : Status.ACTIVE;
     }
 
-    public static HealthSchedule create(Member member, String scheduleName, String placeAddress, String latitude,
-                                       String longitude, LocalDateTime scheduledAt) {
+    public static HealthSchedule create(Member member, String scheduleName, String placeAddress, Double latitude,
+                                       Double longitude, LocalDateTime scheduledAt) {
         return HealthSchedule.builder()
                 .member(member)
                 .scheduleName(scheduleName)
@@ -94,8 +94,8 @@ public class HealthSchedule extends BaseTimeEntity {
                 .build();
     }
 
-    public void update(String scheduleName, String placeAddress, String latitude,
-                      String longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus) {
+    public void update(String scheduleName, String placeAddress, Double latitude,
+                      Double longitude, LocalDateTime scheduledAt, ProgressStatus progressStatus) {
         if (scheduleName != null) {
             this.scheduleName = scheduleName;
         }

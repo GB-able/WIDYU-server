@@ -9,9 +9,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.widyu.auth.PhoneChangeVerified;
+import com.widyu.auth.VerificationCode;
+import com.widyu.auth.application.SmsService;
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
+import com.widyu.auth.repository.PhoneChangeVerifiedRepository;
+import com.widyu.auth.repository.VerificationCodeRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.addressbookmark.application.GeocodingService;
+import com.widyu.goal.addressbookmark.dto.response.GeocodingResponse;
+import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.LocalAccount;
@@ -27,6 +37,8 @@ import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
 import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
+import com.widyu.parentlocation.LocationType;
+import com.widyu.parentlocation.ParentLocation;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
@@ -49,10 +61,15 @@ class GuardianMyPageServiceTest {
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
+    @Mock private SmsService smsService;
+    @Mock private VerificationCodeRepository verificationCodeRepository;
+    @Mock private PhoneChangeVerifiedRepository phoneChangeVerifiedRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private PointHistoryRepository pointHistoryRepository;
+    @Mock private ParentLocationRepository parentLocationRepository;
+    @Mock private GeocodingService geocodingService;
 
     @InjectMocks
     private GuardianMyPageService guardianMyPageService;
@@ -181,6 +198,79 @@ class GuardianMyPageServiceTest {
         // then
         verify(s3Service, never()).deleteFile(anyString());
         verify(member).updateProfileImage("https://s3.new.png");
+    }
+
+    // ======================== 부모님(시니어) 추가 ========================
+
+    @Test
+    @DisplayName("정상적인 요청으로 부모님을 추가하면 시니어 회원과 프로필이 저장된다")
+    void 부모님_추가() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.empty());
+        given(geocodingService.geocode("서울시 강남구")).willReturn(new GeocodingResponse(37.55, 126.85));
+
+        // when
+        guardianMyPageService.addSenior(request);
+
+        // then
+        verify(memberRepository).save(any(Member.class));
+        verify(seniorProfileRepository).save(any(SeniorProfile.class));
+        verify(parentLocationRepository).save(any(com.widyu.parentlocation.ParentLocation.class));
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 전화번호로 부모님을 추가하려 하면 예외가 발생한다")
+    void 부모님_추가_전화번호_중복() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member existingMember = mock(Member.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.findByPhoneNumber("01011112222")).willReturn(Optional.of(existingMember));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("가족에 연결되지 않은 보호자가 부모님을 추가하려 하면 예외가 발생한다")
+    void 부모님_추가_가족연결_없음() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "1234567"
+        );
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.addSenior(request))
+                .isInstanceOf(BusinessException.class);
     }
 
     // ======================== 연결된 시니어 목록 조회 ========================
@@ -463,10 +553,39 @@ class GuardianMyPageServiceTest {
     // ======================== 시니어 주소 수정 ========================
 
     @Test
-    @DisplayName("시니어 주소를 수정하면 시니어 프로필의 주소가 변경된다")
+    @DisplayName("시니어 주소를 수정하면 시니어 프로필 주소와 HOME 안심구역 좌표가 갱신된다")
     void 시니어_주소_수정() {
         // given
         Member guardian = mock(Member.class);
+        Member seniorMember = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        ParentLocation homeLocation = mock(ParentLocation.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse(37.55, 126.85));
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.of(homeLocation));
+
+        // when
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
+
+        // then
+        verify(seniorProfile).updateAddress("서울시 강서구");
+        verify(homeLocation).update(LocationType.HOME, "서울시 강서구", 37.55, 126.85, homeLocation.getName());
+    }
+
+    @Test
+    @DisplayName("시니어 주소를 수정할 때 HOME 안심구역이 없으면 새로 생성된다")
+    void 시니어_주소_수정_HOME_최초_생성() {
+        // given
+        Member guardian = mock(Member.class);
+        Member seniorMember = mock(Member.class);
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -475,12 +594,16 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(geocodingService.geocode("서울시 강서구")).willReturn(new GeocodingResponse(37.55, 126.85));
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.empty());
 
         // when
-        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", "101호"));
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
 
         // then
-        verify(seniorProfile).updateAddress("서울시 강서구", "101호");
+        verify(parentLocationRepository).save(any(ParentLocation.class));
     }
 
     // ======================== 가족 멤버 목록 조회 ========================
@@ -729,6 +852,66 @@ class GuardianMyPageServiceTest {
         verify(familyMembershipRepository).delete(targetMembership);
     }
 
+    @Test
+    @DisplayName("방장이 시니어를 삭제할 때 가족에 시니어가 2명 이상이면 삭제에 성공한다")
+    void 가족_멤버_삭제_시니어_2명_이상() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member targetMember = mock(Member.class);
+        SeniorProfile targetSeniorProfile = mock(SeniorProfile.class);
+        SeniorProfile otherSeniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(targetMember));
+        given(targetMember.getType()).willReturn(MemberType.SENIOR);
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(targetSeniorProfile));
+        given(targetSeniorProfile.getFamily()).willReturn(family);
+        given(targetSeniorProfile.getId()).willReturn(200L);
+        given(seniorProfileRepository.findAllByFamilyIdWithLock(10L))
+                .willReturn(List.of(targetSeniorProfile, otherSeniorProfile));
+
+        // when
+        guardianMyPageService.deleteFamilyMember(2L);
+
+        // then
+        verify(seniorProfileRepository).deleteByIdDirectly(200L);
+    }
+
+    @Test
+    @DisplayName("방장이 시니어를 삭제할 때 마지막 시니어이면 예외가 발생한다")
+    void 가족_멤버_삭제_마지막_시니어_삭제_불가() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership myMembership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        Member targetMember = mock(Member.class);
+        SeniorProfile targetSeniorProfile = mock(SeniorProfile.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(myMembership));
+        given(myMembership.isLeader()).willReturn(true);
+        given(myMembership.getFamily()).willReturn(family);
+        given(family.getId()).willReturn(10L);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(targetMember));
+        given(targetMember.getType()).willReturn(MemberType.SENIOR);
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(targetSeniorProfile));
+        given(targetSeniorProfile.getFamily()).willReturn(family);
+        given(seniorProfileRepository.findAllByFamilyIdWithLock(10L))
+                .willReturn(List.of(targetSeniorProfile));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.deleteFamilyMember(2L))
+                .isInstanceOf(BusinessException.class);
+    }
+
     // ======================== 시니어 초대코드 수정 ========================
 
     @Test
@@ -744,7 +927,6 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getId()).willReturn(100L);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(false);
 
         // when
         guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234"));
@@ -772,23 +954,119 @@ class GuardianMyPageServiceTest {
                 .isInstanceOf(BusinessException.class);
     }
 
-    @Test
-    @DisplayName("이미 사용 중인 초대코드로 수정하려 하면 예외가 발생한다")
-    void 시니어_초대코드_수정_중복_코드() {
-        // given
-        Member guardian = mock(Member.class);
-        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+    // ======================== 보호자 전화번호 변경 - SMS 발송 ========================
 
-        given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(guardian.getId()).willReturn(1L);
-        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
-        given(seniorProfile.getId()).willReturn(100L);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
-        given(seniorProfileRepository.existsByInviteCode("ABC1234")).willReturn(true);
+    @Test
+    @DisplayName("사용 중이지 않은 번호로 요청하면 SMS 인증코드가 발송된다")
+    void 전화번호_변경_SMS_발송() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberRepository.findByPhoneNumber("01099998888")).willReturn(Optional.empty());
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(currentMember.getName()).willReturn("한토마");
+
+        // when
+        guardianMyPageService.sendPhoneChangeSms(new UpdatePhoneRequest("01099998888"));
+
+        // then
+        verify(smsService).sendVerificationSms("01099998888", "한토마");
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 번호로 SMS 발송을 요청하면 예외가 발생한다")
+    void 전화번호_변경_SMS_발송_중복_번호() {
+        // given
+        Member existingMember = mock(Member.class);
+        given(memberRepository.findByPhoneNumber("01099998888")).willReturn(Optional.of(existingMember));
 
         // when & then
-        assertThatThrownBy(() -> guardianMyPageService.updateSeniorInviteCode(10L, new UpdateInviteCodeRequest("ABC1234")))
+        assertThatThrownBy(() -> guardianMyPageService.sendPhoneChangeSms(new UpdatePhoneRequest("01099998888")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 보호자 전화번호 변경 - 인증코드 검증 ========================
+
+    @Test
+    @DisplayName("올바른 인증코드로 검증하면 인증 완료 상태가 Redis에 저장된다")
+    void 전화번호_변경_인증코드_검증_성공() {
+        // given
+        VerificationCode verificationCode = VerificationCode.builder()
+                .phoneNumber("01099998888")
+                .code("123456")
+                .name("한토마")
+                .ttl(180)
+                .build();
+
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
+
+        // when
+        guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456"));
+
+        // then
+        verify(verificationCodeRepository).deleteById("01099998888");
+        verify(phoneChangeVerifiedRepository).save(any(PhoneChangeVerified.class));
+    }
+
+    @Test
+    @DisplayName("인증코드가 불일치하면 예외가 발생한다")
+    void 전화번호_변경_인증코드_불일치() {
+        // given
+        VerificationCode verificationCode = VerificationCode.builder()
+                .phoneNumber("01099998888")
+                .code("999999")
+                .name("한토마")
+                .ttl(180)
+                .build();
+
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.of(verificationCode));
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("인증코드가 만료되어 없으면 예외가 발생한다")
+    void 전화번호_변경_인증코드_만료() {
+        // given
+        given(verificationCodeRepository.findById("01099998888")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.verifyPhoneChangeCode(new SmsCodeRequest("01099998888", "123456")))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ======================== 보호자 전화번호 변경 ========================
+
+    @Test
+    @DisplayName("인증이 완료된 번호로 변경 요청하면 전화번호가 업데이트된다")
+    void 전화번호_변경() {
+        // given
+        Member currentMember = mock(Member.class);
+        PhoneChangeVerified verified = PhoneChangeVerified.builder()
+                .phoneNumber("01099998888")
+                .ttl(300)
+                .build();
+
+        given(phoneChangeVerifiedRepository.findById("01099998888")).willReturn(Optional.of(verified));
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+
+        // when
+        guardianMyPageService.updatePhone(new UpdatePhoneRequest("01099998888"));
+
+        // then
+        verify(currentMember).updatePhoneNumber("01099998888");
+        verify(phoneChangeVerifiedRepository).deleteById("01099998888");
+    }
+
+    @Test
+    @DisplayName("인증이 완료되지 않은 번호로 변경 요청하면 예외가 발생한다")
+    void 전화번호_변경_인증_미완료() {
+        // given
+        given(phoneChangeVerifiedRepository.findById("01099998888")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> guardianMyPageService.updatePhone(new UpdatePhoneRequest("01099998888")))
                 .isInstanceOf(BusinessException.class);
     }
 }

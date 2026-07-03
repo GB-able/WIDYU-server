@@ -1,5 +1,7 @@
 package com.widyu.mypage.controller;
 
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.application.GuardianMyPageService;
 import com.widyu.mypage.controller.docs.GuardianMyPageDocs;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -70,6 +73,46 @@ public class GuardianMyPageController implements GuardianMyPageDocs {
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2013")
                 .message("프로필 이미지 수정 성공")
+                .build();
+    }
+
+    @Override
+    @PostMapping("/seniors")
+    public ApiResponseTemplate<Void> addSenior(@RequestBody @Valid SeniorSignUpRequest request) {
+        guardianMyPageService.addSenior(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2027")
+                .message("부모님 추가 성공")
+                .build();
+    }
+
+    @Override
+    @PostMapping("/phone/sms")
+    public ApiResponseTemplate<Void> sendPhoneChangeSms(@RequestBody @Valid UpdatePhoneRequest request) {
+        guardianMyPageService.sendPhoneChangeSms(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2025")
+                .message("인증 SMS가 발송되었습니다.")
+                .build();
+    }
+
+    @Override
+    @PostMapping("/phone/verify")
+    public ApiResponseTemplate<Void> verifyPhoneChangeCode(@RequestBody @Valid SmsCodeRequest request) {
+        guardianMyPageService.verifyPhoneChangeCode(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2026")
+                .message("인증이 완료되었습니다.")
+                .build();
+    }
+
+    @Override
+    @PatchMapping("/phone")
+    public ApiResponseTemplate<Void> updatePhone(@RequestBody @Valid UpdatePhoneRequest request) {
+        guardianMyPageService.updatePhone(request);
+        return ApiResponseTemplate.ok()
+                .code("MYPAGE_2028")
+                .message("전화번호 변경이 완료되었습니다.")
                 .build();
     }
 

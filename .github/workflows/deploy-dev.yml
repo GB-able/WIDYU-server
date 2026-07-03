@@ -5,6 +5,10 @@ on:
     branches:
       - develop
 
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
 env:
   DOCKER_IMAGE_NAME: ${{ secrets.DEV_DOCKER_IMAGE_NAME }}
   EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -127,6 +131,7 @@ jobs:
             docker pull ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
 
             echo "🚀 Deploying widyu-api (monitoring containers stay running)..."
+            docker rm -f widyu-api-dev 2>/dev/null || true
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --no-deps --force-recreate widyu-api
 
             echo "🔄 Reloading nginx config..."

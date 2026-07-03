@@ -6,8 +6,8 @@ import java.time.LocalDateTime;
 public record HealthScheduleUpdateRequest(
         String scheduleName,
         String placeAddress,
-        String latitude,
-        String longitude,
+        Double latitude,
+        Double longitude,
         LocalDateTime scheduledAt,
         ProgressStatus progressStatus
 ) {

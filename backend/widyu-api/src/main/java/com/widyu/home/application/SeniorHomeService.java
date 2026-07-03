@@ -1,7 +1,5 @@
 package com.widyu.home.application;
 
-import com.widyu.album.Album;
-import com.widyu.album.repository.AlbumRepository;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -14,12 +12,9 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
 import com.widyu.medicine.MedicineSchedule;
-import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyMembershipRepository;
-import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.walk.Walk;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,7 +24,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,21 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class SeniorHomeService {
 
-    private static final int ALBUM_CANDIDATE_SIZE = 10;
-    private static final int ALBUM_RESULT_SIZE = 3;
-    private static final int LIKE_WEIGHT = 3;
-    private static final int COMMENT_WEIGHT = 2;
-    private static final int DATE_BONUS = 10;
-
     private final MemberUtil memberUtil;
     private final MedicineScheduleRepository medicineScheduleRepository;
     private final MedicationProofRepository medicationProofRepository;
     private final WalkRepository walkRepository;
     private final HealthScheduleRepository healthScheduleRepository;
-    private final AlbumRepository albumRepository;
     private final HeartRateResultRepository heartRateResultRepository;
-    private final SeniorProfileRepository seniorProfileRepository;
-    private final FamilyMembershipRepository familyMembershipRepository;
+    private final HomeAlbumRecommendationService albumRecommendationService;
 
     public SeniorHomeCardsResponse getHomeCards() {
         Member member = memberUtil.getCurrentMember();
@@ -119,56 +105,9 @@ public class SeniorHomeService {
     }
 
     private List<SeniorHomeCardsResponse.AlbumInfo> getScoredAlbums(Member senior, LocalDate today) {
-        List<Long> familyMemberIds = getFamilyMemberIds(senior);
-
-        List<Long> candidateIds = albumRepository
-                .findTopScoredAlbumIdsByMemberIds(familyMemberIds, PageRequest.of(0, ALBUM_CANDIDATE_SIZE))
-                .getContent();
-
-        if (candidateIds.isEmpty()) {
-            return List.of();
-        }
-
-        return albumRepository.findAlbumsWithCollectionsByIds(candidateIds).stream()
-                .sorted(Comparator.comparingInt((Album album) -> calculateScore(album, today)).reversed())
-                .limit(ALBUM_RESULT_SIZE)
+        return albumRecommendationService.recommendAlbums(senior, today).stream()
                 .map(SeniorHomeCardsResponse.AlbumInfo::from)
                 .toList();
-    }
-
-    private List<Long> getFamilyMemberIds(Member senior) {
-        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(senior.getId())
-                .orElse(null);
-
-        if (seniorProfile == null) {
-            return List.of(senior.getId());
-        }
-
-        Long familyId = seniorProfile.getFamily().getId();
-
-        List<Long> seniorIds = seniorProfileRepository.findAllByFamilyId(familyId).stream()
-                .map(sp -> sp.getMember().getId())
-                .toList();
-
-        List<Long> guardianIds = familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId).stream()
-                .map(fm -> fm.getGuardian().getId())
-                .toList();
-
-        return java.util.stream.Stream.concat(seniorIds.stream(), guardianIds.stream()).toList();
-    }
-
-    private int calculateScore(Album album, LocalDate today) {
-        int baseScore = album.getLikeCount() * LIKE_WEIGHT + album.getCommentCount() * COMMENT_WEIGHT;
-        if (isAnniversary(album, today)) {
-            return baseScore + DATE_BONUS;
-        }
-        return baseScore;
-    }
-
-    private boolean isAnniversary(Album album, LocalDate today) {
-        LocalDate albumDate = album.getCreatedAt().toLocalDate();
-        return albumDate.getMonth() == today.getMonth()
-                && albumDate.getDayOfMonth() == today.getDayOfMonth();
     }
 
     private SeniorHomeCardsResponse.HealthScheduleInfo getHealthScheduleInfo(Member member, LocalDate today) {

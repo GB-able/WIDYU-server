@@ -37,13 +37,10 @@ public class SeniorProfile extends BaseTimeEntity {
 
     private String address;
 
-    @Column(name = "detail_address")
-    private String detailAddress;
-
-    @Column(name = "invite_code", nullable = false, unique = true, length = 7)
+    @Column(name = "invite_code", nullable = false, length = 7)
     private String inviteCode;
 
-    @Column(name = "birth_date")
+    @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
 
     @Column(nullable = false)
@@ -53,12 +50,11 @@ public class SeniorProfile extends BaseTimeEntity {
     private Integer defaultWalkGoal;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private SeniorProfile(Member member, Family family, String address, String detailAddress,
+    private SeniorProfile(Member member, Family family, String address,
                           String inviteCode, LocalDate birthDate, Long points, Integer defaultWalkGoal) {
         this.member = member;
         this.family = family;
         this.address = address;
-        this.detailAddress = detailAddress;
         this.inviteCode = inviteCode;
         this.birthDate = birthDate;
         this.points = points;
@@ -66,12 +62,11 @@ public class SeniorProfile extends BaseTimeEntity {
     }
 
     public static SeniorProfile createSeniorProfile(Member member, Family family, String address,
-                                                    String detailAddress, String inviteCode, LocalDate birthDate) {
+                                                    String inviteCode, LocalDate birthDate) {
         return SeniorProfile.builder()
                 .member(member)
                 .family(family)
                 .address(address)
-                .detailAddress(detailAddress)
                 .inviteCode(inviteCode)
                 .birthDate(birthDate)
                 .points(100L)
@@ -103,9 +98,8 @@ public class SeniorProfile extends BaseTimeEntity {
         return this.defaultWalkGoal != null;
     }
 
-    public void updateAddress(String address, String detailAddress) {
+    public void updateAddress(String address) {
         this.address = address;
-        this.detailAddress = detailAddress;
     }
 
     public void updateInviteCode(String inviteCode) {

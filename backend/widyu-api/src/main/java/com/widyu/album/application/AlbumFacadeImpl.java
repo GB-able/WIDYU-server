@@ -20,9 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -45,62 +42,32 @@ public class AlbumFacadeImpl implements AlbumFacade {
     @Override
     public AlbumUploadAcceptedResponse uploadAlbum(AlbumUploadRequest request) {
         Member currentMember = memberUtil.getCurrentMember();
-        mediaPolicy.validate(request.mediaFiles());
 
-        List<String> mediaUrls = new ArrayList<>();
-        List<String> thumbnailUrls = new ArrayList<>();
-        List<Integer> durations = new ArrayList<>();
-        List<AlbumVideoProcessingService.VideoEntry> videoEntries = new ArrayList<>();
+        AlbumFileService.AsyncUploadPreparation prep =
+                albumFileService.prepareForAsyncUpload(request.mediaFiles(), currentMember.getId());
 
-        for (int i = 0; i < request.mediaFiles().size(); i++) {
-            MultipartFile file = request.mediaFiles().get(i);
-            String contentType = file.getContentType();
-
-            if (contentType == null) {
-                throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
-            }
-
-            if (contentType.startsWith("image/")) {
-                String url = albumFileService.uploadAlbumPhoto(file, currentMember.getId());
-                mediaUrls.add(url);
-                thumbnailUrls.add(null);
-                durations.add(null);
-            } else if (contentType.startsWith("video/")) {
-                try {
-                    File tempFile = albumFileService.toTempFile(file);
-                    videoEntries.add(new AlbumVideoProcessingService.VideoEntry(
-                            i, tempFile, file.getOriginalFilename(), contentType));
-                    mediaUrls.add("");
-                    thumbnailUrls.add(null);
-                    durations.add(null);
-                } catch (IOException e) {
-                    throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
-                }
-            } else {
-                throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
-            }
-        }
-
-        boolean hasVideos = !videoEntries.isEmpty();
         Long albumId = albumService.saveAlbum(
-                currentMember, request.content(), mediaUrls, thumbnailUrls, durations, hasVideos);
+                currentMember, request.content(),
+                prep.mediaUrls(), prep.thumbnailUrls(), prep.durations(),
+                prep.hasVideos());
 
-        if (hasVideos) {
-            albumVideoProcessingService.processVideosAsync(albumId, currentMember.getId(), videoEntries);
+        if (prep.hasVideos()) {
+            albumVideoProcessingService.processVideosAsync(albumId, currentMember.getId(), prep.videoEntries());
         }
 
         return new AlbumUploadAcceptedResponse(albumId);
     }
 
     @Override
-    public CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId, String date) {
-        AlbumFeedRequest request = AlbumFeedRequest.from(lastAlbumId, date);
+    public CursorPage<AlbumFeedResponse> getAlbumFeed(String cursor, String date) {
+        AlbumFeedRequest request = AlbumFeedRequest.from(cursor, date);
         return albumFeedService.getAlbumFeed(request);
     }
     
     @Override
-    public CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId) {
-        return albumFeedService.getMediaFeed(lastPostId);
+    public CursorPage<AlbumMediaResponse> getMediaFeed(String cursor) {
+        AlbumFeedRequest parsed = AlbumFeedRequest.from(cursor, null);
+        return albumFeedService.getMediaFeed(parsed.lastCreatedAt(), parsed.lastAlbumId());
     }
 
     @Override

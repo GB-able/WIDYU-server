@@ -40,8 +40,8 @@ public interface HealthScheduleDocs {
                                     {
                                       "scheduleName": "정기 건강검진",
                                       "placeAddress": "서울대학교병원",
-                                      "latitude": "37.5665",
-                                      "longitude": "126.9780",
+                                      "latitude": 37.5665,
+                                      "longitude": 126.9780,
                                       "scheduledAt": "2025-11-15T14:30:00"
                                     }
                                     """
@@ -89,8 +89,8 @@ public interface HealthScheduleDocs {
                                       "memberId": 1,
                                       "scheduleName": "정기 건강검진",
                                       "placeAddress": "서울대학교병원",
-                                      "latitude": "37.5665",
-                                      "longitude": "126.9780",
+                                      "latitude": 37.5665,
+                                      "longitude": 126.9780,
                                       "scheduledAt": "2025-11-15T14:30:00"
                                     }
                                     """
@@ -140,8 +140,8 @@ public interface HealthScheduleDocs {
                                     {
                                       "scheduleName": "정기 건강검진 (수정)",
                                       "placeAddress": "강남세브란스병원",
-                                      "latitude": "37.5665",
-                                      "longitude": "126.9780",
+                                      "latitude": 37.5665,
+                                      "longitude": 126.9780,
                                       "scheduledAt": "2025-11-20T10:00:00",
                                       "progressStatus": "UPCOMING"
                                     }
@@ -392,16 +392,16 @@ public interface HealthScheduleDocs {
                                             "datetime": "2025-11-01T14:30:00",
                                             "healthScheduleId": 1,
                                             "position": {
-                                              "lat": "37.5665",
-                                              "lon": "126.9780"
+                                              "lat": 37.5665,
+                                              "lon": 126.9780
                                             }
                                           },
                                           {
                                             "datetime": "2025-11-05T10:00:00",
                                             "healthScheduleId": 2,
                                             "position": {
-                                              "lat": "37.5665",
-                                              "lon": "126.9780"
+                                              "lat": 37.5665,
+                                              "lon": 126.9780
                                             }
                                           }
                                         ]

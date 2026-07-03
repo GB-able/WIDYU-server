@@ -1,5 +1,7 @@
 package com.widyu.mypage.controller.docs;
 
+import com.widyu.auth.dto.request.SeniorSignUpRequest;
+import com.widyu.auth.dto.request.SmsCodeRequest;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
 import com.widyu.mypage.dto.request.UpdateInviteCodeRequest;
@@ -32,6 +34,44 @@ public interface GuardianMyPageDocs {
     @Operation(summary = "보호자 이름 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
     ApiResponseTemplate<Void> updateName(UpdateNameRequest request);
+
+    @Operation(summary = "부모님(시니어) 추가", description = "기존 가족에 시니어 1명을 추가 등록합니다. 이름·출생연도·연락처·주소·초대코드(7자리 숫자)를 입력받습니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "추가 성공"),
+            @ApiResponse(responseCode = "400", description = "이미 사용 중인 전화번호"),
+            @ApiResponse(responseCode = "404", description = "연결된 가족 없음")
+    })
+    ApiResponseTemplate<Void> addSenior(SeniorSignUpRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경 - 인증 SMS 발송",
+            description = "변경할 전화번호로 SMS 인증코드를 발송합니다. 이미 사용 중인 번호면 400을 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
+            @ApiResponse(responseCode = "400", description = "이미 사용 중인 전화번호")
+    })
+    ApiResponseTemplate<Void> sendPhoneChangeSms(UpdatePhoneRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경 - 인증코드 검증",
+            description = "SMS 인증코드를 검증합니다. 성공 시 5분간 유효한 인증 완료 상태가 Redis에 저장됩니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "인증 성공"),
+            @ApiResponse(responseCode = "400", description = "인증코드 불일치 또는 만료")
+    })
+    ApiResponseTemplate<Void> verifyPhoneChangeCode(SmsCodeRequest request);
+
+    @Operation(
+            summary = "보호자 전화번호 변경",
+            description = "인증이 완료된 전화번호로 변경합니다. 인증 완료 후 5분 이내에 호출해야 합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "전화번호 변경 성공"),
+            @ApiResponse(responseCode = "400", description = "인증이 완료되지 않은 번호")
+    })
+    ApiResponseTemplate<Void> updatePhone(UpdatePhoneRequest request);
 
     @Operation(summary = "보호자 프로필 이미지 수정")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
@@ -95,7 +135,6 @@ public interface GuardianMyPageDocs {
     @Operation(summary = "시니어 초대코드 수정", description = "방장만 호출 가능. 시니어 로그인에 사용되는 7자리 초대코드를 수정합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "수정 성공"),
-            @ApiResponse(responseCode = "400", description = "이미 사용 중인 초대코드"),
             @ApiResponse(responseCode = "403", description = "방장만 수정 가능")
     })
     ApiResponseTemplate<Void> updateSeniorInviteCode(

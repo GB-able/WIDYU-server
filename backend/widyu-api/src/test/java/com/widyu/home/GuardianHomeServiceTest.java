@@ -3,11 +3,10 @@ package com.widyu.home;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import com.widyu.album.repository.AlbumRepository;
+import com.widyu.album.Album;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
@@ -17,6 +16,7 @@ import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.application.GuardianHomeService;
+import com.widyu.home.application.HomeAlbumRecommendationService;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Family;
@@ -36,7 +36,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.SliceImpl;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GuardianHomeService 단위 테스트")
@@ -53,7 +52,7 @@ class GuardianHomeServiceTest {
     @Mock private MedicationProofRepository medicationProofRepository;
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private WalkRepository walkRepository;
-    @Mock private AlbumRepository albumRepository;
+    @Mock private HomeAlbumRecommendationService albumRecommendationService;
 
     @Test
     @DisplayName("시니어가 보호자 홈을 호출하면 403 예외가 발생한다")
@@ -75,7 +74,7 @@ class GuardianHomeServiceTest {
         Member otherSenior = Member.createMember(MemberType.SENIOR, "다른가족부모님", "01055556666");
         Family otherFamily = Family.createFamily("OTHER1");
         SeniorProfile otherProfile = SeniorProfile.createSeniorProfile(
-                otherSenior, otherFamily, "서울시", null, "9990001", null);
+                otherSenior, otherFamily, "서울시", "9990001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(memberRepository.findById(42L)).willReturn(Optional.of(otherSenior));
@@ -96,20 +95,16 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(seniorProfileRepository.findByMemberId(any())).willReturn(Optional.of(seniorProfile));
-        given(seniorProfileRepository.findAllByFamilyId(any())).willReturn(List.of(seniorProfile));
-        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(any())).willReturn(List.of(membership));
-        given(albumRepository.findTopScoredAlbumIdsByMemberIds(anyList(), any()))
-                .willReturn(new SliceImpl<>(List.of()));
+        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
@@ -127,20 +122,16 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(seniorProfileRepository.findByMemberId(any())).willReturn(Optional.of(seniorProfile));
-        given(seniorProfileRepository.findAllByFamilyId(any())).willReturn(List.of(seniorProfile));
-        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(any())).willReturn(List.of(membership));
-        given(albumRepository.findTopScoredAlbumIdsByMemberIds(anyList(), any()))
-                .willReturn(new SliceImpl<>(List.of()));
+        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
@@ -158,20 +149,16 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
         given(familyMembershipRepository.findByGuardianId(any())).willReturn(Optional.of(membership));
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(seniorProfileRepository.findByMemberId(any())).willReturn(Optional.of(seniorProfile));
-        given(seniorProfileRepository.findAllByFamilyId(any())).willReturn(List.of(seniorProfile));
-        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(any())).willReturn(List.of(membership));
-        given(albumRepository.findTopScoredAlbumIdsByMemberIds(anyList(), any()))
-                .willReturn(new SliceImpl<>(List.of()));
+        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
@@ -189,7 +176,7 @@ class GuardianHomeServiceTest {
         Family family = Family.createFamily("FAMA01");
         FamilyMembership membership = FamilyMembership.createLeaderMembership(family, guardian);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                senior, family, "서울시", null, "1110001", null);
+                senior, family, "서울시", "1110001", null);
 
         MedicineSchedule schedule1 = mock(MedicineSchedule.class);
         MedicineSchedule schedule2 = mock(MedicineSchedule.class);
@@ -206,13 +193,9 @@ class GuardianHomeServiceTest {
                 .willReturn(List.of(schedule1, schedule2));
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
                 .willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(seniorProfileRepository.findByMemberId(any())).willReturn(Optional.of(seniorProfile));
-        given(seniorProfileRepository.findAllByFamilyId(any())).willReturn(List.of(seniorProfile));
-        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(any())).willReturn(List.of(membership));
-        given(albumRepository.findTopScoredAlbumIdsByMemberIds(anyList(), any()))
-                .willReturn(new SliceImpl<>(List.of()));
+        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);

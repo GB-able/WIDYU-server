@@ -177,7 +177,6 @@ class PaymentIntegrationTest {
                         member,
                         family,
                         "서울시 강남구",
-                        "101호",
                         inviteCode,
                         LocalDate.of(1950, 1, 1)
                 )
