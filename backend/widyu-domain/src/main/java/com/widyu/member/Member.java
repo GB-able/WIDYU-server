@@ -36,11 +36,14 @@ public class Member extends BaseTimeEntity {
     private Long id;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private MemberRole role;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private MemberType type;
 
+    @Column(nullable = false)
     private String name;
 
     private String phoneNumber;
@@ -67,6 +70,7 @@ public class Member extends BaseTimeEntity {
     private List<AddressBookmark> addressBookmarks = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Status status;
 
     @Builder(access = AccessLevel.PRIVATE)
