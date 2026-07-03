@@ -38,6 +38,7 @@ public class Payment {
     @Column(unique = true, nullable = false)
     private String paymentKey;
 
+    @Column(nullable = false)
     private String orderId;
     private String orderName;
     private int amount;
@@ -45,6 +46,7 @@ public class Payment {
     private int canceledPointAmount;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private PaymentStatus status;
 
     private ZonedDateTime requestedAt;
