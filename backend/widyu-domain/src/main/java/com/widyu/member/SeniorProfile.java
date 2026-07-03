@@ -40,7 +40,7 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(name = "invite_code", nullable = false, length = 7)
     private String inviteCode;
 
-    @Column(name = "birth_date")
+    @Column(name = "birth_date", nullable = false)
     private LocalDate birthDate;
 
     @Column(nullable = false)
