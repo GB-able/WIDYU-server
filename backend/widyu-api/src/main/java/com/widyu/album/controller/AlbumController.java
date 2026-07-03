@@ -53,7 +53,7 @@ public class AlbumController implements AlbumDocs {
     @Override
     @GetMapping("/feed")
     public ApiResponseTemplate<CursorPage<AlbumFeedResponse>> getAlbumFeed(
-            @RequestParam(value = "cursor", required = false) Long cursor,
+            @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "date", required = false) String date
     ) {
         CursorPage<AlbumFeedResponse> response = albumFacade.getAlbumFeed(cursor, date);
@@ -67,7 +67,7 @@ public class AlbumController implements AlbumDocs {
     @Override
     @GetMapping("/media")
     public ApiResponseTemplate<CursorPage<AlbumMediaResponse>> getMediaFeed(
-            @RequestParam(value = "cursor", required = false) Long cursor
+            @RequestParam(value = "cursor", required = false) String cursor
     ) {
         CursorPage<AlbumMediaResponse> response = albumFacade.getMediaFeed(cursor);
         
