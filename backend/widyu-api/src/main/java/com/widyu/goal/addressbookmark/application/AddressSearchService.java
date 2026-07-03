@@ -38,11 +38,11 @@ public class AddressSearchService {
                     Double latitude = null;
                     Double longitude = null;
                     try {
-                        GeocodingResponse geo = geocodingService.geocode(item.roadAddr());
+                        GeocodingResponse geo = geocodingService.geocode(item.roadAddrPart1());
                         latitude = geo.latitude();
                         longitude = geo.longitude();
                     } catch (Exception e) {
-                        log.warn("좌표 변환 실패: {}", item.roadAddr());
+                        log.warn("좌표 변환 실패: {}", item.roadAddrPart1());
                     }
                     return AddressItem.from(item, latitude, longitude);
                 })

@@ -22,7 +22,7 @@ public record AddressSearchResponse(
     ) {
         public static AddressItem from(JusoApiResponse.JusoItem item, Double latitude, Double longitude) {
             return new AddressItem(
-                    item.roadAddr(),
+                    item.roadAddrPart1(),
                     item.jibunAddr(),
                     item.zipNo(),
                     item.bdNm(),
