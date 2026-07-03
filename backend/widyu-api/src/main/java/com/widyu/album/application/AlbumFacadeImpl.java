@@ -59,14 +59,15 @@ public class AlbumFacadeImpl implements AlbumFacade {
     }
 
     @Override
-    public CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId, String date) {
-        AlbumFeedRequest request = AlbumFeedRequest.from(lastAlbumId, date);
+    public CursorPage<AlbumFeedResponse> getAlbumFeed(String cursor, String date) {
+        AlbumFeedRequest request = AlbumFeedRequest.from(cursor, date);
         return albumFeedService.getAlbumFeed(request);
     }
     
     @Override
-    public CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId) {
-        return albumFeedService.getMediaFeed(lastPostId);
+    public CursorPage<AlbumMediaResponse> getMediaFeed(String cursor) {
+        AlbumFeedRequest parsed = AlbumFeedRequest.from(cursor, null);
+        return albumFeedService.getMediaFeed(parsed.lastCreatedAt(), parsed.lastAlbumId());
     }
 
     @Override

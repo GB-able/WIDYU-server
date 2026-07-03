@@ -25,12 +25,12 @@ public interface AlbumFacade {
     /**
      * 앨범 피드 조회 (무한 스크롤)
      */
-    CursorPage<AlbumFeedResponse> getAlbumFeed(Long lastAlbumId, String date);
+    CursorPage<AlbumFeedResponse> getAlbumFeed(String cursor, String date);
     
     /**
      * 미디어 피드 조회 (무한 스크롤)
      */
-    CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId);
+    CursorPage<AlbumMediaResponse> getMediaFeed(String cursor);
     
     /**
      * 앨범 상세 조회

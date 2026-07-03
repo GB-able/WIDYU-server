@@ -45,7 +45,11 @@ public class AlbumFeedService {
 
         // 1) 앨범 ID 커서 페이지 조회 (size+1 로 hasNext 판단)
         Pageable pageable = pagePlusOne(ALBUM_FEED_SIZE);
-        Slice<Long> idSlice = findAlbumIdSlice(request.hasCursor() ? request.lastAlbumId() : null, request.hasDate() ? LocalDate.parse(request.date()) : null, pageable);
+        Slice<Long> idSlice = findAlbumIdSlice(
+                request.hasCursor() ? request.lastCreatedAt() : null,
+                request.hasCursor() ? request.lastAlbumId() : null,
+                request.hasDate() ? LocalDate.parse(request.date()) : null,
+                pageable);
 
         // 2) 상세 조회 (ID 순서 보존)
         List<Long> albumIds = idSlice.getContent();
@@ -59,17 +63,17 @@ public class AlbumFeedService {
         if (feed.size() > ALBUM_FEED_SIZE) {
             feed = feed.subList(0, ALBUM_FEED_SIZE);
         }
-        String nextCursor = lastAlbumIdOrNull(feed);
+        String nextCursor = lastCursorOrNull(feed);
 
         return new CursorPage<>(feed, nextCursor, hasNext);
     }
 
     @Transactional(readOnly = true)
-    public CursorPage<AlbumMediaResponse> getMediaFeed(Long lastPostId) {
+    public CursorPage<AlbumMediaResponse> getMediaFeed(LocalDateTime lastCreatedAt, Long lastPostId) {
         Pageable pageable = pagePlusOne(MEDIA_FEED_SIZE);
 
         // 1) 앨범 ID 커서 페이지
-        Slice<Long> idSlice = findAlbumIdSlice(lastPostId, null, pageable);
+        Slice<Long> idSlice = findAlbumIdSlice(lastCreatedAt, lastPostId, null, pageable);
 
         // 2) 상세 조회 (ID 순서 보존)
         List<Long> albumIds = idSlice.getContent();
@@ -81,11 +85,11 @@ public class AlbumFeedService {
             albumMediaResponses.addAll(AlbumMediaResponse.fromAlbum(album));
         }
 
-        // 4) 커서는 마지막 미디어의 postId(=albumId)
+        // 4) 커서는 마지막 앨범의 (createdAt, albumId)
         boolean hasNext = idSlice.hasNext();
         String nextCursor = albumMediaResponses.isEmpty()
                 ? null
-                : String.valueOf(albumMediaResponses.getLast().postId());
+                : buildCursor(albumMediaResponses.getLast().createdAt(), albumMediaResponses.getLast().postId());
 
         return new CursorPage<>(albumMediaResponses, nextCursor, hasNext);
     }
@@ -94,18 +98,22 @@ public class AlbumFeedService {
         return PageRequest.of(0, size + 1);
     }
 
-    private Slice<Long> findAlbumIdSlice(Long lastPostId, LocalDate date, Pageable pageable) {
+    private Slice<Long> findAlbumIdSlice(LocalDateTime lastCreatedAt, Long lastPostId, LocalDate date, Pageable pageable) {
         if (date != null) {
             LocalDateTime startOfDay = date.atStartOfDay();
             LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
-            return (lastPostId != null)
-                    ? albumRepository.findAlbumIdsAfterPostIdByDate(lastPostId, startOfDay, startOfNextDay, pageable)
+            return (lastCreatedAt != null)
+                    ? albumRepository.findAlbumIdsAfterPostIdByDate(lastCreatedAt, lastPostId, startOfDay, startOfNextDay, pageable)
                     : albumRepository.findLatestAlbumIdsByDate(startOfDay, startOfNextDay, pageable);
         } else {
-            return (lastPostId != null)
-                    ? albumRepository.findAlbumIdsAfterPostId(lastPostId, pageable)
+            return (lastCreatedAt != null)
+                    ? albumRepository.findAlbumIdsAfterPostId(lastCreatedAt, lastPostId, pageable)
                     : albumRepository.findLatestAlbumIds(pageable);
         }
+    }
+
+    private String buildCursor(LocalDateTime createdAt, Long albumId) {
+        return createdAt.toString() + "|" + albumId;
     }
 
     private List<Album> findAlbumsOrderedByIds(List<Long> albumIds) {
@@ -122,10 +130,10 @@ public class AlbumFeedService {
         return fetched;
     }
 
-    private String lastAlbumIdOrNull(List<AlbumFeedResponse> feed) {
+    private String lastCursorOrNull(List<AlbumFeedResponse> feed) {
         if (feed == null || feed.isEmpty()) return null;
         AlbumFeedResponse last = feed.getLast();
-        return String.valueOf(last.albumId());
+        return buildCursor(last.createdAt(), last.albumId());
     }
 
     private List<AlbumFeedResponse> convertToFeedResponsesBulk(List<Album> albums, Member currentMember) {

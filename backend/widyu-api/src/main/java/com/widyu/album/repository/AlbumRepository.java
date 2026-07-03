@@ -27,9 +27,16 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT DISTINCT a FROM Album a LEFT JOIN FETCH a.mediaUrls LEFT JOIN FETCH a.thumbnailUrls LEFT JOIN FETCH a.durations WHERE a.id IN :albumIds ORDER BY a.createdAt DESC, a.id DESC")
     List<Album> findAlbumsWithCollectionsByIds(@Param("albumIds") List<Long> albumIds);
 
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.id < :lastPostId ORDER BY a.id DESC")
+    @Query("""
+            SELECT a.id FROM Album a
+            WHERE a.status = 'ACTIVE'
+              AND (a.createdAt < :lastCreatedAt
+                   OR (a.createdAt = :lastCreatedAt AND a.id < :lastId))
+            ORDER BY a.createdAt DESC, a.id DESC
+            """)
     org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostId(
-            @Param("lastPostId") Long lastPostId,
+            @Param("lastCreatedAt") LocalDateTime lastCreatedAt,
+            @Param("lastId") Long lastId,
             Pageable pageable
     );
 
@@ -57,9 +64,18 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay ORDER BY a.createdAt DESC, a.id DESC")
     org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("startOfNextDay") LocalDateTime startOfNextDay, Pageable pageable);
 
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay AND a.id < :lastPostId ORDER BY a.id DESC")
+    @Query("""
+            SELECT a.id FROM Album a
+            WHERE a.status = 'ACTIVE'
+              AND a.createdAt >= :startOfDay
+              AND a.createdAt < :startOfNextDay
+              AND (a.createdAt < :lastCreatedAt
+                   OR (a.createdAt = :lastCreatedAt AND a.id < :lastId))
+            ORDER BY a.createdAt DESC, a.id DESC
+            """)
     org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdByDate(
-            @Param("lastPostId") Long lastPostId,
+            @Param("lastCreatedAt") LocalDateTime lastCreatedAt,
+            @Param("lastId") Long lastId,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("startOfNextDay") LocalDateTime startOfNextDay,
             Pageable pageable
