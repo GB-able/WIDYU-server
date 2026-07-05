@@ -13,7 +13,9 @@ PR 본문은 LLD를 오라클로 삼아 작성한다. LLD에 없는 내용은 �
 - base 브랜치는 `develop`.
 - LLD가 있으면 반드시 링크하고 인수조건 기준으로 작성한다.
 - Open Questions는 LLD의 미결정 사항을 그대로 옮긴다.
+- PR 제목과 본문은 한글 존댓말로 작성한다.
 - 기본 Assignee: `dongkyun0713`.
+- 변경 성격에 맞는 label을 확인하고 가능하면 함께 지정한다.
 
 ## 사전 확인
 
@@ -27,16 +29,31 @@ PR 본문은 LLD를 오라클로 삼아 작성한다. LLD에 없는 내용은 �
 2. 관련 이슈 `gh issue view <N>` 읽기.
 3. 관련 LLD `docs/lld/LLD-XXXX.md` 읽기.
 4. `git diff develop...HEAD --stat`으로 변경 범위 파악.
-5. 아래 템플릿으로 본문 작성.
+5. 아래 템플릿으로 본문 작성. 본문은 존댓말 종결형(`합니다`, `습니다`, `확인했습니다`)을 사용한다.
 6. `gh pr create --base develop --head <branch> --title "<title>" --body-file <tmpfile> --assignee dongkyun0713`.
-7. 필요한 라벨이 정해져 있으면 `gh pr edit <PR> --add-label "<label>"`로 추가한다.
-8. `gh pr view <PR> --json assignees,labels`로 반영 확인.
+7. `gh label list --limit 50`로 사용 가능한 label을 확인한다.
+8. 변경 성격에 맞는 label이 있으면 `gh pr edit <PR> --add-label "<label>"`로 추가한다.
+9. `gh pr view <PR> --json assignees,labels`로 assignee와 label 반영을 확인한다.
+
+### Label 선택 기준
+
+| 변경 성격 | label |
+| --- | --- |
+| 문서/가이드/스킬 문서 | `Docs` |
+| 개발 환경, CI, 설정, 하네스 | `Setting` |
+| 테스트 코드/검증 보강 | `Test` |
+| 기능 구현 | `Feature` |
+| 버그 수정 | `bug` |
+| 구조 개선 | `Refactor` |
+| 배포/인프라 | `Devops` |
 
 ## PR 본문 템플릿
 
+본문은 존댓말 종결형으로 작성한다.
+
 ```markdown
 ## 개요
-<LLD 기준으로 이 PR이 해결하는 문제와 범위>
+<LLD 기준으로 이 PR이 해결하는 문제와 범위를 존댓말로 작성합니다.>
 
 ## 관련 문서
 - LLD: docs/lld/<경로> (없으면 -)
@@ -47,7 +64,7 @@ Closes #<N>
 
 ## 변경 사항
 - 변경 모듈: widyu-api / widyu-domain
-<diff 기반 사실만 bullet>
+<diff 기반 사실만 존댓말 bullet로 작성합니다.>
 
 ## 테스트
 - `./gradlew :backend:widyu-api:test`: 통과/실패
@@ -60,7 +77,7 @@ Closes #<N>
 - [ ] LLD 인수조건 전체 충족
 
 ## Open Questions (LLD 미결정 사항)
-<LLD의 Open Questions를 그대로 옮김. 없으면 "없음">
+<LLD의 Open Questions를 그대로 옮깁니다. 없으면 "없습니다.">
 
 ## 비고
 <배포 영향, 후속 작업>
