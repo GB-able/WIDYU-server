@@ -4,6 +4,7 @@ import static com.widyu.global.constant.SecurityConstant.TOKEN_PREFIX;
 
 import com.widyu.auth.dto.AccessTokenDto;
 import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.member.MemberRole;
 import java.util.Map;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -23,52 +24,70 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final WsTokenService wsTokenService;
 
-    @Override // websocket jwt 토큰 검사
+    @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                     WebSocketHandler wsHandler, Map<String, Object> attributes) {
 
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
-        // Query parameter로도 받을 수 있도록
         if (authHeader == null || authHeader.isEmpty()) {
             String query = request.getURI().getQuery();
             if (query != null && query.contains("token=")) {
-                String encodedToken = extractTokenFromQuery(query);
-                if (encodedToken != null) {
-                    try {
-                        String decodedToken = URLDecoder.decode(encodedToken, StandardCharsets.UTF_8.name());
-                        authHeader = TOKEN_PREFIX + decodedToken;
-                    } catch (UnsupportedEncodingException e) {
-                        log.error("Failed to decode token from query parameter", e);
-                        // 토큰 디코딩 실패 시 연결을 거부합니다.
-                        log.warn("WebSocket handshake 실패 - 토큰 디코딩 오류");
-                        return false;
-                    }
-                }
+                return authenticateWithWsToken(extractTokenFromQuery(query), attributes);
             }
         }
 
-        if (authHeader != null && authHeader.startsWith(TOKEN_PREFIX)) {
-            String token = authHeader.replace(TOKEN_PREFIX, "");
-            AccessTokenDto accessTokenDto = jwtTokenProvider.retrieveAccessToken(token);
-
-            if (accessTokenDto != null) {
-                attributes.put("memberId", accessTokenDto.memberId());
-                attributes.put("memberRole", accessTokenDto.memberRole());
-                log.info("WebSocket handshake 성공 - memberId: {}", accessTokenDto.memberId());
-                return true;
-            }
-        }
-
-        log.warn("WebSocket handshake 실패 - 유효하지 않은 토큰");
-        return false;
+        return authenticateWithJwt(authHeader, attributes);
     }
 
     @Override
     public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                 WebSocketHandler wsHandler, Exception exception) {
-        // 필요시 후처리
+    }
+
+    private boolean authenticateWithWsToken(String tokenId, Map<String, Object> attributes) {
+        if (tokenId == null) {
+            log.warn("WebSocket handshake 실패 - WS 토큰 없음");
+            return false;
+        }
+
+        try {
+            String decodedTokenId = URLDecoder.decode(tokenId, StandardCharsets.UTF_8.name());
+            Long memberId = wsTokenService.validateAndConsume(decodedTokenId);
+            if (memberId == null) {
+                log.warn("WebSocket handshake 실패 - WS 토큰 만료 또는 존재하지 않음");
+                return false;
+            }
+            attributes.put("memberId", memberId);
+            attributes.put("memberRole", MemberRole.USER);
+            log.info("WebSocket handshake 성공 (WS 토큰) - memberId: {}", memberId);
+            return true;
+        } catch (UnsupportedEncodingException e) {
+            log.error("WebSocket handshake 실패 - WS 토큰 디코딩 오류", e);
+            return false;
+        }
+    }
+
+    private boolean authenticateWithJwt(String authHeader, Map<String, Object> attributes) {
+        if (authHeader == null || !authHeader.startsWith(TOKEN_PREFIX)) {
+            log.warn("WebSocket handshake 실패 - Authorization 헤더 없음");
+            return false;
+        }
+
+        String token = authHeader.replace(TOKEN_PREFIX, "");
+        AccessTokenDto accessTokenDto = jwtTokenProvider.retrieveAccessToken(token);
+
+        if (accessTokenDto == null) {
+            log.warn("WebSocket handshake 실패 - 유효하지 않은 JWT");
+            return false;
+        }
+
+        attributes.put("memberId", accessTokenDto.memberId());
+        attributes.put("memberRole", accessTokenDto.memberRole());
+        log.info("WebSocket handshake 성공 (JWT) - memberId: {}", accessTokenDto.memberId());
+        return true;
     }
 
     private String extractTokenFromQuery(String query) {
