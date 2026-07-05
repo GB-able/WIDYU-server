@@ -14,6 +14,18 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    # 실제 Redis 연동 테스트(WsTokenService 동시성 등)용 서비스 컨테이너 — 러너에 localhost:6379 제공
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       # 1️⃣ 코드 체크아웃
       - name: Checkout repository
