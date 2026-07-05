@@ -116,6 +116,27 @@ npm run build # dist/ 생성
 - **QueryDSL** — 복잡한 조건 쿼리에 사용, `./gradlew compileJava`로 Q-클래스 재생성
 - **WebSocket STOMP** — JWT 핸드셰이크 인터셉터로 인증, `SimpMessagingTemplate`으로 브로드캐스트
 
+## AI 하네스 워크플로우
+
+Java 파일을 수정할 때마다 `on-file-edit.sh` 훅이 자동 실행되어 규칙을 검사합니다.
+작업 완료 전 다음 순서를 따르세요:
+
+```
+1. 관련 도메인 문서 확인 (backend/CLAUDE.md → 해당 도메인 섹션)
+2. 변경 계획 작성 (어떤 파일, 어떤 이유)
+3. 코드 수정 (훅이 자동으로 규칙 검사)
+4. 테스트 실행: bash scripts/harness/run-module-tests.sh
+5. 엔티티 변경 시 QueryDSL 재생성: ./gradlew compileJava
+```
+
+**자동 검사 규칙** (`scripts/harness/validate-java-rules.sh`):
+- 삼항 연산자 사용 → if/else로 수정
+- Service/Facade에서 DTO 직접 생성(`new XxxResponse(`) → `from()`/`of()` 사용
+- Controller에서 Repository 직접 import → Service 계층 거쳐야 함
+- widyu-api에 `@Entity` → widyu-domain으로 이동
+- widyu-domain에 Repository → widyu-api로 이동
+- `@Async` 메서드에 `@Transactional` 누락 경고
+
 ## 코드 작성 원칙
 
 1. **삼항 연산자 금지** — 조건 분기는 `if/else` 또는 early return으로 작성한다

@@ -325,7 +325,7 @@ erDiagram
 
 | 테이블 | 인덱스명 | 컬럼 | 비고 |
 | --- | --- | --- | --- |
-| `album` | `idx_album_member_status_created` | `(member_id, status, created_at DESC)` | 피드 조회 커버링 인덱스 |
+| `album` | `idx_album_status_created_id` | `(status, created_at DESC, album_id DESC)` | 피드 조회 커버링 인덱스 |
 | `medicine` | FULLTEXT | `item_name` | N-gram, 한글 검색 |
 | `local_account` | UK | `(email)` | 이메일 중복 방지 |
 | `social_account` | UK `uk_provider_user` | `(provider, oauth_id)` | 소셜 계정 중복 방지 |
@@ -337,8 +337,8 @@ erDiagram
 ## 도메인별 조회 기준
 
 ### 앨범 (Album)
-- 가족 피드 조회: `member_id`(가족 구성원) + `status = ACTIVE` + `created_at DESC` 커서 페이징
-- 커버링 인덱스 `(member_id, status, created_at)` 적용으로 클러스터드 인덱스 접근 없이 반환
+- 피드 조회: `status = ACTIVE` + `created_at DESC, album_id DESC` 커서 페이징
+- 커버링 인덱스 `(status, created_at DESC, album_id DESC)` 적용으로 ID 페이지를 먼저 조회
 
 ### 의약품 (Medicine)
 - 이름 검색: FULLTEXT N-gram 인덱스 → `MATCH(item_name) AGAINST(?)`
