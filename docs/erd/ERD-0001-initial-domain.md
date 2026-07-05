@@ -1,0 +1,355 @@
+# ERD-0001: 초기 도메인 ERD
+
+| 항목 | 값 |
+| --- | --- |
+| 상태 | Accepted |
+| 날짜 | 2026-07-05 |
+| 코드 동기화 | 2026-07-05 |
+| 관련 | ADR-0001 |
+
+## 목적
+
+현재 코드의 JPA 엔티티를 기준으로 도메인 데이터 모델을 기록한다.
+이 문서는 **실제 테이블·컬럼·enum·인덱스의 기준 문서**다.
+엔티티 변경 시 코드와 함께 이 문서를 수정한다.
+
+## 현재 모델링 규칙
+
+- 공통 시간 필드는 `BaseTimeEntity`가 제공한다 (`created_at`, `updated_at`).
+- PK는 각 엔티티가 `Long id` + `GenerationType.IDENTITY`로 선언한다.
+- `Status` 값: `ACTIVE`, `INACTIVE`, `DELETED`, `PROCESSING`.
+- soft delete는 전역 규칙이 아니다. `@SQLDelete`, `@Where` 적용 여부를 엔티티별로 기록한다.
+- JPA 연관관계(`@ManyToOne`, `@OneToMany`, `@JoinColumn`)를 사용한다.
+- enum은 `@Enumerated(EnumType.STRING)` 기준으로 문자열 저장한다.
+- 엔티티는 `widyu-domain` 모듈에만 위치한다.
+- Redis 엔티티(`@RedisHash`)는 MySQL 테이블이 아니다. 별도 섹션에 정리한다.
+
+## Mermaid ERD
+
+```mermaid
+erDiagram
+    Member {
+        Long id PK
+        String name
+        String phoneNumber
+        String profileImage
+        MemberRole role
+        MemberType type
+        Status status
+    }
+
+    LocalAccount {
+        Long id PK
+        Long member_id FK
+        String email
+        String password
+        Boolean isFirst
+    }
+
+    SocialAccount {
+        Long id PK
+        Long member_id FK
+        String provider
+        String oauthId
+        String email
+        String refreshToken
+        Boolean isFirst
+    }
+
+    Family {
+        Long id PK
+        String familyCode
+    }
+
+    FamilyMembership {
+        Long id PK
+        Long family_id FK
+        Long guardian_id FK
+        String nickname
+        Boolean isRepresentative
+        Boolean isLeader
+        LocalDateTime connectedAt
+    }
+
+    SeniorProfile {
+        Long id PK
+        Long member_id FK
+        Long family_id FK
+        String address
+        String inviteCode
+        LocalDate birthDate
+        Long points
+        Integer defaultWalkGoal
+    }
+
+    PointHistory {
+        Long id PK
+        Long senior_profile_id FK
+        PointHistoryType type
+        Long amount
+        String description
+    }
+
+    Album {
+        Long id PK
+        Long member_id FK
+        String content
+        Integer likeCount
+        Integer commentCount
+        Integer viewCount
+        Status status
+    }
+
+    AlbumComment {
+        Long id PK
+        Long album_id FK
+        Long member_id FK
+        Long parent_comment_id FK
+        String content
+        Integer likeCount
+        Integer depth
+        Status status
+    }
+
+    AlbumLike {
+        Long id PK
+        Long album_id FK
+        Long member_id FK
+    }
+
+    AlbumUnlock {
+        Long id PK
+        Long album_id FK
+        Long member_id FK
+        LocalDateTime unlockedAt
+    }
+
+    HealthSchedule {
+        Long id PK
+        Long member_id FK
+        String scheduleName
+        String placeAddress
+        Double latitude
+        Double longitude
+        LocalDateTime scheduledAt
+        ProgressStatus progressStatus
+        Integer rewardPoint
+        Boolean isReward
+        Status status
+    }
+
+    Medicine {
+        Long id PK
+        String itemSeq
+        String itemName
+        String entpName
+        String itemImage
+        String efcyQesitm
+        String useMethodQesitm
+    }
+
+    MedicineSchedule {
+        Long id PK
+        Long member_id FK
+        LocalTime alarmTime
+        Status status
+    }
+
+    MedicineCategory {
+        Long id PK
+        Long medicine_schedule_id FK
+    }
+
+    MedicineScheduleDetail {
+        Long id PK
+        Long medicine_category_id FK
+        Long medicine_id FK
+        Integer dose
+    }
+
+    MedicationProof {
+        Long id PK
+        Long medicine_schedule_id FK
+        Long member_id FK
+        LocalDateTime verifiedAt
+    }
+
+    Walk {
+        Long id PK
+        Long member_id FK
+        LocalDate walkDate
+        Integer goalSteps
+        Integer actualSteps
+    }
+
+    HeartRateEmergency {
+        Long id PK
+        Long member_id FK
+        Integer heartRate
+        LocalDateTime measuredAt
+        String location
+    }
+
+    PaymentOrder {
+        Long id PK
+        Long member_id FK
+        String orderId
+        String orderName
+        String packageId
+        Integer amount
+        Integer pointAmount
+        PaymentOrderStatus status
+        ZonedDateTime expiresAt
+    }
+
+    Payment {
+        Long id PK
+        Long member_id FK
+        Long payment_order_id FK
+        String paymentKey
+        String orderId
+        Integer amount
+        Integer canceledAmount
+        PaymentStatus status
+        ZonedDateTime approvedAt
+    }
+
+    PaymentCancel {
+        Long id PK
+        Long payment_id FK
+    }
+
+    MemberFcmToken {
+        Long id PK
+        Long member_id FK
+        String token
+    }
+
+    FcmNotification {
+        Long id PK
+        Long member_fcm_token_id FK
+        String title
+        String body
+        String image
+        Boolean isRead
+        FcmCategory fcmCategory
+    }
+
+    MemberNotificationSetting {
+        Long id PK
+        Long member_id FK
+    }
+
+    AddressBookmark {
+        Long id PK
+        Long member_id FK
+        String roadAddress
+        String address
+        String name
+        Double latitude
+        Double longitude
+        Status status
+    }
+
+    AdminAuditLog {
+        Long id PK
+        Long member_id FK
+    }
+
+    Member ||--o{ LocalAccount : "1:1"
+    Member ||--o{ SocialAccount : "1:N"
+    Member ||--o{ FamilyMembership : "보호자"
+    Member ||--o| SeniorProfile : "시니어"
+    Member ||--o{ Album : "업로드"
+    Member ||--o{ AlbumComment : "작성"
+    Member ||--o{ AlbumLike : "좋아요"
+    Member ||--o{ AlbumUnlock : "포인트 해금"
+    Member ||--o{ HealthSchedule : "건강 일정"
+    Member ||--o{ MedicineSchedule : "복약 알림"
+    Member ||--o{ MedicationProof : "복약 인증"
+    Member ||--o{ Walk : "걸음 기록"
+    Member ||--o{ HeartRateEmergency : "심박 이상"
+    Member ||--o{ PaymentOrder : "결제 주문"
+    Member ||--o{ Payment : "결제"
+    Member ||--o{ MemberFcmToken : "FCM 토큰"
+    Member ||--o{ MemberNotificationSetting : "알림 설정"
+    Member ||--o{ AddressBookmark : "주소 즐겨찾기"
+    Member ||--o{ AdminAuditLog : "관리자 로그"
+
+    Family ||--o{ FamilyMembership : "보호자 구성"
+    Family ||--o{ SeniorProfile : "시니어 구성"
+
+    SeniorProfile ||--o{ PointHistory : "포인트 내역"
+
+    Album ||--o{ AlbumComment : "댓글"
+    Album ||--o{ AlbumLike : "좋아요"
+    Album ||--o{ AlbumUnlock : "잠금 해제"
+    AlbumComment ||--o{ AlbumComment : "대댓글"
+
+    MedicineSchedule ||--o{ MedicineCategory : "카테고리"
+    MedicineSchedule ||--o{ MedicationProof : "복약 인증"
+    MedicineCategory ||--o{ MedicineScheduleDetail : "약 상세"
+    MedicineScheduleDetail }o--|| Medicine : "약 참조"
+
+    Payment ||--o{ PaymentCancel : "취소"
+    Payment ||--|| PaymentOrder : "주문 참조"
+
+    MemberFcmToken ||--o{ FcmNotification : "알림 수신"
+```
+
+## Redis 엔티티 (MySQL 테이블 아님)
+
+| 엔티티 | key | TTL | 주요 필드 |
+| --- | --- | --- | --- |
+| `SeniorLocation` | `senior_location:{seniorId}` | 300s (5분) | latitude, longitude, updatedAt |
+| `HeartRateResult` | `heart_rate_result:{memberId}` | 86400s (24시간) | status, heartRate, measuredAt |
+| `RefreshToken` | - | - | token |
+| `VerificationCode` | - | - | code |
+| `OAuthState` | - | - | state |
+| `PhoneChangeVerified` | - | - | verified |
+| `TemporaryMember` | - | - | member 임시 정보 |
+
+## Enum 값
+
+| enum | 값 |
+| --- | --- |
+| `MemberRole` | `ADMIN`, `USER`, `TEMPORARY` |
+| `MemberType` | `SENIOR`, `GUARDIAN` |
+| `Status` | `ACTIVE`, `INACTIVE`, `DELETED`, `PROCESSING` |
+| `ProgressStatus` | `UPCOMING`, `INCOMPLETE`, `COMPLETED` |
+| `PaymentStatus` | `READY`, `DONE`, `PARTIAL_CANCELED`, `CANCELED` |
+| `PaymentOrderStatus` | `CREATED`, `PAID`, `CANCELED`, `EXPIRED` |
+| `PointHistoryType` | `EARN`, `USE` |
+
+## 주요 인덱스
+
+| 테이블 | 인덱스명 | 컬럼 | 비고 |
+| --- | --- | --- | --- |
+| `album` | `idx_album_member_status_created` | `(member_id, status, created_at DESC)` | 피드 조회 커버링 인덱스 |
+| `medicine` | FULLTEXT | `item_name` | N-gram, 한글 검색 |
+| `local_account` | UK | `(email)` | 이메일 중복 방지 |
+| `social_account` | UK `uk_provider_user` | `(provider, oauth_id)` | 소셜 계정 중복 방지 |
+| `family` | UK | `(family_code)` | 가족 코드 중복 방지 |
+| `family_membership` | UK | `(guardian_id)` | 보호자는 하나의 가족에만 속함 |
+| `album_like` | UK | `(album_id, member_id)` | 중복 좋아요 방지 |
+| `album_unlock` | UK | `(album_id, member_id)` | 중복 해금 방지 |
+
+## 도메인별 조회 기준
+
+### 앨범 (Album)
+- 가족 피드 조회: `member_id`(가족 구성원) + `status = ACTIVE` + `created_at DESC` 커서 페이징
+- 커버링 인덱스 `(member_id, status, created_at)` 적용으로 클러스터드 인덱스 접근 없이 반환
+
+### 의약품 (Medicine)
+- 이름 검색: FULLTEXT N-gram 인덱스 → `MATCH(item_name) AGAINST(?)`
+- 외부 API fallback: `item_seq` unique 기준으로 배치 동기화
+
+### 위치 (SeniorLocation)
+- Redis `senior_location:{seniorId}` 키로 저장, TTL 5분
+- WebSocket 연결 시 실시간 업데이트, 구독 해제 시 자연 만료
+
+## 코드 동기화 메모
+
+- 이 문서는 `backend/widyu-domain/src/main/java/com/widyu/**`의 현재 엔티티 기준이다.
+- 새로운 엔티티, 컬럼, enum, 인덱스가 추가되면 이 문서를 함께 수정한다.
+- MySQL ENUM 컬럼 추가 시 `ALTER TABLE` 명령을 PR 비고에 포함한다.
