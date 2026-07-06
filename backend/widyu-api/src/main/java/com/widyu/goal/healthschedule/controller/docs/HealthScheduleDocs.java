@@ -59,13 +59,11 @@ public interface HealthScheduleDocs {
                                       "code": "HLTH_2001",
                                       "message": "건강 일정이 생성되었습니다.",
                                       "data": {
-                                        "healthScheduleId": 1,
                                         "scheduleName": "정기 건강검진",
-                                        "placeAddress": "서울대학교병원",
-                                        "latitude": "37.5665",
-                                        "longitude": "126.9780",
                                         "scheduledAt": "2025-11-15T14:30:00",
-                                        "progressStatus": "UPCOMING"
+                                        "placeAddress": "서울대학교병원",
+                                        "latitude": 37.5665,
+                                        "longitude": 126.9780
                                       }
                                     }
                                     """
@@ -108,13 +106,11 @@ public interface HealthScheduleDocs {
                                       "code": "HLTH_2001",
                                       "message": "건강 일정이 생성되었습니다.",
                                       "data": {
-                                        "healthScheduleId": 1,
                                         "scheduleName": "정기 건강검진",
-                                        "placeAddress": "서울대학교병원",
-                                        "latitude": "37.5665",
-                                        "longitude": "126.9780",
                                         "scheduledAt": "2025-11-15T14:30:00",
-                                        "progressStatus": "UPCOMING"
+                                        "placeAddress": "서울대학교병원",
+                                        "latitude": 37.5665,
+                                        "longitude": 126.9780
                                       }
                                     }
                                     """
@@ -160,13 +156,11 @@ public interface HealthScheduleDocs {
                                       "code": "HLTH_2002",
                                       "message": "건강 일정이 수정되었습니다.",
                                       "data": {
-                                        "healthScheduleId": 1,
                                         "scheduleName": "정기 건강검진 (수정)",
-                                        "placeAddress": "강남세브란스병원",
-                                        "latitude": "37.5665",
-                                        "longitude": "126.9780",
                                         "scheduledAt": "2025-11-20T10:00:00",
-                                        "progressStatus": "UPCOMING"
+                                        "placeAddress": "강남세브란스병원",
+                                        "latitude": 37.5665,
+                                        "longitude": 126.9780
                                       }
                                     }
                                     """

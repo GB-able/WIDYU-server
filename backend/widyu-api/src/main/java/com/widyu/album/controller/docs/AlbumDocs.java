@@ -53,28 +53,18 @@ public interface AlbumDocs {
     )
     @ApiResponses({
             @ApiResponse(
-                    responseCode = "200",
-                    description = "앨범 업로드 성공",
+                    responseCode = "202",
+                    description = "앨범 업로드 요청 접수",
                     content = @Content(
-                            schema = @Schema(implementation = AlbumUploadResponse.class),
+                            schema = @Schema(implementation = AlbumUploadAcceptedResponse.class),
                             examples = @ExampleObject(
                                     name = "성공 응답",
                                     value = """
                                             {
                                               "code": "ALBM_2001",
-                                              "message": "앨범 업로드가 완료되었습니다.",
+                                              "message": "앨범 업로드 요청이 접수되었습니다.",
                                               "data": {
-                                                "albumId": 123,
-                                                "content": "가족 여행 사진입니다!",
-                                                "mediaUrls": [
-                                                  "https://s3.bucket.com/albums/photos/1/20241221_143000_abcd1234.jpg",
-                                                  "https://s3.bucket.com/albums/videos/1/20241221_143001_efgh5678.mp4"
-                                                ],
-                                                "mediaCount": 2,
-                                                "photoCount": 1,
-                                                "videoCount": 1,
-                                                "authorName": "홍길동",
-                                                "createdAt": "2024-12-21T14:30:00"
+                                                "albumId": 123
                                               }
                                             }
                                             """
@@ -189,7 +179,7 @@ public interface AlbumDocs {
                                                   }
                                                 ],
                                                 "hasNext": true,
-                                                "nextCursor": "122"
+                                                "nextCursor": "2024-12-21T14:30:00|123"
                                               }
                                             }
                                             """
@@ -198,7 +188,7 @@ public interface AlbumDocs {
             )
     })
     ApiResponseTemplate<CursorPage<AlbumFeedResponse>> getAlbumFeed(
-            @Parameter(description = "마지막으로 조회한 앨범 ID (무한 스크롤용)", example = "123")
+            @Parameter(description = "응답의 nextCursor 값 (createdAt|albumId 형식)", example = "2024-12-21T14:30:00|123")
             @RequestParam(value = "cursor", required = false) String cursor,
             @Parameter(description = "캘린더용 날짜 파라미터 (yyyy-MM-dd 형식)", example = "2024-12-21")
             @RequestParam(value = "date", required = false) String date
@@ -218,8 +208,8 @@ public interface AlbumDocs {
                     - 페이지 크기: 10개 고정
                     
                     **무한 스크롤 사용법:**
-                    1. 첫 번째 요청: lastPostId 없이 호출
-                    2. 다음 요청: 응답의 nextCursor를 lastPostId로 사용
+                    1. 첫 번째 요청: cursor 없이 호출
+                    2. 다음 요청: 응답의 nextCursor를 cursor로 사용
                     """
     )
     @ApiResponses({
@@ -254,7 +244,7 @@ public interface AlbumDocs {
                                                   }
                                                 ],
                                                 "hasNext": true,
-                                                "nextCursor": "119"
+                                                "nextCursor": "2024-12-21T14:25:00|119"
                                               }
                                             }
                                             """
@@ -263,7 +253,7 @@ public interface AlbumDocs {
             )
     })
     ApiResponseTemplate<CursorPage<AlbumMediaResponse>> getMediaFeed(
-            @Parameter(description = "마지막으로 조회한 postId (무한 스크롤용)", example = "123")
+            @Parameter(description = "응답의 nextCursor 값 (createdAt|albumId 형식)", example = "2024-12-21T14:25:00|119")
             @RequestParam(value = "cursor", required = false) String cursor
     );
 

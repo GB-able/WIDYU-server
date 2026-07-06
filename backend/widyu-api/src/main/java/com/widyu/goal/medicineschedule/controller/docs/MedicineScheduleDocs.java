@@ -60,10 +60,9 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
+                                              "code": "MEDICINE_2001",
+                                              "message": "일자별 약 복용 현황 조회 성공",
+                                              "data": {
                                                 "medicineSchedule": [
                                                   {
                                                     "medicineScheduleId": 1,
@@ -134,12 +133,11 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
-                                                "lastMonthCount": 25,
-                                                "currentMonthCount": 18,
+                                              "code": "MEDICINE_2002",
+                                              "message": "날짜별 약 조회 성공",
+                                              "data": {
+                                                "lastMonthAchieveCount": 25,
+                                                "currentMonthAchieveCount": 18,
                                                 "monthlyGoalRates": [
                                                   1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0,
                                                   1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0,
@@ -189,34 +187,33 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
+                                              "code": "MEDICINE_2003",
+                                              "message": "시니어 약복용 홈 조회 성공",
+                                              "data": {
                                                 "schedules": [
                                                   {
                                                     "scheduleId": 1,
-                                                    "totalCount": 3,
+                                                    "medicineTotalCount": 3,
                                                     "alarmTime": "08:00",
-                                                    "medicines": [
+                                                    "medicineDetails": [
                                                       {
-                                                        "itemName": "타이레놀",
-                                                        "dose": 1
+                                                        "name": "타이레놀",
+                                                        "count": 1
                                                       },
                                                       {
-                                                        "itemName": "비타민C",
-                                                        "dose": 2
+                                                        "name": "비타민C",
+                                                        "count": 2
                                                       }
                                                     ]
                                                   },
                                                   {
                                                     "scheduleId": 2,
-                                                    "totalCount": 1,
+                                                    "medicineTotalCount": 1,
                                                     "alarmTime": "20:00",
-                                                    "medicines": [
+                                                    "medicineDetails": [
                                                       {
-                                                        "itemName": "오메가3",
-                                                        "dose": 1
+                                                        "name": "오메가3",
+                                                        "count": 1
                                                       }
                                                     ]
                                                   }
@@ -257,30 +254,29 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
+                                              "code": "MEDICINE_2004",
+                                              "message": "약 복용 상세 조회 성공",
+                                              "data": {
                                                 "alarmTime": "08:00",
                                                 "totalCount": 3.0,
                                                 "categories": [
                                                   {
                                                     "categoryId": 1,
-                                                    "categoryName": "아침 식후",
+                                                    "name": "아침 식후",
                                                     "countSum": 3.0,
                                                     "medicines": [
                                                       {
                                                         "medicineId": 1,
-                                                        "itemName": "타이레놀",
+                                                        "medicineName": "타이레놀",
                                                         "dose": 1.0,
-                                                        "itemImage": "https://example.com/tylenol.jpg",
+                                                        "imageUrl": "https://example.com/tylenol.jpg",
                                                         "description": "해열, 진통제"
                                                       },
                                                       {
                                                         "medicineId": 2,
-                                                        "itemName": "비타민C",
+                                                        "medicineName": "비타민C",
                                                         "dose": 2.0,
-                                                        "itemImage": "https://example.com/vitaminc.jpg",
+                                                        "imageUrl": "https://example.com/vitaminc.jpg",
                                                         "description": "면역력 강화"
                                                       }
                                                     ]
@@ -355,10 +351,9 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
+                                              "code": "MEDICINE_2005",
+                                              "message": "약 복용 스케줄 생성 성공",
+                                              "data": {
                                                 "scheduleId": 1
                                               }
                                             }
@@ -505,10 +500,9 @@ public interface MedicineScheduleDocs {
                             examples = @ExampleObject(
                                     value = """
                                             {
-                                              "isSuccess": true,
-                                              "code": "200",
-                                              "message": "요청에 성공하였습니다.",
-                                              "result": {
+                                              "code": "MEDICINE_2009",
+                                              "message": "약품 검색 성공",
+                                              "data": {
                                                 "medicines": [
                                                   {
                                                     "medicineId": 1,
