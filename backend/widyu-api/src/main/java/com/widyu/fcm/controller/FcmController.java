@@ -45,7 +45,7 @@ public class FcmController implements FcmDocs {
     public ApiResponseTemplate<List<FcmCategoryResponse>> getNotificationCategories() {
         return ApiResponseTemplate.ok()
                 .code("FCM_2005")
-                .message("OK")
+                .message("알림 카테고리 조회 성공")
                 .body(fcmService.getNotificationCategories());
     }
 

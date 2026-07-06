@@ -8,6 +8,9 @@ import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,12 +35,33 @@ public interface GoalHomeDocs {
                     - 시니어 ID (memberId)
                     - 시니어 이름 (name)
                     - 시니어 프로필 이미지 (profileImage)
-                    - 보호자가 설정한 닉네임 (nickname)
-                    - 연결된 날짜 (connectedAt)
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "code": "GOAL_HOME_2001",
+                                              "message": "가족 목록 조회 성공",
+                                              "data": {
+                                                "families": [
+                                                  {
+                                                    "memberId": 1,
+                                                    "name": "김부모",
+                                                    "profileImage": "https://www.widyu.shop/profile/senior.png"
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<FamilyListResponse> getFamilyList();
@@ -48,16 +72,50 @@ public interface GoalHomeDocs {
                     시니어 사용자의 목표 홈 화면 정보를 조회합니다.
 
                     **반환 정보:**
-                    - **약 스케줄**: 오늘 복용 현황, 다음 알람 시간(HH:mm 형식) 및 복용 개수
-                    - **걸음 수**: 오늘 걸음 수 및 목표
-                    - **병원 일정**: 가장 가까운 병원 일정 (D-day, 일시, 병원명, 주소)
+                    - **약 스케줄**: 다음 복용 스케줄 ID, 오늘 복용/예정 횟수, 다음 복용 예정 개수, 다음 알람 시간
+                    - **걸음 수**: 오늘 걸음 수 및 목표 걸음 수
+                    - **병원 일정**: 가장 가까운 병원 일정 ID, D-day, 일시, 일정명, 주소
 
                     **권한:**
                     - 시니어 본인만 가능
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "code": "GOAL_HOME_2002",
+                                              "message": "시니어 목표 홈 조회 성공",
+                                              "data": {
+                                                "medicine": {
+                                                  "medicineScheduleId": 1,
+                                                  "todayTakenCount": 2,
+                                                  "todayTotalCount": 3,
+                                                  "nextDoseCount": 4,
+                                                  "nextAlarmTime": "17:00"
+                                                },
+                                                "steps": {
+                                                  "steps": 9829,
+                                                  "goal": 10000
+                                                },
+                                                "hospital": {
+                                                  "hospitalScheduleId": 1,
+                                                  "dday": 14,
+                                                  "datetime": "2025-08-26T17:00:00",
+                                                  "name": "고려대학교 의과대학 부속병원",
+                                                  "address": "서울특별시 성북구 고려대로 73"
+                                                }
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<SeniorGoalHomeResponse> getSeniorGoalHome();
@@ -84,7 +142,32 @@ public interface GoalHomeDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "code": "GOAL_HOME_2003",
+                                              "message": "시니어 주간 목표 달성률 조회 성공",
+                                              "data": {
+                                                "thisWeekGoalRates": [
+                                                  "NOT_STARTED",
+                                                  "IN_PROGRESS",
+                                                  "COMPLETED",
+                                                  "FAILED",
+                                                  "NOT_STARTED",
+                                                  "NOT_STARTED",
+                                                  "NOT_STARTED"
+                                                ]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<SeniorWeeklyGoalStatusResponse> getSeniorWeeklyGoalStatus();
@@ -109,7 +192,26 @@ public interface GoalHomeDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "code": "GOAL_HOME_2004",
+                                              "message": "보호자 목표 현황 조회 성공",
+                                              "data": {
+                                                "lastWeekGoalRate": 0.8,
+                                                "thisWeekGoalRate": 0.65,
+                                                "thisWeekGoalRates": [0.6, 0.24, 0.53, 0.75, 0.85, 0.9, 1.0]
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "400", description = "연결된 부모님이 없음"),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
@@ -140,7 +242,52 @@ public interface GoalHomeDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(
+                                    value = """
+                                            {
+                                              "code": "GOAL_HOME_2005",
+                                              "message": "보호자 목표 홈 조회 성공",
+                                              "data": {
+                                                "medicine": {
+                                                  "totalCount": 6,
+                                                  "takenCount": 1,
+                                                  "schedules": [
+                                                    {
+                                                      "medicineScheduleId": 101,
+                                                      "alarmTime": "19:00",
+                                                      "status": "taken",
+                                                      "proofImageUrl": "https://www.widyu.shop/img",
+                                                      "medicines": [
+                                                        {
+                                                          "name": "위염약",
+                                                          "count": 5
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                "steps": {
+                                                  "steps": 9829,
+                                                  "goal": 10000
+                                                },
+                                                "hospital": {
+                                                  "hospitalScheduleId": 1,
+                                                  "dday": 14,
+                                                  "datetime": "2025-08-26T17:00:00",
+                                                  "name": "고려대학교 의과대학 부속병원",
+                                                  "address": "서울특별시 성북구 고려대로 73"
+                                                }
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            ),
             @ApiResponse(responseCode = "400", description = "연결된 부모님이 없음"),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })

@@ -92,7 +92,7 @@ public interface NotificationSettingDocs {
                             value = """
                                     {
                                       "code": "FCM_4001",
-                                      "message": "유효하지 않은 알림 그룹입니다.",
+                                      "message": "유효하지 않은 알림 카테고리입니다.",
                                       "data": null
                                     }
                                     """

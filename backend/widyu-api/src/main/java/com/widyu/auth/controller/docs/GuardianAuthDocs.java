@@ -95,12 +95,7 @@ public interface GuardianAuthDocs {
                                         "profile": {
                                           "name": "홍길동",
                                           "phoneNumber": "010-1234-5678",
-                                          "email": "user@example.com",
-                                          "providers": ["LOCAL"]
-                                        },
-                                        "accountInfo": {
-                                          "email": "user@example.com",
-                                          "accountType": "LOCAL"
+                                          "email": "user@example.com"
                                         }
                                       }
                                     }
@@ -230,19 +225,13 @@ public interface GuardianAuthDocs {
                                       "message": "소셜 로그인 성공",
                                       "data": {
                                         "isFirst": false,
-                                        "accessToken": null,
-                                        "refreshToken": null,
                                         "profile": {
                                           "name": "홍길동",
                                           "phoneNumber": "010-1234-5678",
                                           "email": "existing@example.com",
                                           "providers": ["kakao"]
                                         },
-                                        "newSocialAccount": {
-                                          "provider": "naver",
-                                          "email": "newuser@naver.com",
-                                          "name": "홍길동"
-                                        }
+                                        "socialTemporaryToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                                       }
                                     }
                                     """
@@ -258,7 +247,7 @@ public interface GuardianAuthDocs {
                             name = "토큰 오류",
                             value = """
                                     {
-                                      "code": "AUTH_4001",
+                                      "code": "AUTH_4018",
                                       "message": "유효하지 않은 액세스 토큰입니다.",
                                       "data": null
                                     }
@@ -348,6 +337,7 @@ public interface GuardianAuthDocs {
                                       "code": "AUTH_2006",
                                       "message": "휴대폰 번호로 회원 조회 성공",
                                       "data": {
+                                        "memberId": 1,
                                         "name": "홍길동",
                                         "phoneNumber": "01012345678",
                                         "email": "user@example.com"
@@ -409,7 +399,7 @@ public interface GuardianAuthDocs {
                             name = "토큰 만료",
                             value = """
                                     {
-                                      "code": "AUTH_4011",
+                                      "code": "AUTH_4014",
                                       "message": "임시 토큰이 만료되었습니다.",
                                       "data": null
                                     }
@@ -428,8 +418,7 @@ public interface GuardianAuthDocs {
                                     name = "요청 예시",
                                     value = """
                                             {
-                                              "password": "NewPass@1234",
-                                              "confirmPassword": "NewPass@1234"
+                                              "password": "NewPass@1234"
                                             }
                                             """
                             )
@@ -471,7 +460,7 @@ public interface GuardianAuthDocs {
                             name = "토큰 오류",
                             value = """
                                     {
-                                      "code": "AUTH_4001",
+                                      "code": "AUTH_4018",
                                       "message": "유효하지 않은 액세스 토큰입니다.",
                                       "data": null
                                     }
@@ -537,7 +526,7 @@ public interface GuardianAuthDocs {
                             name = "토큰 만료",
                             value = """
                                     {
-                                      "code": "AUTH_4011",
+                                      "code": "AUTH_4014",
                                       "message": "임시 토큰이 만료되었습니다.",
                                       "data": null
                                     }
@@ -589,7 +578,7 @@ public interface GuardianAuthDocs {
                                     name = "이미 연동된 제공자",
                                     value = """
                                             {
-                                              "code": "AUTH_4010",
+                                              "code": "AUTH_4019",
                                               "message": "이미 연동된 소셜 로그인 제공자입니다.",
                                               "data": null
                                             }

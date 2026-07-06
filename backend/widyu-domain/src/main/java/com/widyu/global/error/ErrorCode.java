@@ -28,7 +28,7 @@ public enum ErrorCode {
     SOCIAL_NAME_NOT_PROVIDED(HttpStatus.BAD_REQUEST, "AUTH_4007", "소셜 로그인 제공자가 이름을 제공하지 않습니다."),
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4008", "이미 연동된 소셜 계정입니다."),
     SOCIAL_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(HttpStatus.BAD_REQUEST, "AUTH_4009", "현재 사용자에게 이미 연동된 소셜 계정입니다."),
-    SOCIAL_PROVIDER_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4010", "이미 연동된 소셜 로그인 제공자입니다."),
+    SOCIAL_PROVIDER_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4019", "이미 연동된 소셜 로그인 제공자입니다."),
 
     // 부모 인증 관련
     INVITE_CODE_DUPLICATED(HttpStatus.BAD_REQUEST, "PARENT_4001", "이미 존재하는 초대코드입니다."),

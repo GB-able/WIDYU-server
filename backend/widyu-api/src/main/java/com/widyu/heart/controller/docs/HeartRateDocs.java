@@ -91,8 +91,8 @@ public interface HeartRateDocs {
                     examples = @ExampleObject(
                             value = """
                                     {
-                                      "code": "FORBIDDEN",
-                                      "message": "해당 회원의 정보를 조회할 권한이 없습니다.",
+                                      "code": "AUTH_4030",
+                                      "message": "접근 권한이 없습니다. - 가족으로 연결된 시니어만 접근할 수 있습니다.",
                                       "data": null
                                     }
                                     """
