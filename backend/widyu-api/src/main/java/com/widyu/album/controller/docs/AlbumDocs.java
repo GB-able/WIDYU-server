@@ -686,8 +686,7 @@ public interface AlbumDocs {
                                                           "name": "홍길동",
                                                           "profileImage": null
                                                         },
-                                                        "canEdit": true,
-                                                        "replies": []
+                                                        "canEdit": true
                                                       }
                                                     ]
                                                   }
@@ -789,9 +788,11 @@ public interface AlbumDocs {
                                               "code": "ALBM_2008",
                                               "message": "앨범 해금이 완료되었습니다.",
                                               "data": {
+                                                "unlockId": 1,
                                                 "albumId": 123,
-                                                "unlockPrice": 50,
-                                                "remainingPoints": 450
+                                                "albumTitle": "오늘 소풍 다녀왔어요!",
+                                                "unlockedAt": "2025-09-13T12:00:00",
+                                                "message": "앨범이 해금되었습니다."
                                               }
                                             }
                                             """

@@ -354,7 +354,7 @@ public interface MedicineScheduleDocs {
                                               "code": "MEDICINE_2005",
                                               "message": "약 복용 스케줄 생성 성공",
                                               "data": {
-                                                "scheduleId": 1
+                                                "medicineScheduleId": 1
                                               }
                                             }
                                             """

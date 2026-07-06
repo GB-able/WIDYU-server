@@ -134,7 +134,7 @@ public interface SmsDocs {
                             value = """
                                     {
                                       "code": "MEMBER_4041",
-                                      "message": "해당 정보와 일치하는 회원을 찾을 수 없습니다.",
+                                      "message": "회원을 찾을 수 없습니다.",
                                       "data": null
                                     }
                                     """

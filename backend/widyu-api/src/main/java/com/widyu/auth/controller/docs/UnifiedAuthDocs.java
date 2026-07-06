@@ -34,6 +34,7 @@ public interface UnifiedAuthDocs {
                                       "code": "AUTH_2009",
                                       "message": "토큰 재발급에 성공했습니다.",
                                       "data": {
+                                        "memberId": 1,
                                         "accessToken": "Bearer eyJhbGciOiJIUzI1NiIs...",
                                         "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
                                       }

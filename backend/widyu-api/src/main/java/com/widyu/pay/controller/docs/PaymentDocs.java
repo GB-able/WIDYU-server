@@ -66,9 +66,34 @@ public interface PaymentDocs {
                                       "code": "PAY_2001",
                                       "message": "결제 승인 성공",
                                       "data": {
-                                        "paymentKey": "string",
+                                        "mId": null,
+                                        "lastTransactionKey": null,
+                                        "paymentKey": "pay_abc123",
                                         "orderId": "order_123456",
-                                        "status": "DONE"
+                                        "orderName": "포인트 충전 5,000P",
+                                        "amount": 5000,
+                                        "taxExemptionAmount": 0,
+                                        "status": "DONE",
+                                        "requestedAt": "2026-07-06T12:00:00+09:00",
+                                        "approvedAt": "2026-07-06T12:00:05+09:00",
+                                        "canceledAmount": 0,
+                                        "canceledPointAmount": 0,
+                                        "remainingAmount": 5000,
+                                        "useEscrow": false,
+                                        "cultureExpense": false,
+                                        "cancellations": [],
+                                        "card": {
+                                          "issuerCode": "3K",
+                                          "acquirerCode": "3K",
+                                          "number": "43301234****000*",
+                                          "installmentPlanMonths": 0,
+                                          "interestFree": false,
+                                          "approveNo": "00000000",
+                                          "cardType": "신용"
+                                        },
+                                        "easyPay": null,
+                                        "transfer": null,
+                                        "virtualAccount": null
                                       }
                                     }
                                     """
@@ -110,9 +135,34 @@ public interface PaymentDocs {
                                       "code": "PAY_2002",
                                       "message": "결제 취소 성공",
                                       "data": {
-                                        "paymentKey": "string",
+                                        "mId": null,
+                                        "lastTransactionKey": null,
+                                        "paymentKey": "pay_abc123",
                                         "orderId": "order_123456",
-                                        "status": "CANCELED"
+                                        "orderName": "포인트 충전 5,000P",
+                                        "amount": 5000,
+                                        "taxExemptionAmount": 0,
+                                        "status": "CANCELED",
+                                        "requestedAt": "2026-07-06T12:00:00+09:00",
+                                        "approvedAt": "2026-07-06T12:00:05+09:00",
+                                        "canceledAmount": 5000,
+                                        "canceledPointAmount": 0,
+                                        "remainingAmount": 0,
+                                        "useEscrow": false,
+                                        "cultureExpense": false,
+                                        "cancellations": [
+                                          {
+                                            "cancelAmount": 5000,
+                                            "cancelPointAmount": 0,
+                                            "cancelReason": "사용자 요청",
+                                            "requestedByMemberId": 1,
+                                            "canceledAt": "2026-07-06T13:00:00+09:00"
+                                          }
+                                        ],
+                                        "card": null,
+                                        "easyPay": null,
+                                        "transfer": null,
+                                        "virtualAccount": null
                                       }
                                     }
                                     """
@@ -163,14 +213,56 @@ public interface PaymentDocs {
                                       "data": {
                                         "payments": [
                                           {
+                                            "mId": null,
+                                            "lastTransactionKey": null,
                                             "paymentKey": "pay_abc123",
                                             "orderId": "order_123456",
-                                            "status": "DONE"
+                                            "orderName": "포인트 충전 5,000P",
+                                            "amount": 5000,
+                                            "taxExemptionAmount": 0,
+                                            "status": "DONE",
+                                            "requestedAt": "2026-07-06T12:00:00+09:00",
+                                            "approvedAt": "2026-07-06T12:00:05+09:00",
+                                            "canceledAmount": 0,
+                                            "canceledPointAmount": 0,
+                                            "remainingAmount": 5000,
+                                            "useEscrow": false,
+                                            "cultureExpense": false,
+                                            "cancellations": [],
+                                            "card": null,
+                                            "easyPay": null,
+                                            "transfer": null,
+                                            "virtualAccount": null
                                           },
                                           {
+                                            "mId": null,
+                                            "lastTransactionKey": null,
                                             "paymentKey": "pay_xyz789",
                                             "orderId": "order_789123",
-                                            "status": "PARTIAL_CANCELED"
+                                            "orderName": "포인트 충전 10,000P",
+                                            "amount": 10000,
+                                            "taxExemptionAmount": 0,
+                                            "status": "PARTIAL_CANCELED",
+                                            "requestedAt": "2026-07-05T09:30:00+09:00",
+                                            "approvedAt": "2026-07-05T09:30:04+09:00",
+                                            "canceledAmount": 3000,
+                                            "canceledPointAmount": 0,
+                                            "remainingAmount": 7000,
+                                            "useEscrow": false,
+                                            "cultureExpense": false,
+                                            "cancellations": [
+                                              {
+                                                "cancelAmount": 3000,
+                                                "cancelPointAmount": 0,
+                                                "cancelReason": "부분 취소 요청",
+                                                "requestedByMemberId": 1,
+                                                "canceledAt": "2026-07-05T15:00:00+09:00"
+                                              }
+                                            ],
+                                            "card": null,
+                                            "easyPay": null,
+                                            "transfer": null,
+                                            "virtualAccount": null
                                           }
                                         ]
                                       }

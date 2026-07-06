@@ -186,7 +186,8 @@ public interface HealthScheduleDocs {
                             value = """
                                     {
                                       "code": "HLTH_2003",
-                                      "message": "건강 일정이 삭제되었습니다."
+                                      "message": "건강 일정이 삭제되었습니다.",
+                                      "data": null
                                     }
                                     """
                     )
@@ -358,7 +359,8 @@ public interface HealthScheduleDocs {
                             value = """
                                     {
                                       "code": "HLTH_2006",
-                                      "message": "건강 일정 포인트 적립이 완료되었습니다."
+                                      "message": "건강 일정 포인트 적립이 완료되었습니다.",
+                                      "data": null
                                     }
                                     """
                     )
@@ -434,7 +436,8 @@ public interface HealthScheduleDocs {
                             value = """
                                     {
                                       "code": "HLTH_2008",
-                                      "message": "건강 일정이 완료 처리되었습니다."
+                                      "message": "건강 일정이 완료 처리되었습니다.",
+                                      "data": null
                                     }
                                     """
                     )
