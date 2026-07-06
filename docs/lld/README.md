@@ -55,3 +55,4 @@ LLD가 필요 없는 PR은 PR 본문에 `LLD: N/A - <사유>`를 남긴다.
 | LLD-0004 | Apple 로그인 authorization code 교환 | Approved | - |
 | LLD-0005 | 약품 검색 DB 우선 조회와 외부 API fallback | Approved | - |
 | LLD-0006 | 앨범 영상 업로드 비동기 처리 파이프라인 | Approved | - |
+| LLD-0007 | 약 복용 홈 일자별 조회와 복용 상태 | Approved | #357 |
