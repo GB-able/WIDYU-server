@@ -15,13 +15,13 @@ public class GeocodingService {
 
     private final KakaoGeocodingClient kakaoGeocodingClient;
 
-    @Value("${oauth.kakao.client-id}")
-    private String clientId;
+    @Value("${kakao.geocoding.api-key}")
+    private String apiKey;
 
     public GeocodingResponse geocode(String address) {
         KakaoGeocodingResponse response;
         try {
-            response = kakaoGeocodingClient.geocode("KakaoAK " + clientId, address);
+            response = kakaoGeocodingClient.geocode("KakaoAK " + apiKey, address);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "주소 좌표 변환 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
         }
