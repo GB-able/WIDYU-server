@@ -28,10 +28,10 @@ class MedicationStatusTest {
     }
 
     @Test
-    @DisplayName("인증이 없고 알람 30분 전보다 이르면 UPCOMING을 반환한다")
-    void 인증이_없고_인증창_전이면_UPCOMING을_반환한다() {
+    @DisplayName("인증이 없고 인증 마감(알람+30분) 전이면 UPCOMING을 반환한다")
+    void 인증이_없고_인증마감_전이면_UPCOMING을_반환한다() {
         // given
-        LocalDateTime now = date.atTime(8, 0);
+        LocalDateTime now = date.atTime(9, 20);
 
         // when
         MedicationStatus status = MedicationStatus.of(false, date, alarmTime, now);
@@ -41,23 +41,10 @@ class MedicationStatusTest {
     }
 
     @Test
-    @DisplayName("인증이 없고 알람 전후 30분 이내이면 AVAILABLE을 반환한다")
-    void 인증이_없고_인증창_안이면_AVAILABLE을_반환한다() {
+    @DisplayName("인증이 없고 인증 마감(알람+30분)이 지나면 MISSED를 반환한다")
+    void 인증이_없고_인증마감_후면_MISSED를_반환한다() {
         // given
-        LocalDateTime now = date.atTime(9, 10);
-
-        // when
-        MedicationStatus status = MedicationStatus.of(false, date, alarmTime, now);
-
-        // then
-        assertThat(status).isEqualTo(MedicationStatus.AVAILABLE);
-    }
-
-    @Test
-    @DisplayName("인증이 없고 알람 30분 후를 지나면 MISSED를 반환한다")
-    void 인증이_없고_인증창_후면_MISSED를_반환한다() {
-        // given
-        LocalDateTime now = date.atTime(10, 0);
+        LocalDateTime now = date.atTime(9, 31);
 
         // when
         MedicationStatus status = MedicationStatus.of(false, date, alarmTime, now);

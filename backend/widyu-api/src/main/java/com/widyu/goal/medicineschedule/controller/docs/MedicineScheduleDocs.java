@@ -39,9 +39,8 @@ public interface MedicineScheduleDocs {
                     - 활성 약 스케줄 목록 조회 (알람 시간·약품 목록)
                     - 각 스케줄의 선택 날짜 기준 복용 상태(status) 반환
                       - DONE: 복용 인증 완료
-                      - AVAILABLE: 지금 인증 가능 (알람 시간 ±30분)
-                      - UPCOMING: 아직 인증 시간 전
-                      - MISSED: 인증 시간이 지났는데 미인증
+                      - UPCOMING: 아직 인증 마감(알람+30분) 전 (미복용)
+                      - MISSED: 인증 마감이 지났는데 미인증
 
                     **파라미터:**
                     - date: 조회할 날짜 (yyyy-MM-dd)

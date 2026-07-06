@@ -6,13 +6,13 @@ import java.time.LocalTime;
 
 /**
  * 선택한 날짜 기준 개별 약 스케줄의 복용 상태.
- * 인증은 알람 시간 전후 {@link #ALLOWED_WINDOW_MINUTES}분 이내에만 가능하다.
+ * 인증은 알람 시간 전후 {@link #ALLOWED_WINDOW_MINUTES}분 이내에만 가능하며,
+ * 인증 마감(알람 + {@link #ALLOWED_WINDOW_MINUTES}분)이 지나면 더 이상 인증할 수 없다.
  */
 public enum MedicationStatus {
     DONE,       // 복용 인증 완료
-    AVAILABLE,  // 지금 인증 가능 (알람 시간 ±30분 이내)
-    UPCOMING,   // 아직 인증 시간 전 (복용 시간이 안 됨)
-    MISSED;     // 인증 시간이 지났는데 미인증
+    UPCOMING,   // 미인증 + 인증 마감 전 (아직 복용 시간이 안 됨)
+    MISSED;     // 미인증 + 인증 마감이 지남 (놓침)
 
     public static final int ALLOWED_WINDOW_MINUTES = 30;
 
@@ -21,18 +21,12 @@ public enum MedicationStatus {
             return DONE;
         }
 
-        LocalDateTime alarmDateTime = date.atTime(alarmTime);
-        LocalDateTime windowStart = alarmDateTime.minusMinutes(ALLOWED_WINDOW_MINUTES);
-        LocalDateTime windowEnd = alarmDateTime.plusMinutes(ALLOWED_WINDOW_MINUTES);
+        LocalDateTime verificationDeadline = date.atTime(alarmTime).plusMinutes(ALLOWED_WINDOW_MINUTES);
 
-        if (now.isBefore(windowStart)) {
-            return UPCOMING;
-        }
-
-        if (now.isAfter(windowEnd)) {
+        if (now.isAfter(verificationDeadline)) {
             return MISSED;
         }
 
-        return AVAILABLE;
+        return UPCOMING;
     }
 }
