@@ -73,11 +73,16 @@ fi
 
 cat "$REPORT_FILE"
 
-# 판정 파싱: REQUEST_CHANGES 우선, 없으면 APPROVE, 둘 다 없으면 보수적으로 통과(fail-open)
-if grep -qE 'VERDICT:[[:space:]]*REQUEST_CHANGES|\bREQUEST_CHANGES\b' "$REPORT_FILE"; then
-  rm -f "$REPORT_FILE"
+# 판정 파싱: codex exec는 입력 프롬프트를 출력에 에코하고, 그 프롬프트에는
+# "VERDICT: APPROVE"/"VERDICT: REQUEST_CHANGES" 안내 문구가 들어있다.
+# 출력 전체를 grep하면 실제 판정과 무관하게 프롬프트 문구에 매칭되므로,
+# codex가 마지막 줄에 단독 출력하는 마지막 VERDICT 줄만 실제 판정으로 본다.
+# VERDICT 줄이 없으면 보수적으로 통과(fail-open).
+FINAL_VERDICT=$(grep -oE 'VERDICT:[[:space:]]*(APPROVE|REQUEST_CHANGES)' "$REPORT_FILE" | tail -n 1)
+rm -f "$REPORT_FILE"
+
+if printf '%s' "$FINAL_VERDICT" | grep -q 'REQUEST_CHANGES'; then
   exit 1
 fi
 
-rm -f "$REPORT_FILE"
 exit 0
