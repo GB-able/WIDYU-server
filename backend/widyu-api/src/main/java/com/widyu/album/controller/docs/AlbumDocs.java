@@ -81,7 +81,7 @@ public interface AlbumDocs {
                                             value = """
                                                     {
                                                       "code": "REQ_4000",
-                                                      "message": "전체 최대 8개, 사진 최대 8개, 동영상 최대 3개까지 업로드 가능합니다.",
+                                                      "message": "잘못된 요청입니다. - 전체 최대 8개, 사진 최대 8개, 동영상 최대 3개까지 업로드 가능합니다.",
                                                       "data": null
                                                     }
                                                     """
@@ -329,7 +329,7 @@ public interface AlbumDocs {
                                     value = """
                                             {
                                               "code": "AUTH_4030",
-                                              "message": "본인의 앨범만 수정할 수 있습니다.",
+                                              "message": "접근 권한이 없습니다. - 본인의 앨범만 수정할 수 있습니다.",
                                               "data": null
                                             }
                                             """

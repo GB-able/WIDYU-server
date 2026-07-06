@@ -24,14 +24,67 @@ public interface PaymentDocs {
             summary = "결제 패키지 목록 조회",
             description = "서버가 제공하는 포인트 충전 패키지 목록을 조회합니다."
     )
-    @ApiResponse(responseCode = "200", description = "패키지 조회 성공")
+    @ApiResponse(
+            responseCode = "200",
+            description = "패키지 조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            name = "응답 예시",
+                            value = """
+                                    {
+                                      "code": "PAY_1999",
+                                      "message": "결제 패키지 조회 성공",
+                                      "data": [
+                                        {
+                                          "packageId": "POINT_10000",
+                                          "orderName": "포인트 10,000P 충전",
+                                          "amount": 10000,
+                                          "pointAmount": 10000
+                                        },
+                                        {
+                                          "packageId": "POINT_30000",
+                                          "orderName": "포인트 30,000P 충전",
+                                          "amount": 30000,
+                                          "pointAmount": 33000
+                                        }
+                                      ]
+                                    }
+                                    """
+                    )
+            )
+    )
     ApiResponseTemplate<java.util.List<PaymentPackageResponse>> getPackages();
 
     @Operation(
             summary = "결제 주문 생성",
             description = "결제 승인 전에 서버에 선행 주문을 생성하고 주문 ID, 금액, 만료 시각을 반환합니다."
     )
-    @ApiResponse(responseCode = "200", description = "주문 생성 성공")
+    @ApiResponse(
+            responseCode = "200",
+            description = "주문 생성 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            name = "응답 예시",
+                            value = """
+                                    {
+                                      "code": "PAY_2000",
+                                      "message": "주문 생성 성공",
+                                      "data": {
+                                        "orderId": "order_123456",
+                                        "packageId": "POINT_10000",
+                                        "orderName": "포인트 10,000P 충전",
+                                        "amount": 10000,
+                                        "pointAmount": 10000,
+                                        "status": "CREATED",
+                                        "expiresAt": "2026-07-06T12:10:00+09:00"
+                                      }
+                                    }
+                                    """
+                    )
+            )
+    )
     ApiResponseTemplate<PaymentOrderResponse> createOrder(
             @RequestBody(
                     required = true,
