@@ -10,7 +10,7 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
-import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleTodayResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineRepository;
@@ -47,28 +47,37 @@ public class MedicineScheduleService {
     private final MemberRepository memberRepository;
     private final MemberUtil memberUtil;
 
-    public MedicineScheduleTodayResponse getTodaySchedules(Long memberId) {
+    public MedicineScheduleDailyResponse getDailySchedules(Long memberId, LocalDate date) {
         Member targetMember = getMember(memberId);
 
         List<MedicineSchedule> schedules = medicineScheduleRepository
                 .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
 
-        List<MedicineScheduleTodayResponse.ScheduleItem> scheduleItems = schedules.stream()
-                .map(schedule -> new MedicineScheduleTodayResponse.ScheduleItem(
-                        schedule.getId(),
-                        schedule.getTotalCount(),
-                        schedule.getAlarmTime().toString(),
-                        schedule.getCategories().stream()
-                                .flatMap(category -> category.getMedicines().stream()
-                                        .map(detail -> new MedicineScheduleTodayResponse.MedicineItem(
-                                                detail.getMedicine().getName(),
-                                                detail.getDose()
-                                        )))
-                                .collect(Collectors.toList())
+        Set<Long> verifiedScheduleIds = findVerifiedScheduleIds(schedules, date);
+
+        List<MedicineScheduleDailyResponse.ScheduleItem> scheduleItems = schedules.stream()
+                .map(schedule -> MedicineScheduleDailyResponse.ScheduleItem.from(
+                        schedule,
+                        verifiedScheduleIds.contains(schedule.getId())
                 ))
                 .collect(Collectors.toList());
 
-        return new MedicineScheduleTodayResponse(scheduleItems);
+        return MedicineScheduleDailyResponse.of(scheduleItems);
+    }
+
+    private Set<Long> findVerifiedScheduleIds(List<MedicineSchedule> schedules, LocalDate date) {
+        List<Long> scheduleIds = schedules.stream()
+                .map(MedicineSchedule::getId)
+                .collect(Collectors.toList());
+
+        if (scheduleIds.isEmpty()) {
+            return Set.of();
+        }
+
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+
+        return Set.copyOf(medicationProofRepository.findVerifiedScheduleIds(scheduleIds, startOfDay, endOfDay));
     }
 
     public MedicineMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {

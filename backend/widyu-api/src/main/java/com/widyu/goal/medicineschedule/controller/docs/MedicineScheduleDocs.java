@@ -7,7 +7,7 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
-import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleTodayResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,7 +18,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,13 +31,16 @@ import org.springframework.web.multipart.MultipartFile;
 public interface MedicineScheduleDocs {
 
     @Operation(
-            summary = "당일 약 복용 현황 조회",
+            summary = "일자별 약 복용 현황 조회",
             description = """
-                    오늘 날짜의 약 복용 스케줄과 현황을 조회합니다.
+                    선택한 날짜의 약 복용 스케줄과 복용 인증 현황을 조회합니다.
 
                     **기능:**
-                    - 오늘 복용해야 할 모든 약 스케줄 조회
-                    - 각 스케줄별 알람 시간과 약품 목록 반환
+                    - 활성 약 스케줄 목록 조회 (알람 시간·약품 목록)
+                    - 각 스케줄의 선택 날짜 기준 복용 인증 여부(taken) 반환
+
+                    **파라미터:**
+                    - date: 조회할 날짜 (yyyy-MM-dd)
 
                     **권한:**
                     - memberId가 null → 본인의 약 복용 현황 조회
@@ -48,7 +53,7 @@ public interface MedicineScheduleDocs {
                     description = "조회 성공",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = MedicineScheduleTodayResponse.class),
+                            schema = @Schema(implementation = MedicineScheduleDailyResponse.class),
                             examples = @ExampleObject(
                                     value = """
                                             {
@@ -56,30 +61,32 @@ public interface MedicineScheduleDocs {
                                               "code": "200",
                                               "message": "요청에 성공하였습니다.",
                                               "result": {
-                                                "schedules": [
+                                                "medicineSchedule": [
                                                   {
-                                                    "scheduleId": 1,
+                                                    "medicineScheduleId": 1,
                                                     "totalCount": 3,
                                                     "alarmTime": "08:00",
+                                                    "taken": true,
                                                     "medicines": [
                                                       {
-                                                        "itemName": "타이레놀",
-                                                        "dose": 1
+                                                        "name": "타이레놀",
+                                                        "count": 1
                                                       },
                                                       {
-                                                        "itemName": "비타민C",
-                                                        "dose": 2
+                                                        "name": "비타민C",
+                                                        "count": 2
                                                       }
                                                     ]
                                                   },
                                                   {
-                                                    "scheduleId": 2,
+                                                    "medicineScheduleId": 2,
                                                     "totalCount": 1,
                                                     "alarmTime": "20:00",
+                                                    "taken": false,
                                                     "medicines": [
                                                       {
-                                                        "itemName": "오메가3",
-                                                        "dose": 1
+                                                        "name": "오메가3",
+                                                        "count": 1
                                                       }
                                                     ]
                                                   }
@@ -93,7 +100,9 @@ public interface MedicineScheduleDocs {
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
-    ApiResponseTemplate<MedicineScheduleTodayResponse> getTodaySchedules(
+    ApiResponseTemplate<MedicineScheduleDailyResponse> getDailySchedules(
+            @Parameter(description = "조회할 날짜 (yyyy-MM-dd)", example = "2026-07-06")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @Parameter(description = "대상 시니어 ID (null이면 본인)", example = "1")
             @RequestParam(required = false) Long memberId
     );

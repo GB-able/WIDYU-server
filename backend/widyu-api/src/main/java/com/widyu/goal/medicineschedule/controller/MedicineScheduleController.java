@@ -12,12 +12,14 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
-import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleTodayResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,15 +43,16 @@ public class MedicineScheduleController implements MedicineScheduleDocs {
     private final ExternalMedicineService externalMedicineService;
 
     @Override
-    @GetMapping("/today")
+    @GetMapping("/daily")
     @ValidateFamilyAccess(memberIdParam = "memberId")
-    public ApiResponseTemplate<MedicineScheduleTodayResponse> getTodaySchedules(
+    public ApiResponseTemplate<MedicineScheduleDailyResponse> getDailySchedules(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long memberId
     ) {
-        MedicineScheduleTodayResponse response = medicineScheduleService.getTodaySchedules(memberId);
+        MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, date);
         return ApiResponseTemplate.ok()
                 .code("MEDICINE_2001")
-                .message("당일 약 복용 현황 조회 성공")
+                .message("일자별 약 복용 현황 조회 성공")
                 .body(response);
     }
 
