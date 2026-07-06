@@ -28,7 +28,7 @@ class GeocodingServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(geocodingService, "clientId", "test-client-id");
+        ReflectionTestUtils.setField(geocodingService, "apiKey", "test-client-id");
     }
 
     @Test

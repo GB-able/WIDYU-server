@@ -25,3 +25,4 @@ oauth:
 kakao:
   geocoding:
     url: https://dapi.kakao.com
+    api-key: ${KAKAO_GEOCODING_API_KEY}

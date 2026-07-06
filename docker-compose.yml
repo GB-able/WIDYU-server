@@ -75,6 +75,9 @@ services:
       # Juso API (공통)
       JUSO_CONFM_KEY: ${JUSO_CONFM_KEY}
 
+      # Kakao Geocoding (로그인용 키와 분리)
+      KAKAO_GEOCODING_API_KEY: ${KAKAO_GEOCODING_API_KEY}
+
       # Admin (공통)
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
