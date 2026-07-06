@@ -578,7 +578,7 @@ public interface GuardianAuthDocs {
                                     name = "이미 연동된 제공자",
                                     value = """
                                             {
-                                              "code": "AUTH_4010",
+                                              "code": "AUTH_4019",
                                               "message": "이미 연동된 소셜 로그인 제공자입니다.",
                                               "data": null
                                             }
