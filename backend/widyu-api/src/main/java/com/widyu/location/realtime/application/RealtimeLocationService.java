@@ -138,10 +138,9 @@ public class RealtimeLocationService {
                 .map(s -> s.getMember().getId())
                 .toList();
 
-        Map<Long, SeniorLocation> locationMap = seniorLocationRepository
-                .findAllBySeniorIdIn(seniorMemberIds)
-                .stream()
-                .collect(Collectors.toMap(SeniorLocation::getSeniorId, l -> l));
+        Map<Long, SeniorLocation> locationMap = new java.util.HashMap<>();
+        seniorLocationRepository.findAllById(seniorMemberIds)
+                .forEach(l -> locationMap.put(l.getSeniorId(), l));
 
         return seniors.stream()
                 .map(senior -> {
@@ -153,9 +152,14 @@ public class RealtimeLocationService {
                     }
 
                     String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
-                    Object stayObj = redisTemplate.opsForValue().get(stayKey);
-                    if (stayObj instanceof StayInfo stayInfo) {
-                        return TrackedSeniorResponse.of(senior, stayInfo.latitude(), stayInfo.longitude());
+                    try {
+                        Object stayObj = redisTemplate.opsForValue().get(stayKey);
+                        if (stayObj instanceof StayInfo stayInfo) {
+                            return TrackedSeniorResponse.of(senior, stayInfo.latitude(), stayInfo.longitude());
+                        }
+                    } catch (Exception e) {
+                        log.warn("StayInfo 역직렬화 실패 (stale data) - stayKey: {}, 삭제 후 재생성", stayKey, e);
+                        redisTemplate.delete(stayKey);
                     }
 
                     return TrackedSeniorResponse.of(senior, null, null);
@@ -182,15 +186,20 @@ public class RealtimeLocationService {
 
         // 체류 시간 및 위치 타입 정보 조회 (memberId 기준)
         String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
-        Object stayObj = redisTemplate.opsForValue().get(stayKey);
         LocalDateTime stayStartTime = LocalDateTime.now();
         String locationType = null;
         StayInfo stayInfo = null;
 
-        if (stayObj instanceof StayInfo info) {
-            stayInfo = info;
-            stayStartTime = stayInfo.startTime();
-            locationType = stayInfo.locationType();
+        try {
+            Object stayObj = redisTemplate.opsForValue().get(stayKey);
+            if (stayObj instanceof StayInfo info) {
+                stayInfo = info;
+                stayStartTime = stayInfo.startTime();
+                locationType = stayInfo.locationType();
+            }
+        } catch (Exception e) {
+            log.warn("StayInfo 역직렬화 실패 (stale data) - stayKey: {}, 삭제 후 재생성", stayKey, e);
+            redisTemplate.delete(stayKey);
         }
 
         // SeniorLocation(5분 TTL) 우선 조회, 만료 시 StayInfo(24시간 TTL)로 fallback
@@ -282,7 +291,13 @@ public class RealtimeLocationService {
      * - 안전구역 이탈 시 보호자에게 알림 전송
      */
     private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
-        Object stayObj = redisTemplate.opsForValue().get(stayKey);
+        Object stayObj = null;
+        try {
+            stayObj = redisTemplate.opsForValue().get(stayKey);
+        } catch (Exception e) {
+            log.warn("StayInfo 역직렬화 실패 (stale data) - stayKey: {}, 삭제 후 재생성", stayKey, e);
+            redisTemplate.delete(stayKey);
+        }
         String previousLocationType = null;
 
         if (stayObj instanceof StayInfo previousStay) {
