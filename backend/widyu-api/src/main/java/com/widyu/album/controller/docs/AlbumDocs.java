@@ -405,7 +405,7 @@ public interface AlbumDocs {
                                     value = """
                                             {
                                               "code": "AUTH_4030",
-                                              "message": "본인의 앨범만 삭제할 수 있습니다.",
+                                              "message": "접근 권한이 없습니다. - 본인의 앨범만 삭제할 수 있습니다.",
                                               "data": null
                                             }
                                             """

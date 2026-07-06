@@ -105,7 +105,7 @@ public interface RealtimeLocationDocs {
                             value = """
                     {
                       "code": "AUTH_4030",
-                      "message": "해당 시니어의 위치를 조회할 권한이 없습니다.",
+                      "message": "접근 권한이 없습니다. - 해당 시니어의 위치를 조회할 권한이 없습니다.",
                       "data": null
                     }
                     """
@@ -120,7 +120,7 @@ public interface RealtimeLocationDocs {
                             value = """
                     {
                       "code": "SRV_4040",
-                      "message": "최근 위치 정보가 없습니다.",
+                      "message": "찾을 수 없습니다 - 최근 위치 정보가 없습니다.",
                       "data": null
                     }
                     """
@@ -187,7 +187,7 @@ public interface RealtimeLocationDocs {
                             value = """
                     {
                       "code": "AUTH_4030",
-                      "message": "해당 시니어의 위치를 조회할 권한이 없습니다.",
+                      "message": "접근 권한이 없습니다. - 해당 시니어의 위치를 조회할 권한이 없습니다.",
                       "data": null
                     }
                     """
