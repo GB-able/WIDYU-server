@@ -15,10 +15,10 @@ public record MedicineScheduleDailyResponse(
             Long medicineScheduleId,
             Integer totalCount,
             String alarmTime,
-            boolean taken,
+            MedicationStatus status,
             List<MedicineItem> medicines
     ) {
-        public static ScheduleItem from(MedicineSchedule schedule, boolean taken) {
+        public static ScheduleItem from(MedicineSchedule schedule, MedicationStatus status) {
             List<MedicineItem> medicines = schedule.getCategories().stream()
                     .flatMap(category -> category.getMedicines().stream()
                             .map(detail -> MedicineItem.of(
@@ -31,7 +31,7 @@ public record MedicineScheduleDailyResponse(
                     schedule.getId(),
                     schedule.getTotalCount(),
                     schedule.getAlarmTime().toString(),
-                    taken,
+                    status,
                     medicines
             );
         }

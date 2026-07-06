@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 
 import com.widyu.global.entity.Status;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse.ScheduleItem;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
@@ -52,11 +53,11 @@ class MedicineScheduleServiceTest {
     }
 
     @Test
-    @DisplayName("선택한 날짜에 인증된 스케줄은 taken이 true로, 인증되지 않은 스케줄은 false로 반환된다")
-    void 일자별_조회하면_스케줄별_복용_인증_여부가_taken으로_반영된다() {
+    @DisplayName("지난 날짜를 조회하면 인증된 스케줄은 DONE, 미인증 스케줄은 MISSED로 반환된다")
+    void 지난_날짜_조회하면_인증_스케줄은_DONE_미인증은_MISSED로_반영된다() {
         // given
         Long memberId = 1L;
-        LocalDate date = LocalDate.of(2026, 7, 6);
+        LocalDate pastDate = LocalDate.of(2020, 1, 1);
         Member targetMember = mock(Member.class);
 
         MedicineSchedule verified = scheduleWithId(10L, LocalTime.of(8, 0));
@@ -69,13 +70,13 @@ class MedicineScheduleServiceTest {
                 .willReturn(List.of(10L));
 
         // when
-        MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, date);
+        MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, pastDate);
 
         // then
-        Map<Long, Boolean> takenByScheduleId = response.medicineSchedule().stream()
-                .collect(Collectors.toMap(ScheduleItem::medicineScheduleId, ScheduleItem::taken));
-        assertThat(takenByScheduleId.get(10L)).isTrue();
-        assertThat(takenByScheduleId.get(20L)).isFalse();
+        Map<Long, MedicationStatus> statusByScheduleId = response.medicineSchedule().stream()
+                .collect(Collectors.toMap(ScheduleItem::medicineScheduleId, ScheduleItem::status));
+        assertThat(statusByScheduleId.get(10L)).isEqualTo(MedicationStatus.DONE);
+        assertThat(statusByScheduleId.get(20L)).isEqualTo(MedicationStatus.MISSED);
     }
 
     @Test

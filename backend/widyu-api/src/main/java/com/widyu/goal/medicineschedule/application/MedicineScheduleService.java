@@ -10,6 +10,7 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
@@ -54,12 +55,14 @@ public class MedicineScheduleService {
                 .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
 
         Set<Long> verifiedScheduleIds = findVerifiedScheduleIds(schedules, date);
+        LocalDateTime now = LocalDateTime.now();
 
         List<MedicineScheduleDailyResponse.ScheduleItem> scheduleItems = schedules.stream()
-                .map(schedule -> MedicineScheduleDailyResponse.ScheduleItem.from(
-                        schedule,
-                        verifiedScheduleIds.contains(schedule.getId())
-                ))
+                .map(schedule -> {
+                    boolean verified = verifiedScheduleIds.contains(schedule.getId());
+                    MedicationStatus status = MedicationStatus.of(verified, date, schedule.getAlarmTime(), now);
+                    return MedicineScheduleDailyResponse.ScheduleItem.from(schedule, status);
+                })
                 .collect(Collectors.toList());
 
         return MedicineScheduleDailyResponse.of(scheduleItems);
