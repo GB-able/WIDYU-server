@@ -93,7 +93,7 @@ public class MedicineScheduleService {
 
         List<Double> monthlyGoalRates = calculateMonthlyGoalRates(targetMember.getId(), requestedMonth);
 
-        return new MedicineMonthlyResponse(lastMonthCount, currentMonthCount, monthlyGoalRates);
+        return MedicineMonthlyResponse.of(lastMonthCount, currentMonthCount, monthlyGoalRates);
     }
 
     public MedicineHomeResponse getHomeSchedules(Long memberId) {
@@ -103,21 +103,10 @@ public class MedicineScheduleService {
                 .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
 
         List<MedicineHomeResponse.ScheduleItem> scheduleItems = schedules.stream()
-                .map(schedule -> new MedicineHomeResponse.ScheduleItem(
-                        schedule.getId(),
-                        schedule.getTotalCount(),
-                        schedule.getAlarmTime().toString(),
-                        schedule.getCategories().stream()
-                                .flatMap(category -> category.getMedicines().stream()
-                                        .map(detail -> new MedicineHomeResponse.MedicineDetail(
-                                                detail.getMedicine().getName(),
-                                                detail.getDose()
-                                        )))
-                                .collect(Collectors.toList())
-                ))
+                .map(MedicineHomeResponse.ScheduleItem::from)
                 .collect(Collectors.toList());
 
-        return new MedicineHomeResponse(scheduleItems);
+        return MedicineHomeResponse.of(scheduleItems);
     }
 
     public MedicineScheduleDetailResponse getScheduleDetail(Long scheduleId, Long memberId) {
@@ -133,28 +122,7 @@ public class MedicineScheduleService {
                     "해당 스케줄에 접근할 권한이 없습니다.");
         }
 
-        List<MedicineScheduleDetailResponse.CategoryItem> categories = schedule.getCategories().stream()
-                .map(category -> new MedicineScheduleDetailResponse.CategoryItem(
-                        category.getId(),
-                        category.getName(),
-                        category.getCountSum().doubleValue(),
-                        category.getMedicines().stream()
-                                .map(detail -> new MedicineScheduleDetailResponse.MedicineItem(
-                                        detail.getMedicine().getId(),
-                                        detail.getMedicine().getName(),
-                                        detail.getDose().doubleValue(),
-                                        detail.getMedicine().getImageUrl(),
-                                        detail.getMedicine().getDescription()
-                                ))
-                                .collect(Collectors.toList())
-                ))
-                .collect(Collectors.toList());
-
-        return new MedicineScheduleDetailResponse(
-                schedule.getAlarmTime().toString(),
-                schedule.getTotalCount().doubleValue(),
-                categories
-        );
+        return MedicineScheduleDetailResponse.from(schedule);
     }
 
     @Transactional
