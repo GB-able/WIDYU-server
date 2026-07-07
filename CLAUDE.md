@@ -3,6 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > 도메인 상세 로직, 비즈니스 플로우, DB·외부 연동·보안 설계는 [backend/CLAUDE.md](backend/CLAUDE.md)를 참조하세요.
+>
+> 이슈·커밋·PR·리뷰·구현 작업은 항상 [.agents/skills](.agents/skills) 아래 해당 스킬(`issue`, `commit`, `pr`, `review`, `implement`)의 절차·컨벤션을 먼저 확인하고 그대로 따르세요. 예: 이슈 생성 → [.agents/skills/issue/SKILL.md](.agents/skills/issue/SKILL.md), 커밋 → [.agents/skills/commit/SKILL.md](.agents/skills/commit/SKILL.md), PR → [.agents/skills/pr/SKILL.md](.agents/skills/pr/SKILL.md).
 
 ## Project Overview
 

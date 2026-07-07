@@ -15,6 +15,8 @@ WIDYU-server 작업을 시작하기 전에 GitHub Issue를 생성하고, 필요�
 - 작업 범위가 크면 분리안을 제안한다.
 - 미결정 사항은 `확인 필요`로 남긴다.
 - 브랜치는 사용자 요청 시 또는 바로 작업할 때만 만든다.
+- 기본 Assignee: `dongkyun0713`.
+- 변경 성격에 맞는 label을 확인하고 가능하면 함께 지정한다.
 
 ## 절차
 
@@ -25,9 +27,23 @@ WIDYU-server 작업을 시작하기 전에 GitHub Issue를 생성하고, 필요�
 2. `gh issue list --state open --limit 30 --json number,title,labels`로 중복 확인.
 3. 관련 LLD가 `docs/lld/`에 있으면 이슈 본문에 링크를 건다.
 4. 아래 템플릿으로 본문 작성.
-5. `gh issue create --title "<title>" --body-file <tmpfile>`.
-6. 필요하면 최신화된 `develop`에서 `git switch -c feature/<issue-number>`로 브랜치를 만든다.
-7. 이슈 번호, URL, 브랜치명 보고.
+5. `gh label list --limit 50`로 사용 가능한 label을 확인한다.
+6. `gh issue create --title "<title>" --body-file <tmpfile> --assignee dongkyun0713 --label "<label>"`.
+7. `gh issue view <N> --json assignees,labels`로 assignee와 label 반영을 확인한다.
+8. 필요하면 최신화된 `develop`에서 `git switch -c feature/<issue-number>`로 브랜치를 만든다.
+9. 이슈 번호, URL, 브랜치명 보고.
+
+### Label 선택 기준
+
+| 변경 성격 | label |
+| --- | --- |
+| 문서/가이드/스킬 문서 | `Docs` |
+| 개발 환경, CI, 설정, 하네스 | `Setting` |
+| 테스트 코드/검증 보강 | `Test` |
+| 기능 구현 | `Feature` |
+| 버그 수정 | `bug` |
+| 구조 개선 | `Refactor` |
+| 배포/인프라 | `Devops` |
 
 ## 이슈 본문 템플릿
 
