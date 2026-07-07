@@ -63,7 +63,7 @@ public interface MedicineScheduleDocs {
                                               "code": "MEDICINE_2001",
                                               "message": "일자별 약 복용 현황 조회 성공",
                                               "data": {
-                                                "medicineSchedule": [
+                                                "medicineSchedules": [
                                                   {
                                                     "medicineScheduleId": 1,
                                                     "totalCount": 3,
@@ -190,12 +190,12 @@ public interface MedicineScheduleDocs {
                                               "code": "MEDICINE_2003",
                                               "message": "시니어 약복용 홈 조회 성공",
                                               "data": {
-                                                "schedules": [
+                                                "medicineSchedules": [
                                                   {
-                                                    "scheduleId": 1,
-                                                    "medicineTotalCount": 3,
+                                                    "medicineScheduleId": 1,
+                                                    "totalCount": 3,
                                                     "alarmTime": "08:00",
-                                                    "medicineDetails": [
+                                                    "medicines": [
                                                       {
                                                         "name": "타이레놀",
                                                         "count": 1
@@ -207,10 +207,10 @@ public interface MedicineScheduleDocs {
                                                     ]
                                                   },
                                                   {
-                                                    "scheduleId": 2,
-                                                    "medicineTotalCount": 1,
+                                                    "medicineScheduleId": 2,
+                                                    "totalCount": 1,
                                                     "alarmTime": "20:00",
-                                                    "medicineDetails": [
+                                                    "medicines": [
                                                       {
                                                         "name": "오메가3",
                                                         "count": 1

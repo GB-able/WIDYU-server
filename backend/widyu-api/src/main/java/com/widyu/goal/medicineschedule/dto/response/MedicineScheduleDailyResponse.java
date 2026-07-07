@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public record MedicineScheduleDailyResponse(
-        List<ScheduleItem> medicineSchedule
+        List<ScheduleItem> medicineSchedules
 ) {
-    public static MedicineScheduleDailyResponse of(List<ScheduleItem> medicineSchedule) {
-        return new MedicineScheduleDailyResponse(medicineSchedule);
+    public static MedicineScheduleDailyResponse of(List<ScheduleItem> medicineSchedules) {
+        return new MedicineScheduleDailyResponse(medicineSchedules);
     }
 
     public record ScheduleItem(

@@ -1,6 +1,7 @@
 package com.widyu.goal.home.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,7 +25,7 @@ public record GuardianGoalHomeResponse(
             Integer takenCount,
 
             @Schema(description = "약 스케줄 목록")
-            List<ScheduleItem> schedules
+            List<ScheduleItem> medicineSchedules
     ) {
     }
 
@@ -36,8 +37,8 @@ public record GuardianGoalHomeResponse(
             @Schema(description = "알람 시간", example = "19:00")
             String alarmTime,
 
-            @Schema(description = "복용 상태 (taken/not_taken)", example = "taken")
-            String status,
+            @Schema(description = "복용 상태 (DONE: 복용 완료, UPCOMING: 복용 시간 전, MISSED: 놓침)", example = "DONE")
+            MedicationStatus status,
 
             @Schema(description = "복용 인증 이미지 URL", example = "https://www.widyu.shop/img")
             String proofImageUrl,

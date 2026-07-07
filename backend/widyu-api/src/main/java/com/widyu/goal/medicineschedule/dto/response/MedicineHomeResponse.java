@@ -5,22 +5,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public record MedicineHomeResponse(
-        List<ScheduleItem> schedules
+        List<ScheduleItem> medicineSchedules
 ) {
-    public static MedicineHomeResponse of(List<ScheduleItem> schedules) {
-        return new MedicineHomeResponse(schedules);
+    public static MedicineHomeResponse of(List<ScheduleItem> medicineSchedules) {
+        return new MedicineHomeResponse(medicineSchedules);
     }
 
     public record ScheduleItem(
-            Long scheduleId,
-            Integer medicineTotalCount,
+            Long medicineScheduleId,
+            Integer totalCount,
             String alarmTime,
-            List<MedicineDetail> medicineDetails
+            List<MedicineItem> medicines
     ) {
         public static ScheduleItem from(MedicineSchedule schedule) {
-            List<MedicineDetail> medicineDetails = schedule.getCategories().stream()
+            List<MedicineItem> medicines = schedule.getCategories().stream()
                     .flatMap(category -> category.getMedicines().stream()
-                            .map(detail -> MedicineDetail.of(
+                            .map(detail -> MedicineItem.of(
                                     detail.getMedicine().getName(),
                                     detail.getDose()
                             )))
@@ -30,17 +30,17 @@ public record MedicineHomeResponse(
                     schedule.getId(),
                     schedule.getTotalCount(),
                     schedule.getAlarmTime().toString(),
-                    medicineDetails
+                    medicines
             );
         }
     }
 
-    public record MedicineDetail(
+    public record MedicineItem(
             String name,
             Integer count
     ) {
-        public static MedicineDetail of(String name, Integer count) {
-            return new MedicineDetail(name, count);
+        public static MedicineItem of(String name, Integer count) {
+            return new MedicineItem(name, count);
         }
     }
 }

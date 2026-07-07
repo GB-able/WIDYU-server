@@ -11,6 +11,7 @@ import com.widyu.goal.home.dto.response.GuardianGoalHomeResponse;
 import com.widyu.goal.home.dto.response.GuardianGoalStatsResponse;
 import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -387,6 +388,7 @@ public class GoalHomeService {
 
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        LocalDateTime now = LocalDateTime.now();
 
         // 오늘 복용 인증 정보 조회
         Map<Long, MedicationProof> proofMap = medicationProofRepository
@@ -413,6 +415,8 @@ public class GoalHomeService {
                 takenCount += scheduleTotal;
             }
 
+            MedicationStatus status = MedicationStatus.of(taken, today, schedule.getAlarmTime(), now);
+
             List<GuardianGoalHomeResponse.MedicineItem> medicineItems = schedule.getCategories().stream()
                     .flatMap(category -> category.getMedicines().stream())
                     .map(detail -> new GuardianGoalHomeResponse.MedicineItem(
@@ -428,7 +432,7 @@ public class GoalHomeService {
             scheduleItems.add(new GuardianGoalHomeResponse.ScheduleItem(
                     schedule.getId(),
                     schedule.getAlarmTime().format(TIME_FORMATTER),
-                    taken ? "taken" : "not_taken",
+                    status,
                     proofImageUrl,
                     medicineItems
             ));
