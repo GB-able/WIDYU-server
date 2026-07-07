@@ -18,6 +18,7 @@ import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.Medicine;
 import com.widyu.medicine.MedicineCategory;
 import com.widyu.medicine.MedicineSchedule;
@@ -54,33 +55,49 @@ public class MedicineScheduleService {
         List<MedicineSchedule> schedules = medicineScheduleRepository
                 .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
 
-        Set<Long> verifiedScheduleIds = findVerifiedScheduleIds(schedules, date);
+        if (schedules.isEmpty()) {
+            return MedicineScheduleDailyResponse.of(List.of());
+        }
+
+        Map<Long, MedicationProof> proofsByScheduleId = findProofsByScheduleId(targetMember, date);
         LocalDateTime now = LocalDateTime.now();
 
         List<MedicineScheduleDailyResponse.ScheduleItem> scheduleItems = schedules.stream()
                 .map(schedule -> {
-                    boolean verified = verifiedScheduleIds.contains(schedule.getId());
+                    MedicationProof proof = proofsByScheduleId.get(schedule.getId());
+                    boolean verified = proof != null;
                     MedicationStatus status = MedicationStatus.of(verified, date, schedule.getAlarmTime(), now);
-                    return MedicineScheduleDailyResponse.ScheduleItem.from(schedule, status);
+                    String proofImageUrl = extractProofImageUrl(proof);
+                    return MedicineScheduleDailyResponse.ScheduleItem.from(schedule, status, proofImageUrl);
                 })
                 .collect(Collectors.toList());
 
         return MedicineScheduleDailyResponse.of(scheduleItems);
     }
 
-    private Set<Long> findVerifiedScheduleIds(List<MedicineSchedule> schedules, LocalDate date) {
-        List<Long> scheduleIds = schedules.stream()
-                .map(MedicineSchedule::getId)
-                .collect(Collectors.toList());
-
-        if (scheduleIds.isEmpty()) {
-            return Set.of();
-        }
-
+    private Map<Long, MedicationProof> findProofsByScheduleId(Member member, LocalDate date) {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        return Set.copyOf(medicationProofRepository.findVerifiedScheduleIds(scheduleIds, startOfDay, endOfDay));
+        return medicationProofRepository.findByMemberIdAndDateRange(member.getId(), startOfDay, endOfDay)
+                .stream()
+                .collect(Collectors.toMap(
+                        proof -> proof.getMedicineSchedule().getId(),
+                        proof -> proof,
+                        (existing, duplicate) -> existing
+                ));
+    }
+
+    private String extractProofImageUrl(MedicationProof proof) {
+        if (proof == null) {
+            return null;
+        }
+
+        if (proof.getProofImageUrls().isEmpty()) {
+            return null;
+        }
+
+        return proof.getProofImageUrls().get(0);
     }
 
     public MedicineMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {

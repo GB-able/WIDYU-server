@@ -54,6 +54,7 @@ Response:
         "totalCount": 3,
         "alarmTime": "08:00",
         "status": "DONE",
+        "proofImageUrl": "https://www.widyu.shop/proof/1.jpg",
         "medicines": [
           { "name": "타이레놀", "count": 1 },
           { "name": "비타민C", "count": 2 }
@@ -64,6 +65,7 @@ Response:
         "totalCount": 1,
         "alarmTime": "20:00",
         "status": "UPCOMING",
+        "proofImageUrl": null,
         "medicines": [
           { "name": "오메가3", "count": 1 }
         ]
@@ -75,14 +77,16 @@ Response:
 
 `status`: `DONE`(복용 인증 완료) / `UPCOMING`(미인증, 인증 마감 전) / `MISSED`(미인증, 인증 마감 후)
 
+`proofImageUrl`: 해당 날짜의 복용 인증 이미지 첫 장 URL. 인증이 없거나 이미지가 없으면 `null` (#370).
+
 ## 4. 데이터 모델
 
 신규 엔티티·테이블·컬럼 없음.
 
 - `MedicationStatus` (widyu-api, `goal/medicineschedule/dto/response`): 응답 계산용 enum. **영속 대상 아님** (DB ENUM 컬럼 아님).
   - 상수 `ALLOWED_WINDOW_MINUTES = 30` 를 단일 정의. `MedicationProofService`의 인증 허용창도 이 상수를 참조.
-- `MedicineScheduleDailyResponse` (widyu-api, dto/response): 기존 `MedicineScheduleTodayResponse`를 대체. 정적 팩토리 `of()` / `ScheduleItem.from(schedule, status)` 사용.
-- 재사용 엔티티: `MedicineSchedule`(알람시간·카테고리·약품), `MedicationProof`(`verifiedAt`).
+- `MedicineScheduleDailyResponse` (widyu-api, dto/response): 기존 `MedicineScheduleTodayResponse`를 대체. 정적 팩토리 `of()` / `ScheduleItem.from(schedule, status, proofImageUrl)` 사용. `ScheduleItem`은 `proofImageUrl`(복용 인증 이미지) 필드를 포함한다(#370).
+- 재사용 엔티티: `MedicineSchedule`(알람시간·카테고리·약품), `MedicationProof`(`verifiedAt`, `proofImageUrls`).
 
 ## 5. 처리 흐름
 
@@ -93,12 +97,14 @@ Response:
 2. getMember(memberId): null이면 memberUtil.getCurrentMember(), 아니면 memberRepository.findById
 3. medicineScheduleRepository.findByMemberAndStatusWithDetails(member, ACTIVE)
    → 활성 스케줄 + 카테고리/약품 fetch join
-4. 인증된 스케줄 id 집합 조회 (findVerifiedScheduleIds)
-   - 스케줄 id 목록이 비면 조회 생략 후 빈 Set 반환
-   - MedicationProofRepository.findVerifiedScheduleIds(ids, date 00:00:00 ~ date 23:59:59.999999999)
-5. now = LocalDateTime.now()
-6. 스케줄별로 verified = 집합 포함 여부 → MedicationStatus.of(verified, date, alarmTime, now)
-7. MedicineScheduleDailyResponse.of(items) 반환
+4. 활성 스케줄이 비면 인증 조회를 생략하고 빈 목록 반환
+5. 스케줄별 복용 인증 조회 (findProofsByScheduleId)
+   - MedicationProofRepository.findByMemberIdAndDateRange(memberId, date 00:00:00 ~ date 23:59:59.999999999)
+   - 결과를 scheduleId → MedicationProof Map으로 수집 (중복 시 첫 인증 유지)
+6. now = LocalDateTime.now()
+7. 스케줄별로 verified = Map에 인증 존재 여부 → MedicationStatus.of(verified, date, alarmTime, now)
+   - proofImageUrl = 인증의 proofImageUrls 첫 장 (없으면 null)
+8. MedicineScheduleDailyResponse.of(items) 반환
 ```
 
 상태 계산 `MedicationStatus.of(verified, date, alarmTime, now)`:
@@ -128,6 +134,7 @@ now > date.atTime(alarmTime) + 30분(인증 마감)     → MISSED
 - [x] 복용 인증이 있으면 `DONE`을 반환한다.
 - [x] 미인증이고 인증 마감(알람+30분) 전이면 `UPCOMING`을 반환한다.
 - [x] 미인증이고 인증 마감이 지났으면 `MISSED`를 반환한다.
+- [x] 각 스케줄에 복용 인증 이미지(`proofImageUrl`)를 반환하고, 인증이 없으면 `null`을 반환한다 (#370).
 - [x] 활성 스케줄이 없으면 빈 목록을 반환하고 인증 조회를 생략한다.
 - [x] 인증 허용창(30분)은 `MedicationStatus`의 단일 상수이며 `verifyMedication`도 이를 참조한다.
 - [x] Swagger에 `status` 설명과 일자별 조회 응답이 반영된다.
