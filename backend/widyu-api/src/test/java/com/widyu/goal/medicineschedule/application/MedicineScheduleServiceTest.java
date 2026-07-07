@@ -73,7 +73,7 @@ class MedicineScheduleServiceTest {
         MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, pastDate);
 
         // then
-        Map<Long, MedicationStatus> statusByScheduleId = response.medicineSchedule().stream()
+        Map<Long, MedicationStatus> statusByScheduleId = response.medicineSchedules().stream()
                 .collect(Collectors.toMap(ScheduleItem::medicineScheduleId, ScheduleItem::status));
         assertThat(statusByScheduleId.get(10L)).isEqualTo(MedicationStatus.DONE);
         assertThat(statusByScheduleId.get(20L)).isEqualTo(MedicationStatus.MISSED);
@@ -95,7 +95,7 @@ class MedicineScheduleServiceTest {
         MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, date);
 
         // then
-        assertThat(response.medicineSchedule()).isEmpty();
+        assertThat(response.medicineSchedules()).isEmpty();
         then(medicationProofRepository).should(never()).findVerifiedScheduleIds(anyList(), any(), any());
     }
 }

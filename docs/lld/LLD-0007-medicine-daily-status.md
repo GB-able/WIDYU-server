@@ -48,7 +48,7 @@ Response:
   "code": "MEDICINE_2001",
   "message": "일자별 약 복용 현황 조회 성공",
   "result": {
-    "medicineSchedule": [
+    "medicineSchedules": [
       {
         "medicineScheduleId": 1,
         "totalCount": 3,
@@ -117,7 +117,7 @@ now > date.atTime(alarmTime) + 30분(인증 마감)     → MISSED
 | `date` 형식 오류 | 400 Bad Request (Spring `@DateTimeFormat(ISO.DATE)` 파싱 실패) |
 | 존재하지 않는 `memberId` | `BusinessException(BAD_REQUEST)` "존재하지 않는 사용자입니다." |
 | 보호자-시니어 가족 연결 없음 | 403 Forbidden (`@ValidateFamilyAccess`) |
-| 활성 스케줄 없음 | 빈 `medicineSchedule` 목록 반환 (인증 조회 생략) |
+| 활성 스케줄 없음 | 빈 `medicineSchedules` 목록 반환 (인증 조회 생략) |
 
 신규 에러 코드 없음. 성공 코드 `MEDICINE_2001` 유지(메시지만 "일자별 …"로 변경).
 
@@ -140,6 +140,7 @@ now > date.atTime(alarmTime) + 30분(인증 마감)     → MISSED
 - **API 계약 변경(Breaking)**: `/today`가 제거되고 `/daily?date=`로 대체된다. 응답에서 기존 `taken`(boolean, 실제로는 미포함) 대신 `status`가 추가된다.
   - 앱 클라이언트가 `date` 파라미터 전달 + `status` 분기를 구현해야 하며, 배포 타이밍을 서버와 맞춰야 한다.
 - `MedicationProofService`의 인증 허용창 상수 출처가 `MedicationStatus.ALLOWED_WINDOW_MINUTES`로 변경(값 30분 동일, 동작 변화 없음).
+- 응답 리스트 키를 `medicineSchedule`(단수) → `medicineSchedules`(복수)로 정정(#366). 약복용 홈·목표 홈 응답과 필드명·`status` 표현을 통일하는 작업의 일부이며, 단수 키 파싱 클라이언트는 수정이 필요하다.
 
 ## 9. 미결정 사항 (Open Questions)
 

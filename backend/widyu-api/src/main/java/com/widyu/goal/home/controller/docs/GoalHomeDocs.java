@@ -94,8 +94,8 @@ public interface GoalHomeDocs {
                                               "data": {
                                                 "medicine": {
                                                   "medicineScheduleId": 1,
-                                                  "todayTakenCount": 2,
-                                                  "todayTotalCount": 3,
+                                                  "takenCount": 2,
+                                                  "totalCount": 3,
                                                   "nextDoseCount": 4,
                                                   "nextAlarmTime": "17:00"
                                                 },
@@ -232,7 +232,7 @@ public interface GoalHomeDocs {
 
                     **약 스케줄 상세:**
                     - 각 알람 시간 (HH:mm 형식, 예: "19:00")
-                    - 복용 여부 (taken/not_taken)
+                    - 복용 상태 (DONE: 복용 완료, UPCOMING: 복용 시간 전, MISSED: 놓침)
                     - 복용 인증 사진 URL
                     - 복용해야 할 약 목록 (약 이름, 개수)
 
@@ -256,11 +256,11 @@ public interface GoalHomeDocs {
                                                 "medicine": {
                                                   "totalCount": 6,
                                                   "takenCount": 1,
-                                                  "schedules": [
+                                                  "medicineSchedules": [
                                                     {
                                                       "medicineScheduleId": 101,
                                                       "alarmTime": "19:00",
-                                                      "status": "taken",
+                                                      "status": "DONE",
                                                       "proofImageUrl": "https://www.widyu.shop/img",
                                                       "medicines": [
                                                         {

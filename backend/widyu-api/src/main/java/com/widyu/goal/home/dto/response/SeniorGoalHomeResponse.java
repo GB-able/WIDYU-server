@@ -20,10 +20,10 @@ public record SeniorGoalHomeResponse(
             Long medicineScheduleId,
 
             @Schema(description = "오늘 복용한 횟수", example = "2")
-            Integer todayTakenCount,
+            Integer takenCount,
 
             @Schema(description = "오늘 총 복용 예정 횟수", example = "3")
-            Integer todayTotalCount,
+            Integer totalCount,
 
             @Schema(description = "다음 복용 예정 개수", example = "4")
             Integer nextDoseCount,
