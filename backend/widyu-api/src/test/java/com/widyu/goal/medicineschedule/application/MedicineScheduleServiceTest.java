@@ -2,7 +2,7 @@ package com.widyu.goal.medicineschedule.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.never;
 import static org.mockito.BDDMockito.then;
@@ -16,6 +16,7 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyRespons
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
@@ -53,8 +54,8 @@ class MedicineScheduleServiceTest {
     }
 
     @Test
-    @DisplayName("지난 날짜를 조회하면 인증된 스케줄은 DONE, 미인증 스케줄은 MISSED로 반환된다")
-    void 지난_날짜_조회하면_인증_스케줄은_DONE_미인증은_MISSED로_반영된다() {
+    @DisplayName("지난 날짜를 조회하면 인증 스케줄은 DONE과 인증 이미지, 미인증 스케줄은 MISSED와 null을 반환한다")
+    void 지난_날짜_조회하면_인증_스케줄은_DONE과_이미지_미인증은_MISSED와_null을_반영한다() {
         // given
         Long memberId = 1L;
         LocalDate pastDate = LocalDate.of(2020, 1, 1);
@@ -63,20 +64,27 @@ class MedicineScheduleServiceTest {
         MedicineSchedule verified = scheduleWithId(10L, LocalTime.of(8, 0));
         MedicineSchedule notVerified = scheduleWithId(20L, LocalTime.of(20, 0));
 
+        MedicationProof proof = mock(MedicationProof.class);
+        given(proof.getMedicineSchedule()).willReturn(verified);
+        given(proof.getProofImageUrls()).willReturn(List.of("https://widyu.shop/proof/10.jpg"));
+
         given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
+        given(targetMember.getId()).willReturn(memberId);
         given(medicineScheduleRepository.findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE))
                 .willReturn(List.of(verified, notVerified));
-        given(medicationProofRepository.findVerifiedScheduleIds(anyList(), any(), any()))
-                .willReturn(List.of(10L));
+        given(medicationProofRepository.findByMemberIdAndDateRange(anyLong(), any(), any()))
+                .willReturn(List.of(proof));
 
         // when
         MedicineScheduleDailyResponse response = medicineScheduleService.getDailySchedules(memberId, pastDate);
 
         // then
-        Map<Long, MedicationStatus> statusByScheduleId = response.medicineSchedules().stream()
-                .collect(Collectors.toMap(ScheduleItem::medicineScheduleId, ScheduleItem::status));
-        assertThat(statusByScheduleId.get(10L)).isEqualTo(MedicationStatus.DONE);
-        assertThat(statusByScheduleId.get(20L)).isEqualTo(MedicationStatus.MISSED);
+        Map<Long, ScheduleItem> itemByScheduleId = response.medicineSchedules().stream()
+                .collect(Collectors.toMap(ScheduleItem::medicineScheduleId, item -> item));
+        assertThat(itemByScheduleId.get(10L).status()).isEqualTo(MedicationStatus.DONE);
+        assertThat(itemByScheduleId.get(10L).proofImageUrl()).isEqualTo("https://widyu.shop/proof/10.jpg");
+        assertThat(itemByScheduleId.get(20L).status()).isEqualTo(MedicationStatus.MISSED);
+        assertThat(itemByScheduleId.get(20L).proofImageUrl()).isNull();
     }
 
     @Test
@@ -96,6 +104,6 @@ class MedicineScheduleServiceTest {
 
         // then
         assertThat(response.medicineSchedules()).isEmpty();
-        then(medicationProofRepository).should(never()).findVerifiedScheduleIds(anyList(), any(), any());
+        then(medicationProofRepository).should(never()).findByMemberIdAndDateRange(anyLong(), any(), any());
     }
 }

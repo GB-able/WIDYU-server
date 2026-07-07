@@ -41,6 +41,7 @@ public interface MedicineScheduleDocs {
                       - DONE: 복용 인증 완료
                       - UPCOMING: 아직 인증 마감(알람+30분) 전 (미복용)
                       - MISSED: 인증 마감이 지났는데 미인증
+                    - 각 스케줄의 복용 인증 이미지(proofImageUrl) 반환 (인증 없으면 null)
 
                     **파라미터:**
                     - date: 조회할 날짜 (yyyy-MM-dd)
@@ -69,6 +70,7 @@ public interface MedicineScheduleDocs {
                                                     "totalCount": 3,
                                                     "alarmTime": "08:00",
                                                     "status": "DONE",
+                                                    "proofImageUrl": "https://www.widyu.shop/proof/1.jpg",
                                                     "medicines": [
                                                       {
                                                         "name": "타이레놀",
@@ -85,6 +87,7 @@ public interface MedicineScheduleDocs {
                                                     "totalCount": 1,
                                                     "alarmTime": "20:00",
                                                     "status": "UPCOMING",
+                                                    "proofImageUrl": null,
                                                     "medicines": [
                                                       {
                                                         "name": "오메가3",
