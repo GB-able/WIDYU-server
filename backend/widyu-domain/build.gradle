@@ -26,6 +26,12 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+tasks.withType(JavaCompile).configureEach {
+    // @RedisHash 엔티티를 파라미터가 있는 생성자로 역직렬화할 때 파라미터 이름이 필요하다.
+    // widyu-api는 Spring Boot 플러그인이 -parameters를 자동 적용하지만, 이 모듈(java-library)은 직접 지정한다.
+    options.compilerArgs.add('-parameters')
+}
+
 tasks.named('test') {
     useJUnitPlatform()
 }
