@@ -93,7 +93,10 @@ jobs:
             docker-compose.yml docker-compose.dev.yml \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/
 
-          rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
+          # --inplace: nginx.conf가 단일 파일 바인드 마운트라, 파일 교체 시 inode가 바뀌면
+          # 컨테이너가 옛 파일을 계속 참조해 `nginx -s reload`가 반영되지 않는다.
+          # in-place로 덮어써 inode를 유지하면 reload가 정상 반영된다.
+          rsync -avz --inplace -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
             nginx/ \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/nginx/
 
