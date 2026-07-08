@@ -14,11 +14,19 @@ import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -49,10 +57,14 @@ public class GlobalExceptionHandler {
     ) {
         final FieldError fieldError = e.getBindingResult().getFieldError();
 
-        final String field = (fieldError != null) ? fieldError.getField() : "unknown";
-        final String defaultMsg = (fieldError != null && fieldError.getDefaultMessage() != null)
-                ? fieldError.getDefaultMessage()
-                : "요청 값이 유효하지 않습니다";
+        String field = "unknown";
+        String defaultMsg = "요청 값이 유효하지 않습니다";
+        if (fieldError != null) {
+            field = fieldError.getField();
+            if (fieldError.getDefaultMessage() != null) {
+                defaultMsg = fieldError.getDefaultMessage();
+            }
+        }
 
         final String message = String.format("%s (%s)", trimTrailingPeriod(defaultMsg), field);
 
@@ -75,6 +87,94 @@ public class GlobalExceptionHandler {
         log.error("Validation error: {}", message);
 
         return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleHttpMessageNotReadableException(
+            final HttpMessageNotReadableException e
+    ) {
+        log.warn("Malformed request body: {}", e.getMessage());
+
+        return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), "요청 본문을 읽을 수 없습니다. 형식을 확인해주세요.");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleMethodArgumentTypeMismatchException(
+            final MethodArgumentTypeMismatchException e
+    ) {
+        final String message = String.format("요청 값의 타입이 올바르지 않습니다 (%s)", e.getName());
+        log.warn("Type mismatch for parameter {}: {}", e.getName(), e.getMessage());
+
+        return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleMissingServletRequestParameterException(
+            final MissingServletRequestParameterException e
+    ) {
+        final String message = String.format("필수 요청 파라미터가 누락되었습니다 (%s)", e.getParameterName());
+        log.warn("Missing request parameter: {}", e.getParameterName());
+
+        return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleMissingServletRequestPartException(
+            final MissingServletRequestPartException e
+    ) {
+        final String message = String.format("필수 요청 파트가 누락되었습니다 (%s)", e.getRequestPartName());
+        log.warn("Missing request part: {}", e.getRequestPartName());
+
+        return toResponse(HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleMaxUploadSizeExceededException(
+            final MaxUploadSizeExceededException e
+    ) {
+        log.warn("Upload size exceeded: {}", e.getMessage());
+
+        return toResponse(
+                ErrorCode.PAYLOAD_TOO_LARGE.getHttpStatus(),
+                ErrorCode.PAYLOAD_TOO_LARGE.getCode(),
+                ErrorCode.PAYLOAD_TOO_LARGE.getMessage()
+        );
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleHttpRequestMethodNotSupportedException(
+            final HttpRequestMethodNotSupportedException e
+    ) {
+        final String message = String.format("지원하지 않는 HTTP 메서드입니다 (%s)", e.getMethod());
+        log.warn("Method not supported: {}", e.getMethod());
+
+        return toResponse(ErrorCode.METHOD_NOT_ALLOWED.getHttpStatus(), ErrorCode.METHOD_NOT_ALLOWED.getCode(), message);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleHttpMediaTypeNotSupportedException(
+            final HttpMediaTypeNotSupportedException e
+    ) {
+        log.warn("Media type not supported: {}", e.getContentType());
+
+        return toResponse(
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE.getHttpStatus(),
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE.getCode(),
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage()
+        );
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    protected ResponseEntity<ApiResponseTemplate<Void>> handleNoResourceFoundException(
+            final NoResourceFoundException e
+    ) {
+        log.warn("No resource found: {}", e.getResourcePath());
+
+        return toResponse(
+                ErrorCode.NOT_FOUND.getHttpStatus(),
+                ErrorCode.NOT_FOUND.getCode(),
+                ErrorCode.NOT_FOUND.getMessage()
+        );
     }
 
     @ExceptionHandler(Exception.class)
@@ -107,7 +207,10 @@ public class GlobalExceptionHandler {
     private static HttpStatus getHttpStatusOrDefault(final ErrorCode errorCode) {
         try {
             final HttpStatus s = errorCode.getHttpStatus();
-            return (s != null) ? s : HttpStatus.BAD_REQUEST;
+            if (s == null) {
+                return HttpStatus.BAD_REQUEST;
+            }
+            return s;
         } catch (Exception ignore) {
             return HttpStatus.BAD_REQUEST;
         }
@@ -121,7 +224,10 @@ public class GlobalExceptionHandler {
         while (end > 0 && s.charAt(end - 1) == '.') {
             end--;
         }
-        return (end == s.length()) ? s : s.substring(0, end);
+        if (end == s.length()) {
+            return s;
+        }
+        return s.substring(0, end);
     }
 
     private void doBusinessLog(final RuntimeException runtimeException, final HttpServletRequest request) {
@@ -148,7 +254,10 @@ public class GlobalExceptionHandler {
     }
 
     private static String nullSafe(final String primary, final String fallback) {
-        return (primary == null || primary.isBlank()) ? fallback : primary;
+        if (primary == null || primary.isBlank()) {
+            return fallback;
+        }
+        return primary;
     }
 
     private String toStackTraceLog(final Exception exception) {

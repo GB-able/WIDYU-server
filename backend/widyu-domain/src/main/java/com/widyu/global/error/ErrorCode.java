@@ -41,29 +41,29 @@ public enum ErrorCode {
     // 문자 인증
     SMS_VERIFICATION_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "SMS_4040", "문자 인증 코드가 존재하지 않습니다."),
     SMS_VERIFICATION_CODE_MISMATCH(HttpStatus.BAD_REQUEST, "SMS_4000", "문자 인증 코드가 일치하지 않습니다."),
-    SMS_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "SMS_5000", "SMS 전송에 실패했습니다."),
+    SMS_SEND_FAILED(HttpStatus.BAD_GATEWAY, "SMS_5000", "SMS 전송에 실패했습니다."),
     INVALID_PHONE_NUMBER(HttpStatus.BAD_REQUEST, "SMS_4001", "유효하지 않은 전화번호 형식입니다."),
     PHONE_NUMBER_REQUIRED(HttpStatus.BAD_REQUEST, "SMS_4002", "전화번호는 필수입니다."),
 
     // 네이버
-    NAVER_COMMUNICATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "NAVER_5000", "네이버 통신에 실패하였습니다."),
+    NAVER_COMMUNICATION_ERROR(HttpStatus.BAD_GATEWAY, "NAVER_5000", "네이버 통신에 실패하였습니다."),
     NAVER_TOKEN_IS_BLANK(HttpStatus.BAD_REQUEST, "NAVER_4000", "네이버 토큰이 비어 있습니다."),
-    NAVER_WITHDRAW_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "NAVER_5001", "네이버 계정 탈퇴에 실패하였습니다."),
+    NAVER_WITHDRAW_ERROR(HttpStatus.BAD_GATEWAY, "NAVER_5001", "네이버 계정 탈퇴에 실패하였습니다."),
 
     // 카카오
-    KAKAO_COMMUNICATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "KAKAO_5000", "카카오 통신에 실패하였습니다."),
+    KAKAO_COMMUNICATION_ERROR(HttpStatus.BAD_GATEWAY, "KAKAO_5000", "카카오 통신에 실패하였습니다."),
     KAKAO_TOKEN_IS_BLANK(HttpStatus.BAD_REQUEST, "KAKAO_4000", "카카오 토큰이 비어 있습니다."),
-    KAKAO_WITHDRAW_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "KAKAO_5001", "카카오 계정 탈퇴에 실패하였습니다."),
+    KAKAO_WITHDRAW_ERROR(HttpStatus.BAD_GATEWAY, "KAKAO_5001", "카카오 계정 탈퇴에 실패하였습니다."),
 
     // 애플
-    APPLE_COMMUNICATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5000", "애플 통신에 실패하였습니다."),
+    APPLE_COMMUNICATION_ERROR(HttpStatus.BAD_GATEWAY, "APPLE_5000", "애플 통신에 실패하였습니다."),
     APPLE_AUTHORIZATION_CODE_IS_BLANK(HttpStatus.BAD_REQUEST, "APPLE_4000", "애플 인증 코드가 비어 있습니다."),
-    APPLE_TOKEN_EXCHANGE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5001", "애플 토큰 교환에 실패하였습니다."),
-    APPLE_TOKEN_RESPONSE_INVALID(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5002", "애플 토큰 응답이 유효하지 않습니다."),
-    APPLE_ID_TOKEN_INVALID(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5003", "애플 ID 토큰이 유효하지 않습니다."),
-    APPLE_SIGNATURE_VERIFICATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5004", "애플 ID 토큰 서명 검증에 실패하였습니다."),
+    APPLE_TOKEN_EXCHANGE_FAILED(HttpStatus.BAD_GATEWAY, "APPLE_5001", "애플 토큰 교환에 실패하였습니다."),
+    APPLE_TOKEN_RESPONSE_INVALID(HttpStatus.BAD_GATEWAY, "APPLE_5002", "애플 토큰 응답이 유효하지 않습니다."),
+    APPLE_ID_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "APPLE_5003", "애플 ID 토큰이 유효하지 않습니다."),
+    APPLE_SIGNATURE_VERIFICATION_FAILED(HttpStatus.UNAUTHORIZED, "APPLE_5004", "애플 ID 토큰 서명 검증에 실패하였습니다."),
     APPLE_PRIVATE_KEY_PARSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5005", "애플 비밀 키 파싱에 실패하였습니다."),
-    APPLE_WITHDRAW_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5006", "애플 계정 탈퇴에 실패하였습니다."),
+    APPLE_WITHDRAW_ERROR(HttpStatus.BAD_GATEWAY, "APPLE_5006", "애플 계정 탈퇴에 실패하였습니다."),
 
     // 회원 관련
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4041", "회원을 찾을 수 없습니다."),
@@ -115,6 +115,9 @@ public enum ErrorCode {
 
     // 잘못된 요청
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "REQ_4000", "잘못된 요청입니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "REQ_4050", "지원하지 않는 HTTP 메서드입니다."),
+    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "REQ_4130", "요청 크기가 허용 범위를 초과했습니다."),
+    UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REQ_4150", "지원하지 않는 미디어 타입입니다."),
 
     // 서버 오류
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "SRV_5000", "서버 내부 오류가 발생했습니다."),
