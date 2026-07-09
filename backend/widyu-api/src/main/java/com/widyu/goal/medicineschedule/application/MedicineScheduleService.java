@@ -53,7 +53,7 @@ public class MedicineScheduleService {
         Member targetMember = getMember(memberId);
 
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(targetMember, Status.ACTIVE, date);
 
         if (schedules.isEmpty()) {
             return MedicineScheduleDailyResponse.of(List.of());
@@ -117,7 +117,7 @@ public class MedicineScheduleService {
         Member targetMember = getMember(memberId);
 
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(targetMember, Status.ACTIVE);
+                .findCurrentByMemberWithDetails(targetMember, Status.ACTIVE);
 
         List<MedicineHomeResponse.ScheduleItem> scheduleItems = schedules.stream()
                 .map(MedicineHomeResponse.ScheduleItem::from)
@@ -185,12 +185,39 @@ public class MedicineScheduleService {
                     "해당 스케줄을 수정할 권한이 없습니다.");
         }
 
+        if (!schedule.isCurrent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "이미 종료된 과거 스케줄은 수정할 수 없습니다. 최신 스케줄을 수정해주세요.");
+        }
+
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
-        schedule.updateAlarmTime(alarmTime);
+        LocalDate today = LocalDate.now();
 
-        schedule.getCategories().clear();
+        if (schedule.startedOn(today)) {
+            // 오늘 생성됐거나 오늘 이미 수정된 버전 → 과거 의존이 없으므로 그대로 수정한다
+            schedule.updateAlarmTime(alarmTime);
+            schedule.clearCategories();
+            addCategories(schedule, request.categories());
+            log.info("약 복용 스케줄 당일 수정: scheduleId={}, memberId={}", scheduleId, targetMember.getId());
+            return;
+        }
 
-        for (UpdateMedicineScheduleRequest.CategoryItem categoryItem : request.categories()) {
+        // 과거부터 유효한 버전 → 어제까지로 마감하고 오늘부터 유효한 새 버전을 만든다 (과거 보존)
+        schedule.closeAsOf(today.minusDays(1));
+
+        MedicineSchedule newSchedule = MedicineSchedule.create(targetMember, alarmTime);
+        addCategories(newSchedule, request.categories());
+        MedicineSchedule savedSchedule = medicineScheduleRepository.save(newSchedule);
+
+        log.info("약 복용 스케줄 수정(새 버전 생성): oldScheduleId={}, newScheduleId={}, memberId={}",
+                scheduleId, savedSchedule.getId(), targetMember.getId());
+    }
+
+    private void addCategories(
+            MedicineSchedule schedule,
+            List<UpdateMedicineScheduleRequest.CategoryItem> categoryItems
+    ) {
+        for (UpdateMedicineScheduleRequest.CategoryItem categoryItem : categoryItems) {
             MedicineCategory category = MedicineCategory.create(categoryItem.name());
             schedule.addCategory(category);
 
@@ -204,8 +231,6 @@ public class MedicineScheduleService {
                 category.addMedicine(detail);
             }
         }
-
-        log.info("약 복용 스케줄 수정: scheduleId={}, memberId={}", scheduleId, targetMember.getId());
     }
 
     @Transactional
@@ -221,8 +246,14 @@ public class MedicineScheduleService {
                     "해당 스케줄을 삭제할 권한이 없습니다.");
         }
 
-        schedule.delete();
-        log.info("약 복용 스케줄 삭제: scheduleId={}, memberId={}", scheduleId, targetMember.getId());
+        if (!schedule.isCurrent()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "이미 종료된 과거 스케줄은 삭제할 수 없습니다.");
+        }
+
+        // 오늘부터 중단하고 과거 날짜에는 그대로 보존한다 (오늘 생성분은 유효 구간이 비어 어디에도 노출되지 않음)
+        schedule.closeAsOf(LocalDate.now().minusDays(1));
+        log.info("약 복용 스케줄 삭제(오늘부터 중단): scheduleId={}, memberId={}", scheduleId, targetMember.getId());
     }
 
     private LocalTime parseAlarmTime(String alarmTimeStr) {
@@ -269,12 +300,14 @@ public class MedicineScheduleService {
 
         Member member = getMember(memberId);
 
+        LocalDate monthStart = month.atDay(1);
+        LocalDate monthEnd = month.atEndOfMonth();
+
+        // 이 달과 겹치는 모든 스케줄 버전 (날짜별 유효 수는 버전 유효 구간으로 계산한다)
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusOrderByAlarmTime(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateRange(member, Status.ACTIVE, monthStart, monthEnd);
 
-        int totalSchedulesPerDay = schedules.size();
-
-        if (totalSchedulesPerDay == 0) {
+        if (schedules.isEmpty()) {
             for (int i = 0; i < daysInMonth; i++) {
                 rates.add(0.0);
             }
@@ -282,9 +315,9 @@ public class MedicineScheduleService {
         }
 
         // 한 달치 MedicationProof를 한 번에 조회
-        LocalDateTime start = month.atDay(1).atStartOfDay();
-        LocalDateTime end = month.atEndOfMonth().atTime(LocalTime.MAX);
-        List<com.widyu.medicine.MedicationProof> proofs = medicationProofRepository
+        LocalDateTime start = monthStart.atStartOfDay();
+        LocalDateTime end = monthEnd.atTime(LocalTime.MAX);
+        List<MedicationProof> proofs = medicationProofRepository
                 .findByMemberIdAndDateRange(member.getId(), start, end);
 
         // 날짜별로 "어떤 스케줄들이 인증됐는지" 집계
@@ -294,14 +327,24 @@ public class MedicineScheduleService {
                         Collectors.mapping(p -> p.getMedicineSchedule().getId(), Collectors.toSet())
                 ));
 
-        // 각 날짜별 달성률 계산
+        // 각 날짜별 달성률 계산 (분모 = 그날 유효했던 스케줄 수)
         for (int day = 1; day <= daysInMonth; day++) {
             LocalDate date = month.atDay(day);
+
+            long totalForDay = schedules.stream()
+                    .filter(schedule -> schedule.isEffectiveOn(date))
+                    .count();
+
+            if (totalForDay == 0) {
+                rates.add(0.0);
+                continue;
+            }
+
             int achievedCount = scheduleIdsByDate
                     .getOrDefault(date, Set.of())
                     .size();
 
-            double rate = (double) achievedCount / totalSchedulesPerDay;
+            double rate = (double) achievedCount / totalForDay;
             rates.add(rate);
         }
 

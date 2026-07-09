@@ -70,9 +70,9 @@ public class MedicineScheduleRewardScheduler {
         long proofCount = medicationProofRepository
                 .countByMemberAndVerifiedAtBetween(member, startOfDay, endOfDay);
 
-        // 전날 기준 활성화된 총 복용 일정 수
+        // 전날 기준 유효했던 총 복용 일정 수 (그날 유효했던 스케줄 버전만 집계)
         long totalSchedules = medicineScheduleRepository
-                .countByMemberAndStatus(member, Status.ACTIVE);
+                .countEffectiveByMemberAndDate(member, Status.ACTIVE, startOfDay.toLocalDate());
 
         if (proofCount == 0) {
             log.debug("복용 인증 기록 없음: memberId={}", member.getId());
