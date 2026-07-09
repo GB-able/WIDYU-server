@@ -63,7 +63,7 @@ class SeniorHomeServiceTest {
         Member senior = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
 
         given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
@@ -91,7 +91,7 @@ class SeniorHomeServiceTest {
         given(proof.getMedicineSchedule()).willReturn(schedule);
 
         given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any()))
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any()))
                 .willReturn(List.of(schedule));
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
                 .willReturn(List.of(proof));
@@ -115,7 +115,7 @@ class SeniorHomeServiceTest {
         Member senior = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
 
         given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
@@ -135,7 +135,7 @@ class SeniorHomeServiceTest {
         Member senior = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
 
         given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
@@ -155,7 +155,7 @@ class SeniorHomeServiceTest {
         Member senior = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
 
         given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(medicineScheduleRepository.findByMemberAndStatusWithDetails(any(), any())).willReturn(List.of());
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());

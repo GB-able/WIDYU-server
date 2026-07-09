@@ -118,7 +118,7 @@ public class GuardianHomeService {
 
     private GuardianHomeCardsResponse.MedicineInfo getMedicineInfo(Member senior, LocalDate today) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(senior, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today);
 
         if (schedules.isEmpty()) {
             return null;

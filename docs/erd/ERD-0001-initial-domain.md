@@ -153,6 +153,8 @@ erDiagram
         Long member_id FK
         LocalTime alarmTime
         Status status
+        LocalDate effectiveFrom
+        LocalDate effectiveTo
     }
 
     MedicineCategory {

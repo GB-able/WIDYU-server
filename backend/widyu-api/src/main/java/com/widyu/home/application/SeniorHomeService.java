@@ -66,7 +66,7 @@ public class SeniorHomeService {
 
     private SeniorHomeCardsResponse.MedicineInfo getMedicineInfo(Member member, LocalDate today) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
 
         if (schedules.isEmpty()) {
             return null;

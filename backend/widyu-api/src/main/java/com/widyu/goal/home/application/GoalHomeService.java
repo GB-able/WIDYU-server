@@ -171,7 +171,7 @@ public class GoalHomeService {
 
     private SeniorGoalHomeResponse.MedicineInfo getSeniorMedicineInfo(Member member, LocalDate today) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
 
         if (schedules.isEmpty()) {
             return null;
@@ -269,11 +269,14 @@ public class GoalHomeService {
 
         // 약 스케줄과 걸음 수 확인
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, date);
 
         Walk walk = walkRepository.findByMemberAndWalkDate(member, date).orElse(null);
 
-        int totalGoals = schedules.size() + (walk != null ? 1 : 0);
+        int totalGoals = schedules.size();
+        if (walk != null) {
+            totalGoals++;
+        }
         if (totalGoals == 0) {
             return DailyGoalStatus.NOT_STARTED; // 목표가 없으면 시작 전
         }
@@ -350,11 +353,14 @@ public class GoalHomeService {
 
         // 약 스케줄과 걸음 수 확인
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, date);
 
         Walk walk = walkRepository.findByMemberAndWalkDate(member, date).orElse(null);
 
-        int totalGoals = schedules.size() + (walk != null ? 1 : 0);
+        int totalGoals = schedules.size();
+        if (walk != null) {
+            totalGoals++;
+        }
         if (totalGoals == 0) {
             return 0.0;
         }
@@ -380,7 +386,7 @@ public class GoalHomeService {
 
     private GuardianGoalHomeResponse.MedicineInfo getGuardianMedicineInfo(Member member, LocalDate today) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByMemberAndStatusWithDetails(member, Status.ACTIVE);
+                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
 
         if (schedules.isEmpty()) {
             return null;
@@ -425,9 +431,10 @@ public class GoalHomeService {
                     ))
                     .toList();
 
-            String proofImageUrl = taken && !proof.getProofImageUrls().isEmpty()
-                    ? proof.getProofImageUrls().get(0)
-                    : null;
+            String proofImageUrl = null;
+            if (taken && !proof.getProofImageUrls().isEmpty()) {
+                proofImageUrl = proof.getProofImageUrls().get(0);
+            }
 
             scheduleItems.add(new GuardianGoalHomeResponse.ScheduleItem(
                     schedule.getId(),

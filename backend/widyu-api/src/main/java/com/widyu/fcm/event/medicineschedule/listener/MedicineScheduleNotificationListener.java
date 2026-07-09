@@ -61,7 +61,7 @@ public class MedicineScheduleNotificationListener {
 
     private void sendNotificationForTime(LocalTime alarmTime, LocalDate date, int attemptNumber) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByAlarmTimeAndStatus(alarmTime, Status.ACTIVE);
+                .findByAlarmTimeAndStatusEffectiveOn(alarmTime, Status.ACTIVE, date);
 
         if (schedules.isEmpty()) {
             return;
@@ -88,7 +88,7 @@ public class MedicineScheduleNotificationListener {
 
     private void sendGuardianAlertOnly(LocalTime alarmTime, LocalDate date) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByAlarmTimeAndStatus(alarmTime, Status.ACTIVE);
+                .findByAlarmTimeAndStatusEffectiveOn(alarmTime, Status.ACTIVE, date);
 
         if (schedules.isEmpty()) {
             return;
@@ -114,9 +114,10 @@ public class MedicineScheduleNotificationListener {
     }
 
     private void sendMedicineNotification(MedicineSchedule schedule, int attemptNumber) {
-        String title = attemptNumber == 1
-                ? "약 복용 시간이에요!"
-                : "약 복용 알림 (" + attemptNumber + "차)";
+        String title = "약 복용 알림 (" + attemptNumber + "차)";
+        if (attemptNumber == 1) {
+            title = "약 복용 시간이에요!";
+        }
         String content = "지금 약을 복용하고 인증해주세요.";
 
         FcmSendDto dto = new FcmSendDto(
