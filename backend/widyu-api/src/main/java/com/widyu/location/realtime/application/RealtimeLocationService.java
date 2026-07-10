@@ -10,6 +10,7 @@ import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.dto.StayInfo;
 import com.widyu.location.realtime.dto.TrackedSeniorResponse;
+import com.widyu.location.realtime.event.SeniorLocationUpdatedEvent;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.FamilyMembership;
@@ -83,6 +84,7 @@ public class RealtimeLocationService {
                 request.longitude()
         );
         seniorLocationRepository.save(location);
+        eventPublisher.publishEvent(new SeniorLocationUpdatedEvent(memberId, request.latitude(), request.longitude()));
 
         // 4. Redis List에 이동 경로 저장 (15분 TTL, memberId 기준)
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;

@@ -59,3 +59,4 @@ ADR 커버리지는 100%를 목표로 하지 않는다. 대신 다음 영역은 
 | [ADR-0004](ADR-0004-media-upload-strategy.md) | 미디어 업로드 전략 — 서버 직접 S3 업로드 + @Async | Accepted | 2026-07-05 |
 | [ADR-0005](ADR-0005-cursor-pagination.md) | 커서 기반 페이징 전략 | Accepted | 2026-07-05 |
 | [ADR-0006](ADR-0006-medicine-search-fallback-fulltext.md) | 약품 검색 전략 — 자체 DB 우선 조회 + 외부 API fallback + FULLTEXT | Accepted | 2026-07-05 |
+| [ADR-0007](ADR-0007-location-event-visit-verification.md) | 실시간 위치 이벤트 기반 방문인증 처리 | Accepted | 2026-07-10 |

@@ -13,7 +13,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -28,6 +27,8 @@ import org.hibernate.annotations.Where;
 @SQLDelete(sql = "UPDATE health_schedule SET status = 'DELETED' WHERE health_schedule_id = ?")
 @Where(clause = "status = 'ACTIVE'")
 public class HealthSchedule extends BaseTimeEntity {
+
+    public static final long COMPLETION_GRACE_MINUTES = 30;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -137,18 +138,33 @@ public class HealthSchedule extends BaseTimeEntity {
         this.progressStatus = ProgressStatus.COMPLETED;
     }
 
+    public boolean canCompleteAt(LocalDateTime now) {
+        LocalDateTime completionStart = scheduledAt.toLocalDate().atStartOfDay();
+        LocalDateTime completionEnd = scheduledAt.plusMinutes(COMPLETION_GRACE_MINUTES);
+
+        if (now.isBefore(completionStart)) {
+            return false;
+        }
+
+        return !now.isAfter(completionEnd);
+    }
+
     public void markIncomplete() {
         this.progressStatus = ProgressStatus.INCOMPLETE;
     }
 
     /**
      * 조회 시점 기준의 진행 상태.
-     * 저장된 상태가 UPCOMING이라도 예정일이 이미 지났다면 INCOMPLETE로 간주한다.
+     * 저장된 상태가 UPCOMING이라도 방문 인증 가능 시간이 지났다면 INCOMPLETE로 간주한다.
      * (자정 배치가 아직 반영하지 못한 지난 일정도 올바르게 표시하기 위함)
      */
     public ProgressStatus getDisplayProgressStatus() {
+        return getDisplayProgressStatus(LocalDateTime.now());
+    }
+
+    public ProgressStatus getDisplayProgressStatus(LocalDateTime now) {
         if (progressStatus == ProgressStatus.UPCOMING
-                && scheduledAt.toLocalDate().isBefore(LocalDate.now())) {
+                && now.isAfter(scheduledAt.plusMinutes(COMPLETION_GRACE_MINUTES))) {
             return ProgressStatus.INCOMPLETE;
         }
         return progressStatus;
