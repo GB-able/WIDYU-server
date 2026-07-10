@@ -57,4 +57,15 @@ class MedicineScheduleTest {
         assertThat(schedule.isEffectiveOn(LocalDate.of(2026, 7, 5))).isTrue();
         assertThat(schedule.isEffectiveOn(LocalDate.of(2026, 7, 6))).isFalse();
     }
+
+    @Test
+    @DisplayName("effectiveFrom이 없는 기존 데이터는 모든 날짜에 유효한 기존 스케줄로 취급한다")
+    void effectiveFrom이_없는_기존_데이터는_기존_스케줄로_취급한다() {
+        // given
+        MedicineSchedule schedule = scheduleEffectiveBetween(null, null);
+
+        // when & then
+        assertThat(schedule.isEffectiveOn(LocalDate.of(2020, 1, 1))).isTrue();
+        assertThat(schedule.startedOn(LocalDate.of(2020, 1, 1))).isFalse();
+    }
 }

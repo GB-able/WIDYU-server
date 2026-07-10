@@ -50,6 +50,11 @@ public class MedicationProofService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        if (!schedule.isEffectiveOn(now.toLocalDate())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "오늘 유효하지 않은 약 복용 스케줄입니다.");
+        }
+
         LocalTime alarmTime = schedule.getAlarmTime();
 
         // 알람 시간 전후 30분 체크
