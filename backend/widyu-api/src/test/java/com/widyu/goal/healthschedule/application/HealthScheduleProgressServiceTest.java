@@ -174,7 +174,7 @@ class HealthScheduleProgressServiceTest {
     void 실시간_위치가_당일_일정장소_반경_안이면_자동_완료한다() {
         // given
         Member senior = seniorMember();
-        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().plusMinutes(30));
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
         given(healthScheduleRepository.findByMemberIdAndStatusAndDate(
                 eq(senior.getId()), eq(ProgressStatus.UPCOMING), beforeDateCaptor.capture(), beforeDateCaptor.capture()))
                 .willReturn(List.of(schedule));
@@ -191,7 +191,7 @@ class HealthScheduleProgressServiceTest {
     void 실시간_위치가_일정장소_반경_밖이면_자동_완료하지_않는다() {
         // given
         Member senior = seniorMember();
-        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().plusMinutes(30));
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
         given(healthScheduleRepository.findByMemberIdAndStatusAndDate(
                 eq(senior.getId()), eq(ProgressStatus.UPCOMING), beforeDateCaptor.capture(), beforeDateCaptor.capture()))
                 .willReturn(List.of(schedule));

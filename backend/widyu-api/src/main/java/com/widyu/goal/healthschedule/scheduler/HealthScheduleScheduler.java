@@ -14,9 +14,9 @@ public class HealthScheduleScheduler {
     private final HealthScheduleProgressService healthScheduleProgressService;
 
     /**
-     * 매분 실행: 방문 인증 가능 시간이 지난 UPCOMING 일정을 INCOMPLETE로 변경
+     * 5분마다 실행: 방문 인증 가능 시간이 지난 UPCOMING 일정을 INCOMPLETE로 변경
      */
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "0 */5 * * * *")
     public void markOverdueSchedules() {
         healthScheduleProgressService.markOverdueSchedulesAsIncomplete();
     }
