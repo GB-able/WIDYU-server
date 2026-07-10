@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -76,10 +77,22 @@ public class HealthSchedule extends BaseTimeEntity {
         this.latitude = latitude;
         this.longitude = longitude;
         this.scheduledAt = scheduledAt;
-        this.progressStatus = progressStatus != null ? progressStatus : ProgressStatus.UPCOMING;
-        this.rewardPoint = rewardPoint != null ? rewardPoint : 100;
-        this.isReward = isReward != null ? isReward : false;
-        this.status = status != null ? status : Status.ACTIVE;
+        this.progressStatus = ProgressStatus.UPCOMING;
+        if (progressStatus != null) {
+            this.progressStatus = progressStatus;
+        }
+        this.rewardPoint = 100;
+        if (rewardPoint != null) {
+            this.rewardPoint = rewardPoint;
+        }
+        this.isReward = false;
+        if (isReward != null) {
+            this.isReward = isReward;
+        }
+        this.status = Status.ACTIVE;
+        if (status != null) {
+            this.status = status;
+        }
     }
 
     public static HealthSchedule create(Member member, String scheduleName, String placeAddress, Double latitude,
@@ -126,5 +139,18 @@ public class HealthSchedule extends BaseTimeEntity {
 
     public void markIncomplete() {
         this.progressStatus = ProgressStatus.INCOMPLETE;
+    }
+
+    /**
+     * 조회 시점 기준의 진행 상태.
+     * 저장된 상태가 UPCOMING이라도 예정일이 이미 지났다면 INCOMPLETE로 간주한다.
+     * (자정 배치가 아직 반영하지 못한 지난 일정도 올바르게 표시하기 위함)
+     */
+    public ProgressStatus getDisplayProgressStatus() {
+        if (progressStatus == ProgressStatus.UPCOMING
+                && scheduledAt.toLocalDate().isBefore(LocalDate.now())) {
+            return ProgressStatus.INCOMPLETE;
+        }
+        return progressStatus;
     }
 }

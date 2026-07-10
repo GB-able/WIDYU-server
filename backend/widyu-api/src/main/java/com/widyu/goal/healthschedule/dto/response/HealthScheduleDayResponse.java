@@ -11,7 +11,7 @@ public record HealthScheduleDayResponse(
     public static HealthScheduleDayResponse from(HealthSchedule healthSchedule) {
         return new HealthScheduleDayResponse(
                 healthSchedule.getScheduledAt().toLocalDate(),
-                healthSchedule.getProgressStatus()
+                healthSchedule.getDisplayProgressStatus()
         );
     }
 }

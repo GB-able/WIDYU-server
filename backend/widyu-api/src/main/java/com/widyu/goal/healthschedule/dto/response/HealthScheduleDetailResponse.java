@@ -21,7 +21,7 @@ public record HealthScheduleDetailResponse(
                 healthSchedule.getPlaceAddress(),
                 healthSchedule.getLatitude(),
                 healthSchedule.getLongitude(),
-                healthSchedule.getProgressStatus()
+                healthSchedule.getDisplayProgressStatus()
         );
     }
 }

@@ -1,6 +1,7 @@
 package com.widyu.goal.addressbookmark.controller.docs;
 
 import com.widyu.goal.addressbookmark.dto.request.AddressBookmarkCreateRequest;
+import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkIdResponse;
 import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
@@ -64,13 +65,15 @@ public interface AddressBookmarkDocs {
                     {
                         "code": "ADR_2001",
                         "message": "주소 즐겨찾기가 생성되었습니다.",
-                        "data": null
+                        "data": {
+                            "addressBookmarkId": 1
+                        }
                     }
                     """
             )
         )
     )
-    ApiResponseTemplate<Void> createAddressBookmark(
+    ApiResponseTemplate<AddressBookmarkIdResponse> createAddressBookmark(
         AddressBookmarkCreateRequest request
     );
 
