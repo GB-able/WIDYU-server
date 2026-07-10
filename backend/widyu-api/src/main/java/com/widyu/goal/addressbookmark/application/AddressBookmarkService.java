@@ -2,6 +2,7 @@ package com.widyu.goal.addressbookmark.application;
 
 import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.goal.addressbookmark.dto.request.AddressBookmarkCreateRequest;
+import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkIdResponse;
 import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkResponse;
 import com.widyu.goal.addressbookmark.repository.AddressBookmarkRepository;
 import com.widyu.global.error.BusinessException;
@@ -31,14 +32,16 @@ public class AddressBookmarkService {
     }
 
     @Transactional
-    public void create(AddressBookmarkCreateRequest request) {
+    public AddressBookmarkIdResponse create(AddressBookmarkCreateRequest request) {
         Member member = memberUtil.getCurrentMember();
 
         if (addressBookmarkRepository.existsByMemberAndRoadAddress(member, request.roadAddress())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 즐겨찾기에 추가된 주소입니다.");
         }
 
-        addressBookmarkRepository.save(request.toEntity(member));
+        AddressBookmark saved = addressBookmarkRepository.save(request.toEntity(member));
+
+        return AddressBookmarkIdResponse.of(saved);
     }
 
     @Transactional

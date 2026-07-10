@@ -3,6 +3,7 @@ package com.widyu.goal.addressbookmark.controller;
 import com.widyu.goal.addressbookmark.application.AddressBookmarkService;
 import com.widyu.goal.addressbookmark.controller.docs.AddressBookmarkDocs;
 import com.widyu.goal.addressbookmark.dto.request.AddressBookmarkCreateRequest;
+import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkIdResponse;
 import com.widyu.goal.addressbookmark.dto.response.AddressBookmarkResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
@@ -24,14 +25,14 @@ public class AddressBookmarkController implements AddressBookmarkDocs {
     private final AddressBookmarkService addressBookmarkService;
 
     @PostMapping
-    public ApiResponseTemplate<Void> createAddressBookmark(
+    public ApiResponseTemplate<AddressBookmarkIdResponse> createAddressBookmark(
         @Valid @RequestBody AddressBookmarkCreateRequest request
     ) {
-        addressBookmarkService.create(request);
+        AddressBookmarkIdResponse data = addressBookmarkService.create(request);
         return ApiResponseTemplate.ok()
             .code("ADR_2001")
             .message("주소 즐겨찾기가 생성되었습니다.")
-            .build();
+            .body(data);
     }
 
     @DeleteMapping("/{addressBookmarkId}")
