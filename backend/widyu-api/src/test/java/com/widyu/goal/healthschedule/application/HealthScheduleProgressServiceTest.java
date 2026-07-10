@@ -72,8 +72,9 @@ class HealthScheduleProgressServiceTest {
         // then
         assertThat(yesterday.getProgressStatus()).isEqualTo(ProgressStatus.INCOMPLETE);
         assertThat(threeDaysAgo.getProgressStatus()).isEqualTo(ProgressStatus.INCOMPLETE);
-        assertThat(beforeDateCaptor.getValue().toLocalTime())
-                .isEqualTo(java.time.LocalTime.MIDNIGHT);
+        // 마감 기준은 완료 허용창(예정 시각 + 30분)이 지난 시점 = now - 30분
+        assertThat(beforeDateCaptor.getValue())
+                .isBeforeOrEqualTo(LocalDateTime.now().minusMinutes(HealthSchedule.COMPLETION_GRACE_MINUTES));
     }
 
     @Test
@@ -98,7 +99,8 @@ class HealthScheduleProgressServiceTest {
         // given
         Long scheduleId = 1L;
         Member senior = seniorMember();
-        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().plusMinutes(30));
+        // 완료 허용창 안(예정 시각 직후)이 되도록 과거 5분으로 고정해 자정 경계에서도 안정적으로 통과시킨다.
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findById(scheduleId)).willReturn(Optional.of(schedule));
 

@@ -74,15 +74,17 @@ public class HealthScheduleProgressService {
     }
 
     /**
-     * 예정일이 지난(오늘 이전) UPCOMING 일정을 모두 INCOMPLETE로 변경.
-     * 배치가 하루 이상 누락되어도 밀린 지난 일정까지 일괄 정리한다.
+     * 완료 허용창(예정 시각 + COMPLETION_GRACE_MINUTES)이 지난 UPCOMING 일정을 INCOMPLETE로 변경.
+     * 표시 상태(getDisplayProgressStatus)와 동일한 경계를 사용해, 아직 인증 가능한 일정을
+     * 자정에 조기 마감하지 않는다. 배치가 하루 이상 누락되어도 밀린 지난 일정까지 일괄 정리한다.
      */
     @Transactional
     public void markOverdueSchedulesAsIncomplete() {
-        LocalDateTime todayStart = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime completionWindowClosedBefore =
+                LocalDateTime.now().minusMinutes(HealthSchedule.COMPLETION_GRACE_MINUTES);
 
         List<HealthSchedule> overdueSchedules = healthScheduleRepository.findByStatusAndScheduledAtBefore(
-                ProgressStatus.UPCOMING, todayStart
+                ProgressStatus.UPCOMING, completionWindowClosedBefore
         );
 
         for (HealthSchedule schedule : overdueSchedules) {
