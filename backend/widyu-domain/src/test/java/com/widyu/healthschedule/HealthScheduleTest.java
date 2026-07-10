@@ -68,4 +68,48 @@ class HealthScheduleTest {
         // when & then
         assertThat(schedule.getDisplayProgressStatus()).isEqualTo(ProgressStatus.INCOMPLETE);
     }
+
+    @Test
+    @DisplayName("방문 인증은 일정 당일 00시부터 허용한다")
+    void 방문_인증은_일정_당일_자정부터_허용한다() {
+        // given
+        LocalDate scheduleDate = LocalDate.of(2026, 7, 10);
+        HealthSchedule schedule = scheduleAt(scheduleDate.atTime(14, 0));
+
+        // when & then
+        assertThat(schedule.canCompleteAt(scheduleDate.atStartOfDay())).isTrue();
+    }
+
+    @Test
+    @DisplayName("방문 인증은 일정 당일 전에는 허용하지 않는다")
+    void 방문_인증은_일정_당일_전에는_허용하지_않는다() {
+        // given
+        LocalDate scheduleDate = LocalDate.of(2026, 7, 10);
+        HealthSchedule schedule = scheduleAt(scheduleDate.atTime(14, 0));
+
+        // when & then
+        assertThat(schedule.canCompleteAt(scheduleDate.minusDays(1).atTime(23, 59))).isFalse();
+    }
+
+    @Test
+    @DisplayName("방문 인증은 일정 시간 30분 후까지 허용한다")
+    void 방문_인증은_일정시간_30분_후까지_허용한다() {
+        // given
+        LocalDateTime scheduledAt = LocalDateTime.of(2026, 7, 10, 14, 0);
+        HealthSchedule schedule = scheduleAt(scheduledAt);
+
+        // when & then
+        assertThat(schedule.canCompleteAt(scheduledAt.plusMinutes(30))).isTrue();
+    }
+
+    @Test
+    @DisplayName("방문 인증은 일정 시간 30분 후를 지나면 허용하지 않는다")
+    void 방문_인증은_일정시간_30분_후를_지나면_허용하지_않는다() {
+        // given
+        LocalDateTime scheduledAt = LocalDateTime.of(2026, 7, 10, 14, 0);
+        HealthSchedule schedule = scheduleAt(scheduledAt);
+
+        // when & then
+        assertThat(schedule.canCompleteAt(scheduledAt.plusMinutes(31))).isFalse();
+    }
 }

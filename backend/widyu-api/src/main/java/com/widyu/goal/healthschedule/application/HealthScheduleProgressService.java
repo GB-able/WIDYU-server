@@ -42,6 +42,12 @@ public class HealthScheduleProgressService {
         // 권한 체크
         validateHealthScheduleAccess(healthSchedule, currentMember);
 
+        if (!healthSchedule.canCompleteAt(LocalDateTime.now())) {
+            throw new BusinessException(
+                    ErrorCode.BAD_REQUEST,
+                    "건강 일정 방문 인증은 당일 00시부터 일정 시간 30분 후까지만 가능합니다.");
+        }
+
         // COMPLETED로 변경
         healthSchedule.complete();
     }

@@ -413,7 +413,11 @@ public interface HealthScheduleDocs {
 
     @Operation(
             summary = "건강 일정 완료 처리",
-            description = "건강 일정의 progressStatus를 COMPLETED로 변경합니다. 시니어는 본인의 일정만, 보호자는 연결된 시니어의 일정만 완료 처리 가능합니다."
+            description = """
+                    건강 일정의 progressStatus를 COMPLETED로 변경합니다.
+                    시니어는 본인의 일정만, 보호자는 연결된 시니어의 일정만 완료 처리 가능합니다.
+                    방문 인증은 일정 당일 00시부터 일정 시간 30분 후까지 가능합니다.
+                    """
     )
     @RequestBody(
             description = "완료 처리할 건강 일정 정보",

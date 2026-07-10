@@ -29,6 +29,8 @@ import org.hibernate.annotations.Where;
 @Where(clause = "status = 'ACTIVE'")
 public class HealthSchedule extends BaseTimeEntity {
 
+    public static final long COMPLETION_GRACE_MINUTES = 30;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "health_schedule_id")
@@ -135,6 +137,17 @@ public class HealthSchedule extends BaseTimeEntity {
 
     public void complete() {
         this.progressStatus = ProgressStatus.COMPLETED;
+    }
+
+    public boolean canCompleteAt(LocalDateTime now) {
+        LocalDateTime completionStart = scheduledAt.toLocalDate().atStartOfDay();
+        LocalDateTime completionEnd = scheduledAt.plusMinutes(COMPLETION_GRACE_MINUTES);
+
+        if (now.isBefore(completionStart)) {
+            return false;
+        }
+
+        return !now.isAfter(completionEnd);
     }
 
     public void markIncomplete() {
