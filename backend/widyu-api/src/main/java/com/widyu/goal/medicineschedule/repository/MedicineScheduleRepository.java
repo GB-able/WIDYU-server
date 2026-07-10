@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -25,7 +26,7 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     @Query("SELECT DISTINCT ms FROM MedicineSchedule ms " +
            "LEFT JOIN FETCH ms.categories c " +
            "WHERE ms.member = :member AND ms.status = :status " +
-           "AND ms.effectiveFrom <= :date " +
+           "AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= :date) " +
            "AND (ms.effectiveTo IS NULL OR ms.effectiveTo >= :date) " +
            "ORDER BY ms.alarmTime ASC")
     List<MedicineSchedule> findEffectiveByMemberAndDateWithDetails(
@@ -48,7 +49,7 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     // [start, end] 기간과 겹치는 모든 스케줄 버전 조회 (월별 통계에서 날짜별 유효 수 계산용)
     @Query("SELECT ms FROM MedicineSchedule ms " +
            "WHERE ms.member = :member AND ms.status = :status " +
-           "AND ms.effectiveFrom <= :end " +
+           "AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= :end) " +
            "AND (ms.effectiveTo IS NULL OR ms.effectiveTo >= :start)")
     List<MedicineSchedule> findEffectiveByMemberAndDateRange(
             @Param("member") Member member,
@@ -61,7 +62,7 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     @Query("SELECT DISTINCT ms FROM MedicineSchedule ms " +
            "LEFT JOIN FETCH ms.member " +
            "WHERE ms.alarmTime = :alarmTime AND ms.status = :status " +
-           "AND ms.effectiveFrom <= :date " +
+           "AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= :date) " +
            "AND (ms.effectiveTo IS NULL OR ms.effectiveTo >= :date)")
     List<MedicineSchedule> findByAlarmTimeAndStatusEffectiveOn(
             @Param("alarmTime") LocalTime alarmTime,
@@ -72,11 +73,19 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     // 특정 날짜에 유효했던 스케줄 개수 (포인트 정산 시 그날 기준 총 일정 수)
     @Query("SELECT COUNT(ms) FROM MedicineSchedule ms " +
            "WHERE ms.member = :member AND ms.status = :status " +
-           "AND ms.effectiveFrom <= :date " +
+           "AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= :date) " +
            "AND (ms.effectiveTo IS NULL OR ms.effectiveTo >= :date)")
     long countEffectiveByMemberAndDate(
             @Param("member") Member member,
             @Param("status") Status status,
             @Param("date") LocalDate date
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE medicine_schedule
+               SET effective_from = CAST(created_at AS DATE)
+             WHERE effective_from IS NULL
+            """, nativeQuery = true)
+    int backfillMissingEffectiveFrom();
 }

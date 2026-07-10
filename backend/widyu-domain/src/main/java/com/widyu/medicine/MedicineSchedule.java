@@ -50,7 +50,7 @@ public class MedicineSchedule extends BaseTimeEntity {
     private Status status = Status.ACTIVE;
 
     // 이 버전이 유효한 시작일 (수정 시 새 버전이 생기고, 과거 버전은 그대로 보존된다)
-    @Column(nullable = false)
+    @Column
     private LocalDate effectiveFrom;
 
     // 유효 종료일. null이면 현재 유효한 최신 버전
@@ -92,7 +92,7 @@ public class MedicineSchedule extends BaseTimeEntity {
     }
 
     public boolean isEffectiveOn(LocalDate date) {
-        if (date.isBefore(effectiveFrom)) {
+        if (date.isBefore(getEffectiveStartDate())) {
             return false;
         }
         if (effectiveTo == null) {
@@ -102,12 +102,22 @@ public class MedicineSchedule extends BaseTimeEntity {
     }
 
     public boolean startedOn(LocalDate date) {
-        return effectiveFrom.equals(date);
+        return getEffectiveStartDate().equals(date);
     }
 
     // 현재 유효한 최신 버전인지 여부 (마감된 과거 버전은 수정·삭제 대상이 아니다)
     public boolean isCurrent() {
         return effectiveTo == null;
+    }
+
+    private LocalDate getEffectiveStartDate() {
+        if (effectiveFrom != null) {
+            return effectiveFrom;
+        }
+        if (getCreatedAt() != null) {
+            return getCreatedAt().toLocalDate();
+        }
+        return LocalDate.MIN;
     }
 
     public Integer getTotalCount() {

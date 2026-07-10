@@ -21,7 +21,7 @@
 
 ### In scope
 - 변경 모듈: widyu-domain(엔티티), widyu-api(medicineschedule, home, fcm 리스너, 스케줄러)
-- `MedicineSchedule`에 `effectiveFrom`(적용 시작일, NOT NULL) / `effectiveTo`(종료일, null=현재 유효) 추가
+- `MedicineSchedule`에 `effectiveFrom`(적용 시작일) / `effectiveTo`(종료일, null=현재 유효) 추가
 - 조회: 날짜 D 기준 `effectiveFrom <= D <= (effectiveTo ?? ∞)`인 버전만 반환
 - 수정: 과거부터 유효한 버전은 어제까지 마감(`effectiveTo = 어제`) + 오늘부터 유효한 새 버전 생성. 당일 생성/수정분은 in-place 수정
 - 삭제: `effectiveTo = 어제`로 마감(오늘부터 중단, 과거 보존)
@@ -48,7 +48,7 @@
 
 | 컬럼 | 타입 | 설명 |
 | --- | --- | --- |
-| `effective_from` | DATE, NOT NULL | 이 버전이 유효한 시작일. 생성 시 오늘 |
+| `effective_from` | DATE | 이 버전이 유효한 시작일. 생성 시 오늘. 기존 데이터는 시작 시 `created_at` 기준으로 보정 |
 | `effective_to` | DATE, NULL | 유효 종료일. null이면 현재 유효한 최신 버전 |
 
 - 도메인 메서드: `isEffectiveOn(date)`, `closeAsOf(date)`, `startedOn(date)`, `clearCategories()`
@@ -86,11 +86,10 @@
 
 ## 8. 영향 범위 / 마이그레이션
 
-**DB 마이그레이션(배포 전 필수)** — `effective_from`이 NOT NULL이라 `ddl-auto: update`만으로는 기존 행이 깨진다.
+**DB 마이그레이션** — 기존 행은 애플리케이션 시작 시 `created_at` 기준으로 `effective_from`을 보정한다. 수동 보정이 필요한 환경에서는 아래 SQL을 사용할 수 있다.
 ```sql
 ALTER TABLE medicine_schedule ADD COLUMN effective_from DATE NULL, ADD COLUMN effective_to DATE NULL;
 UPDATE medicine_schedule SET effective_from = DATE(created_at) WHERE effective_from IS NULL;
-ALTER TABLE medicine_schedule MODIFY COLUMN effective_from DATE NOT NULL;
 ```
 - ERD(`ERD-0001-initial-domain.md`) 동기화 완료.
 - API 계약(경로·필드) 변경 없음. 수정 시 새 버전 id가 생기므로 클라이언트는 수정 후 재조회한다.
@@ -98,7 +97,6 @@ ALTER TABLE medicine_schedule MODIFY COLUMN effective_from DATE NOT NULL;
 ## 9. 미결정 사항 (Open Questions)
 
 - 같은 스케줄을 하루에 여러 번 수정하는 경우 in-place로 처리(현재 정책). 추후 이력 보관 필요 시 재검토.
-- repository JPQL(effectiveFrom/To 필터)에 대한 `@DataJpaTest` 보강은 후속 과제.
 
 ## 10. 참고
 
