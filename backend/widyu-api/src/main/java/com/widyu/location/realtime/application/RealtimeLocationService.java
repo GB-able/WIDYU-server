@@ -3,6 +3,7 @@ package com.widyu.location.realtime.application;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.GeoUtils;
+import com.widyu.goal.healthschedule.application.HealthScheduleProgressService;
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
@@ -49,6 +50,7 @@ public class RealtimeLocationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final HealthScheduleProgressService healthScheduleProgressService;
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
     private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
@@ -83,6 +85,7 @@ public class RealtimeLocationService {
                 request.longitude()
         );
         seniorLocationRepository.save(location);
+        healthScheduleProgressService.completeArrivedSchedules(memberId, request.latitude(), request.longitude());
 
         // 4. Redis List에 이동 경로 저장 (15분 TTL, memberId 기준)
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;

@@ -417,6 +417,7 @@ public interface HealthScheduleDocs {
                     건강 일정의 progressStatus를 COMPLETED로 변경합니다.
                     시니어는 본인의 일정만, 보호자는 연결된 시니어의 일정만 완료 처리 가능합니다.
                     방문 인증은 일정 당일 00시부터 일정 시간 30분 후까지 가능합니다.
+                    클라이언트 좌표를 별도로 받지 않고, 서버에 저장된 최신 시니어 위치가 일정 장소 반경 75m 이내인지 검증합니다.
                     """
     )
     @RequestBody(

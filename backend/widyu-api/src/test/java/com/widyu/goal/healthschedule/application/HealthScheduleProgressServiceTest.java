@@ -11,6 +11,8 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
+import com.widyu.location.SeniorLocation;
+import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.FamilyMembershipRepository;
@@ -33,6 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class HealthScheduleProgressServiceTest {
 
     @Mock private HealthScheduleRepository healthScheduleRepository;
+    @Mock private SeniorLocationRepository seniorLocationRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private MemberUtil memberUtil;
@@ -103,6 +106,8 @@ class HealthScheduleProgressServiceTest {
         HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findById(scheduleId)).willReturn(Optional.of(schedule));
+        given(seniorLocationRepository.findBySeniorId(senior.getId()))
+                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0)));
 
         // when
         healthScheduleProgressService.completeSchedule(scheduleId);
@@ -142,6 +147,59 @@ class HealthScheduleProgressServiceTest {
         assertThatThrownBy(() -> healthScheduleProgressService.completeSchedule(scheduleId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("30분 후");
+        assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.UPCOMING);
+    }
+
+    @Test
+    @DisplayName("최신 위치가 일정 장소 반경 밖이면 방문 인증을 완료 처리하지 않는다")
+    void 최신_위치가_일정장소_반경_밖이면_방문_인증을_완료하지_않는다() {
+        // given
+        Long scheduleId = 1L;
+        Member senior = seniorMember();
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(healthScheduleRepository.findById(scheduleId)).willReturn(Optional.of(schedule));
+        given(seniorLocationRepository.findBySeniorId(senior.getId()))
+                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.0, 127.0)));
+
+        // when & then
+        assertThatThrownBy(() -> healthScheduleProgressService.completeSchedule(scheduleId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("75m");
+        assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.UPCOMING);
+    }
+
+    @Test
+    @DisplayName("실시간 위치가 당일 일정 장소 반경 안에 들어오면 자동 완료 처리한다")
+    void 실시간_위치가_당일_일정장소_반경_안이면_자동_완료한다() {
+        // given
+        Member senior = seniorMember();
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().plusMinutes(30));
+        given(healthScheduleRepository.findByMemberIdAndStatusAndDate(
+                eq(senior.getId()), eq(ProgressStatus.UPCOMING), beforeDateCaptor.capture(), beforeDateCaptor.capture()))
+                .willReturn(List.of(schedule));
+
+        // when
+        healthScheduleProgressService.completeArrivedSchedules(senior.getId(), 37.5, 127.0);
+
+        // then
+        assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("실시간 위치가 일정 장소 반경 밖이면 자동 완료 처리하지 않는다")
+    void 실시간_위치가_일정장소_반경_밖이면_자동_완료하지_않는다() {
+        // given
+        Member senior = seniorMember();
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().plusMinutes(30));
+        given(healthScheduleRepository.findByMemberIdAndStatusAndDate(
+                eq(senior.getId()), eq(ProgressStatus.UPCOMING), beforeDateCaptor.capture(), beforeDateCaptor.capture()))
+                .willReturn(List.of(schedule));
+
+        // when
+        healthScheduleProgressService.completeArrivedSchedules(senior.getId(), 37.0, 127.0);
+
+        // then
         assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.UPCOMING);
     }
 }

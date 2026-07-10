@@ -2,10 +2,13 @@ package com.widyu.goal.healthschedule.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.util.GeoUtils;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.location.SeniorLocation;
+import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
@@ -24,7 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class HealthScheduleProgressService {
 
+    private static final double VISIT_COMPLETION_RADIUS_METERS = 75.0;
+
     private final HealthScheduleRepository healthScheduleRepository;
+    private final SeniorLocationRepository seniorLocationRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final MemberUtil memberUtil;
@@ -48,8 +54,40 @@ public class HealthScheduleProgressService {
                     "건강 일정 방문 인증은 당일 00시부터 일정 시간 30분 후까지만 가능합니다.");
         }
 
+        SeniorLocation currentLocation = seniorLocationRepository.findBySeniorId(healthSchedule.getMember().getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "최근 위치 정보가 없습니다."));
+
+        if (!isArrivedAtSchedule(healthSchedule, currentLocation.getLatitude(), currentLocation.getLongitude())) {
+            throw new BusinessException(
+                    ErrorCode.BAD_REQUEST,
+                    "건강 일정 장소 반경 " + (int) VISIT_COMPLETION_RADIUS_METERS + "m 안에서만 방문 인증할 수 있습니다.");
+        }
+
         // COMPLETED로 변경
         healthSchedule.complete();
+    }
+
+    /**
+     * 실시간 위치가 들어올 때, 당일 방문 인증 가능창 안의 건강 일정에 도착했으면 자동 완료 처리한다.
+     */
+    @Transactional
+    public void completeArrivedSchedules(Long memberId, Double latitude, Double longitude) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startOfDay = now.toLocalDate().atStartOfDay();
+        LocalDateTime startOfNextDay = startOfDay.plusDays(1);
+
+        List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndStatusAndDate(
+                memberId, ProgressStatus.UPCOMING, startOfDay, startOfNextDay);
+
+        for (HealthSchedule schedule : schedules) {
+            if (!schedule.canCompleteAt(now)) {
+                continue;
+            }
+
+            if (isArrivedAtSchedule(schedule, latitude, longitude)) {
+                schedule.complete();
+            }
+        }
     }
 
     private void validateHealthScheduleAccess(HealthSchedule healthSchedule, Member currentMember) {
@@ -71,6 +109,24 @@ public class HealthScheduleProgressService {
                 throw new BusinessException(ErrorCode.FORBIDDEN, "해당 일정에 접근할 권한이 없습니다.");
             }
         }
+    }
+
+    private boolean isArrivedAtSchedule(HealthSchedule schedule, Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return false;
+        }
+
+        if (schedule.getLatitude() == null || schedule.getLongitude() == null) {
+            return false;
+        }
+
+        return GeoUtils.isWithinRadius(
+                latitude,
+                longitude,
+                schedule.getLatitude(),
+                schedule.getLongitude(),
+                VISIT_COMPLETION_RADIUS_METERS
+        );
     }
 
     /**

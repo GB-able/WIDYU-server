@@ -14,10 +14,10 @@ public class HealthScheduleScheduler {
     private final HealthScheduleProgressService healthScheduleProgressService;
 
     /**
-     * 매일 자정에 실행: UPCOMING 상태에서 시간이 지난 일정을 INCOMPLETE로 변경
+     * 매분 실행: 방문 인증 가능 시간이 지난 UPCOMING 일정을 INCOMPLETE로 변경
      */
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 * * * * *")
     public void markOverdueSchedules() {
-            healthScheduleProgressService.markOverdueSchedulesAsIncomplete();
+        healthScheduleProgressService.markOverdueSchedulesAsIncomplete();
     }
 }

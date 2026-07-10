@@ -26,6 +26,14 @@ public interface HealthScheduleRepository extends JpaRepository<HealthSchedule, 
             @Param("startOfNextDay") LocalDateTime startOfNextDay
     );
 
+    @Query("SELECT h FROM HealthSchedule h WHERE h.member.id = :memberId AND h.progressStatus = :status AND h.scheduledAt >= :startOfDay AND h.scheduledAt < :startOfNextDay")
+    List<HealthSchedule> findByMemberIdAndStatusAndDate(
+            @Param("memberId") Long memberId,
+            @Param("status") ProgressStatus status,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("startOfNextDay") LocalDateTime startOfNextDay
+    );
+
     @Query("SELECT h FROM HealthSchedule h WHERE h.member.id = :memberId AND h.scheduledAt >= :startDate AND h.scheduledAt < :endDate ORDER BY h.scheduledAt ASC")
     List<HealthSchedule> findByMemberIdAndWeek(
             @Param("memberId") Long memberId,
