@@ -68,17 +68,15 @@ public class HealthScheduleProgressService {
     }
 
     /**
-     * 어제 하루치 UPCOMING 일정을 INCOMPLETE로 변경
+     * 예정일이 지난(오늘 이전) UPCOMING 일정을 모두 INCOMPLETE로 변경.
+     * 배치가 하루 이상 누락되어도 밀린 지난 일정까지 일괄 정리한다.
      */
     @Transactional
     public void markOverdueSchedulesAsIncomplete() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime todayStart = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
 
-        LocalDateTime yesterdayStart = now.minusDays(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime todayStart = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-
-        List<HealthSchedule> overdueSchedules = healthScheduleRepository.findByStatusAndDateRange(
-                ProgressStatus.UPCOMING, yesterdayStart, todayStart
+        List<HealthSchedule> overdueSchedules = healthScheduleRepository.findByStatusAndScheduledAtBefore(
+                ProgressStatus.UPCOMING, todayStart
         );
 
         for (HealthSchedule schedule : overdueSchedules) {

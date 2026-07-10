@@ -45,4 +45,10 @@ public interface HealthScheduleRepository extends JpaRepository<HealthSchedule, 
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+
+    @Query("SELECT h FROM HealthSchedule h WHERE h.progressStatus = :status AND h.scheduledAt < :beforeDate")
+    List<HealthSchedule> findByStatusAndScheduledAtBefore(
+            @Param("status") ProgressStatus status,
+            @Param("beforeDate") LocalDateTime beforeDate
+    );
 }

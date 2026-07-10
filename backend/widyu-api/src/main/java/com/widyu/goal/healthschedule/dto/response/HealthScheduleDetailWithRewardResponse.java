@@ -23,7 +23,7 @@ public record HealthScheduleDetailWithRewardResponse(
                 healthSchedule.getPlaceAddress(),
                 healthSchedule.getLatitude(),
                 healthSchedule.getLongitude(),
-                healthSchedule.getProgressStatus(),
+                healthSchedule.getDisplayProgressStatus(),
                 healthSchedule.getRewardPoint(),
                 healthSchedule.getIsReward()
         );
