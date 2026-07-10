@@ -52,7 +52,7 @@ public class WalkService {
                 requestedMonth
         );
 
-        return new WalkMonthlyResponse(summary, dailyData);
+        return WalkMonthlyResponse.of(summary, dailyData);
     }
 
     public WalkDetailResponse getWalkDetail(Long memberId) {
@@ -183,10 +183,13 @@ public class WalkService {
         YearMonth previousMonth = requestedMonth.minusMonths(1);
         WalkMonthlyResponse.WalkSummary.MonthStats previous = getMonthStats(member, previousMonth);
 
-        YearMonth targetMonth = requestedMonth.equals(currentMonth) ? currentMonth : requestedMonth;
+        YearMonth targetMonth = requestedMonth;
+        if (requestedMonth.equals(currentMonth)) {
+            targetMonth = currentMonth;
+        }
         WalkMonthlyResponse.WalkSummary.MonthStats current = getMonthStats(member, targetMonth);
 
-        return new WalkMonthlyResponse.WalkSummary(previous, current);
+        return WalkMonthlyResponse.WalkSummary.of(previous, current);
     }
 
     private WalkMonthlyResponse.WalkSummary.MonthStats getMonthStats(Member member, YearMonth month) {
@@ -196,7 +199,7 @@ public class WalkService {
         long achieved = walkRepository.countAchievedGoals(member.getId(), startDate, endDate);
         long total = walkRepository.countTotalRecords(member.getId(), startDate, endDate);
 
-        return new WalkMonthlyResponse.WalkSummary.MonthStats(achieved, total);
+        return WalkMonthlyResponse.WalkSummary.MonthStats.of(achieved, total);
     }
 
     private List<WalkMonthlyResponse.WalkDaily> getDailyDataForMonth(
@@ -219,12 +222,14 @@ public class WalkService {
             defaultWalkGoal = member.getSeniorProfile().getDefaultWalkGoal();
         }
 
+        LocalDate today = LocalDate.now();
+
         List<WalkMonthlyResponse.WalkDaily> dailyData = new ArrayList<>();
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
             Walk walk = walkMap.get(date);
             if (walk != null) {
                 // Walk 기록이 있으면 실제 기록 반환
-                dailyData.add(new WalkMonthlyResponse.WalkDaily(
+                dailyData.add(WalkMonthlyResponse.WalkDaily.of(
                         date.toString(),
                         walk.getGoalSteps(),
                         walk.getActualSteps()
@@ -232,9 +237,15 @@ public class WalkService {
                 continue;
             }
 
+            // 과거 날짜는 기록이 없으면 그날 목표가 없었던 것이므로 채우지 않는다.
+            // (기본 목표를 소급 적용하면 목표 설정 이전의 지난 날짜까지 오염됨)
+            if (date.isBefore(today)) {
+                continue;
+            }
+
             if (defaultWalkGoal != null) {
-                // Walk 기록이 없어도 defaultWalkGoal이 있으면 기본 목표로 반환
-                dailyData.add(new WalkMonthlyResponse.WalkDaily(
+                // 오늘·미래 날짜는 기록이 없어도 defaultWalkGoal이 있으면 기본 목표로 반환
+                dailyData.add(WalkMonthlyResponse.WalkDaily.of(
                         date.toString(),
                         defaultWalkGoal,
                         0
