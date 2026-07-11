@@ -201,7 +201,8 @@ enum PointChargePackage {
 
 **SeniorProfile** 포인트 필드:
 ```
-senior_profile.points (Long)  ← 현재 보유 포인트
+senior_profile.points  (Long)  ← 현재 보유 포인트
+senior_profile.version (Long)  ← 포인트 잔액 동시성 제어용 낙관적 락 버전 (@Version)
 ```
 
 ### DTO (widyu-api)
@@ -332,6 +333,17 @@ POST {spring.payment.base-url}/{paymentKey}/cancel  → cancelPayment()
 - 기존 구현 완료 상태, 스키마 변경 없음
 - `PointChargePackage` enum 변경 시 기존 `payment_order.package_id` 데이터 영향 없음 (문자열로 저장)
 - 새 패키지 추가: enum 값 추가만으로 반영 (DB 마이그레이션 불필요)
+
+### 포인트 잔액 낙관적 락 도입 (2026-07, Issue #390)
+
+- `SeniorProfile`에 `@Version private Long version` 컬럼 추가로 포인트 잔액 lost update·과차감 방지
+- 포인트 증감 진입점(`SeniorProfileService.addPointsToMember`/`deductPointsFromMember`, `WalkService.updateSteps`, `AdminPointGrantService.grant`)에 `@RetryOnPointConflict`로 충돌 시 새 트랜잭션 재시도(최대 3회)
+- `AlbumUnlockService.unlockAlbum`은 트랜잭션 내 동기 FCM 이벤트를 발행하므로 서버 재시도 없이 충돌 시 409(`POINT_CONCURRENT_UPDATE`)로 응답 → 클라이언트 재시도
+- 재시도 소진 시 `ObjectOptimisticLockingFailureException` → GlobalExceptionHandler가 409(`POINT_CONCURRENT_UPDATE`) 응답
+- **운영 DB 마이그레이션 필요** (`ddl-auto: update`는 기존 행에 NOT NULL 컬럼 backfill을 보장하지 않음):
+  ```sql
+  ALTER TABLE senior_profile ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+  ```
 
 ## 9. 미결정 사항 (Open Questions)
 

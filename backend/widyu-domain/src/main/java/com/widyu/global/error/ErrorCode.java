@@ -105,6 +105,9 @@ public enum ErrorCode {
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),
 
+    // 포인트 관련
+    POINT_CONCURRENT_UPDATE(HttpStatus.CONFLICT, "POINT_4090", "포인트 처리가 동시에 요청되었습니다. 잠시 후 다시 시도해주세요."),
+
     // 파일 업로드 관련
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_5000", "파일 업로드에 실패했습니다."),
     FILE_IS_EMPTY(HttpStatus.BAD_REQUEST, "FILE_4000", "파일이 비어있습니다."),

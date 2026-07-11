@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -45,6 +46,11 @@ public class SeniorProfile extends BaseTimeEntity {
 
     @Column(nullable = false)
     private Long points = 0L;
+
+    // 포인트 잔액 동시성 제어용 낙관적 락 버전
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @Column(name = "default_walk_goal")
     private Integer defaultWalkGoal;
