@@ -193,6 +193,9 @@ public class AlbumFileService {
         } catch (Exception e) {
             cleanupUploadedFiles(mediaUrls);
             cleanupUploadedFiles(thumbnailUrls);
+            if (e instanceof BusinessException be) {
+                throw be;
+            }
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, e.getMessage());
         }
     }

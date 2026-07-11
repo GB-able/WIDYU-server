@@ -40,6 +40,9 @@ public class HeartRateService {
 
     @Transactional
     public HeartRateStatusResponse processHeartRates(Long memberId, HeartRateSendRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
         List<Integer> heartRateValues = request.heartRates().stream()
                 .map(HeartRateMeasurement::heartRate)
                 .toList();
@@ -59,9 +62,6 @@ public class HeartRateService {
                 latestMeasurement.measuredAt()
         );
         heartRateResultRepository.save(result);
-
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
         List<HeartRateEvent> events = request.heartRates().stream()
                 .map(m -> HeartRateEvent.of(member, m.heartRate(), m.measuredAt(), status))

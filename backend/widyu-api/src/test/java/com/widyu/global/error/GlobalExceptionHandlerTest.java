@@ -126,6 +126,24 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("파일 검증 BusinessException은 400과 명시적 메시지를 반환한다")
+    void 파일_검증_비즈니스_예외는_400과_메시지를_반환한다() throws Exception {
+        mockMvc.perform(get("/test/business/invalid-file-type"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_FILE_TYPE.getCode()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.INVALID_FILE_TYPE.getMessage()));
+    }
+
+    @Test
+    @DisplayName("상세 메시지가 있는 BusinessException은 응답 메시지에 상세 내용을 포함한다")
+    void 상세_메시지_비즈니스_예외는_응답에_상세_내용을_포함한다() throws Exception {
+        mockMvc.perform(get("/test/business/file-too-large"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FILE_TOO_LARGE.getCode()))
+                .andExpect(jsonPath("$.message").value("파일 크기가 너무 큽니다. - 사진은 최대 10MB까지 업로드 가능합니다."));
+    }
+
+    @Test
     @DisplayName("업로드 파일 크기를 초과하면 413을 반환한다")
     void 파일_크기_초과() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
@@ -176,6 +194,16 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/business/naver")
         void naver() {
             throw new BusinessException(ErrorCode.NAVER_COMMUNICATION_ERROR);
+        }
+
+        @GetMapping("/test/business/invalid-file-type")
+        void invalidFileType() {
+            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+        }
+
+        @GetMapping("/test/business/file-too-large")
+        void fileTooLarge() {
+            throw new BusinessException(ErrorCode.FILE_TOO_LARGE, "사진은 최대 10MB까지 업로드 가능합니다.");
         }
     }
 

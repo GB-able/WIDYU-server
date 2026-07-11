@@ -54,9 +54,15 @@ public class JwtTokenProvider {
 
     public AccessTokenDto retrieveAccessToken(String accessTokenValue) {
         try {
-            return jwtUtil.parseAccessToken(accessTokenValue);
+            AccessTokenDto accessTokenDto = jwtUtil.parseAccessToken(accessTokenValue);
+            if (accessTokenDto == null) {
+                throw new BusinessException(ErrorCode.INVALID_ACCESS_TOKEN);
+            }
+            return accessTokenDto;
         } catch (ExpiredJwtException e) {
             throw new BusinessException(ErrorCode.EXPIRED_ACCESS_TOKEN);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_ACCESS_TOKEN);
         }
@@ -81,9 +87,15 @@ public class JwtTokenProvider {
 
     public SocialTemporaryTokenDto retrieveSocialTemporaryToken(String socialTemporaryTokenValue) {
         try {
-            return jwtUtil.parseSocialTemporaryToken(socialTemporaryTokenValue);
+            SocialTemporaryTokenDto socialTemporaryTokenDto = jwtUtil.parseSocialTemporaryToken(socialTemporaryTokenValue);
+            if (socialTemporaryTokenDto == null) {
+                throw new BusinessException(ErrorCode.INVALID_TEMPORARY_TOKEN);
+            }
+            return socialTemporaryTokenDto;
         } catch (ExpiredJwtException e) {
             throw new BusinessException(ErrorCode.TEMPORARY_TOKEN_EXPIRED);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("Social Temporary Token 파싱 실패: {}", e.getMessage());
             throw new BusinessException(ErrorCode.INVALID_TEMPORARY_TOKEN);
