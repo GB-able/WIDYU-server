@@ -1,0 +1,91 @@
+package com.widyu.member.application;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
+
+import com.widyu.album.repository.AlbumUnlockRepository;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.global.util.MemberUtil;
+import com.widyu.member.Family;
+import com.widyu.member.Member;
+import com.widyu.member.MemberType;
+import com.widyu.member.PointHistory;
+import com.widyu.member.SeniorProfile;
+import com.widyu.member.repository.PointHistoryRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
+import java.time.LocalDate;
+import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("SeniorProfileService 예외 처리 단위 테스트")
+class SeniorProfileServiceTest {
+
+    @Mock private MemberUtil memberUtil;
+    @Mock private AlbumUnlockRepository albumUnlockRepository;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
+    @Mock private PointHistoryRepository pointHistoryRepository;
+
+    @InjectMocks
+    private SeniorProfileService seniorProfileService;
+
+    @Test
+    @DisplayName("보호자가 포인트 조회 시 FORBIDDEN 예외를 던진다")
+    void 보호자가_포인트_조회_시_예외가_발생한다() {
+        // given
+        given(memberUtil.getCurrentMember()).willReturn(member(1L, MemberType.GUARDIAN));
+
+        // when & then
+        assertThatThrownBy(seniorProfileService::getLeftPoints)
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
+                .hasMessageContaining("시니어 회원만 접근할 수 있습니다.");
+    }
+
+    @Test
+    @DisplayName("포인트 적립 대상 시니어 프로필이 없으면 SENIOR_PROFILE_NOT_FOUND 예외를 던진다")
+    void 포인트_적립_대상_프로필이_없으면_예외가_발생한다() {
+        // given
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> seniorProfileService.addPointsToMember(1L, 100L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENIOR_PROFILE_NOT_FOUND)
+                .hasMessageContaining("시니어 프로필을 찾을 수 없습니다.");
+        then(pointHistoryRepository).should(never()).save(any(PointHistory.class));
+    }
+
+    @Test
+    @DisplayName("차감 포인트가 부족하면 BAD_REQUEST 예외를 던지고 이력을 저장하지 않는다")
+    void 차감_포인트가_부족하면_예외가_발생한다() {
+        // given
+        SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
+                member(1L, MemberType.SENIOR), Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
+        ReflectionTestUtils.setField(seniorProfile, "points", 10L);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
+
+        // when & then
+        assertThatThrownBy(() -> seniorProfileService.deductPointsFromMember(1L, 50L, "취소"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST)
+                .hasMessageContaining("결제 취소에 필요한 포인트가 부족합니다.");
+        then(pointHistoryRepository).should(never()).save(any(PointHistory.class));
+    }
+
+    private Member member(Long id, MemberType type) {
+        Member member = Member.createMember(type, type.name(), "01011112222");
+        ReflectionTestUtils.setField(member, "id", id);
+        return member;
+    }
+}
