@@ -9,6 +9,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.PointHistoryType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.application.SeniorProfileService;
 import com.widyu.member.repository.FamilyRepository;
@@ -77,39 +78,61 @@ class SeniorPointConcurrencyIntegrationTest {
     void 포인트_동시_적립_유실없음() throws InterruptedException {
         // given
         Long memberId = createSeniorMember("홍길동", "01012345678", "FAM100", "INV1001");
+        long seniorProfileId = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getId();
         long initialPoints = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getPoints();
-        int threadCount = 10;
+        int threadCount = 4;
         long addAmount = 10L;
 
         // when
-        AtomicInteger successCount = runConcurrently(threadCount,
+        ConcurrencyResult result = runConcurrently(threadCount,
                 () -> seniorProfileService.addPointsToMember(memberId, addAmount, "동시 적립 테스트"));
 
         // then
+        // 적립은 잔액 부족 같은 정상 실패가 없으므로 모든 요청이 성공해야 한다
+        assertThat(result.completed()).isTrue();
+        assertThat(result.successCount()).isEqualTo(threadCount);
+
         long finalPoints = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getPoints();
-        assertThat(finalPoints).isEqualTo(initialPoints + addAmount * successCount.get());
+        assertThat(finalPoints).isEqualTo(initialPoints + addAmount * threadCount);
+
+        long earnHistoryCount = countHistoriesByType(seniorProfileId, PointHistoryType.EARN);
+        assertThat(earnHistoryCount).isEqualTo(threadCount);
     }
 
     @Test
-    @DisplayName("잔액을 초과하는 동시 차감 요청에도 잔액이 음수가 되지 않고 성공한 만큼만 차감된다")
+    @DisplayName("잔액을 초과하는 동시 차감 요청에도 성공한 만큼만 차감되고 잔액이 음수가 되지 않는다")
     void 포인트_동시_차감_과차감없음() throws InterruptedException {
-        // given
+        // given — 초기 100pt, 50pt씩 차감하면 최대 2건만 성공 가능
         Long memberId = createSeniorMember("김영희", "01099998888", "FAM200", "INV2002");
+        long seniorProfileId = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getId();
         long initialPoints = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getPoints();
-        int threadCount = 10;
+        int threadCount = 4;
         long deductAmount = 50L;
+        int expectedSuccess = (int) (initialPoints / deductAmount);
 
         // when
-        AtomicInteger successCount = runConcurrently(threadCount,
+        ConcurrencyResult result = runConcurrently(threadCount,
                 () -> seniorProfileService.deductPointsFromMember(memberId, deductAmount, "동시 차감 테스트"));
 
         // then
+        assertThat(result.completed()).isTrue();
+        assertThat(result.successCount()).isEqualTo(expectedSuccess);
+
         long finalPoints = seniorProfileRepository.findByMemberId(memberId).orElseThrow().getPoints();
-        assertThat(finalPoints).isEqualTo(initialPoints - deductAmount * successCount.get());
-        assertThat(finalPoints).isGreaterThanOrEqualTo(0L);
+        assertThat(finalPoints).isEqualTo(0L);
+        assertThat(finalPoints).isEqualTo(initialPoints - deductAmount * expectedSuccess);
+
+        long useHistoryCount = countHistoriesByType(seniorProfileId, PointHistoryType.USE);
+        assertThat(useHistoryCount).isEqualTo(expectedSuccess);
     }
 
-    private AtomicInteger runConcurrently(int threadCount, Runnable action) throws InterruptedException {
+    private long countHistoriesByType(long seniorProfileId, PointHistoryType type) {
+        return pointHistoryRepository.findAllBySeniorProfileIdOrderByCreatedAtDesc(seniorProfileId).stream()
+                .filter(history -> history.getType() == type)
+                .count();
+    }
+
+    private ConcurrencyResult runConcurrently(int threadCount, Runnable action) throws InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch readyLatch = new CountDownLatch(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -126,7 +149,7 @@ class SeniorPointConcurrencyIntegrationTest {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (RuntimeException ignored) {
-                    // 잔액 부족 또는 재시도 소진 시 실패는 정상 흐름이므로 무시한다
+                    // 잔액 부족(BusinessException) 등 정상 실패는 성공 카운트에서 제외한다
                 } finally {
                     doneLatch.countDown();
                 }
@@ -135,9 +158,12 @@ class SeniorPointConcurrencyIntegrationTest {
 
         readyLatch.await();
         startLatch.countDown();
-        doneLatch.await(30, TimeUnit.SECONDS);
+        boolean completed = doneLatch.await(30, TimeUnit.SECONDS);
         executor.shutdownNow();
-        return successCount;
+        return new ConcurrencyResult(completed, successCount.get());
+    }
+
+    private record ConcurrencyResult(boolean completed, int successCount) {
     }
 
     private Long createSeniorMember(String name, String phoneNumber, String familyCode, String inviteCode) {

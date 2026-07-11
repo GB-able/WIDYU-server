@@ -110,6 +110,9 @@ public class PaymentService {
             paymentRepository.save(payment);
             paymentOrder.markPaid();
             PointChargePackage paymentPackage = resolvePackage(paymentOrder.getPackageId());
+            // 이 메서드는 이미 트랜잭션 안이므로 addPointsToMember의 @RetryOnPointConflict는 여기서는 동작하지 않는다.
+            // 결제 확인은 외부 PG 호출을 재실행하면 안 되므로 서버 재시도 대신, 포인트 @Version 충돌 시
+            // 트랜잭션 전체를 롤백하고 409(POINT_CONCURRENT_UPDATE)로 응답한다. (결제는 orderId/paymentKey로 멱등하여 클라이언트 재시도 안전)
             seniorProfileService.addPointsToMember(
                     currentMember.getId(),
                     (long) paymentPackage.getPointAmount(),
@@ -155,6 +158,8 @@ public class PaymentService {
         );
         payment.addCancellation(paymentCancel);
         payment.cancel(effectiveRequest.cancelAmount(), refundPointAmount, effectiveRequest.cancelReason(), canceledAt);
+        // confirmPayment와 동일: 상위 트랜잭션 안이라 재시도가 동작하지 않으며, PG 취소 재호출을 피하기 위해
+        // 포인트 @Version 충돌 시 롤백 후 409로 응답한다. (취소는 isCanceled 가드로 멱등)
         seniorProfileService.deductPointsFromMember(
                 currentMember.getId(),
                 (long) refundPointAmount,
