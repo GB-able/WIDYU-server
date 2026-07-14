@@ -208,6 +208,8 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/optimistic-lock")
         void optimisticLock() {
             throw new ObjectOptimisticLockingFailureException("SeniorProfile", 1L);
+        }
+        
         @GetMapping("/test/business/invalid-file-type")
         void invalidFileType() {
             throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
