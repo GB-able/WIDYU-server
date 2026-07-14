@@ -19,6 +19,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -156,6 +157,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("포인트 낙관적 락 재시도가 소진되면 409(POINT_CONCURRENT_UPDATE)를 반환한다")
+    void 낙관적_락_충돌_소진() throws Exception {
+        mockMvc.perform(get("/test/optimistic-lock"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.POINT_CONCURRENT_UPDATE.getCode()));
+    }
+
+    @Test
     @DisplayName("존재하지 않는 리소스를 요청하면 404를 반환한다")
     void 존재하지_않는_리소스() {
         GlobalExceptionHandler handler = new GlobalExceptionHandler();
@@ -196,6 +205,11 @@ class GlobalExceptionHandlerTest {
             throw new BusinessException(ErrorCode.NAVER_COMMUNICATION_ERROR);
         }
 
+        @GetMapping("/test/optimistic-lock")
+        void optimisticLock() {
+            throw new ObjectOptimisticLockingFailureException("SeniorProfile", 1L);
+        }
+        
         @GetMapping("/test/business/invalid-file-type")
         void invalidFileType() {
             throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);

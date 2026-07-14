@@ -2,6 +2,7 @@ package com.widyu.admin.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
@@ -21,6 +22,7 @@ public class AdminPointGrantService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final PointHistoryRepository pointHistoryRepository;
 
+    @RetryOnPointConflict
     @Transactional
     public long grant(Long memberId, long amount) {
         Member member = memberRepository.findById(memberId)

@@ -11,6 +11,7 @@ import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,11 +66,13 @@ public class SeniorProfileService {
         return UnlockedAlbumIdsResponse.from(unlockedAlbumIds);
     }
 
+    @RetryOnPointConflict
     @Transactional
     public void addPointsToMember(Long memberId, Long points) {
         addPointsToMember(memberId, points, "포인트 적립");
     }
 
+    @RetryOnPointConflict
     @Transactional
     public void addPointsToMember(Long memberId, Long points, String description) {
         if (points == null || points <= 0) {
@@ -86,6 +89,7 @@ public class SeniorProfileService {
                 memberId, points, seniorProfile.getPoints());
     }
 
+    @RetryOnPointConflict
     @Transactional
     public void deductPointsFromMember(Long memberId, Long points, String description) {
         if (points == null || points <= 0) {

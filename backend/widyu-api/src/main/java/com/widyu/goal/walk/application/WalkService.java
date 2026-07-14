@@ -2,6 +2,7 @@ package com.widyu.goal.walk.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
@@ -132,6 +133,7 @@ public class WalkService {
                 targetMember.getId(), previousDefaultGoal, request.steps());
     }
 
+    @RetryOnPointConflict
     @Transactional
     public UpdateStepsResponse updateSteps(UpdateStepsRequest request) {
         Member currentMember = memberUtil.getCurrentMember();

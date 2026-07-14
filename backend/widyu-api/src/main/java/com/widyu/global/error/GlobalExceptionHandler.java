@@ -15,6 +15,7 @@ import org.slf4j.MarkerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -174,6 +175,20 @@ public class GlobalExceptionHandler {
                 ErrorCode.NOT_FOUND.getHttpStatus(),
                 ErrorCode.NOT_FOUND.getCode(),
                 ErrorCode.NOT_FOUND.getMessage()
+        );
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponseTemplate<Void>> handleOptimisticLockingFailureException(
+            final ObjectOptimisticLockingFailureException e,
+            final HttpServletRequest request
+    ) {
+        doBusinessLog(e, request);
+
+        return toResponse(
+                ErrorCode.POINT_CONCURRENT_UPDATE.getHttpStatus(),
+                ErrorCode.POINT_CONCURRENT_UPDATE.getCode(),
+                ErrorCode.POINT_CONCURRENT_UPDATE.getMessage()
         );
     }
 

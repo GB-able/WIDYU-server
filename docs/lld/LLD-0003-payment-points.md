@@ -201,7 +201,8 @@ enum PointChargePackage {
 
 **SeniorProfile** 포인트 필드:
 ```
-senior_profile.points (Long)  ← 현재 보유 포인트
+senior_profile.points  (Long)  ← 현재 보유 포인트
+senior_profile.version (Long)  ← 포인트 잔액 동시성 제어용 낙관적 락 버전 (@Version)
 ```
 
 ### DTO (widyu-api)
@@ -332,6 +333,22 @@ POST {spring.payment.base-url}/{paymentKey}/cancel  → cancelPayment()
 - 기존 구현 완료 상태, 스키마 변경 없음
 - `PointChargePackage` enum 변경 시 기존 `payment_order.package_id` 데이터 영향 없음 (문자열로 저장)
 - 새 패키지 추가: enum 값 추가만으로 반영 (DB 마이그레이션 불필요)
+
+### 포인트 잔액 낙관적 락 도입 (2026-07, Issue #390)
+
+- `SeniorProfile`에 `@Version private Long version` 컬럼 추가로 포인트 잔액 lost update·과차감 방지
+- `@RetryOnPointConflict`(최대 5회, 50ms→2배·최대 200ms 백오프)로 충돌 시 **새 트랜잭션에서 재시도**
+- **재시도 경계 = 최외곽 트랜잭션.** 낙관적 락 충돌은 커밋(flush) 시점에 발생하므로, 재시도는 자신이 최외곽 트랜잭션 경계가 되는 진입점에만 유효하다. 적용 대상:
+  - `SeniorProfileService.addPointsToMember`/`deductPointsFromMember` — 스케줄러 등 트랜잭션 밖에서 직접 호출될 때
+  - `WalkService.updateSteps`, `AdminPointGrantService.grant`
+- **재시도 미적용 경로(충돌 시 409 응답 → 클라이언트 재시도):**
+  - `AlbumUnlockService.unlockAlbum`: 트랜잭션 내 동기 FCM 이벤트 발행 → 서버 재시도 시 알림 중복 위험
+  - `PaymentService.confirmPayment`/`cancelPayment`: 외부 PG 호출과 포인트 증감을 한 트랜잭션으로 묶음. 상위 트랜잭션 커밋 시점에 충돌이 나 내부 재시도가 동작하지 않으며, PG 호출 재실행·dual-write를 피하기 위해 롤백 후 409로 응답 (결제는 orderId/paymentKey, 취소는 isCanceled 가드로 멱등)
+- 재시도 소진·미적용 경로의 충돌은 `ObjectOptimisticLockingFailureException` → GlobalExceptionHandler가 409(`POINT_CONCURRENT_UPDATE`) 응답
+- **운영 DB 마이그레이션 필요** (`ddl-auto: update`는 기존 행에 NOT NULL 컬럼 backfill을 보장하지 않음):
+  ```sql
+  ALTER TABLE senior_profile ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+  ```
 
 ## 9. 미결정 사항 (Open Questions)
 

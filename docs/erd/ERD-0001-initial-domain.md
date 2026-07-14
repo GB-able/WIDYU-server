@@ -79,6 +79,7 @@ erDiagram
         String inviteCode
         LocalDate birthDate
         Long points
+        Long version
         Integer defaultWalkGoal
     }
 

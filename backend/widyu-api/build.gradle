@@ -33,6 +33,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web-services'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+    // Retry (포인트 잔액 낙관적 락 충돌 재시도)
+    implementation 'org.springframework.retry:spring-retry'
 
     // Security
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
