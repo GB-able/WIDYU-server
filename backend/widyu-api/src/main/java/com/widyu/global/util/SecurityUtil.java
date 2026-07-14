@@ -28,8 +28,10 @@ public class SecurityUtil {
                     .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED))
                     .getAuthority();
 
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
     }
 }

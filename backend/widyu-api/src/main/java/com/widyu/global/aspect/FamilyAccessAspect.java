@@ -87,7 +87,8 @@ public class FamilyAccessAspect {
             }
         }
 
-        throw new IllegalArgumentException(
+        throw new BusinessException(
+                ErrorCode.BAD_REQUEST,
                 String.format("파라미터 '%s'를 찾을 수 없습니다.", paramName)
         );
     }

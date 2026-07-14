@@ -59,6 +59,10 @@ public class NotificationSettingService {
     public NotificationSettingResponse updateNotificationSetting(UpdateNotificationSettingRequest request) {
         Member member = memberUtil.getCurrentMember();
 
+        if (request.group() == null || request.group().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_FCM_CATEGORY);
+        }
+
         NotificationSettingGroup group;
         try {
             group = NotificationSettingGroup.valueOf(request.group());

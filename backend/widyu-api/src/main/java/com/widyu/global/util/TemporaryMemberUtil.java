@@ -34,7 +34,7 @@ public class TemporaryMemberUtil {
         }
 
         // 역할 확인(임시 토큰만 허용)
-        if (dto.memberRole() == null || !(dto.memberRole() == MemberRole.TEMPORARY)) {
+        if (dto == null || dto.memberRole() == null || !(dto.memberRole() == MemberRole.TEMPORARY)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
