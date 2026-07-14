@@ -1,5 +1,6 @@
 package com.widyu.heart.dto.response;
 
+import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import java.time.LocalDateTime;
 
@@ -9,5 +10,9 @@ public record HeartRateEventResponse(
 ) {
     public static HeartRateEventResponse from(HeartRateEvent event) {
         return new HeartRateEventResponse(event.getHeartRate(), event.getMeasuredAt());
+    }
+
+    public static HeartRateEventResponse from(HeartRateEmergency emergency) {
+        return new HeartRateEventResponse(emergency.getHeartRate(), emergency.getMeasuredAt());
     }
 }

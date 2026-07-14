@@ -17,6 +17,8 @@ public interface HeartRateEventRepository extends JpaRepository<HeartRateEvent, 
 
     List<HeartRateEvent> findTop5ByMemberIdOrderByMeasuredAtDesc(Long memberId);
 
+    Optional<HeartRateEvent> findFirstByMemberIdOrderByMeasuredAtDesc(Long memberId);
+
     List<HeartRateEvent> findTop15ByMemberIdOrderByMeasuredAtDesc(Long memberId);
 
     @Query("SELECT MAX(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId")
