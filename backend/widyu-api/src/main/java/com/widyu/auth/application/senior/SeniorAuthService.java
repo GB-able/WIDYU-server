@@ -52,6 +52,7 @@ public class SeniorAuthService {
     @Transactional
     public void seniorSignUpBulk(List<SeniorSignUpRequest> requests) {
         Member guardian = memberUtil.getCurrentMember();
+        validateIsGuardian(guardian);
 
         validateRequestsNotEmpty(requests);
 
@@ -99,6 +100,12 @@ public class SeniorAuthService {
     private void validateRequestsNotEmpty(List<SeniorSignUpRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new BusinessException(ErrorCode.SENIOR_SIGNUP_REQUEST_EMPTY);
+        }
+    }
+
+    private void validateIsGuardian(Member member) {
+        if (member.getType() != MemberType.GUARDIAN) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 

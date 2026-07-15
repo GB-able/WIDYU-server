@@ -39,7 +39,7 @@
 | ARCH-006 | Controller 외부 API 직접 호출 예외 | Medium | 분석 중 | auth | 검토 예정 | Naver 테스트 연동 계층 정리 |
 | ARCH-007 | 아키텍처 경계 자동 검증 부재 | Low | 작업 예정 | 전체 | TEST-005 | 아키텍처 경계 테스트 |
 | ARCH-008 | Refresh Token 회전 검증 누락 | Critical | 완료 | auth | TEST-001 | Refresh Token rotation 검증 수정 |
-| ARCH-009 | Senior 가입 행위자 타입 검증 누락 | High | 작업 예정 | auth/family | TEST-002 | 시니어 등록 행위자 검증 |
+| ARCH-009 | Senior 가입 행위자 타입 검증 누락 | High | 완료 | auth/family | TEST-002 | 시니어 등록 행위자 검증 |
 | ARCH-010 | 탈퇴 후 FamilyMembership·leader 상태 잔존 | High | 개선안 제안 | member/family/auth | TEST-003 | 탈퇴-가족 구성원 생명주기 정책 |
 | ARCH-011 | 가족 접근 정책의 AOP·Service 분산 | High | 작업 예정 | member/family/global | TEST-004 | 가족 접근 정책 단일화 |
 | ARCH-012 | 가입 트랜잭션 내부 외부 지오코딩 호출 | Medium | 개선안 제안 | auth/location | TEST-006 | 시니어 가입 지오코딩 경계 |
@@ -638,7 +638,7 @@
 
 ### ARCH-009 Senior 가입 행위자 타입 검증 누락
 
-- **상태:** 작업 예정
+- **상태:** 완료 (2026-07-15, 브랜치 fix/#397, 이슈 #397)
 - **심각도:** High
 - **관련 모듈:** `widyu-api`
 - **관련 패키지 및 파일:** [SeniorAuthService.java](../../backend/widyu-api/src/main/java/com/widyu/auth/application/senior/SeniorAuthService.java), [SecurityConfig.java](../../backend/widyu-api/src/main/java/com/widyu/global/config/SecurityConfig.java)
@@ -652,8 +652,8 @@
 - **예상 영향 범위:** senior 가입 API, Family 초기 생성.
 - **추천 PR 단위:** `시니어 등록 행위자 검증`.
 - **관련 ADR·LLD:** ADR-0002.
-- **결정 이력:** 2026-07-15 리뷰에서 확인.
-- **추가 확인 사항:** admin의 등록 허용 여부는 별도 정책 확인 필요.
+- **결정 이력:** 2026-07-15 리뷰에서 확인. 2026-07-15 구현 완료 — `SeniorAuthService.validateIsGuardian()`이 `seniorSignUpBulk()` 진입 직후 `member.getType() != MemberType.GUARDIAN`이면 `BusinessException(ErrorCode.FORBIDDEN)`으로 거부한다. 설계: [ARCH-009 구현 설계](implementation-plans/ARCH-009-senior-actor-type-guard.md).
+- **추가 확인 사항:** admin의 등록 허용 여부는 별도 정책 확인 필요. 현재는 GUARDIAN만 허용.
 
 ### ARCH-010 탈퇴 후 FamilyMembership·leader 상태 잔존
 
@@ -851,7 +851,7 @@
 | ID | 테스트 대상 | 보호할 동작 | 테스트 유형 | 우선순위 | 상태 | 이후 가능한 리팩터링 |
 | -- | ------ | ------ | ------ | ---- | -- | ----------- |
 | TEST-001 | Refresh Token 재발급 | 최신 토큰만 유효, 재발급 저장 1회 | Redis 통합 테스트 | P0 | 완료 | Refresh Token rotation 단순화 |
-| TEST-002 | SeniorAuthService | guardian만 Family·Senior 등록 가능 | Service 단위 테스트 | P0 | 작업 예정 | 가입 권한 정책 명시 |
+| TEST-002 | SeniorAuthService | guardian만 Family·Senior 등록 가능 | Service 단위 테스트 | P0 | 완료 | 가입 권한 정책 명시 |
 | TEST-003 | MemberWithdrawService + Membership | 탈퇴 guardian이 유효 leader로 남지 않음 | JPA 통합 테스트 | P0 | 작업 예정 | Membership 생명주기 정리 |
 | TEST-004 | FamilyAccessService/Aspect | AOP와 Service 경로의 권한 판정 일치 | 단위 + Controller 통합 테스트 | P1 | 작업 예정 | 정책 추출·패키지 이동 |
 | TEST-005 | 모듈·계층 규칙 | Entity/Repository/Controller 경계 유지 | 아키텍처 경계 테스트 | P1 | 작업 예정 | 모듈 경계 리팩터링 |
@@ -1002,6 +1002,7 @@ query-read-model     # home/mypage/admin 조합 조회
 - **완료 조건:** guardian 외 요청이 일관된 FORBIDDEN으로 거부됨
 - **롤백 가능성:** 높음
 - **추천 PR:** `fix(auth): restrict senior provisioning to guardians`
+- **상태:** 완료 (2026-07-15). 이슈 #397, 브랜치 fix/#397. 완료 조건 충족 — SENIOR 타입 거부(FORBIDDEN)와 GUARDIAN 정상 흐름을 단위 테스트로 검증. 독립 리뷰 APPROVE.
 
 - **작업 ID:** TASK-007
 - **작업:** ParentLocation CUD 가족 소유권 검증
@@ -1296,7 +1297,7 @@ query-read-model     # home/mypage/admin 조합 조회
 | PR 순서 | PR 제목 | 해결할 이슈 | 선행 테스트 | 주요 대상 | 위험도 | 상태 |
 | ----- | ----- | ------ | ------ | ----- | --- | -- |
 | 1 | `fix(auth): validate rotated refresh token value` | ARCH-008 | TEST-001 | auth/global security | 높음 | 리뷰 완료 (구현·독립 리뷰 APPROVE, 커밋·PR 생성은 사용자 지시 대기) |
-| 2 | `fix(auth): restrict senior provisioning to guardians` | ARCH-009 | TEST-002 | auth senior signup | 중간 | 예비 후보 |
+| 2 | `fix(auth): restrict senior provisioning to guardians` | ARCH-009 | TEST-002 | auth senior signup | 중간 | 리뷰 완료 (구현·독립 리뷰 APPROVE, 커밋·PR 생성은 사용자 지시 대기) |
 | 3 | `refactor(member): centralize family access policy` | ARCH-004, ARCH-011 | TEST-004, TEST-005 | member/global/AOP | 중간 | 예비 후보 |
 | 4 | `refactor(member): define membership withdrawal lifecycle` | ARCH-010 | TEST-003, TEST-007 | member/auth withdrawal | 높음 | 예비 후보 |
 | 5 | `test(architecture): enforce module and layer boundaries` | ARCH-007 | TEST-005 | test/CI | 낮음 | 예비 후보 |
@@ -1468,6 +1469,17 @@ query-read-model     # home/mypage/admin 조합 조회
 - **관련 이슈:** ARCH-008~011, ARCH-013~014, ARCH-016, ARCH-019~021, ARCH-023~024, ARCH-026, ARCH-028~030, ARCH-032.
 - **ADR 작성 여부:** 아니오. 각 구현 결정이 확정되면 관련 ADR·LLD를 개별 개정한다.
 
+### 2026-07-15 — ARCH-009 Senior 가입 행위자 타입 검증 구현
+
+- **배경:** TEST-002·TASK-002·PR 2(`fix(auth): restrict senior provisioning to guardians`)를 두 번째 리팩터링 사이클로 구현했다. 이슈 #397, 브랜치 fix/#397.
+- **결정 (검증 위치 및 방식):** `SeniorAuthService.seniorSignUpBulk()` 진입 직후 `validateIsGuardian(member)`를 첫 번째 검증으로 배치한다. `member.getType() != MemberType.GUARDIAN`이면 `BusinessException(ErrorCode.FORBIDDEN)`으로 즉시 거부한다.
+- **검증 순서 결정 근거:** MemberType 위반은 요청 내용과 무관한 행위자 권한 문제이므로 empty-request 검증보다 먼저 차단해야 한다. SENIOR 회원의 빈 요청이 `SENIOR_SIGNUP_REQUEST_EMPTY`(400)로 반환되면 오류 의미가 모호해진다.
+- **에러 코드 재사용:** 새 에러 코드 추가 없이 기존 `ErrorCode.FORBIDDEN`(HTTP 403)을 사용한다.
+- **검토한 대안:** SecurityConfig URL 패턴으로 차단 — Spring Security `USER` role이 GUARDIAN·SENIOR를 구분하지 않아 URL 패턴만으로 차단 불가.
+- **관련 테스트:** `SeniorAuthServiceTest`에 `시니어_타입_회원이_시니어_등록을_시도하면_FORBIDDEN_예외가_발생한다` 1개 추가. 기존 10개 테스트 전부 통과.
+- **영향 범위:** `SeniorAuthService.seniorSignUpBulk()` 1개 메서드만 수정. `seniorSignIn()` 및 admin 경로 미변경.
+- **관련 이슈:** ARCH-009. 후속 후보: admin 직접 호출 정책 결정 시 별도 PR.
+
 ### 2026-07-15 — ARCH-008 Refresh Token 회전 검증 구현
 
 - **배경:** TEST-001·TASK-001·PR 1(`fix(auth): validate rotated refresh token value`)을 첫 리팩터링 사이클로 구현했다. 이슈 #395, 브랜치 fix/#395.
@@ -1496,7 +1508,7 @@ query-read-model     # home/mypage/admin 조합 조회
 
 ## 13. 다음 작업
 
-> 2026-07-15 갱신: PR 1(ARCH-008/TEST-001/TASK-001)은 구현·리뷰 완료. 커밋·PR 생성은 사용자 지시 대기. 다음 구현 후보는 권장 PR 목록 순서상 PR 2 `fix(auth): restrict senior provisioning to guardians` (ARCH-009, TEST-002, TASK-002)다. 아래 기존 계획 항목은 유지한다.
+> 2026-07-15 갱신: PR 1(ARCH-008/TEST-001/TASK-001)·PR 2(ARCH-009/TEST-002/TASK-002) 구현·리뷰 완료. 커밋·PR 생성은 사용자 지시 대기. 다음 구현 후보는 권장 PR 목록 순서상 PR 3 `refactor(member): centralize family access policy` (ARCH-004, ARCH-011)다. 아래 기존 계획 항목은 유지한다.
 
 1. **순서:** 1
    **작업:** 최종 통합 리뷰에서 Critical·High 이슈와 P0 테스트를 기준으로 리팩터링 PR 순서를 확정한다.
@@ -1531,3 +1543,4 @@ query-read-model     # home/mypage/admin 조합 조회
 | 2026-07-15 | home/mypage/admin 및 직접 참조 QueryDSL·Repository 리뷰 반영. ARCH-005 근거 갱신, ARCH-032~034, TEST-027~030, TASK-026~029 등록. | home/mypage/admin 상세 리뷰 |
 | 2026-07-15 | Critical·High 이슈 중심 테스트·ADR·LLD 정합성 리뷰 반영. 새 구조 이슈 추가 없이 TASK-030과 PR 30 후보를 등록하고 테스트·문서 게이트를 확정. | 테스트·ADR·LLD 정합성 리뷰 |
 | 2026-07-15 | ARCH-008 구현 완료 (이슈 #395, 브랜치 fix/#395). Refresh Token Redis 저장값 비교 도입, 재발급 이중 저장 제거. TEST-001 단위 9개 + Redis 통합 4개 + 서비스 3개 테스트 보강, 독립 리뷰 APPROVE, 전체 빌드 통과. ARCH-008·TEST-001·TASK-001 완료, PR 1 리뷰 완료로 상태 변경. 설계 문서 implementation-plans/ARCH-008-refresh-token-rotation.md 추가. | PR 1 `fix(auth): validate rotated refresh token value` |
+| 2026-07-15 | ARCH-009 구현 완료 (이슈 #397, 브랜치 fix/#397). SeniorAuthService.validateIsGuardian() 추가로 SENIOR 타입 회원의 시니어 등록 API 호출을 FORBIDDEN으로 차단. TEST-002 단위 테스트 1개 추가, 기존 10개 전부 통과, 독립 리뷰 APPROVE, 전체 빌드 통과. ARCH-009·TEST-002·TASK-002 완료, PR 2 리뷰 완료로 상태 변경. 설계 문서 implementation-plans/ARCH-009-senior-actor-type-guard.md 추가. | PR 2 `fix(auth): restrict senior provisioning to guardians` |
