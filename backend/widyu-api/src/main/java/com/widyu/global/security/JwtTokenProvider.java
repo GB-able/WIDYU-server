@@ -70,7 +70,7 @@ public class JwtTokenProvider {
 
     public RefreshTokenDto retrieveRefreshToken(String refreshTokenValue) {
         RefreshTokenDto refreshTokenDto = parseRefreshTokenSafely(refreshTokenValue);
-        validateRefreshTokenExists(refreshTokenDto.memberId());
+        validateRefreshTokenMatches(refreshTokenDto.memberId(), refreshTokenValue);
         return refreshTokenDto;
     }
 
@@ -149,8 +149,11 @@ public class JwtTokenProvider {
         }
     }
 
-    private void validateRefreshTokenExists(Long memberId) {
-        if (refreshTokenRepository.findById(memberId).isEmpty()) {
+    private void validateRefreshTokenMatches(Long memberId, String refreshTokenValue) {
+        RefreshToken savedRefreshToken = refreshTokenRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
+
+        if (!savedRefreshToken.getToken().equals(refreshTokenValue)) {
             throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
     }

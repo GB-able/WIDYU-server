@@ -29,16 +29,21 @@ public class GuardianTokenService {
 
         RefreshTokenDto refreshTokenDto = jwtTokenProvider.retrieveRefreshToken(request.refreshToken());
 
-        RefreshTokenDto newRefreshToken = jwtTokenProvider.createRefreshTokenDto(refreshTokenDto.memberId());
-        
-        Member member = memberUtil.getMemberByMemberId(newRefreshToken.memberId());
+        Member member = memberUtil.getMemberByMemberId(refreshTokenDto.memberId());
 
         // 토큰 재발급이므로 기존 loginType을 유지하기 위해 회원의 계정 타입 확인
-        String loginType = member.getLocalAccount() != null ? "local" :
-                          member.getSocialAccounts().stream()
-                                  .findFirst()
-                                  .map(account -> account.getProvider())
-                                  .orElse("unknown");
+        String loginType = resolveLoginType(member);
+
         return jwtTokenProvider.generateTokenPair(member.getId(), MemberRole.USER, loginType);
+    }
+
+    private String resolveLoginType(Member member) {
+        if (member.getLocalAccount() != null) {
+            return "local";
+        }
+        return member.getSocialAccounts().stream()
+                .findFirst()
+                .map(account -> account.getProvider())
+                .orElse("unknown");
     }
 }

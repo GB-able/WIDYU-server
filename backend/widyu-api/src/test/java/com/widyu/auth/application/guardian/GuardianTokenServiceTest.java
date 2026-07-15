@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.auth.dto.RefreshTokenDto;
@@ -43,15 +44,14 @@ class GuardianTokenServiceTest {
         String refreshToken = "valid-refresh-token";
         Long memberId = 1L;
         RefreshTokenDto refreshTokenDto = new RefreshTokenDto(memberId, refreshToken, 604800L);
-        RefreshTokenDto newRefreshTokenDto = new RefreshTokenDto(memberId, "new-refresh-token", 604800L);
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", memberId);
         LocalAccount localAccount = LocalAccount.createLocalAccount(member, "test@test.com", "encoded");
         ReflectionTestUtils.setField(member, "localAccount", localAccount);
         ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
         TokenPairResponse expectedTokenPair = TokenPairResponse.of(memberId, "new-access", "new-refresh");
 
         given(jwtTokenProvider.retrieveRefreshToken(refreshToken)).willReturn(refreshTokenDto);
-        given(jwtTokenProvider.createRefreshTokenDto(memberId)).willReturn(newRefreshTokenDto);
         given(memberUtil.getMemberByMemberId(memberId)).willReturn(member);
         given(jwtTokenProvider.generateTokenPair(any(), eq(MemberRole.USER), eq("local")))
                 .willReturn(expectedTokenPair);
@@ -61,6 +61,8 @@ class GuardianTokenServiceTest {
 
         // then
         assertThat(result).isEqualTo(expectedTokenPair);
+        verify(jwtTokenProvider, never()).createRefreshTokenDto(any());
+        verify(jwtTokenProvider).generateTokenPair(memberId, MemberRole.USER, "local");
     }
 
     @Test
@@ -71,13 +73,13 @@ class GuardianTokenServiceTest {
         String refreshToken = "refresh-token";
         RefreshTokenDto dto = new RefreshTokenDto(memberId, refreshToken, 604800L);
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", memberId);
         LocalAccount localAccount = LocalAccount.createLocalAccount(member, "test@test.com", "pw");
         ReflectionTestUtils.setField(member, "localAccount", localAccount);
         ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
         TokenPairResponse tokenPair = TokenPairResponse.of(memberId, "access", "refresh");
 
         given(jwtTokenProvider.retrieveRefreshToken(refreshToken)).willReturn(dto);
-        given(jwtTokenProvider.createRefreshTokenDto(memberId)).willReturn(dto);
         given(memberUtil.getMemberByMemberId(memberId)).willReturn(member);
         given(jwtTokenProvider.generateTokenPair(any(), any(), eq("local"))).willReturn(tokenPair);
 
@@ -85,6 +87,7 @@ class GuardianTokenServiceTest {
         guardianTokenService.reissueTokenPair(new RefreshTokenRequest(refreshToken));
 
         // then
+        verify(jwtTokenProvider, never()).createRefreshTokenDto(any());
         verify(jwtTokenProvider).generateTokenPair(any(), eq(MemberRole.USER), eq("local"));
     }
 
@@ -96,6 +99,7 @@ class GuardianTokenServiceTest {
         String refreshToken = "refresh-token";
         RefreshTokenDto dto = new RefreshTokenDto(memberId, refreshToken, 604800L);
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", memberId);
         ReflectionTestUtils.setField(member, "localAccount", null);
 
         SocialAccount kakaoAccount = SocialAccount.createSocialAccount(
@@ -105,7 +109,6 @@ class GuardianTokenServiceTest {
         TokenPairResponse tokenPair = TokenPairResponse.of(memberId, "access", "refresh");
 
         given(jwtTokenProvider.retrieveRefreshToken(refreshToken)).willReturn(dto);
-        given(jwtTokenProvider.createRefreshTokenDto(memberId)).willReturn(dto);
         given(memberUtil.getMemberByMemberId(memberId)).willReturn(member);
         given(jwtTokenProvider.generateTokenPair(any(), any(), eq("kakao"))).willReturn(tokenPair);
 
@@ -113,6 +116,7 @@ class GuardianTokenServiceTest {
         guardianTokenService.reissueTokenPair(new RefreshTokenRequest(refreshToken));
 
         // then
+        verify(jwtTokenProvider, never()).createRefreshTokenDto(any());
         verify(jwtTokenProvider).generateTokenPair(any(), eq(MemberRole.USER), eq("kakao"));
     }
 }
