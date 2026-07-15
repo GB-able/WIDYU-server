@@ -42,7 +42,8 @@ public interface SeniorAuthDocs {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "시니어 일괄 회원가입 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 (빈 리스트, 유효하지 않은 주소 등)"),
-            @ApiResponse(responseCode = "401", description = "인증 실패")
+            @ApiResponse(responseCode = "401", description = "인증 실패"),
+            @ApiResponse(responseCode = "403", description = "보호자(GUARDIAN) 타입 회원만 시니어 등록 가능")
     })
     ApiResponseTemplate<Void> seniorSignUpBulk(@RequestBody @Valid List<SeniorSignUpRequest> requests);
 

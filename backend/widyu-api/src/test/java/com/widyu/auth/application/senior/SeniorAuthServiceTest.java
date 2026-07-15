@@ -290,4 +290,21 @@ class SeniorAuthServiceTest {
         // then
         verify(memberRepository).saveAll(anyList());
     }
+
+    @Test
+    @DisplayName("시니어 타입 회원이 시니어 등록을 시도하면 FORBIDDEN 예외가 발생한다")
+    void 시니어_타입_회원이_시니어_등록을_시도하면_FORBIDDEN_예외가_발생한다() {
+        // given — SENIOR 타입 Member
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
+        );
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
 }
