@@ -20,6 +20,11 @@ public interface HeartRateDocs {
             description = """
                     회원의 가장 최신 심박수 분석 결과를 조회합니다.
 
+                    **조회 우선순위**:
+                    1. 최신 분석 결과 (Redis, 24시간 TTL)
+                    2. 분석 결과가 만료·부재 시: 가장 최근 심박수 이벤트(DB) 값으로 대체 반환
+                    3. 이벤트도 없으면 `UNKNOWN` 반환
+
                     **접근 권한**:
                     - memberId 미입력 시: 본인의 심박수 조회
                     - memberId 입력 시: 가족 관계가 있는 경우에만 조회 가능

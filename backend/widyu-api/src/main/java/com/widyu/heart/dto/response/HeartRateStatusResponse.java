@@ -1,5 +1,6 @@
 package com.widyu.heart.dto.response;
 
+import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
 import java.time.LocalDateTime;
@@ -16,6 +17,15 @@ public record HeartRateStatusResponse(
                 result.getStatus(),
                 result.getHeartRate(),
                 result.getMeasuredAt()
+        );
+    }
+
+    public static HeartRateStatusResponse from(Long memberId, HeartRateEvent event) {
+        return new HeartRateStatusResponse(
+                memberId,
+                event.getStatus(),
+                event.getHeartRate(),
+                event.getMeasuredAt()
         );
     }
 

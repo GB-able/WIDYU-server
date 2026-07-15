@@ -83,6 +83,8 @@ public class HeartRateService {
     public HeartRateStatusResponse getHeartRateStatus(Long memberId) {
         return heartRateResultRepository.findByMemberId(memberId)
                 .map(HeartRateStatusResponse::from)
+                .or(() -> heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)
+                        .map(event -> HeartRateStatusResponse.from(memberId, event)))
                 .orElse(HeartRateStatusResponse.unknown(memberId));
     }
 
@@ -94,12 +96,13 @@ public class HeartRateService {
         Integer maxHeartRate = heartRateEventRepository.findMaxHeartRateByMemberId(memberId).orElse(null);
         Integer minHeartRate = heartRateEventRepository.findMinHeartRateByMemberId(memberId).orElse(null);
 
-        HeartGraphCurrentResponse current = buildCurrentForInitial(latest, maxHeartRate, minHeartRate);
+        HeartRateEvent latestEvent = getLatestEvent(allEvents);
+        HeartGraphCurrentResponse current = buildCurrentForInitial(latest, latestEvent, maxHeartRate, minHeartRate);
 
         HeartRateEmergency firstEmergency = heartRateEmergencyRepository.findFirstByMemberIdOrderByMeasuredAtAsc(memberId).orElse(null);
         HeartRateEventResponse firstEmergencyResponse = null;
         if (firstEmergency != null) {
-            firstEmergencyResponse = new HeartRateEventResponse(firstEmergency.getHeartRate(), firstEmergency.getMeasuredAt());
+            firstEmergencyResponse = HeartRateEventResponse.from(firstEmergency);
         }
 
         List<HeartRateEventResponse> eventResponses = allEvents.stream()
@@ -118,10 +121,13 @@ public class HeartRateService {
         Integer maxHeartRate = heartRateEventRepository.findMaxHeartRateByMemberId(memberId).orElse(null);
         Integer minHeartRate = heartRateEventRepository.findMinHeartRateByMemberId(memberId).orElse(null);
 
-        HeartGraphCurrentResponse current = buildCurrentForRefresh(latest, maxHeartRate, minHeartRate);
+        List<HeartRateEvent> recentHeartRateEvents = heartRateEventRepository.findTop5ByMemberIdOrderByMeasuredAtDesc(memberId);
+        HeartRateEvent latestEvent = recentHeartRateEvents.stream()
+                .max(Comparator.comparing(HeartRateEvent::getMeasuredAt))
+                .orElse(null);
+        HeartGraphCurrentResponse current = buildCurrentForRefresh(latest, latestEvent, maxHeartRate, minHeartRate);
 
-        List<HeartRateEventResponse> recentEvents = heartRateEventRepository
-                .findTop5ByMemberIdOrderByMeasuredAtDesc(memberId)
+        List<HeartRateEventResponse> recentEvents = recentHeartRateEvents
                 .stream()
                 .sorted(Comparator.comparing(HeartRateEvent::getMeasuredAt))
                 .map(HeartRateEventResponse::from)
@@ -132,19 +138,68 @@ public class HeartRateService {
         return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId));
     }
 
-    private HeartGraphCurrentResponse buildCurrentForInitial(HeartRateResult latest, Integer maxHeartRate, Integer minHeartRate) {
+    private HeartGraphCurrentResponse buildCurrentForInitial(
+            HeartRateResult latest,
+            HeartRateEvent latestEvent,
+            Integer maxHeartRate,
+            Integer minHeartRate
+    ) {
         if (latest == null) {
-            return HeartGraphCurrentResponse.forInitial(null, null, maxHeartRate, minHeartRate, HeartRateStatus.UNKNOWN);
+            return buildCurrentForInitialFromEvent(latestEvent, maxHeartRate, minHeartRate);
         }
         return HeartGraphCurrentResponse.forInitial(
                 latest.getHeartRate(), latest.getMeasuredAt(), maxHeartRate, minHeartRate, latest.getStatus());
     }
 
-    private HeartGraphCurrentResponse buildCurrentForRefresh(HeartRateResult latest, Integer maxHeartRate, Integer minHeartRate) {
+    private HeartGraphCurrentResponse buildCurrentForInitialFromEvent(
+            HeartRateEvent latestEvent,
+            Integer maxHeartRate,
+            Integer minHeartRate
+    ) {
+        if (latestEvent == null) {
+            return HeartGraphCurrentResponse.forInitial(null, null, maxHeartRate, minHeartRate, HeartRateStatus.UNKNOWN);
+        }
+        return HeartGraphCurrentResponse.forInitial(
+                latestEvent.getHeartRate(),
+                latestEvent.getMeasuredAt(),
+                maxHeartRate,
+                minHeartRate,
+                latestEvent.getStatus()
+        );
+    }
+
+    private HeartGraphCurrentResponse buildCurrentForRefresh(
+            HeartRateResult latest,
+            HeartRateEvent latestEvent,
+            Integer maxHeartRate,
+            Integer minHeartRate
+    ) {
         if (latest == null) {
-            return HeartGraphCurrentResponse.forRefresh(null, maxHeartRate, minHeartRate, HeartRateStatus.UNKNOWN);
+            return buildCurrentForRefreshFromEvent(latestEvent, maxHeartRate, minHeartRate);
         }
         return HeartGraphCurrentResponse.forRefresh(latest.getHeartRate(), maxHeartRate, minHeartRate, latest.getStatus());
+    }
+
+    private HeartGraphCurrentResponse buildCurrentForRefreshFromEvent(
+            HeartRateEvent latestEvent,
+            Integer maxHeartRate,
+            Integer minHeartRate
+    ) {
+        if (latestEvent == null) {
+            return HeartGraphCurrentResponse.forRefresh(null, maxHeartRate, minHeartRate, HeartRateStatus.UNKNOWN);
+        }
+        return HeartGraphCurrentResponse.forRefresh(
+                latestEvent.getHeartRate(),
+                maxHeartRate,
+                minHeartRate,
+                latestEvent.getStatus()
+        );
+    }
+
+    private HeartRateEvent getLatestEvent(List<HeartRateEvent> events) {
+        return events.stream()
+                .max(Comparator.comparing(HeartRateEvent::getMeasuredAt))
+                .orElse(null);
     }
 
     private HeartRateStatus resolveStatus(boolean isAbnormal) {
@@ -162,6 +217,6 @@ public class HeartRateService {
                 .stream()
                 .map(EmergencyEventResponse::from)
                 .toList();
-        return new EmergencyHistoryResponse(emergencyCount, totalDuration, emergencyEvents);
+        return EmergencyHistoryResponse.of(emergencyCount, totalDuration, emergencyEvents);
     }
 }
