@@ -12,6 +12,7 @@ import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
@@ -33,6 +34,7 @@ public class ParentLocationService {
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
+    private final FamilyAccessService familyAccessService;
 
     public List<SeniorWithLocationsResponse> findAllByGuardianId() {
         Long guardianId = memberUtil.getCurrentMember().getId();
@@ -65,6 +67,9 @@ public class ParentLocationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
         }
 
+        Long guardianId = memberUtil.getCurrentMember().getId();
+        familyAccessService.verifyFamilyAccess(guardianId, request.memberId());
+
         Member seniorMember = memberRepository.findById(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
 
@@ -77,6 +82,9 @@ public class ParentLocationService {
 
     @Transactional
     public void delete(Long memberId, Long parentLocationId) {
+        Long guardianId = memberUtil.getCurrentMember().getId();
+        familyAccessService.verifyFamilyAccess(guardianId, memberId);
+
         Member seniorMember = memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
 
@@ -95,6 +103,9 @@ public class ParentLocationService {
         if (request.locationType() == LocationType.HOME) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "집 주소는 마이페이지에서만 수정할 수 있습니다.");
         }
+
+        Long guardianId = memberUtil.getCurrentMember().getId();
+        familyAccessService.verifyFamilyAccess(guardianId, request.memberId());
 
         Member seniorMember = memberRepository.findById(request.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 회원입니다."));
