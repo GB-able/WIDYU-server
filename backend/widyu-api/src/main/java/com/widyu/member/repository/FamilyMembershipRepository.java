@@ -11,6 +11,8 @@ public interface FamilyMembershipRepository extends JpaRepository<FamilyMembersh
 
     Optional<FamilyMembership> findByGuardianId(Long guardianId);
 
+    void deleteByGuardianId(Long guardianId);
+
     Optional<FamilyMembership> findByFamilyIdAndGuardianId(Long familyId, Long guardianId);
 
     boolean existsByFamilyIdAndGuardianId(Long familyId, Long guardianId);
