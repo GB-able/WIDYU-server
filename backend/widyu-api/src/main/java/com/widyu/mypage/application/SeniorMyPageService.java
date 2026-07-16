@@ -89,6 +89,10 @@ public class SeniorMyPageService {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
 
+        if (seniorProfile.getFamily() == null) {
+            return EmergencyContactResponse.of(List.of());
+        }
+
         List<FamilyMembership> memberships = familyMembershipRepository
                 .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
 
@@ -99,6 +103,10 @@ public class SeniorMyPageService {
     public void updateRepresentativeContact(Long memberId) {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = member.getSeniorProfile();
+
+        if (seniorProfile.getFamily() == null) {
+            throw new BusinessException(ErrorCode.FAMILY_MEMBERSHIP_NOT_FOUND);
+        }
 
         List<FamilyMembership> memberships = familyMembershipRepository
                 .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());

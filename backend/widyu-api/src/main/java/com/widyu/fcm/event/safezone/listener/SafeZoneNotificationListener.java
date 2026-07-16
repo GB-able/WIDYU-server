@@ -38,6 +38,11 @@ public class SafeZoneNotificationListener {
             return;
         }
 
+        if (seniorProfile.getFamily() == null) {
+            log.debug("안전구역 이탈 알림 스킵: 시니어가 가족에 속해 있지 않습니다. memberId={}", seniorMember.getId());
+            return;
+        }
+
         List<FamilyMembership> memberships = familyMembershipRepository
                 .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
         if (memberships.isEmpty()) {

@@ -74,7 +74,7 @@ erDiagram
     SeniorProfile {
         Long id PK
         Long member_id FK
-        Long family_id FK
+        Long family_id FK "nullable: 마지막 방장 탈퇴 시 Family 삭제 후 null 처리"
         String address
         String inviteCode
         LocalDate birthDate
@@ -280,7 +280,7 @@ erDiagram
     Member ||--o{ AdminAuditLog : "관리자 로그"
 
     Family ||--o{ FamilyMembership : "보호자 구성"
-    Family ||--o{ SeniorProfile : "시니어 구성"
+    Family |o--o{ SeniorProfile : "시니어 구성"
 
     SeniorProfile ||--o{ PointHistory : "포인트 내역"
 
@@ -350,6 +350,12 @@ erDiagram
 ### 위치 (SeniorLocation)
 - Redis `senior_location:{seniorId}` 키로 저장, TTL 5분
 - WebSocket 연결 시 실시간 업데이트, 구독 해제 시 자연 만료
+
+## 스키마 마이그레이션 이력
+
+| 날짜 | 테이블 | 변경 내용 | DDL |
+|------|--------|-----------|-----|
+| 2026-07-16 | `senior_profile` | `family_id` NOT NULL → NULL 허용 (마지막 방장 탈퇴 시 Family 삭제 후 null 처리) | `ALTER TABLE senior_profile MODIFY COLUMN family_id BIGINT NULL;` |
 
 ## 코드 동기화 메모
 

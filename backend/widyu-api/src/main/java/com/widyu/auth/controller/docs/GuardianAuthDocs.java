@@ -700,6 +700,23 @@ public interface GuardianAuthDocs {
             )
     )
     @ApiResponse(
+            responseCode = "400",
+            description = "방장 권한 위임 없이 탈퇴 시도",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            name = "방장 위임 필요",
+                            value = """
+                                    {
+                                      "code": "FAMILY_4001",
+                                      "message": "방장 권한을 다른 구성원에게 위임한 후 탈퇴해주세요.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
             responseCode = "401",
             description = "인증 실패(토큰 만료/없음/권한 오류)",
             content = @Content(
