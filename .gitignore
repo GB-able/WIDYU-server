@@ -51,6 +51,7 @@ src/main/resources/firebase/
 # claude
 .claude/
 apiDocs/
+docs/architecture/
 
 # local artifacts
 dump.rdb
