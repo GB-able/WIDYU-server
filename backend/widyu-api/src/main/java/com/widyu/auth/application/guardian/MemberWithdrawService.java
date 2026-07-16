@@ -7,6 +7,7 @@ import com.widyu.auth.OAuthProvider;
 import com.widyu.auth.repository.RefreshTokenRepository;
 import com.widyu.member.Member;
 import com.widyu.member.SocialAccount;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -23,6 +24,7 @@ public class MemberWithdrawService {
 
     private final MemberRepository memberRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final FamilyMembershipRepository familyMembershipRepository;
     private final SocialLoginStrategyFactory strategyFactory;
     private final MemberUtil memberUtil;
 
@@ -38,13 +40,16 @@ public class MemberWithdrawService {
         // 2. 연동된 모든 소셜 계정 탈퇴
         withdrawAllSocialAccounts(member);
 
-        // 3. 개인정보 마스킹 (GDPR 준수)
+        // 3. FamilyMembership 삭제
+        familyMembershipRepository.deleteByGuardianId(member.getId());
+
+        // 4. 개인정보 마스킹 (GDPR 준수)
         member.maskPersonalInfo();
 
-        // 4. 로컬 계정 삭제
+        // 5. 로컬 계정 삭제
         member.withdraw();
 
-        // 5. 회원 데이터 저장
+        // 6. 회원 데이터 저장
         memberRepository.save(member);
         
         log.info("회원 탈퇴 완료: memberId={}", member.getId());

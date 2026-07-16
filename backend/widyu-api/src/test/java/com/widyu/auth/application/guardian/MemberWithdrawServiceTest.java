@@ -1,5 +1,6 @@
 package com.widyu.auth.application.guardian;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
@@ -14,6 +15,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SocialAccount;
+import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +33,7 @@ class MemberWithdrawServiceTest {
 
     @Mock private MemberRepository memberRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SocialLoginStrategyFactory strategyFactory;
     @Mock private MemberUtil memberUtil;
     @Mock private SocialLoginStrategy kakaoStrategy;
@@ -53,7 +56,39 @@ class MemberWithdrawServiceTest {
 
         // then
         verify(refreshTokenRepository).deleteById(1L);
+        verify(familyMembershipRepository).deleteByGuardianId(1L);
         verify(memberRepository).save(member);
+    }
+
+    @Test
+    @DisplayName("탈퇴 시 해당 guardian의 FamilyMembership이 삭제된다")
+    void 탈퇴_시_FamilyMembership이_삭제된다() {
+        // given
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", 1L);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        given(memberUtil.getCurrentMember()).willReturn(member);
+
+        // when
+        memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
+
+        // then
+        verify(familyMembershipRepository).deleteByGuardianId(1L);
+    }
+
+    @Test
+    @DisplayName("FamilyMembership이 없는 guardian 탈퇴 시 예외 없이 완료된다")
+    void FamilyMembership_없는_guardian_탈퇴_시_예외없이_완료된다() {
+        // given
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", 1L);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        // deleteByGuardianId on a void mock is a no-op when no matching rows exist
+
+        // when & then
+        assertThatCode(() -> memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유")))
+                .doesNotThrowAnyException();
     }
 
     @Test
