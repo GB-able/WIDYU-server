@@ -5,13 +5,17 @@ import com.widyu.auth.application.guardian.oauth.strategy.SocialLoginStrategyFac
 import com.widyu.auth.dto.request.MemberWithdrawRequest;
 import com.widyu.auth.OAuthProvider;
 import com.widyu.auth.repository.RefreshTokenRepository;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SocialAccount;
 import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,14 +29,19 @@ public class MemberWithdrawService {
     private final MemberRepository memberRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
+    private final FamilyRepository familyRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
     private final SocialLoginStrategyFactory strategyFactory;
     private final MemberUtil memberUtil;
 
     @Transactional
     public void withdrawMember(MemberWithdrawRequest request) {
         Member member = memberUtil.getCurrentMember();
-        
+
         log.info("회원 탈퇴 시작: memberId={}, reason={}", member.getId(), request.reason());
+
+        // 외부 side-effect 전 방장 위임 여부 사전 검증
+        validateLeaderCanWithdraw(member.getId());
 
         // 1. 리프레시 토큰 삭제
         refreshTokenRepository.deleteById(member.getId());
@@ -40,8 +49,8 @@ public class MemberWithdrawService {
         // 2. 연동된 모든 소셜 계정 탈퇴
         withdrawAllSocialAccounts(member);
 
-        // 3. FamilyMembership 삭제
-        familyMembershipRepository.deleteByGuardianId(member.getId());
+        // 3. FamilyMembership 처리 (leader 정책 적용)
+        handleFamilyMembershipWithdrawal(member.getId());
 
         // 4. 개인정보 마스킹 (GDPR 준수)
         member.maskPersonalInfo();
@@ -51,8 +60,35 @@ public class MemberWithdrawService {
 
         // 6. 회원 데이터 저장
         memberRepository.save(member);
-        
+
         log.info("회원 탈퇴 완료: memberId={}", member.getId());
+    }
+
+    private void validateLeaderCanWithdraw(Long guardianId) {
+        Optional<FamilyMembership> membershipOpt = familyMembershipRepository.findByGuardianId(guardianId);
+        if (membershipOpt.isEmpty() || !membershipOpt.get().isLeader()) {
+            return;
+        }
+        long memberCount = familyMembershipRepository.countByFamilyId(membershipOpt.get().getFamily().getId());
+        if (memberCount > 1) {
+            throw new BusinessException(ErrorCode.FAMILY_LEADER_MUST_DELEGATE_BEFORE_WITHDRAW);
+        }
+    }
+
+    private void handleFamilyMembershipWithdrawal(Long guardianId) {
+        Optional<FamilyMembership> membershipOpt = familyMembershipRepository.findByGuardianId(guardianId);
+        if (membershipOpt.isEmpty()) {
+            return;
+        }
+        FamilyMembership membership = membershipOpt.get();
+        if (membership.isLeader()) {
+            Long familyId = membership.getFamily().getId();
+            seniorProfileRepository.clearFamilyByFamilyId(familyId);
+            familyMembershipRepository.deleteByGuardianId(guardianId);
+            familyRepository.deleteById(familyId);
+            return;
+        }
+        familyMembershipRepository.deleteByGuardianId(guardianId);
     }
 
     private void withdrawAllSocialAccounts(Member member) {

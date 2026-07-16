@@ -30,6 +30,10 @@ public enum ErrorCode {
     SOCIAL_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(HttpStatus.BAD_REQUEST, "AUTH_4009", "현재 사용자에게 이미 연동된 소셜 계정입니다."),
     SOCIAL_PROVIDER_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4019", "이미 연동된 소셜 로그인 제공자입니다."),
 
+    // 가족 관련
+    FAMILY_LEADER_MUST_DELEGATE_BEFORE_WITHDRAW(HttpStatus.BAD_REQUEST, "FAMILY_4001", "방장 권한을 다른 구성원에게 위임한 후 탈퇴해주세요."),
+    FAMILY_MEMBERSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "FAMILY_4040", "가족 구성원 정보를 찾을 수 없습니다."),
+
     // 부모 인증 관련
     INVITE_CODE_DUPLICATED(HttpStatus.BAD_REQUEST, "PARENT_4001", "이미 존재하는 초대코드입니다."),
     INVITE_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "PARENT_4040", "초대코드를 찾을 수 없습니다."),

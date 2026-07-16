@@ -32,8 +32,8 @@ public class SeniorProfile extends BaseTimeEntity {
     @JoinColumn(name = "member_id", nullable = false, unique = true)
     private Member member;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "family_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "family_id")
     private Family family;
 
     private String address;

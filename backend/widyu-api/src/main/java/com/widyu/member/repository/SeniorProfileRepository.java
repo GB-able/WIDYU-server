@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Long> {
 
@@ -30,6 +31,11 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
     List<SeniorProfile> findAllByFamilyIdWithMember(@Param("familyId") Long familyId);
 
     List<SeniorProfile> findAllByFamilyId(Long familyId);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE SeniorProfile sp SET sp.family = null WHERE sp.family.id = :familyId")
+    void clearFamilyByFamilyId(@Param("familyId") Long familyId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT sp FROM SeniorProfile sp WHERE sp.family.id = :familyId")
