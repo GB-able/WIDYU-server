@@ -2,23 +2,17 @@ package com.widyu.global.aspect;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 
 import com.widyu.global.annotation.ValidateFamilyAccess;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
-import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
-import com.widyu.member.SeniorProfile;
-import com.widyu.member.repository.FamilyMembershipRepository;
-import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.application.FamilyAccessService;
 import java.lang.reflect.Method;
-import java.time.LocalDate;
-import java.util.Optional;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.DisplayName;
@@ -34,8 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class FamilyAccessAspectTest {
 
     @Mock private MemberUtil memberUtil;
-    @Mock private MemberRepository memberRepository;
-    @Mock private FamilyMembershipRepository familyMembershipRepository;
+    @Mock private FamilyAccessService familyAccessService;
 
     @InjectMocks
     private FamilyAccessAspect familyAccessAspect;
@@ -74,7 +67,6 @@ class FamilyAccessAspectTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("보호자만 다른 사용자의 리소스에 접근할 수 있습니다.");
-        then(memberRepository).should(never()).findById(2L);
     }
 
     @Test
@@ -83,7 +75,8 @@ class FamilyAccessAspectTest {
         // given
         Member guardian = member(1L, MemberType.GUARDIAN);
         given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(memberRepository.findById(2L)).willReturn(Optional.empty());
+        willThrow(new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 사용자입니다."))
+                .given(familyAccessService).verifyFamilyAccess(1L, 2L);
 
         Method method = DummyController.class.getDeclaredMethod("withMemberId", Long.class);
 
@@ -100,11 +93,9 @@ class FamilyAccessAspectTest {
     void 가족으로_연결되지_않은_시니어_접근_시_예외가_발생한다() throws Exception {
         // given
         Member guardian = member(1L, MemberType.GUARDIAN);
-        Member senior = member(2L, MemberType.SENIOR);
-        SeniorProfile seniorProfile = seniorProfile(10L, senior);
         given(memberUtil.getCurrentMember()).willReturn(guardian);
-        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
-        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(false);
+        willThrow(new BusinessException(ErrorCode.FORBIDDEN, "가족으로 연결된 시니어만 접근할 수 있습니다."))
+                .given(familyAccessService).verifyFamilyAccess(1L, 2L);
 
         Method method = DummyController.class.getDeclaredMethod("withMemberId", Long.class);
 
@@ -114,7 +105,6 @@ class FamilyAccessAspectTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("가족으로 연결된 시니어만 접근할 수 있습니다.");
-        then(familyMembershipRepository).should().existsByGuardianIdAndSeniorProfileId(1L, seniorProfile.getId());
     }
 
     private JoinPoint joinPoint(Method method, Object... args) {
@@ -131,14 +121,6 @@ class FamilyAccessAspectTest {
         Member member = Member.createMember(type, type.name(), "01011112222");
         ReflectionTestUtils.setField(member, "id", id);
         return member;
-    }
-
-    private SeniorProfile seniorProfile(Long id, Member member) {
-        SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
-                member, Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
-        ReflectionTestUtils.setField(seniorProfile, "id", id);
-        ReflectionTestUtils.setField(member, "seniorProfile", seniorProfile);
-        return seniorProfile;
     }
 
     static class DummyController {
