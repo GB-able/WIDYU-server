@@ -6,8 +6,7 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
-import com.widyu.member.repository.FamilyMembershipRepository;
-import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.application.FamilyAccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
@@ -27,8 +26,7 @@ import java.lang.reflect.Parameter;
 public class FamilyAccessAspect {
 
     private final MemberUtil memberUtil;
-    private final MemberRepository memberRepository;
-    private final FamilyMembershipRepository familyMembershipRepository;
+    private final FamilyAccessService familyAccessService;
 
     @Before("@annotation(validateFamilyAccess)")
     public void validateFamilyAccess(JoinPoint joinPoint, ValidateFamilyAccess validateFamilyAccess) {
@@ -46,29 +44,7 @@ public class FamilyAccessAspect {
                     "보호자만 다른 사용자의 리소스에 접근할 수 있습니다.");
         }
 
-        Member targetMember = memberRepository.findById(targetMemberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST,
-                        "존재하지 않는 사용자입니다."));
-
-        if (targetMember.getType() != MemberType.SENIOR) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "시니어의 리소스만 접근할 수 있습니다.");
-        }
-
-        if (targetMember.getSeniorProfile() == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "시니어 프로필이 없습니다.");
-        }
-
-        boolean isFamily = familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(
-                currentMember.getId(),
-                targetMember.getSeniorProfile().getId()
-        );
-
-        if (!isFamily) {
-            throw new BusinessException(ErrorCode.FORBIDDEN,
-                    "가족으로 연결된 시니어만 접근할 수 있습니다.");
-        }
+        familyAccessService.verifyFamilyAccess(currentMember.getId(), targetMemberId);
 
         log.debug("가족 관계 검증 성공: guardianId={}, seniorId={}",
                 currentMember.getId(), targetMemberId);

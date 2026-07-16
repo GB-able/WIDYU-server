@@ -41,7 +41,7 @@
 | ARCH-008 | Refresh Token 회전 검증 누락 | Critical | 완료 | auth | TEST-001 | Refresh Token rotation 검증 수정 |
 | ARCH-009 | Senior 가입 행위자 타입 검증 누락 | High | 완료 | auth/family | TEST-002 | 시니어 등록 행위자 검증 |
 | ARCH-010 | 탈퇴 후 FamilyMembership·leader 상태 잔존 | High | 개선안 제안 | member/family/auth | TEST-003 | 탈퇴-가족 구성원 생명주기 정책 |
-| ARCH-011 | 가족 접근 정책의 AOP·Service 분산 | High | 작업 예정 | member/family/global | TEST-004 | 가족 접근 정책 단일화 |
+| ARCH-011 | 가족 접근 정책의 AOP·Service 분산 | High | 완료 | member/family/global | TEST-004 | 가족 접근 정책 단일화 |
 | ARCH-012 | 가입 트랜잭션 내부 외부 지오코딩 호출 | Medium | 개선안 제안 | auth/location | TEST-006 | 시니어 가입 지오코딩 경계 |
 | ARCH-013 | ParentLocation 변경의 가족 소유권 검증 누락 | Critical | 작업 예정 | parentlocation/member/family | TEST-009 | 안전구역 CUD 인가 |
 | ARCH-014 | STOMP location·heart topic 구독 인가 부재 | High | 작업 예정 | global/websocket/location/heart | TEST-010 | WebSocket 구독 인가 |
@@ -676,10 +676,10 @@
 
 ### ARCH-011 가족 접근 정책의 AOP·Service 분산
 
-- **상태:** 작업 예정
+- **상태:** 완료 (2026-07-16, 브랜치 refactor/#399, 이슈 #399)
 - **심각도:** High
 - **관련 모듈:** `widyu-api`
-- **관련 패키지 및 파일:** [FamilyAccessAspect.java](../../backend/widyu-api/src/main/java/com/widyu/global/aspect/FamilyAccessAspect.java), [FamilyMembershipRepository.java](../../backend/widyu-api/src/main/java/com/widyu/member/repository/FamilyMembershipRepository.java)
+- **관련 패키지 및 파일:** [FamilyAccessAspect.java](../../backend/widyu-api/src/main/java/com/widyu/global/aspect/FamilyAccessAspect.java), [FamilyAccessService.java](../../backend/widyu-api/src/main/java/com/widyu/member/application/FamilyAccessService.java)
 - **확인된 사실:** Aspect 외에도 home, location, heart Service가 가족 연결 Repository predicate를 직접 호출한다. Aspect는 일부 Controller에만 적용된다.
 - **문제:** 정책 구현과 예외 의미가 여러 진입점에 분산된다.
 - **왜 문제인지:** AOP는 HTTP 적용 방식이지 가족 관계 자체의 유일한 정책 소유자가 될 수 없다.
@@ -690,8 +690,8 @@
 - **예상 영향 범위:** AOP 적용 Controller, home, location, heart.
 - **추천 PR 단위:** `가족 접근 정책 단일화`.
 - **관련 ADR·LLD:** ADR-0002.
-- **결정 이력:** 패키지 이동과 정책 추출은 제안.
-- **추가 확인 사항:** senior->guardian 메시지 정책 등 비대칭 권한을 동일 API에 포함할지 확인 필요.
+- **결정 이력:** 패키지 이동과 정책 추출은 제안. 2026-07-16 구현 완료 — `FamilyAccessService.verifyFamilyAccess()` 추출, `FamilyAccessAspect`는 Repository 직접 의존 제거 후 위임. 설계: [ARCH-011 구현 설계](implementation-plans/ARCH-011-family-access-service-extraction.md).
+- **추가 확인 사항:** senior->guardian 메시지 정책 등 비대칭 권한을 동일 API에 포함할지 확인 필요. home/location/heart의 수동 검증 교체는 후속 PR.
 
 ### ARCH-012 가입 트랜잭션 내부 외부 지오코딩 호출
 
@@ -853,7 +853,7 @@
 | TEST-001 | Refresh Token 재발급 | 최신 토큰만 유효, 재발급 저장 1회 | Redis 통합 테스트 | P0 | 완료 | Refresh Token rotation 단순화 |
 | TEST-002 | SeniorAuthService | guardian만 Family·Senior 등록 가능 | Service 단위 테스트 | P0 | 완료 | 가입 권한 정책 명시 |
 | TEST-003 | MemberWithdrawService + Membership | 탈퇴 guardian이 유효 leader로 남지 않음 | JPA 통합 테스트 | P0 | 작업 예정 | Membership 생명주기 정리 |
-| TEST-004 | FamilyAccessService/Aspect | AOP와 Service 경로의 권한 판정 일치 | 단위 + Controller 통합 테스트 | P1 | 작업 예정 | 정책 추출·패키지 이동 |
+| TEST-004 | FamilyAccessService/Aspect | AOP와 Service 경로의 권한 판정 일치 | 단위 + Controller 통합 테스트 | P1 | 완료 | 정책 추출·패키지 이동 |
 | TEST-005 | 모듈·계층 규칙 | Entity/Repository/Controller 경계 유지 | 아키텍처 경계 테스트 | P1 | 작업 예정 | 모듈 경계 리팩터링 |
 | TEST-006 | Senior 가입 지오코딩 실패 | 실패 시 현재 가입 원자성 보존 | Characterization + 외부 연동 실패 테스트 | P1 | 작업 예정 | 외부 호출 경계 분리 |
 | TEST-007 | FamilyMembership 동시 참여 | guardian 한 Family 및 leader 규칙 보존 | Repository/JPA 동시성 테스트 | P1 | 작업 예정 | Membership 정책 변경 |
@@ -1298,7 +1298,7 @@ query-read-model     # home/mypage/admin 조합 조회
 | ----- | ----- | ------ | ------ | ----- | --- | -- |
 | 1 | `fix(auth): validate rotated refresh token value` | ARCH-008 | TEST-001 | auth/global security | 높음 | 리뷰 완료 (구현·독립 리뷰 APPROVE, 커밋·PR 생성은 사용자 지시 대기) |
 | 2 | `fix(auth): restrict senior provisioning to guardians` | ARCH-009 | TEST-002 | auth senior signup | 중간 | 리뷰 완료 (구현·독립 리뷰 APPROVE, 커밋·PR 생성은 사용자 지시 대기) |
-| 3 | `refactor(member): centralize family access policy` | ARCH-004, ARCH-011 | TEST-004, TEST-005 | member/global/AOP | 중간 | 예비 후보 |
+| 3 | `refactor(member): centralize family access policy` | ARCH-004, ARCH-011 | TEST-004, TEST-005 | member/global/AOP | 중간 | 리뷰 완료 (구현·빌드 APPROVE, 커밋·PR 생성은 사용자 지시 대기) |
 | 4 | `refactor(member): define membership withdrawal lifecycle` | ARCH-010 | TEST-003, TEST-007 | member/auth withdrawal | 높음 | 예비 후보 |
 | 5 | `test(architecture): enforce module and layer boundaries` | ARCH-007 | TEST-005 | test/CI | 낮음 | 예비 후보 |
 | 6 | `refactor(auth): isolate senior signup geocoding boundary` | ARCH-012 | TEST-006 | auth/location | 중간 | 예비 후보 |
@@ -1508,7 +1508,7 @@ query-read-model     # home/mypage/admin 조합 조회
 
 ## 13. 다음 작업
 
-> 2026-07-15 갱신: PR 1(ARCH-008/TEST-001/TASK-001)·PR 2(ARCH-009/TEST-002/TASK-002) 구현·리뷰 완료. 커밋·PR 생성은 사용자 지시 대기. 다음 구현 후보는 권장 PR 목록 순서상 PR 3 `refactor(member): centralize family access policy` (ARCH-004, ARCH-011)다. 아래 기존 계획 항목은 유지한다.
+> 2026-07-16 갱신: PR 1(ARCH-008)·PR 2(ARCH-009)·PR 3(ARCH-011/TEST-004) 구현·리뷰 완료. 커밋·PR 생성은 사용자 지시 대기. 다음 구현 후보는 권장 PR 목록 순서상 PR 4 `refactor(member): define membership withdrawal lifecycle` (ARCH-010, TEST-003)다. 아래 기존 계획 항목은 유지한다.
 
 1. **순서:** 1
    **작업:** 최종 통합 리뷰에서 Critical·High 이슈와 P0 테스트를 기준으로 리팩터링 PR 순서를 확정한다.
@@ -1544,3 +1544,4 @@ query-read-model     # home/mypage/admin 조합 조회
 | 2026-07-15 | Critical·High 이슈 중심 테스트·ADR·LLD 정합성 리뷰 반영. 새 구조 이슈 추가 없이 TASK-030과 PR 30 후보를 등록하고 테스트·문서 게이트를 확정. | 테스트·ADR·LLD 정합성 리뷰 |
 | 2026-07-15 | ARCH-008 구현 완료 (이슈 #395, 브랜치 fix/#395). Refresh Token Redis 저장값 비교 도입, 재발급 이중 저장 제거. TEST-001 단위 9개 + Redis 통합 4개 + 서비스 3개 테스트 보강, 독립 리뷰 APPROVE, 전체 빌드 통과. ARCH-008·TEST-001·TASK-001 완료, PR 1 리뷰 완료로 상태 변경. 설계 문서 implementation-plans/ARCH-008-refresh-token-rotation.md 추가. | PR 1 `fix(auth): validate rotated refresh token value` |
 | 2026-07-15 | ARCH-009 구현 완료 (이슈 #397, 브랜치 fix/#397). SeniorAuthService.validateIsGuardian() 추가로 SENIOR 타입 회원의 시니어 등록 API 호출을 FORBIDDEN으로 차단. TEST-002 단위 테스트 1개 추가, 기존 10개 전부 통과, 독립 리뷰 APPROVE, 전체 빌드 통과. ARCH-009·TEST-002·TASK-002 완료, PR 2 리뷰 완료로 상태 변경. 설계 문서 implementation-plans/ARCH-009-senior-actor-type-guard.md 추가. | PR 2 `fix(auth): restrict senior provisioning to guardians` |
+| 2026-07-16 | ARCH-011 구현 완료 (이슈 #399, 브랜치 refactor/#399). FamilyAccessService.verifyFamilyAccess() 추출, FamilyAccessAspect에서 MemberRepository·FamilyMembershipRepository 직접 의존 제거 후 FamilyAccessService 위임. TEST-004 단위 테스트 8개(신규 4 + 기존 4 재작성) 통과, 전체 빌드 통과. ARCH-011·TEST-004 완료, PR 3 리뷰 완료로 상태 변경. 설계 문서 implementation-plans/ARCH-011-family-access-service-extraction.md 추가. | PR 3 `refactor(member): centralize family access policy` |
