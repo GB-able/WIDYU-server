@@ -69,12 +69,15 @@ sid_prefix = session_id[:8]
 # 민감정보 redaction
 # ---------------------------------------------------------------------------
 
-# Step 0: Authorization 헤더 — 스킴 무관하게 헤더 값 전체를 마스킹한다.
-#   "Authorization: Basic dXNlcjpwYXNz" → "Authorization: ***"
-#   "Authorization: Bearer eyJ...", "Authorization: ApiKey abc", "Authorization: JWT xyz" 모두 포함.
-#   HTTP 헤더("Authorization: <value>")와 JSON/env("authorization": "<value>") 형태 모두 처리.
+# Step 0: Authorization 헤더 — 스킴 + credential 한 토큰만 마스킹한다.
+#   구분자는 콜론으로 한정(HTTP 헤더 형식)하고, credential은 따옴표·공백에서 멈춰
+#   뒤따르는 URL 등 실행 맥락을 보존한다.
+#   "Authorization: Basic abc==" → "Authorization: ***"
+#   'curl -H "Authorization: Bearer eyJ..." http://host' → 'curl -H "Authorization: ***" http://host'
+#   JSON key-value("authorization": "Bearer ...") 는 Step 1·3 에서 처리한다.
 _AUTH_HEADER_RE = re.compile(
-    r"(?i)(Authorization\s*[:\s\"']+)\S+(?:\s+\S+)*"
+    r"(?i)(Authorization\s*:\s*)"   # "Authorization: " 부분 (유지)
+    r"(\w+(?:\s+[^\s\"']+)?)"        # scheme 단어 + 선택적 credential 한 토큰 (따옴표/공백에서 멈춤)
 )
 
 # Step 1: Bearer <token> — authorization 키워드가 Bearer를 값으로 소비하면
