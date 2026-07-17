@@ -69,6 +69,14 @@ sid_prefix = session_id[:8]
 # 민감정보 redaction
 # ---------------------------------------------------------------------------
 
+# Step 0: Authorization 헤더 — 스킴 무관하게 헤더 값 전체를 마스킹한다.
+#   "Authorization: Basic dXNlcjpwYXNz" → "Authorization: ***"
+#   "Authorization: Bearer eyJ...", "Authorization: ApiKey abc", "Authorization: JWT xyz" 모두 포함.
+#   HTTP 헤더("Authorization: <value>")와 JSON/env("authorization": "<value>") 형태 모두 처리.
+_AUTH_HEADER_RE = re.compile(
+    r"(?i)(Authorization\s*[:\s\"']+)\S+(?:\s+\S+)*"
+)
+
 # Step 1: Bearer <token> — authorization 키워드가 Bearer를 값으로 소비하면
 #   실제 토큰이 남는 버그를 차단한다. Bearer 뒤 토큰을 선행 마스킹한다.
 _BEARER_RE = re.compile(r"(?i)Bearer\s+([A-Za-z0-9\-_.~+/=]{4,})")
@@ -86,7 +94,9 @@ _REDACT_RE = re.compile(
 
 
 def redact(text: str, max_len: int = 200) -> str:
-    # 1) Bearer 토큰 선행 마스킹 (Authorization: Bearer <token> 포함)
+    # 0) Authorization 헤더 전체 마스킹 (스킴 무관: Basic, Bearer, ApiKey, JWT 등)
+    text = _AUTH_HEADER_RE.sub(lambda m: m.group(1) + "***", text)
+    # 1) 잔여 Bearer 토큰 선행 마스킹
     text = _BEARER_RE.sub("Bearer ***", text)
     # 2) URL userinfo (user:pass@host)
     text = _URL_USERINFO_RE.sub(lambda m: f"://{m.group(1)}:***@", text)
