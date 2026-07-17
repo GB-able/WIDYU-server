@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/harness/on-file-edit.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/harness/audit-log.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/harness/audit-log.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/harness/on-stop.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/harness/audit-log.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

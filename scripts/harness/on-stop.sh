@@ -9,16 +9,78 @@
 #                               (Stop 훅 exit 2 = 정지 차단 + stderr를 Claude에 전달 → 수정 계속)
 #        - Codex 실행 실패     → 사용자에게만 경고, 정지 허용 (fail-open)
 #
-# 무한 루프 방지: .claude/.codex-review-round 카운터로 최대 MAX_ROUNDS회까지만 자동 재수정.
+# 무한 루프 방지: .claude/state/codex-round-<sid>.json 카운터로 최대 MAX_ROUNDS회까지만 자동 재수정.
+# 세션별 상태 파일로 터미널 2개 동시 작업 시 라운드 카운터 간섭을 차단한다.
 # 초과 시 사용자에게 수동 검토를 넘기고 정지 허용.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-STATE_FILE="$ROOT_DIR/.claude/.codex-review-round"
+STATE_DIR="$ROOT_DIR/.claude/state"
+AUDIT_DIR="$ROOT_DIR/.claude/audit"
 MAX_ROUNDS=3
 
-# Stop 훅 stdin(JSON)을 소비해 하위 codex 호출이 삼키지 않도록 한다.
-cat >/dev/null 2>&1 || true
+mkdir -p "$STATE_DIR" "$AUDIT_DIR"
+
+# ---------------------------------------------------------------------------
+# stdin 에서 session_id 추출 (audit-log.sh 와 달리 Stop 훅은 직접 소비해야 함)
+# ---------------------------------------------------------------------------
+
+STDIN_JSON=$(cat 2>/dev/null || true)
+SESSION_ID=$(python3 -c "
+import json, sys
+try:
+    print(json.loads(sys.argv[1]).get('session_id', ''))
+except Exception:
+    print('')
+" "$STDIN_JSON" 2>/dev/null || true)
+
+# session_id 부재 시: 감사 기록만 남기고 Codex review 와 상태 파일 쓰기를 건너뛴다.
+# unknown-<ts> 같은 임시 ID 로 대체하면 충돌 없어 보이지만 세션 간 round 보호가
+# 되지 않아 루프 위험이 있으므로, 아예 Codex 를 실행하지 않고 exit 0 로 빠진다.
+if [[ -z "$SESSION_ID" ]]; then
+  python3 -c "
+import json, datetime
+from pathlib import Path
+month = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
+out = Path('$AUDIT_DIR') / ('audit-' + month + '.jsonl')
+out.parent.mkdir(parents=True, exist_ok=True)
+record = {'ts': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds'),
+          'session_id': '', 'event': 'session_id_missing', 'hook': 'Stop'}
+with open(out, 'a') as f:
+    f.write(json.dumps(record) + '\n')
+" 2>/dev/null || true
+  exit 0
+fi
+
+SID_PREFIX="${SESSION_ID:0:8}"
+STATE_FILE="$STATE_DIR/codex-round-${SID_PREFIX}.json"
+
+# ---------------------------------------------------------------------------
+# audit 기록 헬퍼 — args: verdict round
+# ---------------------------------------------------------------------------
+
+_audit_codex() {
+  local verdict="$1" round="$2"
+  python3 -c "
+import json, datetime, sys
+from pathlib import Path
+root, sid, verdict, rnd = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+month = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m')
+record = {
+    'ts': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds'),
+    'session_id': sid, 'sid_prefix': sid[:8],
+    'event': 'codex_review', 'verdict': verdict, 'round': rnd, 'tags': [],
+}
+out = Path(root) / '.claude' / 'audit' / ('audit-' + month + '.jsonl')
+out.parent.mkdir(parents=True, exist_ok=True)
+with open(out, 'a') as f:
+    f.write(json.dumps(record, ensure_ascii=False) + '\n')
+" "$ROOT_DIR" "$SESSION_ID" "$verdict" "$round" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# Java 변경 감지
+# ---------------------------------------------------------------------------
 
 CHANGED_JAVA=$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all 2>/dev/null \
   | sed -E 's/^...//; s/^.* -> //' \
@@ -27,7 +89,7 @@ CHANGED_JAVA=$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all 2>/de
   | grep -vE '/generated/' || true)
 
 if [[ -z "$CHANGED_JAVA" ]]; then
-  # 검수할 Java 변경 없음 → 라운드 초기화 후 정지 허용
+  # 검수할 Java 변경 없음 → 라운드 파일 초기화 후 정지 허용
   rm -f "$STATE_FILE"
   exit 0
 fi
@@ -37,24 +99,41 @@ echo "🔍 Codex 자동 검수 실행 중... (uncommitted Java 변경 감지)" >
 REPORT="$(bash "$ROOT_DIR/scripts/harness/codex-review.sh")"
 RC=$?
 
-# Codex 실행 실패 → fail-open (세션을 막지 않는다)
+# Codex 실행 실패 → fail-open
 if [[ $RC -eq 3 ]] || printf '%s' "$REPORT" | head -1 | grep -q "CODEX_FAILED"; then
   echo "⚠️  Codex 자동 검수를 실행하지 못했습니다 (네트워크/타임아웃/인증 등). 수동 검수가 필요합니다." >&2
+  _audit_codex "FAILED" 0
   exit 0
 fi
 
-# APPROVE → 라운드 초기화, 정지 허용
+# APPROVE → 라운드 초기화, 감사 기록, 정지 허용
 if [[ $RC -eq 0 ]]; then
   rm -f "$STATE_FILE"
   echo "✅ Codex 검수 통과 (APPROVE)." >&2
+  _audit_codex "APPROVE" 0
   exit 0
 fi
 
 # RC == 1 → REQUEST_CHANGES: 라운드 카운트
 ROUND=0
-[[ -f "$STATE_FILE" ]] && ROUND=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
+if [[ -f "$STATE_FILE" ]]; then
+  ROUND=$(python3 -c "
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get('round', 0))
+except Exception:
+    print(0)
+" "$STATE_FILE" 2>/dev/null || echo 0)
+fi
 ROUND=$((ROUND + 1))
-echo "$ROUND" > "$STATE_FILE"
+
+python3 -c "
+import json, sys
+path, sid, rnd = sys.argv[1], sys.argv[2], int(sys.argv[3])
+json.dump({'session_id': sid, 'round': rnd}, open(path, 'w'))
+" "$STATE_FILE" "$SESSION_ID" "$ROUND" 2>/dev/null || true
+
+_audit_codex "REQUEST_CHANGES" "$ROUND"
 
 if [[ $ROUND -gt $MAX_ROUNDS ]]; then
   rm -f "$STATE_FILE"
