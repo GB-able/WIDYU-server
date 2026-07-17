@@ -69,6 +69,14 @@ sid_prefix = session_id[:8]
 # 민감정보 redaction
 # ---------------------------------------------------------------------------
 
+# Step 1: Bearer <token> — authorization 키워드가 Bearer를 값으로 소비하면
+#   실제 토큰이 남는 버그를 차단한다. Bearer 뒤 토큰을 선행 마스킹한다.
+_BEARER_RE = re.compile(r"(?i)Bearer\s+([A-Za-z0-9\-_.~+/=]{4,})")
+
+# Step 2: URL userinfo (scheme://user:pass@host)
+_URL_USERINFO_RE = re.compile(r"(?i)://([^:@/\s]+):([^@\s]{3,})@")
+
+# Step 3: key=value / key: value / key="value" 형태 키워드 매칭
 _REDACT_RE = re.compile(
     r"(?i)(token|secret|password|passwd|authorization|bearer|jwt"
     r"|credential|api[_\-]?key|db_password|jwt_secret)"
@@ -76,7 +84,13 @@ _REDACT_RE = re.compile(
     r"([^\s\"'&]{3,})"
 )
 
+
 def redact(text: str, max_len: int = 200) -> str:
+    # 1) Bearer 토큰 선행 마스킹 (Authorization: Bearer <token> 포함)
+    text = _BEARER_RE.sub("Bearer ***", text)
+    # 2) URL userinfo (user:pass@host)
+    text = _URL_USERINFO_RE.sub(lambda m: f"://{m.group(1)}:***@", text)
+    # 3) 나머지 keyword=value 패턴
     text = _REDACT_RE.sub(lambda m: m.group(1) + m.group(2) + "***", text)
     if len(text) > max_len:
         text = text[:max_len] + "…"

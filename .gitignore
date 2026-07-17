@@ -47,6 +47,7 @@ out/
 src/main/resources/firebase/
 *.json
 !admin/*.json
+!scripts/harness/settings-template.json
 
 # claude
 .claude/

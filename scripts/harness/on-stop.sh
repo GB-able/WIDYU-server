@@ -34,7 +34,9 @@ except Exception:
     print('')
 " "$STDIN_JSON" 2>/dev/null || true)
 
-# session_id 부재 시 감사 기록만 남기고 세션별 상태 파일은 쓰지 않는다 (fallback)
+# session_id 부재 시: 감사 기록만 남기고 Codex review 와 상태 파일 쓰기를 건너뛴다.
+# unknown-<ts> 같은 임시 ID 로 대체하면 충돌 없어 보이지만 세션 간 round 보호가
+# 되지 않아 루프 위험이 있으므로, 아예 Codex 를 실행하지 않고 exit 0 로 빠진다.
 if [[ -z "$SESSION_ID" ]]; then
   python3 -c "
 import json, datetime
@@ -47,7 +49,7 @@ record = {'ts': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec=
 with open(out, 'a') as f:
     f.write(json.dumps(record) + '\n')
 " 2>/dev/null || true
-  SESSION_ID="unknown-$(date +%s)"
+  exit 0
 fi
 
 SID_PREFIX="${SESSION_ID:0:8}"
