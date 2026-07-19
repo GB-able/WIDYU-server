@@ -130,7 +130,7 @@ CHANGED_JAVA=$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all 2>/de
   | sed -E 's/^...//; s/^.* -> //' \
   | grep -E '\.java$' \
   | grep -E '^backend/(widyu-api|widyu-domain)/src/main/java/' \
-  | grep -vE '/generated/' || true)
+  | grep -vE '/generated/|\.harness-metrics/' || true)
 
 if [[ -z "$CHANGED_JAVA" ]]; then
   rm -f "$STATE_FILE"
@@ -200,6 +200,14 @@ if [[ $DIFF_LOC -lt 30 && $FILE_COUNT -le 2 && $NEW_FILES -eq 0 && $SENSITIVE -e
   exit 0
 fi
 
+# Tier 2 게이트 불충족 이유를 audit에 기록 (튜닝 근거 확보)
+GATE_MISS=""
+[[ $DIFF_LOC -ge 30 ]]    && GATE_MISS+="diff_loc:${DIFF_LOC}"
+[[ $FILE_COUNT -gt 2 ]]   && GATE_MISS+="${GATE_MISS:+,}file_count:${FILE_COUNT}"
+[[ $NEW_FILES -ne 0 ]]    && GATE_MISS+="${GATE_MISS:+,}new_files:${NEW_FILES}"
+[[ $SENSITIVE -ne 0 ]]    && GATE_MISS+="${GATE_MISS:+,}sensitive:${SENSITIVE}"
+_audit_event "gate_miss" "reason=${GATE_MISS}" "diff_loc=$DIFF_LOC" "file_count=$FILE_COUNT" "new_files=$NEW_FILES" "sensitive=$SENSITIVE"
+
 # ─── Tier 3: Codex 시맨틱 리뷰 ───────────────────────────────────────────────
 
 echo "🔍 Codex 자동 검수 실행 중... (${DIFF_LOC} LOC, ${FILE_COUNT}개 파일)" >&2
@@ -225,6 +233,17 @@ _save_suggestions() {
     printf '%s\n' "$body"
   } > "$sugg_file"
   echo "💡 Codex 제안 사항 저장: ${sugg_file#$ROOT_DIR/}" >&2
+}
+
+_save_blockers() {
+  local body="$1" round="$2"
+  [[ -n "$body" ]] || return
+  local blocker_file="$SUGG_DIR/blockers-${SID_PREFIX}-$(date +%s).md"
+  {
+    echo "# Codex BLOCKER ($(date '+%Y-%m-%d %H:%M')) round=${round}"
+    echo ""
+    printf '%s\n' "$body"
+  } > "$blocker_file"
 }
 
 # codex exec는 프롬프트를 출력에 에코하며, 프롬프트에도 VERDICT:/SUGGESTIONS: 줄이
@@ -258,6 +277,7 @@ if [[ -z "$BLOCKER_BODY" ]]; then
   BLOCKER_BODY="$REPORT"
 fi
 _save_suggestions "$SUGGESTION_BODY"
+_save_blockers "$BLOCKER_BODY" "$ROUND"
 
 if [[ $ROUND -gt $MAX_ROUNDS ]]; then
   rm -f "$STATE_FILE"
