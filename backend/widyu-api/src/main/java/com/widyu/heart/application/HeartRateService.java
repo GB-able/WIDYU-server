@@ -18,7 +18,6 @@ import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import com.widyu.heart.repository.HeartRateEmergencyRepository;
 import com.widyu.heart.repository.HeartRateEventRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
-import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -34,15 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class HeartRateService {
 
     private final HeartRateAnomalyDetector heartRateAnomalyDetector;
+    private final HeartRatePersistenceService heartRatePersistenceService;
     private final HeartRateResultRepository heartRateResultRepository;
     private final HeartRateEventRepository heartRateEventRepository;
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
     private final MemberRepository memberRepository;
 
-    @Transactional
     public HeartRateStatusResponse processHeartRates(Long memberId, HeartRateSendRequest request) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        validateMemberExists(memberId);
 
         LocalDateTime batchStart = request.heartRates().stream()
                 .map(HeartRateMeasurement::measuredAt)
@@ -61,31 +59,10 @@ public class HeartRateService {
 
         HeartRateStatus status = resolveStatus(isAbnormal);
 
-        HeartRateMeasurement latestMeasurement = request.heartRates().stream()
-                .max(Comparator.comparing(HeartRateMeasurement::measuredAt))
-                .orElse(request.heartRates().getLast());
-
-        HeartRateResult result = HeartRateResult.of(
-                memberId,
-                status,
-                latestMeasurement.heartRate(),
-                latestMeasurement.measuredAt()
-        );
-        heartRateResultRepository.save(result);
-
-        List<HeartRateEvent> events = request.heartRates().stream()
-                .map(m -> HeartRateEvent.of(member, m.heartRate(), m.measuredAt(), status))
-                .toList();
-        heartRateEventRepository.saveAll(events);
-
-        if (isAbnormal) {
-            Integer peakHeartRate = heartRateValues.stream().max(Integer::compareTo).orElse(latestMeasurement.heartRate());
-            HeartRateEmergency emergency = HeartRateEmergency.of(member, peakHeartRate, latestMeasurement.measuredAt(), request.location());
-            heartRateEmergencyRepository.save(emergency);
-        }
+        HeartRateResult result = heartRatePersistenceService.saveAnalysis(memberId, request, status, isAbnormal);
 
         log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
-                memberId, status, latestMeasurement.heartRate(), latestMeasurement.measuredAt());
+                memberId, status, result.getHeartRate(), result.getMeasuredAt());
 
         return HeartRateStatusResponse.from(result);
     }
@@ -217,6 +194,11 @@ public class HeartRateService {
             return HeartRateStatus.ANOMALY;
         }
         return HeartRateStatus.NORMAL;
+    }
+
+    private void validateMemberExists(Long memberId) {
+        memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
     }
 
     private EmergencyHistoryResponse buildEmergencyHistory(Long memberId) {
