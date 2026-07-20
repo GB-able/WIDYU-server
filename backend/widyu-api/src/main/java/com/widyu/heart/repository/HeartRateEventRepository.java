@@ -13,6 +13,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface HeartRateEventRepository extends JpaRepository<HeartRateEvent, Long> {
 
+    boolean existsByMemberIdAndMeasuredAt(Long memberId, LocalDateTime measuredAt);
+
     List<HeartRateEvent> findByMemberIdOrderByMeasuredAtAsc(Long memberId);
 
     List<HeartRateEvent> findTop5ByMemberIdOrderByMeasuredAtDesc(Long memberId);

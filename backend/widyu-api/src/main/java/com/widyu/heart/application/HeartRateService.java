@@ -20,6 +20,7 @@ import com.widyu.heart.repository.HeartRateEventRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,15 @@ public class HeartRateService {
     public HeartRateStatusResponse processHeartRates(Long memberId, HeartRateSendRequest request) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        LocalDateTime batchStart = request.heartRates().stream()
+                .map(HeartRateMeasurement::measuredAt)
+                .min(Comparator.naturalOrder())
+                .orElseThrow();
+
+        if (heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)) {
+            return getHeartRateStatus(memberId);
+        }
 
         List<Integer> heartRateValues = request.heartRates().stream()
                 .map(HeartRateMeasurement::heartRate)

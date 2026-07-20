@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -21,7 +22,13 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
-@Table(name = "heart_rate_event")
+@Table(
+    name = "heart_rate_event",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_heart_event_member_time",
+        columnNames = {"member_id", "measured_at"}
+    )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HeartRateEvent extends BaseTimeEntity {
 
