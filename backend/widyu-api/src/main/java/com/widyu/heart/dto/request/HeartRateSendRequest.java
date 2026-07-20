@@ -13,4 +13,8 @@ public record HeartRateSendRequest(
 
         String location // 현재 위치 주소 (이상치 감지 시 위급상황 기록에 사용)
 ) {
+
+    public static HeartRateSendRequest of(List<HeartRateMeasurement> heartRates, String location) {
+        return new HeartRateSendRequest(heartRates, location);
+    }
 }

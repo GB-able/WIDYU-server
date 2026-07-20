@@ -3,8 +3,8 @@ package com.widyu.heart.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -39,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class HeartRateServiceTest {
 
     @Mock private HeartRateAnomalyDetector heartRateAnomalyDetector;
+    @Mock private HeartRatePersistenceService heartRatePersistenceService;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HeartRateEventRepository heartRateEventRepository;
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
@@ -59,8 +60,8 @@ class HeartRateServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND)
                 .hasMessageContaining("회원을 찾을 수 없습니다.");
         then(heartRateAnomalyDetector).should(never()).detectAnomaly(any());
-        then(heartRateResultRepository).should(never()).save(any(HeartRateResult.class));
-        then(heartRateEventRepository).should(never()).saveAll(any());
+        then(heartRatePersistenceService).should(never())
+                .saveAnalysis(anyLong(), any(), any(HeartRateStatus.class), anyBoolean());
     }
 
     @Test
@@ -148,7 +149,7 @@ class HeartRateServiceTest {
         List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
                 .mapToObj(i -> new HeartRateMeasurement(70 + i, batchStart.plusSeconds(i)))
                 .toList();
-        HeartRateSendRequest duplicateRequest = new HeartRateSendRequest(measurements, "서울시");
+        HeartRateSendRequest duplicateRequest = HeartRateSendRequest.of(measurements, "서울시");
 
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         HeartRateResult existingResult = HeartRateResult.of(memberId, HeartRateStatus.NORMAL, 75, batchStart.plusSeconds(14));
@@ -177,20 +178,50 @@ class HeartRateServiceTest {
         List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
                 .mapToObj(i -> new HeartRateMeasurement(70 + i, batchStart.plusSeconds(i)))
                 .toList();
-        HeartRateSendRequest newRequest = new HeartRateSendRequest(measurements, "서울시");
+        HeartRateSendRequest newRequest = HeartRateSendRequest.of(measurements, "서울시");
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
 
         given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
         given(heartRateAnomalyDetector.detectAnomaly(any())).willReturn(false);
+        HeartRateResult savedResult = HeartRateResult.of(memberId, HeartRateStatus.NORMAL, 84, batchStart.plusSeconds(14));
+        given(heartRatePersistenceService.saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false))
+                .willReturn(savedResult);
 
         // when
-        heartRateService.processHeartRates(memberId, newRequest);
+        HeartRateStatusResponse response = heartRateService.processHeartRates(memberId, newRequest);
 
         // then
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.NORMAL);
+        assertThat(response.heartRate()).isEqualTo(84);
         then(heartRateAnomalyDetector).should().detectAnomaly(any());
-        then(heartRateResultRepository).should().save(any(HeartRateResult.class));
-        then(heartRateEventRepository).should().saveAll(any());
+        then(heartRatePersistenceService).should()
+                .saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false);
+    }
+
+    @Test
+    @DisplayName("AI 판정이 실패하면 원본 심박 기록을 저장하지 않는다")
+    void AI_판정이_실패하면_원본_심박기록을_저장하지_않는다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime batchStart = LocalDateTime.of(2026, 1, 1, 13, 0, 0);
+        List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
+                .mapToObj(i -> new HeartRateMeasurement(70 + i, batchStart.plusSeconds(i)))
+                .toList();
+        HeartRateSendRequest newRequest = HeartRateSendRequest.of(measurements, "서울시");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
+        given(heartRateAnomalyDetector.detectAnomaly(any()))
+                .willThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "AI 서버와의 통신에 실패했습니다."));
+
+        // when & then
+        assertThatThrownBy(() -> heartRateService.processHeartRates(memberId, newRequest))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INTERNAL_SERVER_ERROR);
+        then(heartRatePersistenceService).should(never())
+                .saveAnalysis(anyLong(), any(), any(HeartRateStatus.class), anyBoolean());
     }
 
     @Test
@@ -202,7 +233,7 @@ class HeartRateServiceTest {
         List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
                 .mapToObj(i -> new HeartRateMeasurement(70 + i, batchStart.plusSeconds(i)))
                 .toList();
-        HeartRateSendRequest duplicateRequest = new HeartRateSendRequest(measurements, "서울시");
+        HeartRateSendRequest duplicateRequest = HeartRateSendRequest.of(measurements, "서울시");
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         HeartRateResult existingResult = HeartRateResult.of(memberId, HeartRateStatus.ANOMALY, 84, batchStart.plusSeconds(14));
 
@@ -222,7 +253,7 @@ class HeartRateServiceTest {
         List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
                 .mapToObj(i -> new HeartRateMeasurement(70 + i, LocalDateTime.now().plusSeconds(i)))
                 .toList();
-        return new HeartRateSendRequest(measurements, "서울시");
+        return HeartRateSendRequest.of(measurements, "서울시");
     }
 
     private HeartRateEvent heartRateEvent(Integer heartRate, LocalDateTime measuredAt, HeartRateStatus status) {
