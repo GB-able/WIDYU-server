@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ public class AlbumVideoProcessingService {
         Map<Integer, String> videoUrls = new HashMap<>();
         Map<Integer, String> thumbnailUrls = new HashMap<>();
         Map<Integer, Integer> durations = new HashMap<>();
+        List<String> uploadedUrls = new ArrayList<>();
 
         try {
             for (VideoEntry entry : videoEntries) {
@@ -49,6 +51,8 @@ public class AlbumVideoProcessingService {
                 videoUrls.put(entry.index(), result.videoUrl());
                 thumbnailUrls.put(entry.index(), result.thumbnailUrl());
                 durations.put(entry.index(), result.duration());
+                uploadedUrls.add(result.videoUrl());
+                uploadedUrls.add(result.thumbnailUrl());
             }
 
             Album album = albumRepository.findById(albumId)
@@ -60,6 +64,7 @@ public class AlbumVideoProcessingService {
 
         } catch (Exception e) {
             log.error("비디오 비동기 처리 실패: albumId={}, error={}", albumId, e.getMessage(), e);
+            albumFileService.cleanupUploadedFiles(uploadedUrls);
             albumRepository.findById(albumId).ifPresent(Album::delete);
         } finally {
             for (VideoEntry entry : videoEntries) {
