@@ -14,4 +14,8 @@ public record LocationUpdateRequest(
 
     Long timestamp  // 클라이언트에서 측정한 시각 (optional)
 ) {
+
+    public static LocationUpdateRequest of(Long memberId, Double latitude, Double longitude, Long timestamp) {
+        return new LocationUpdateRequest(memberId, latitude, longitude, timestamp);
+    }
 }

@@ -19,7 +19,6 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
-import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import java.time.LocalDateTime;
 import org.springframework.scheduling.annotation.Scheduled;
 import java.util.ArrayList;
@@ -50,13 +49,12 @@ public class RealtimeLocationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final SafeZoneAlertService safeZoneAlertService;
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
     private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
-    private static final String SAFE_ZONE_ALERT_KEY_PREFIX = "safezone:alert:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
     private static final long STAY_TTL_SECONDS = 86400; // 24시간
-    private static final long SAFE_ZONE_ALERT_TTL_SECONDS = 1800; // 30분 (중복 알림 방지)
     private static final double STAY_RADIUS_METERS = 30.0; // 30m 이내면 같은 위치
     private static final double SAFE_ZONE_RADIUS_METERS = 75.0; // 안전구역 반경 75m (지름 150m)
 
@@ -220,7 +218,7 @@ public class RealtimeLocationService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "최근 위치 정보가 없습니다.");
         }
 
-        String locationName = stayInfo != null ? stayInfo.locationName() : null;
+        String locationName = getStayLocationName(stayInfo);
 
         return LocationUpdateResponse.of(
                 memberId,
@@ -263,8 +261,8 @@ public class RealtimeLocationService {
                     trail.add(point);
                 } else if (obj instanceof LinkedHashMap<?, ?> map) {
                     // GenericJackson2JsonRedisSerializer로 역직렬화 시 LinkedHashMap으로 변환되는 경우
-                    Double lat = map.get("latitude") instanceof Number n ? n.doubleValue() : null;
-                    Double lng = map.get("longitude") instanceof Number n ? n.doubleValue() : null;
+                    Double lat = getDoubleOrNull(map.get("latitude"));
+                    Double lng = getDoubleOrNull(map.get("longitude"));
                     LocalDateTime timestamp = parseTimestamp(map.get("timestamp"));
                     if (lat != null && lng != null) {
                         trail.add(new LocationPoint(lat, lng, timestamp));
@@ -320,11 +318,11 @@ public class RealtimeLocationService {
 
         // 새로운 위치로 이동 → 안전구역 매칭
         ParentLocation matchedZone = determineMatchingSafeZone(member, newLat, newLng);
-        String locationType = matchedZone != null ? matchedZone.getLocationType().name() : null;
-        String locationName = matchedZone != null ? matchedZone.getName() : null;
+        String locationType = getLocationTypeName(matchedZone);
+        String locationName = getLocationName(matchedZone);
 
         // 안전구역 이탈 감지 및 알림 전송
-        checkAndSendSafeZoneExitAlert(member, previousLocationType, locationType);
+        safeZoneAlertService.handleSafeZoneTransition(member.getId(), previousLocationType, locationType);
 
         StayInfo newStay = StayInfo.of(newLat, newLng, locationType, locationName);
         redisTemplate.opsForValue().set(stayKey, newStay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
@@ -356,39 +354,6 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 안전구역 이탈 감지 및 보호자 알림 전송
-     * - 이전 위치가 안전구역 내(HOME 또는 OTHER)였고, 현재 위치가 안전구역 밖(null)이면 알림
-     * - 중복 알림 방지: 30분 내 동일 알림 전송하지 않음
-     * - 안전구역에 다시 들어오면 알림 플래그 삭제
-     */
-    private void checkAndSendSafeZoneExitAlert(Member member, String previousLocationType, String currentLocationType) {
-        String alertKey = SAFE_ZONE_ALERT_KEY_PREFIX + member.getId();
-
-        // 안전구역에 다시 들어온 경우 → 알림 플래그 삭제
-        if (currentLocationType != null) {
-            redisTemplate.delete(alertKey);
-            return;
-        }
-
-        // 이전에 안전구역 내에 있었고, 현재 안전구역 밖으로 나간 경우
-        if (previousLocationType != null && currentLocationType == null) {
-            // 중복 알림 방지: 이미 알림을 보낸 경우 스킵
-            Boolean alreadySent = redisTemplate.hasKey(alertKey);
-            if (Boolean.TRUE.equals(alreadySent)) {
-                log.debug("안전구역 이탈 알림 스킵 (중복 방지) - memberId: {}", member.getId());
-                return;
-            }
-
-            // 알림 플래그 설정 (30분 TTL)
-            redisTemplate.opsForValue().set(alertKey, true, SAFE_ZONE_ALERT_TTL_SECONDS, TimeUnit.SECONDS);
-
-            // 안전구역 이탈 이벤트 발행 → FCM 리스너에서 알림 전송
-            eventPublisher.publishEvent(new SafeZoneExitEvent(member.getId()));
-            log.info("안전구역 이탈 이벤트 발행 - memberId: {}", member.getId());
-        }
-    }
-
-    /**
      * Redis에서 역직렬화된 timestamp 파싱
      */
     private LocalDateTime parseTimestamp(Object timestampObj) {
@@ -413,7 +378,38 @@ public class RealtimeLocationService {
     }
 
     private int getIntOrDefault(Object value, int defaultValue) {
-        return value instanceof Number n ? n.intValue() : defaultValue;
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        return defaultValue;
+    }
+
+    private Double getDoubleOrNull(Object value) {
+        if (value instanceof Number n) {
+            return n.doubleValue();
+        }
+        return null;
+    }
+
+    private String getStayLocationName(StayInfo stayInfo) {
+        if (stayInfo == null) {
+            return null;
+        }
+        return stayInfo.locationName();
+    }
+
+    private String getLocationTypeName(ParentLocation matchedZone) {
+        if (matchedZone == null) {
+            return null;
+        }
+        return matchedZone.getLocationType().name();
+    }
+
+    private String getLocationName(ParentLocation matchedZone) {
+        if (matchedZone == null) {
+            return null;
+        }
+        return matchedZone.getName();
     }
 
     /**
