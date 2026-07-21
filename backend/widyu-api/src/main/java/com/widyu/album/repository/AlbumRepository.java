@@ -18,8 +18,11 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT a FROM Album a WHERE a.id = :id AND a.status = :status")
     Optional<Album> findByIdAndStatus(@Param("id") Long id, @Param("status") Status status);
 
-    @Query("SELECT DISTINCT a FROM Album a LEFT JOIN FETCH a.mediaUrls LEFT JOIN FETCH a.thumbnailUrls LEFT JOIN FETCH a.durations WHERE a.id = :id AND a.status = :status")
+    @Query("SELECT DISTINCT a FROM Album a JOIN FETCH a.member LEFT JOIN FETCH a.mediaUrls LEFT JOIN FETCH a.thumbnailUrls LEFT JOIN FETCH a.durations WHERE a.id = :id AND a.status = :status")
     Optional<Album> findByIdAndStatusWithCollections(@Param("id") Long id, @Param("status") Status status);
+
+    @Query("SELECT a FROM Album a JOIN FETCH a.member WHERE a.id = :id")
+    Optional<Album> findByIdWithMember(@Param("id") Long id);
 
     @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' ORDER BY a.createdAt DESC, a.id DESC")
     org.springframework.data.domain.Slice<Long> findLatestAlbumIds(Pageable pageable);

@@ -17,6 +17,9 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
 
     Optional<SeniorProfile> findByMemberId(Long memberId);
 
+    @Query("SELECT sp.family.id FROM SeniorProfile sp WHERE sp.member.id = :memberId")
+    Optional<Long> findFamilyIdByMemberId(@Param("memberId") Long memberId);
+
     boolean existsByMemberId(Long memberId);
 
     @Modifying(clearAutomatically = true)

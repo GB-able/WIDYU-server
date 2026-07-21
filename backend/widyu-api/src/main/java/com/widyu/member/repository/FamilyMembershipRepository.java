@@ -11,6 +11,9 @@ public interface FamilyMembershipRepository extends JpaRepository<FamilyMembersh
 
     Optional<FamilyMembership> findByGuardianId(Long guardianId);
 
+    @Query("SELECT fm.family.id FROM FamilyMembership fm WHERE fm.guardian.id = :guardianId")
+    Optional<Long> findFamilyIdByGuardianId(@Param("guardianId") Long guardianId);
+
     void deleteByGuardianId(Long guardianId);
 
     Optional<FamilyMembership> findByFamilyIdAndGuardianId(Long familyId, Long guardianId);
