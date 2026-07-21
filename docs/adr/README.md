@@ -63,3 +63,4 @@ ADR 커버리지는 100%를 목표로 하지 않는다. 대신 다음 영역은 
 | [ADR-0008](ADR-0008-heart-rate-ai-transaction-boundary.md) | 심박 AI 판정과 저장 트랜잭션 경계 분리 | Accepted | 2026-07-20 |
 | [ADR-0009](ADR-0009-safe-zone-alert-deduplication.md) | 안전구역 이탈 알림 원자 중복 차단 | Accepted | 2026-07-21 |
 | [ADR-0010](ADR-0010-album-video-failure-compensation.md) | 앨범 영상 처리 실패 보상 삭제 정책 | Accepted | 2026-07-21 |
+| [ADR-0011](ADR-0011-album-notification-side-effect-isolation.md) | 앨범 알림 부수효과 격리 정책 | Accepted | 2026-07-21 |

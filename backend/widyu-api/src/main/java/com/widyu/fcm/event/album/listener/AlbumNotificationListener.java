@@ -22,8 +22,6 @@ import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.entity.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +29,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Slf4j
 @Component
@@ -46,7 +46,7 @@ public class AlbumNotificationListener {
     private final AlbumViewRepository albumViewRepository;
     private final AlbumRepository albumRepository;
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleAlbumCreated(AlbumCreatedEvent event) {
         Member author = memberRepository.findById(event.authorId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
@@ -57,8 +57,7 @@ public class AlbumNotificationListener {
         sendNotificationToFamilyMembers(event.authorId(), title, content, author.getProfileImage());
     }
 
-    @EventListener
-    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleAlbumViewed(AlbumViewedEvent event) {
         Member viewer = memberRepository.findById(event.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
@@ -66,7 +65,7 @@ public class AlbumNotificationListener {
         Album album = albumRepository.findByIdAndStatusWithCollections(event.albumId(), Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
-        if (hasViewedAllAlbums(event.memberId(), album.getId())) {
+        if (hasViewedAllAlbums(event.memberId(), album)) {
             Member albumWriter = album.getMember();
             String title = viewer.getName() + "님이 " + albumWriter.getName() + "님의 모든 소식을 확인했어요!";
             String content = "새로운 소식을 공유해보세요.";
@@ -75,23 +74,21 @@ public class AlbumNotificationListener {
     }
 
     private void sendNotificationToFamilyMembers(Long memberId, String title, String content, String image) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
-
-        if (member.getSeniorProfile() != null) {
-            Long familyId = member.getSeniorProfile().getFamily().getId();
+        Optional<Long> seniorFamilyId = seniorProfileRepository.findFamilyIdByMemberId(memberId);
+        if (seniorFamilyId.isPresent()) {
+            Long familyId = seniorFamilyId.get();
             List<FamilyMembership> memberships = familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId);
             for (FamilyMembership membership : memberships) {
                 FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
-                fcmService.sendMessageToUser(membership.getGuardian().getId(), dto);
+                sendNotificationSafely(membership.getGuardian().getId(), dto);
             }
         } else {
-            familyMembershipRepository.findByGuardianId(memberId).ifPresent(myMembership -> {
+            familyMembershipRepository.findFamilyIdByGuardianId(memberId).ifPresent(familyId -> {
                 List<SeniorProfile> seniors = seniorProfileRepository
-                        .findAllByFamilyIdWithMember(myMembership.getFamily().getId());
+                        .findAllByFamilyIdWithMember(familyId);
                 for (SeniorProfile senior : seniors) {
                     FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", image);
-                    fcmService.sendMessageToUser(senior.getMember().getId(), dto);
+                    sendNotificationSafely(senior.getMember().getId(), dto);
                 }
             });
         }
@@ -99,14 +96,20 @@ public class AlbumNotificationListener {
 
     private void sendNotificationToSpecificMember(Long memberId, String title, String content) {
         FcmSendDto dto = new FcmSendDto(title, content, FcmCategory.ALBUM, "", ALBUM_DEFAULT_IMAGE);
-        fcmService.sendMessageToUser(memberId, dto);
+        sendNotificationSafely(memberId, dto);
     }
 
-    private boolean hasViewedAllAlbums(Long viewerId, Long albumId) {
-        Member writer = albumRepository.findById(albumId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND))
-                .getMember();
+    private void sendNotificationSafely(Long memberId, FcmSendDto dto) {
+        try {
+            fcmService.sendMessageToUser(memberId, dto);
+        } catch (RuntimeException e) {
+            log.warn("앨범 FCM 알림 전송 실패: memberId={}, category={}, error={}",
+                    memberId, dto.fcmCategory(), e.getMessage());
+        }
+    }
 
+    private boolean hasViewedAllAlbums(Long viewerId, Album album) {
+        Member writer = album.getMember();
         long totalCount = albumRepository.countByMemberId(writer.getId());
         long viewedCount = albumViewRepository.countViewedAlbumsByGuardianAndParent(viewerId, writer.getId());
 
@@ -173,7 +176,7 @@ public class AlbumNotificationListener {
         }
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleAlbumCommented(AlbumCommentedEvent event) {
         Member commenter = memberRepository.findById(event.commenterMemberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
@@ -191,10 +194,10 @@ public class AlbumNotificationListener {
                 "",
                 commenter.getProfileImage()
         );
-        fcmService.sendMessageToUser(albumAuthor.getId(), dto);
+        sendNotificationSafely(albumAuthor.getId(), dto);
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleAlbumLiked(AlbumLikedEvent event) {
         Member liker = memberRepository.findById(event.likerMemberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
@@ -212,15 +215,15 @@ public class AlbumNotificationListener {
                 "",
                 liker.getProfileImage()
         );
-        fcmService.sendMessageToUser(albumAuthor.getId(), dto);
+        sendNotificationSafely(albumAuthor.getId(), dto);
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleAlbumUnlocked(AlbumUnlockedEvent event) {
         Member parentMember = memberRepository.findById(event.parentMemberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_PARENT_MEMBER_NOT_FOUND));
 
-        Album album = albumRepository.findById(event.albumId())
+        Album album = albumRepository.findByIdWithMember(event.albumId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
         FcmSendDto dto = new FcmSendDto(
@@ -230,6 +233,6 @@ public class AlbumNotificationListener {
                 "",
                 parentMember.getProfileImage()
         );
-        fcmService.sendMessageToUser(album.getMember().getId(), dto);
+        sendNotificationSafely(album.getMember().getId(), dto);
     }
 }
