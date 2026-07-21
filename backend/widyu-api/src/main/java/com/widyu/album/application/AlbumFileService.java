@@ -99,6 +99,7 @@ public class AlbumFileService {
 
         File sourceFile = null;
         boolean ownedSourceFile = false;
+        List<String> uploadedUrls = new ArrayList<>();
 
         try {
             // 1) 필요 시 압축 → 결과 File을 이후 단계에서 직접 재사용
@@ -128,19 +129,27 @@ public class AlbumFileService {
             String videoDir = ALBUM_VIDEO_PREFIX + "/" + memberId;
             String videoKey = s3Service.generateFilePath(videoDir, safeOriginalName(processedFile));
             String videoUrl = s3Service.uploadFile(processedFile, videoKey);
+            uploadedUrls.add(videoUrl);
 
             String thumbnailUrl = uploadThumbnail(thumbnailPart, memberId);
+            uploadedUrls.add(thumbnailUrl);
             log.info("비디오/썸네일 업로드 성공: videoUrl={}, thumbnailUrl={}", videoUrl, thumbnailUrl);
 
             return new VideoUploadResult(videoUrl, thumbnailUrl, duration);
 
-        } catch (IOException e) {
+        } catch (Exception e) {
+            cleanupUploadedFiles(uploadedUrls);
             log.error("동영상 처리 실패: name={}, error={}", file.getOriginalFilename(), e.getMessage());
+            if (e instanceof BusinessException businessException) {
+                throw businessException;
+            }
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         } finally {
             cleanupTemp(tempCompressedFile);
             cleanupTemp(tempThumbnailFile);
-            if (ownedSourceFile) cleanupTemp(sourceFile);
+            if (ownedSourceFile) {
+                cleanupTemp(sourceFile);
+            }
         }
     }
 
@@ -241,7 +250,9 @@ public class AlbumFileService {
             }
         } catch (Exception e) {
             cleanupUploadedFiles(uploadedPhotoUrls);
-            if (e instanceof BusinessException be) throw be;
+            if (e instanceof BusinessException be) {
+                throw be;
+            }
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         }
 
@@ -258,7 +269,7 @@ public class AlbumFileService {
         }
     }
 
-    private void cleanupUploadedFiles(List<String> uploadedUrls) {
+    void cleanupUploadedFiles(List<String> uploadedUrls) {
         if (uploadedUrls == null || uploadedUrls.isEmpty()) {
             return;
         }
@@ -277,7 +288,7 @@ public class AlbumFileService {
 
     File toTempFile(MultipartFile file) throws IOException {
         String ext = guessExtByContentType(file.getContentType());
-        Path tmp = Files.createTempFile("source_" + UUID.randomUUID(), ext.isEmpty() ? "" : "." + ext);
+        Path tmp = Files.createTempFile("source_" + UUID.randomUUID(), extensionSuffix(ext));
         Files.copy(file.getInputStream(), tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         return tmp.toFile();
     }
@@ -298,7 +309,7 @@ public class AlbumFileService {
         if (name == null || name.isBlank()) {
             // 확장자 없을 수도 있으니, 타입 기준 fallback
             String ext = guessExtByContentType(file.getContentType());
-            return "upload_" + System.currentTimeMillis() + (ext.isEmpty() ? "" : "." + ext);
+            return "upload_" + System.currentTimeMillis() + extensionSuffix(ext);
         }
         return name;
     }
@@ -308,7 +319,17 @@ public class AlbumFileService {
             return "file";
         }
         int idx = fileName.lastIndexOf('.');
-        return (idx > 0) ? fileName.substring(0, idx) : fileName;
+        if (idx > 0) {
+            return fileName.substring(0, idx);
+        }
+        return fileName;
+    }
+
+    private String extensionSuffix(String ext) {
+        if (ext.isEmpty()) {
+            return "";
+        }
+        return "." + ext;
     }
 
     private String guessExtByContentType(String ct) {
@@ -335,10 +356,9 @@ public class AlbumFileService {
 
     private MultipartFile wrapFileAsMultipart(File file, String originalFileName) throws IOException {
         final Path path = file.toPath();
-        final String fileName =
-                (originalFileName != null && !originalFileName.isBlank()) ? originalFileName : file.getName();
-        final String contentType =
-                Files.probeContentType(path) != null ? Files.probeContentType(path) : detectContentTypeByName(fileName);
+        final String fileName = resolveFileName(originalFileName, file);
+        String probedContentType = Files.probeContentType(path);
+        final String contentType = resolveContentType(probedContentType, fileName);
 
         return new MultipartFile() {
             @NotNull
@@ -408,6 +428,20 @@ public class AlbumFileService {
             case "wmv" -> "video/x-ms-wmv";
             default -> "application/octet-stream";
         };
+    }
+
+    private String resolveFileName(String originalFileName, File file) {
+        if (originalFileName != null && !originalFileName.isBlank()) {
+            return originalFileName;
+        }
+        return file.getName();
+    }
+
+    private String resolveContentType(String probedContentType, String fileName) {
+        if (probedContentType != null) {
+            return probedContentType;
+        }
+        return detectContentTypeByName(fileName);
     }
 
     private String mb(long bytes) {

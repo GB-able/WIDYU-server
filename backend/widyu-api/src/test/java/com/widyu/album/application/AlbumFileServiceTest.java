@@ -1,15 +1,21 @@
 package com.widyu.album.application;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.infrastructure.video.VideoCompressionService;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,6 +77,43 @@ class AlbumFileServiceTest {
     }
 
     @Test
+    @DisplayName("썸네일 업로드가 실패하면 이미 업로드된 영상 파일을 정리한다")
+    void 썸네일_업로드_실패_시_업로드된_영상_파일을_정리한다() throws IOException {
+        // given
+        MultipartFile video = videoFile();
+        File thumbnail = Files.createTempFile("thumbnail_", ".jpg").toFile();
+        Files.writeString(thumbnail.toPath(), "thumbnail");
+
+        given(videoCompressionService.needsCompression(video)).willReturn(false);
+        given(videoCompressionService.extractDuration(any(File.class))).willReturn(10);
+        given(videoCompressionService.generateThumbnail(any(File.class), anyDouble())).willReturn(thumbnail);
+        given(s3Service.generateFilePath(anyString(), anyString()))
+                .willReturn("albums/videos/1/video.mp4")
+                .willReturn("albums/thumbnails/1/video_thumbnail.jpg");
+        given(s3Service.uploadFile(any(MultipartFile.class), anyString()))
+                .willReturn("https://cdn/video.mp4")
+                .willThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED));
+
+        // when & then
+        assertThatThrownBy(() -> albumFileService.uploadAlbumVideoWithThumbnail(video, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_UPLOAD_FAILED);
+        then(s3Service).should().deleteFile("https://cdn/video.mp4");
+    }
+
+    @Test
+    @DisplayName("업로드 파일 정리 실패 시 예외를 덮어쓰지 않는다")
+    void 업로드_파일_정리_실패_시_예외를_던지지_않는다() {
+        // given
+        willThrow(new RuntimeException("delete failed"))
+                .given(s3Service)
+                .deleteFile("https://cdn/video.mp4");
+
+        // when & then
+        albumFileService.cleanupUploadedFiles(List.of("https://cdn/video.mp4"));
+    }
+
+    @Test
     @DisplayName("썸네일 파일이 이미지가 아니면 INVALID_FILE_TYPE 예외를 던지고 업로드하지 않는다")
     void 썸네일_파일이_이미지가_아니면_예외가_발생한다() {
         // given
@@ -91,5 +134,9 @@ class AlbumFileServiceTest {
 
     private MultipartFile imageFile(String filename) {
         return new MockMultipartFile("mediaFiles", filename, "image/jpeg", "image".getBytes());
+    }
+
+    private MultipartFile videoFile() {
+        return new MockMultipartFile("mediaFiles", "video.mp4", "video/mp4", "video".getBytes());
     }
 }
