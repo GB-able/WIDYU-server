@@ -30,7 +30,7 @@ public class MemberFcmTokenService {
             MemberFcmToken existingToken = tokenOpt.get();
 
             if (!existingToken.getMember().equals(currentMember)) {
-                existingToken.deactivate();
+                existingToken.transferTo(currentMember);
             } else {
                 // 같은 유저가 다시 로그인하면 토큰 활성화
                 existingToken.activate();

@@ -54,4 +54,9 @@ public class MemberFcmToken {
         this.expiredAt = null;
         this.lastUsedAt = LocalDateTime.now();
     }
+
+    public void transferTo(Member member) {
+        this.member = member;
+        activate();
+    }
 }
