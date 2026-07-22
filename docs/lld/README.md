@@ -63,3 +63,4 @@ LLD가 필요 없는 PR은 PR 본문에 `LLD: N/A - <사유>`를 남긴다.
 | LLD-0012 | 앨범 영상 처리 실패 보상 삭제 | Approved | #424 |
 | LLD-0013 | 앨범 알림 부수효과 격리 | Approved | #426 |
 | LLD-0014 | FCM 토큰 소유자 변경 처리 | Approved | #428 |
+| LLD-0015 | 결제 PG 호출과 내부 반영 경계 검증 | Approved | #430 |
