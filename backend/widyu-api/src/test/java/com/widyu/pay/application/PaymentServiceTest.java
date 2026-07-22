@@ -244,6 +244,96 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("PG 승인 성공 후 포인트 적립이 실패하면 예외가 전파되고 PG 호출은 이미 완료된다")
+    void PG_승인_성공_후_포인트_적립_실패_시_예외가_전파된다() {
+        Member member = createMember(1L, "시니어");
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.CREATED);
+        PaymentApproveRequest request = new PaymentApproveRequest("order_123", "pay_123");
+        PaymentConfirmResponse approvedResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.DONE);
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.empty());
+        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.empty());
+        given(paymentClient.confirmPayment(any())).willReturn(approvedResponse);
+        given(paymentRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.BDDMockito.willThrow(new BusinessException(ErrorCode.POINT_CONCURRENT_UPDATE))
+                .given(seniorProfileService)
+                .addPointsToMember(member.getId(), 10000L, "포인트 충전 10,000원");
+
+        assertThatThrownBy(() -> paymentService.confirmPayment(request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.POINT_CONCURRENT_UPDATE);
+
+        verify(paymentClient).confirmPayment(any());
+        verify(paymentRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("PG 승인 호출이 실패하면 내부 결제 저장과 포인트 적립을 시도하지 않는다")
+    void PG_승인_호출_실패_시_내부_반영을_시도하지_않는다() {
+        Member member = createMember(1L, "시니어");
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.CREATED);
+        PaymentApproveRequest request = new PaymentApproveRequest("order_123", "pay_123");
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.empty());
+        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.empty());
+        given(paymentClient.confirmPayment(any())).willThrow(new IllegalStateException("PG timeout"));
+
+        assertThatThrownBy(() -> paymentService.confirmPayment(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("PG timeout");
+
+        verify(paymentRepository, never()).save(any());
+        verify(seniorProfileService, never()).addPointsToMember(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("PG 취소 성공 후 포인트 환수가 실패하면 예외가 전파되고 PG 취소는 이미 완료된다")
+    void PG_취소_성공_후_포인트_환수_실패_시_예외가_전파된다() {
+        Member member = createMember(1L, "시니어");
+        given(member.getSeniorProfile().hasEnoughPoints(10000L)).willReturn(true);
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.PAID);
+        Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
+        PaymentConfirmResponse canceledResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.CANCELED);
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentClient.cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000))).willReturn(canceledResponse);
+        org.mockito.BDDMockito.willThrow(new BusinessException(ErrorCode.POINT_CONCURRENT_UPDATE))
+                .given(seniorProfileService)
+                .deductPointsFromMember(member.getId(), 10000L, "사용자 요청");
+
+        assertThatThrownBy(() -> paymentService.cancelPayment("pay_123", null))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.POINT_CONCURRENT_UPDATE);
+
+        verify(paymentClient).cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000));
+    }
+
+    @Test
+    @DisplayName("PG 취소 호출이 실패하면 포인트 환수를 시도하지 않는다")
+    void PG_취소_호출_실패_시_포인트_환수를_시도하지_않는다() {
+        Member member = createMember(1L, "시니어");
+        given(member.getSeniorProfile().hasEnoughPoints(10000L)).willReturn(true);
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.PAID);
+        Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentClient.cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000)))
+                .willThrow(new IllegalStateException("PG timeout"));
+
+        assertThatThrownBy(() -> paymentService.cancelPayment("pay_123", null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("PG timeout");
+
+        verify(seniorProfileService, never()).deductPointsFromMember(anyLong(), anyLong(), any());
+    }
+
+    @Test
     @DisplayName("시니어가 아닌 회원은 주문 생성이 불가능하다")
     void 시니어가_아니면_주문_생성_불가() {
         Member member = Member.createMember(MemberType.GUARDIAN, "보호자", "01012345678");
