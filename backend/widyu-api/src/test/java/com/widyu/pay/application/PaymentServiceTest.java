@@ -29,6 +29,7 @@ import com.widyu.pay.dto.response.PaymentPackageResponse;
 import com.widyu.pay.dto.response.PaymentOrderResponse;
 import com.widyu.pay.repository.PaymentOrderRepository;
 import com.widyu.pay.repository.PaymentRepository;
+import jakarta.persistence.LockModeType;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.jpa.repository.Lock;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PaymentService 단위 테스트")
@@ -79,6 +81,16 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("결제 주문 조회는 병렬 승인 요청을 직렬화하기 위해 비관적 쓰기 락을 사용한다")
+    void 결제_주문_조회는_비관적_쓰기_락을_사용한다() throws NoSuchMethodException {
+        Lock lock = PaymentOrderRepository.class
+                .getMethod("findByOrderIdForUpdate", String.class)
+                .getAnnotation(Lock.class);
+
+        assertThat(lock.value()).isEqualTo(LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
     @DisplayName("이미 저장된 주문 결제면 기존 결제를 반환하고 PG 승인 호출을 생략한다")
     void 중복_결제_승인_요청은_기존_결제를_반환한다() {
         Member member = createMember(1L, "보호자");
@@ -87,7 +99,7 @@ class PaymentServiceTest {
         PaymentApproveRequest request = new PaymentApproveRequest("order_123", "pay_123");
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentOrderRepository.findByOrderIdForUpdate("order_123")).willReturn(Optional.of(paymentOrder));
         given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.of(payment));
 
         PaymentConfirmResponse response = paymentService.confirmPayment(request);
@@ -105,7 +117,7 @@ class PaymentServiceTest {
         PaymentApproveRequest request = new PaymentApproveRequest("order_123", "pay_123");
 
         given(memberUtil.getCurrentMember()).willReturn(currentMember);
-        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentOrderRepository.findByOrderIdForUpdate("order_123")).willReturn(Optional.of(paymentOrder));
 
         assertThatThrownBy(() -> paymentService.confirmPayment(request))
                 .isInstanceOf(BusinessException.class)
@@ -231,7 +243,7 @@ class PaymentServiceTest {
         PaymentConfirmResponse approvedResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.DONE);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentOrderRepository.findByOrderIdForUpdate("order_123")).willReturn(Optional.of(paymentOrder));
         given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.empty());
         given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.empty());
         given(paymentClient.confirmPayment(any())).willReturn(approvedResponse);
@@ -252,7 +264,7 @@ class PaymentServiceTest {
         PaymentConfirmResponse approvedResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.DONE);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentOrderRepository.findByOrderIdForUpdate("order_123")).willReturn(Optional.of(paymentOrder));
         given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.empty());
         given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.empty());
         given(paymentClient.confirmPayment(any())).willReturn(approvedResponse);
@@ -277,7 +289,7 @@ class PaymentServiceTest {
         PaymentApproveRequest request = new PaymentApproveRequest("order_123", "pay_123");
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentOrderRepository.findByOrderId("order_123")).willReturn(Optional.of(paymentOrder));
+        given(paymentOrderRepository.findByOrderIdForUpdate("order_123")).willReturn(Optional.of(paymentOrder));
         given(paymentRepository.findByOrderId("order_123")).willReturn(Optional.empty());
         given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.empty());
         given(paymentClient.confirmPayment(any())).willThrow(new IllegalStateException("PG timeout"));
