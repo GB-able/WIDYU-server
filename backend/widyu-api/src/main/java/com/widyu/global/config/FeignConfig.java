@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @EnableFeignClients(basePackages = {
-        "com.widyu.pay.config",
+        "com.widyu.pay",
         "com.widyu.goal.medicineschedule.client",
         "com.widyu.goal.addressbookmark.client"
 })
