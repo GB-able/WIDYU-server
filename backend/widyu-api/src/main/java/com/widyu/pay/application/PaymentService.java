@@ -74,7 +74,7 @@ public class PaymentService {
     public PaymentConfirmResponse confirmPayment(PaymentApproveRequest request) {
         Member currentMember = memberUtil.getCurrentMember();
         validateSeniorMember(currentMember);
-        PaymentOrder paymentOrder = paymentOrderRepository.findByOrderId(request.orderId())
+        PaymentOrder paymentOrder = paymentOrderRepository.findByOrderIdForUpdate(request.orderId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND, "주문 정보를 찾을 수 없습니다."));
 
         validatePaymentOrderOwnership(paymentOrder, currentMember.getId());
