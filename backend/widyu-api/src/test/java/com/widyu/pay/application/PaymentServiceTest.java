@@ -20,7 +20,7 @@ import com.widyu.pay.PaymentOrder;
 import com.widyu.pay.PaymentOrderStatus;
 import com.widyu.pay.PaymentStatus;
 import com.widyu.pay.PointChargePackage;
-import com.widyu.pay.config.PaymentClient;
+import com.widyu.pay.infrastructure.PaymentClient;
 import com.widyu.pay.dto.request.CancelRequest;
 import com.widyu.pay.dto.request.PaymentApproveRequest;
 import com.widyu.pay.dto.request.PaymentOrderCreateRequest;

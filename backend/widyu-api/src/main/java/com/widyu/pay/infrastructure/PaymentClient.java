@@ -1,5 +1,6 @@
-package com.widyu.pay.config;
+package com.widyu.pay.infrastructure;
 
+import com.widyu.pay.config.PaymentFeignConfig;
 import com.widyu.pay.dto.request.CancelRequest;
 import com.widyu.pay.dto.request.PaymentGatewayConfirmRequest;
 import com.widyu.pay.dto.response.PaymentConfirmResponse;
