@@ -218,4 +218,4 @@ HTTP 202 이후 async 실패는 클라이언트 요청에 직접 예외로 반�
 - `AlbumVideoProcessingService.java`: `@Async @Transactional` 영상 처리
 - `FFmpegVideoCompressionService.java`: 압축, 길이 추출, 썸네일 생성
 - `Album.java` (widyu-domain): PROCESSING/ACTIVE 상태 전환
-- `apiDocs/video-benchmark-results.md`: 영상 처리 벤치마크
+- `apiDocs/api/album/video-benchmark-results.md`: 영상 처리 벤치마크
