@@ -3,6 +3,8 @@ package com.widyu.pay.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.widyu.auth.application.SmsService;
 import com.widyu.auth.repository.RefreshTokenRepository;
@@ -139,7 +141,7 @@ class PaymentIntegrationTest {
         ));
         paymentService.confirmPayment(new PaymentApproveRequest(orderResponse.orderId(), "pay_654321"));
         given(memberUtil.getCurrentMember()).willReturn(reloadCurrentMember(currentMember.getId()));
-        given(paymentClient.cancelPayment("pay_654321", new CancelRequest("부분 취소", 3000)))
+        given(paymentClient.cancelPayment("pay_654321", new CancelRequest("부분 취소", 3000, "cancel-request-1")))
                 .willReturn(createGatewayResponse(
                         "pay_654321",
                         orderResponse.orderId(),
@@ -148,7 +150,7 @@ class PaymentIntegrationTest {
                 ));
         PaymentConfirmResponse cancelResponse = paymentService.cancelPayment(
                 "pay_654321",
-                new CancelRequest("부분 취소", 3000)
+                new CancelRequest("부분 취소", 3000, "cancel-request-1")
         );
 
         Payment payment = paymentRepository.findByPaymentKey("pay_654321").orElseThrow();
@@ -167,6 +169,49 @@ class PaymentIntegrationTest {
         assertThat(pointHistories.get(0).getType()).isEqualTo(PointHistoryType.USE);
         assertThat(pointHistories.get(0).getAmount()).isEqualTo(3000L);
         assertThat(pointHistories.get(0).getDescription()).isEqualTo("부분 취소");
+    }
+
+    @Test
+    @DisplayName("같은 멱등 키로 부분 취소를 재요청하면 취소와 포인트 환수가 한 번만 반영된다")
+    void 동일_멱등_키_부분_취소_재요청_통합() {
+        Member currentMember = createSeniorMember("김영희", "01099998887", "FAM003", "INV0033");
+        given(memberUtil.getCurrentMember()).willReturn(currentMember, currentMember);
+
+        PaymentOrderResponse orderResponse = paymentService.createOrder(new PaymentOrderCreateRequest("POINT_10000"));
+        given(paymentClient.confirmPayment(any())).willReturn(createGatewayResponse(
+                "pay_777777",
+                orderResponse.orderId(),
+                "포인트 충전 10,000원",
+                PaymentStatus.DONE
+        ));
+        paymentService.confirmPayment(new PaymentApproveRequest(orderResponse.orderId(), "pay_777777"));
+
+        CancelRequest cancelRequest = new CancelRequest("부분 취소", 3000, "cancel-request-duplicate");
+        given(memberUtil.getCurrentMember()).willReturn(
+                reloadCurrentMember(currentMember.getId()),
+                reloadCurrentMember(currentMember.getId())
+        );
+        given(paymentClient.cancelPayment("pay_777777", cancelRequest)).willReturn(createGatewayResponse(
+                "pay_777777",
+                orderResponse.orderId(),
+                "포인트 충전 10,000원",
+                PaymentStatus.PARTIAL_CANCELED
+        ));
+
+        paymentService.cancelPayment("pay_777777", cancelRequest);
+        PaymentConfirmResponse duplicatedResponse = paymentService.cancelPayment("pay_777777", cancelRequest);
+
+        Payment payment = paymentRepository.findByPaymentKey("pay_777777").orElseThrow();
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow();
+        List<com.widyu.member.PointHistory> pointHistories =
+                pointHistoryRepository.findAllBySeniorProfileIdOrderByCreatedAtDesc(seniorProfile.getId());
+
+        assertThat(duplicatedResponse.getStatus()).isEqualTo(PaymentStatus.PARTIAL_CANCELED);
+        assertThat(duplicatedResponse.getCancellations()).hasSize(1);
+        assertThat(payment.getCanceledAmount()).isEqualTo(3000);
+        assertThat(seniorProfile.getPoints()).isEqualTo(7100L);
+        assertThat(pointHistories).hasSize(2);
+        verify(paymentClient, times(1)).cancelPayment("pay_777777", cancelRequest);
     }
 
     private Member createSeniorMember(String name, String phoneNumber, String familyCode, String inviteCode) {

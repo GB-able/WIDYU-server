@@ -1,0 +1,35 @@
+# ADR-0012: 부분 취소는 클라이언트 멱등 키와 결제 행 잠금으로 직렬화한다
+
+- 상태: Accepted
+- 날짜: 2026-07-25
+
+## 맥락
+
+부분 취소는 PG 환불, `PaymentCancel` 저장, `Payment` 누적 취소 금액 변경, 포인트 환수를 하나의 흐름에서 수행한다. 기존에는 같은 요청의 재전송이나 병렬 요청이 PG 환불과 포인트 환수를 중복 수행할 수 있었다.
+
+## 결정
+
+- 부분 취소 요청은 `idempotencyKey`를 제공한다.
+- `PaymentCancel`에 요청 키를 저장하고 `(payment_id, idempotency_key)` 고유 제약을 둔다.
+- 취소 시작 시 `Payment`를 비관적 쓰기 잠금으로 조회한다. 잠금을 획득한 뒤 같은 키의 취소 이력이 있으면 PG를 다시 호출하지 않고 현재 결제 결과를 반환한다.
+- 같은 키에 금액 또는 사유가 다르면 `BAD_REQUEST`로 거부한다.
+- `idempotencyKey`는 내부 중복 방지용으로만 사용하며 PG 요청 본문에는 전송하지 않는다.
+
+전액 취소는 기존처럼 취소 상태를 반환할 수 있으므로 키를 필수로 만들지 않는다. 단, 같은 결제 행 잠금으로 병렬 전액 취소도 직렬화한다.
+
+## 대안
+
+1. Toss 취소 거래 키만 저장한다: PG 응답 계약에 의존하고 요청 전 중복 호출을 막지 못한다.
+2. `Payment`의 낙관적 락만 사용한다: 커밋 시점 충돌 전에 외부 PG 호출이 중복될 수 있다.
+3. 분산 락을 사용한다: DB 트랜잭션과 별도 일관성 모델·운영 의존성이 필요하다.
+
+## 결과 및 후속 위험
+
+동일 부분 취소 재전송은 안전하게 처리되지만, 잠금을 보유한 채 PG를 호출하므로 PG 지연이 길면 동일 결제의 다른 취소 요청도 대기한다. 이는 중복 환불을 허용하는 것보다 우선한다. 운영 DB에는 아래 마이그레이션이 필요하다.
+
+```sql
+ALTER TABLE payment_cancel ADD COLUMN idempotency_key VARCHAR(100) NULL;
+ALTER TABLE payment_cancel
+    ADD CONSTRAINT uk_payment_cancel_payment_idempotency_key
+    UNIQUE (payment_id, idempotency_key);
+```

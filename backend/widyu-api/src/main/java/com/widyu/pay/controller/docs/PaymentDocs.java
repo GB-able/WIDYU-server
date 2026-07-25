@@ -174,7 +174,7 @@ public interface PaymentDocs {
 
     @Operation(
             summary = "결제 취소",
-            description = "주어진 paymentKey를 기준으로 결제를 취소합니다."
+            description = "주어진 paymentKey를 기준으로 결제를 취소합니다. 부분 취소에는 재전송 방지를 위한 idempotencyKey가 필요합니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -239,8 +239,9 @@ public interface PaymentDocs {
                                     name = "취소 요청 예시",
                                     value = """
                                             {
-                                              "cancelReason": "사용자 요청",
-                                              "cancelAmount": 10000
+                                              "cancelReason": "부분 취소 요청",
+                                              "cancelAmount": 3000,
+                                              "idempotencyKey": "cancel-20260725-0001"
                                             }
                                             """
                             )

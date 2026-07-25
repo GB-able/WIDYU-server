@@ -114,11 +114,13 @@ Request:
 ```json
 {
   "cancelReason": "구매 실수",
-  "cancelAmount": 10000
+  "cancelAmount": 10000,
+  "idempotencyKey": "cancel-20260725-0001"
 }
 ```
 - `cancelReason` 미전달 시 "사용자 요청"으로 처리
 - `cancelAmount` 미전달 시 전액 취소
+- 부분 취소는 `idempotencyKey` 필수. 같은 키 재전송은 기존 결과를 반환한다.
 
 ```http
 GET /api/v1/payment/me
@@ -325,12 +327,13 @@ POST {spring.payment.base-url}/{paymentKey}/cancel  → cancelPayment()
 - [x] 부분 취소 시 취소 금액 비례 포인트가 환수된다
 - [x] 전액 취소 시 PaymentOrder.status가 CANCELED로 변경된다
 - [x] 취소에 필요한 포인트가 부족하면 BAD_REQUEST가 반환된다
+- [x] 동일 멱등 키의 부분 취소 재전송은 PG 호출과 포인트 환수를 반복하지 않는다
 - [x] Swagger에 주문·승인·취소·내역 응답이 반영된다
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다
 
 ## 8. 영향 범위 / 마이그레이션
 
-- 기존 구현 완료 상태, 스키마 변경 없음
+- 부분 취소 멱등성을 위해 `payment_cancel.idempotency_key`와 `(payment_id, idempotency_key)` 고유 제약을 추가한다.
 - `PointChargePackage` enum 변경 시 기존 `payment_order.package_id` 데이터 영향 없음 (문자열로 저장)
 - 새 패키지 추가: enum 값 추가만으로 반영 (DB 마이그레이션 불필요)
 
@@ -350,9 +353,18 @@ POST {spring.payment.base-url}/{paymentKey}/cancel  → cancelPayment()
   ALTER TABLE senior_profile ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
   ```
 
+### 부분 취소 멱등 키 도입 (2026-07-25)
+
+```sql
+ALTER TABLE payment_cancel ADD COLUMN idempotency_key VARCHAR(100) NULL;
+ALTER TABLE payment_cancel
+    ADD CONSTRAINT uk_payment_cancel_payment_idempotency_key
+    UNIQUE (payment_id, idempotency_key);
+```
+
 ## 9. 미결정 사항 (Open Questions)
 
-없음. (백필 문서, 구현 완료 상태)
+Toss의 취소 거래 키를 대사·보정 식별자로 별도 보관할지 검토한다.
 
 ## 10. 참고
 

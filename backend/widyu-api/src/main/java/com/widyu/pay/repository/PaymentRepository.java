@@ -5,6 +5,8 @@ import com.widyu.pay.PaymentStatus;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +16,10 @@ import org.springframework.data.repository.query.Param;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByPaymentKey(String paymentKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.paymentKey = :paymentKey")
+    Optional<Payment> findByPaymentKeyForUpdate(@Param("paymentKey") String paymentKey);
 
     List<Payment> findByMemberId(Long memberId);
 
