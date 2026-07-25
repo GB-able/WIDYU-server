@@ -20,20 +20,70 @@ public class GuardianMyPageCommandService {
     private final MemberUtil memberUtil;
     private final FamilyAccessService familyAccessService;
 
-    public void updateName(UpdateNameRequest request) { guardianMyPageService.updateName(request); }
-    public void updateProfileImage(MultipartFile image) { guardianMyPageService.updateProfileImage(image); }
-    public void addSenior(SeniorSignUpRequest request) { guardianMyPageService.addSenior(request); }
-    public void sendPhoneChangeSms(UpdatePhoneRequest request) { guardianMyPageService.sendPhoneChangeSms(request); }
-    public void verifyPhoneChangeCode(SmsCodeRequest request) { guardianMyPageService.verifyPhoneChangeCode(request); }
-    public void updatePhone(UpdatePhoneRequest request) { guardianMyPageService.updatePhone(request); }
-    public void updateSeniorName(Long memberId, UpdateNameRequest request) { verifyLeaderAccess(memberId); guardianMyPageService.updateSeniorName(memberId, request); }
-    public void updateSeniorPhone(Long memberId, UpdatePhoneRequest request) { verifyLeaderAccess(memberId); guardianMyPageService.updateSeniorPhone(memberId, request); }
-    public void updateSeniorAddress(Long memberId, UpdateSeniorAddressRequest request) { verifyLeaderAccess(memberId); guardianMyPageService.updateSeniorAddress(memberId, request); }
-    public void updateSeniorProfileImage(Long memberId, MultipartFile image) { verifyLeaderAccess(memberId); guardianMyPageService.updateSeniorProfileImage(memberId, image); }
-    public void updateSeniorInviteCode(Long memberId, UpdateInviteCodeRequest request) { verifyLeaderAccess(memberId); guardianMyPageService.updateSeniorInviteCode(memberId, request); }
-    public void changeLeader(Long memberId) { verifyGuardianLeader(); guardianMyPageService.changeLeader(memberId); }
-    public void deleteFamilyMember(Long memberId) { verifyGuardianLeader(); guardianMyPageService.deleteFamilyMember(memberId); }
+    public void updateName(UpdateNameRequest request) {
+        guardianMyPageService.updateName(request);
+    }
 
-    private void verifyLeaderAccess(Long memberId) { familyAccessService.verifyLeaderAccess(memberUtil.getCurrentMember().getId(), memberId); }
-    private void verifyGuardianLeader() { familyAccessService.verifyGuardianLeader(memberUtil.getCurrentMember().getId()); }
+    public void updateProfileImage(MultipartFile image) {
+        guardianMyPageService.updateProfileImage(image);
+    }
+
+    public void addSenior(SeniorSignUpRequest request) {
+        guardianMyPageService.addSenior(request);
+    }
+
+    public void sendPhoneChangeSms(UpdatePhoneRequest request) {
+        guardianMyPageService.sendPhoneChangeSms(request);
+    }
+
+    public void verifyPhoneChangeCode(SmsCodeRequest request) {
+        guardianMyPageService.verifyPhoneChangeCode(request);
+    }
+
+    public void updatePhone(UpdatePhoneRequest request) {
+        guardianMyPageService.updatePhone(request);
+    }
+
+    public void updateSeniorName(Long memberId, UpdateNameRequest request) {
+        verifyLeaderAccess(memberId);
+        guardianMyPageService.updateSeniorName(memberId, request);
+    }
+
+    public void updateSeniorPhone(Long memberId, UpdatePhoneRequest request) {
+        verifyLeaderAccess(memberId);
+        guardianMyPageService.updateSeniorPhone(memberId, request);
+    }
+
+    public void updateSeniorAddress(Long memberId, UpdateSeniorAddressRequest request) {
+        verifyLeaderAccess(memberId);
+        guardianMyPageService.updateSeniorAddress(memberId, request);
+    }
+
+    public void updateSeniorProfileImage(Long memberId, MultipartFile image) {
+        verifyLeaderAccess(memberId);
+        guardianMyPageService.updateSeniorProfileImage(memberId, image);
+    }
+
+    public void updateSeniorInviteCode(Long memberId, UpdateInviteCodeRequest request) {
+        verifyLeaderAccess(memberId);
+        guardianMyPageService.updateSeniorInviteCode(memberId, request);
+    }
+
+    public void changeLeader(Long memberId) {
+        verifyGuardianLeader();
+        guardianMyPageService.changeLeader(memberId);
+    }
+
+    public void deleteFamilyMember(Long memberId) {
+        verifyGuardianLeader();
+        guardianMyPageService.deleteFamilyMember(memberId);
+    }
+
+    private void verifyLeaderAccess(Long memberId) {
+        familyAccessService.verifyLeaderAccess(memberUtil.getCurrentMember().getId(), memberId);
+    }
+
+    private void verifyGuardianLeader() {
+        familyAccessService.verifyGuardianLeader(memberUtil.getCurrentMember().getId());
+    }
 }

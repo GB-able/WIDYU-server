@@ -16,9 +16,23 @@ public class SeniorMyPageQueryService {
 
     private final SeniorMyPageService seniorMyPageService;
 
-    public SeniorInfoResponse getSeniorInfo() { return seniorMyPageService.getSeniorInfo(); }
-    public FamilyCodeResponse getFamilyCode() { return seniorMyPageService.getFamilyCode(); }
-    public SeniorProfileDetailResponse getProfileDetail() { return seniorMyPageService.getProfileDetail(); }
-    public PointHistoryResponse getPointHistory() { return seniorMyPageService.getPointHistory(); }
-    public EmergencyContactResponse getEmergencyContacts() { return seniorMyPageService.getEmergencyContacts(); }
+    public SeniorInfoResponse getSeniorInfo() {
+        return seniorMyPageService.getSeniorInfo();
+    }
+
+    public FamilyCodeResponse getFamilyCode() {
+        return seniorMyPageService.getFamilyCode();
+    }
+
+    public SeniorProfileDetailResponse getProfileDetail() {
+        return seniorMyPageService.getProfileDetail();
+    }
+
+    public PointHistoryResponse getPointHistory() {
+        return seniorMyPageService.getPointHistory();
+    }
+
+    public EmergencyContactResponse getEmergencyContacts() {
+        return seniorMyPageService.getEmergencyContacts();
+    }
 }

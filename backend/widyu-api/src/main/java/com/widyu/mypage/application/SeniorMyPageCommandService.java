@@ -12,8 +12,19 @@ public class SeniorMyPageCommandService {
 
     private final SeniorMyPageService seniorMyPageService;
 
-    public void updateName(UpdateNameRequest request) { seniorMyPageService.updateName(request); }
-    public void updateProfileImage(MultipartFile image) { seniorMyPageService.updateProfileImage(image); }
-    public void updatePhoneNumber(UpdatePhoneRequest request) { seniorMyPageService.updatePhoneNumber(request); }
-    public void updateRepresentativeContact(Long memberId) { seniorMyPageService.updateRepresentativeContact(memberId); }
+    public void updateName(UpdateNameRequest request) {
+        seniorMyPageService.updateName(request);
+    }
+
+    public void updateProfileImage(MultipartFile image) {
+        seniorMyPageService.updateProfileImage(image);
+    }
+
+    public void updatePhoneNumber(UpdatePhoneRequest request) {
+        seniorMyPageService.updatePhoneNumber(request);
+    }
+
+    public void updateRepresentativeContact(Long memberId) {
+        seniorMyPageService.updateRepresentativeContact(memberId);
+    }
 }
