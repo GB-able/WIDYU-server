@@ -16,6 +16,7 @@ import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.application.SeniorProfileService;
 import com.widyu.pay.Payment;
+import com.widyu.pay.PaymentCancel;
 import com.widyu.pay.PaymentOrder;
 import com.widyu.pay.PaymentOrderStatus;
 import com.widyu.pay.PaymentStatus;
@@ -91,6 +92,16 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("결제 취소 조회는 병렬 취소 요청을 직렬화하기 위해 비관적 쓰기 락을 사용한다")
+    void 결제_취소_조회는_비관적_쓰기_락을_사용한다() throws NoSuchMethodException {
+        Lock lock = PaymentRepository.class
+                .getMethod("findByPaymentKeyForUpdate", String.class)
+                .getAnnotation(Lock.class);
+
+        assertThat(lock.value()).isEqualTo(LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
     @DisplayName("이미 저장된 주문 결제면 기존 결제를 반환하고 PG 승인 호출을 생략한다")
     void 중복_결제_승인_요청은_기존_결제를_반환한다() {
         Member member = createMember(1L, "보호자");
@@ -137,7 +148,7 @@ class PaymentServiceTest {
         PaymentConfirmResponse canceledResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.CANCELED);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
         given(paymentClient.cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000))).willReturn(canceledResponse);
 
         PaymentConfirmResponse result = paymentService.cancelPayment("pay_123", null);
@@ -163,7 +174,7 @@ class PaymentServiceTest {
         Payment payment = createPayment(otherMember, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
 
         given(memberUtil.getCurrentMember()).willReturn(currentMember);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
 
         assertThatThrownBy(() -> paymentService.cancelPayment("pay_123", new CancelRequest("사용자 요청", null)))
                 .isInstanceOf(BusinessException.class)
@@ -181,7 +192,7 @@ class PaymentServiceTest {
         payment.cancel(10000, 10000, "기존 취소", ZonedDateTime.now());
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
 
         PaymentConfirmResponse result = paymentService.cancelPayment("pay_123", new CancelRequest("다시 취소", null));
 
@@ -200,10 +211,10 @@ class PaymentServiceTest {
         PaymentConfirmResponse partialCanceledResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.PARTIAL_CANCELED);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
-        given(paymentClient.cancelPayment("pay_123", new CancelRequest("부분 취소", 3000))).willReturn(partialCanceledResponse);
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
+        given(paymentClient.cancelPayment("pay_123", new CancelRequest("부분 취소", 3000, "cancel-request-1"))).willReturn(partialCanceledResponse);
 
-        PaymentConfirmResponse result = paymentService.cancelPayment("pay_123", new CancelRequest("부분 취소", 3000));
+        PaymentConfirmResponse result = paymentService.cancelPayment("pay_123", new CancelRequest("부분 취소", 3000, "cancel-request-1"));
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.PARTIAL_CANCELED);
         assertThat(payment.getCanceledAmount()).isEqualTo(3000);
@@ -212,6 +223,85 @@ class PaymentServiceTest {
         assertThat(result.getCancellations()).hasSize(1);
         assertThat(paymentOrder.getStatus()).isEqualTo(PaymentOrderStatus.PAID);
         verify(seniorProfileService).deductPointsFromMember(member.getId(), 3000L, "부분 취소");
+    }
+
+    @Test
+    @DisplayName("같은 멱등 키로 부분 취소를 재요청하면 PG를 재호출하지 않고 기존 결과를 반환한다")
+    void 동일_멱등_키_부분_취소_재요청은_기존_결과를_반환한다() {
+        Member member = createMember(1L, "시니어");
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.PAID);
+        Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
+        PaymentCancel paymentCancel = PaymentCancel.create(
+                payment,
+                3000,
+                3000,
+                "부분 취소",
+                member.getId(),
+                "cancel-request-1",
+                ZonedDateTime.now()
+        );
+        payment.addCancellation(paymentCancel);
+        payment.cancel(3000, 3000, "부분 취소", ZonedDateTime.now());
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
+
+        PaymentConfirmResponse result = paymentService.cancelPayment(
+                "pay_123",
+                new CancelRequest("부분 취소", 3000, "cancel-request-1")
+        );
+
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.PARTIAL_CANCELED);
+        assertThat(result.getCancellations()).hasSize(1);
+        verify(paymentClient, never()).cancelPayment(any(), any());
+        verify(seniorProfileService, never()).deductPointsFromMember(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("같은 멱등 키에 다른 부분 취소 요청을 보내면 예외가 발생한다")
+    void 동일_멱등_키_상이한_부분_취소_요청은_예외가_발생한다() {
+        Member member = createMember(1L, "시니어");
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.PAID);
+        Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
+        PaymentCancel paymentCancel = PaymentCancel.create(
+                payment,
+                3000,
+                3000,
+                "부분 취소",
+                member.getId(),
+                "cancel-request-1",
+                ZonedDateTime.now()
+        );
+        payment.addCancellation(paymentCancel);
+        payment.cancel(3000, 3000, "부분 취소", ZonedDateTime.now());
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.cancelPayment(
+                "pay_123",
+                new CancelRequest("다른 사유", 3000, "cancel-request-1")
+        )).isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+
+        verify(paymentClient, never()).cancelPayment(any(), any());
+    }
+
+    @Test
+    @DisplayName("부분 취소에 멱등 키가 없으면 PG 호출 전에 예외가 발생한다")
+    void 부분_취소_멱등_키_누락_시_예외가_발생한다() {
+        Member member = createMember(1L, "시니어");
+        PaymentOrder paymentOrder = createOrder(member, "order_123", 10000, PaymentOrderStatus.PAID);
+        Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.cancelPayment("pay_123", new CancelRequest("부분 취소", 3000)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+
+        verify(paymentClient, never()).cancelPayment(any(), any());
     }
 
     @Test
@@ -225,7 +315,7 @@ class PaymentServiceTest {
         Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
 
         assertThatThrownBy(() -> paymentService.cancelPayment("pay_123", null))
                 .isInstanceOf(BusinessException.class)
@@ -312,7 +402,7 @@ class PaymentServiceTest {
         PaymentConfirmResponse canceledResponse = createResponse("pay_123", "order_123", 10000, PaymentStatus.CANCELED);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
         given(paymentClient.cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000))).willReturn(canceledResponse);
         org.mockito.BDDMockito.willThrow(new BusinessException(ErrorCode.POINT_CONCURRENT_UPDATE))
                 .given(seniorProfileService)
@@ -334,7 +424,7 @@ class PaymentServiceTest {
         Payment payment = createPayment(member, paymentOrder, "pay_123", "order_123", 10000, PaymentStatus.DONE);
 
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(paymentRepository.findByPaymentKey("pay_123")).willReturn(Optional.of(payment));
+        given(paymentRepository.findByPaymentKeyForUpdate("pay_123")).willReturn(Optional.of(payment));
         given(paymentClient.cancelPayment("pay_123", new CancelRequest("사용자 요청", 10000)))
                 .willThrow(new IllegalStateException("PG timeout"));
 

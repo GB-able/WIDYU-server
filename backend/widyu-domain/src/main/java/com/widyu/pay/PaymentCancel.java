@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.ZonedDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -19,7 +20,13 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "payment_cancel")
+@Table(
+        name = "payment_cancel",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_payment_cancel_payment_idempotency_key",
+                columnNames = {"payment_id", "idempotency_key"}
+        )
+)
 public class PaymentCancel extends BaseTimeEntity {
 
     @Id
@@ -42,30 +49,39 @@ public class PaymentCancel extends BaseTimeEntity {
     @Column(name = "requested_by_member_id", nullable = false)
     private Long requestedByMemberId;
 
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     @Column(name = "canceled_at", nullable = false)
     private ZonedDateTime canceledAt;
 
     @Builder(access = AccessLevel.PRIVATE)
     private PaymentCancel(Payment payment, int cancelAmount, int cancelPointAmount, String cancelReason,
-                          Long requestedByMemberId, ZonedDateTime canceledAt) {
+                          Long requestedByMemberId, String idempotencyKey, ZonedDateTime canceledAt) {
         this.payment = payment;
         this.cancelAmount = cancelAmount;
         this.cancelPointAmount = cancelPointAmount;
         this.cancelReason = cancelReason;
         this.requestedByMemberId = requestedByMemberId;
+        this.idempotencyKey = idempotencyKey;
         this.canceledAt = canceledAt;
     }
 
     public static PaymentCancel create(Payment payment, int cancelAmount, int cancelPointAmount, String cancelReason,
-                                       Long requestedByMemberId, ZonedDateTime canceledAt) {
+                                       Long requestedByMemberId, String idempotencyKey, ZonedDateTime canceledAt) {
         return PaymentCancel.builder()
                 .payment(payment)
                 .cancelAmount(cancelAmount)
                 .cancelPointAmount(cancelPointAmount)
                 .cancelReason(cancelReason)
                 .requestedByMemberId(requestedByMemberId)
+                .idempotencyKey(idempotencyKey)
                 .canceledAt(canceledAt)
                 .build();
+    }
+
+    public boolean matchesRequest(String cancelReason, int cancelAmount) {
+        return this.cancelAmount == cancelAmount && this.cancelReason.equals(cancelReason);
     }
 
     void assignPayment(Payment payment) {

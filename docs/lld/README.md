@@ -65,3 +65,4 @@ LLD가 필요 없는 PR은 PR 본문에 `LLD: N/A - <사유>`를 남긴다.
 | LLD-0014 | FCM 토큰 소유자 변경 처리 | Approved | #428 |
 | LLD-0015 | 결제 PG 호출과 내부 반영 경계 검증 | Approved | #430 |
 | LLD-0016 | 결제 승인 멱등성 보강 | Approved | #433 |
+| LLD-0017 | 부분 취소 멱등성 보장 | Approved | - |

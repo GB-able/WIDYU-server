@@ -131,17 +131,24 @@ public class PaymentService {
 
     @Transactional
     public PaymentConfirmResponse cancelPayment(String paymentKey, CancelRequest cancelRequest) {
-        Payment payment = paymentRepository.findByPaymentKey(paymentKey)
+        Payment payment = paymentRepository.findByPaymentKeyForUpdate(paymentKey)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
         Member currentMember = memberUtil.getCurrentMember();
 
         validatePaymentOwnership(payment, currentMember.getId());
+
+        PaymentCancel existingCancellation = findCancellationByIdempotencyKey(payment, cancelRequest);
+        if (existingCancellation != null) {
+            validateExistingCancellationRequest(existingCancellation, cancelRequest);
+            return PaymentConfirmResponse.from(payment);
+        }
 
         if (payment.isCanceled()) {
             return PaymentConfirmResponse.from(payment);
         }
 
         CancelRequest effectiveRequest = sanitizeCancelRequest(payment, cancelRequest);
+        validatePartialCancellationIdempotencyKey(payment, effectiveRequest);
         int refundPointAmount = calculateRefundPointAmount(payment, effectiveRequest.cancelAmount());
         validateRefundPointBalance(currentMember, refundPointAmount);
         PaymentConfirmResponse response = paymentClient.cancelPayment(paymentKey, effectiveRequest);
@@ -154,12 +161,13 @@ public class PaymentService {
                 refundPointAmount,
                 effectiveRequest.cancelReason(),
                 currentMember.getId(),
+                effectiveRequest.idempotencyKey(),
                 canceledAt
         );
         payment.addCancellation(paymentCancel);
         payment.cancel(effectiveRequest.cancelAmount(), refundPointAmount, effectiveRequest.cancelReason(), canceledAt);
         // confirmPayment와 동일: 상위 트랜잭션 안이라 재시도가 동작하지 않으며, PG 취소 재호출을 피하기 위해
-        // 포인트 @Version 충돌 시 롤백 후 409로 응답한다. (취소는 isCanceled 가드로 멱등)
+        // 포인트 @Version 충돌 시 롤백 후 409로 응답한다. 부분 취소 재전송은 멱등 키로 선행 차단한다.
         seniorProfileService.deductPointsFromMember(
                 currentMember.getId(),
                 (long) refundPointAmount,
@@ -252,7 +260,44 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "남은 결제 금액보다 크게 취소할 수 없습니다.");
         }
 
-        return new CancelRequest(reason, cancelAmount);
+        String idempotencyKey = cancelRequest == null ? null : cancelRequest.idempotencyKey();
+        return new CancelRequest(reason, cancelAmount, idempotencyKey);
+    }
+
+    private PaymentCancel findCancellationByIdempotencyKey(Payment payment, CancelRequest cancelRequest) {
+        if (cancelRequest == null || cancelRequest.idempotencyKey() == null || cancelRequest.idempotencyKey().isBlank()) {
+            return null;
+        }
+
+        return payment.getCancellations().stream()
+                .filter(cancellation -> cancelRequest.idempotencyKey().equals(cancellation.getIdempotencyKey()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void validateExistingCancellationRequest(PaymentCancel paymentCancel, CancelRequest cancelRequest) {
+        String cancelReason = cancelRequest.cancelReason();
+        if (cancelReason == null || cancelReason.isBlank()) {
+            cancelReason = "사용자 요청";
+        }
+
+        Integer cancelAmount = cancelRequest.cancelAmount();
+        if (cancelAmount == null) {
+            cancelAmount = paymentCancel.getCancelAmount();
+        }
+
+        if (!paymentCancel.matchesRequest(cancelReason, cancelAmount)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "같은 멱등 키에는 동일한 취소 요청만 사용할 수 있습니다.");
+        }
+    }
+
+    private void validatePartialCancellationIdempotencyKey(Payment payment, CancelRequest cancelRequest) {
+        if (cancelRequest.cancelAmount() >= payment.getRemainingAmount()) {
+            return;
+        }
+        if (cancelRequest.idempotencyKey() == null || cancelRequest.idempotencyKey().isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "부분 취소에는 멱등 키가 필요합니다.");
+        }
     }
 
     private int calculateRefundPointAmount(Payment payment, int cancelAmount) {
