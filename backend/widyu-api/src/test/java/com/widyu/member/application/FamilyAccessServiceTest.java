@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
@@ -87,6 +88,32 @@ class FamilyAccessServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("가족으로 연결된 시니어만 접근할 수 있습니다.");
+    }
+
+    @Test
+    @DisplayName("가족 방장이 연결된 시니어를 수정하면 예외 없이 통과한다")
+    void 방장이_연결된_시니어를_수정하면_예외없이_통과한다() {
+        Member senior = member(2L, MemberType.SENIOR);
+        SeniorProfile seniorProfile = seniorProfile(10L, senior);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 10L))
+                .willReturn(true);
+
+        assertThatCode(() -> familyAccessService.verifyLeaderAccess(1L, 2L))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("방장이 아닌 보호자가 가족 변경을 시도하면 FORBIDDEN 예외를 던진다")
+    void 비방장이_가족_변경을_시도하면_예외가_발생한다() {
+        FamilyMembership membership = org.mockito.Mockito.mock(FamilyMembership.class);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.isLeader()).willReturn(false);
+
+        assertThatThrownBy(() -> familyAccessService.verifyGuardianLeader(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
     }
 
     private Member member(Long id, MemberType type) {
