@@ -1,6 +1,7 @@
 package com.widyu.mypage.controller;
 
-import com.widyu.mypage.application.SeniorMyPageService;
+import com.widyu.mypage.application.SeniorMyPageCommandService;
+import com.widyu.mypage.application.SeniorMyPageQueryService;
 import com.widyu.mypage.controller.docs.SeniorMyPageDocs;
 import com.widyu.mypage.dto.request.ProfileImageUploadRequest;
 import com.widyu.mypage.dto.request.UpdateNameRequest;
@@ -29,12 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/mypage/senior")
 public class SeniorMyPageController implements SeniorMyPageDocs {
 
-    private final SeniorMyPageService seniorMyPageService;
+    private final SeniorMyPageQueryService seniorMyPageQueryService;
+    private final SeniorMyPageCommandService seniorMyPageCommandService;
 
     @Override
     @GetMapping
     public ApiResponseTemplate<SeniorInfoResponse> getSeniorInfo() {
-        SeniorInfoResponse response = seniorMyPageService.getSeniorInfo();
+        SeniorInfoResponse response = seniorMyPageQueryService.getSeniorInfo();
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2001")
                 .message("시니어 내 정보 조회 성공")
@@ -44,7 +46,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @GetMapping("/family-code")
     public ApiResponseTemplate<FamilyCodeResponse> getFamilyCode() {
-        FamilyCodeResponse response = seniorMyPageService.getFamilyCode();
+        FamilyCodeResponse response = seniorMyPageQueryService.getFamilyCode();
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2002")
                 .message("가족코드 조회 성공")
@@ -54,7 +56,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @GetMapping("/profile")
     public ApiResponseTemplate<SeniorProfileDetailResponse> getProfileDetail() {
-        SeniorProfileDetailResponse response = seniorMyPageService.getProfileDetail();
+        SeniorProfileDetailResponse response = seniorMyPageQueryService.getProfileDetail();
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2003")
                 .message("프로필 설정 조회 성공")
@@ -64,7 +66,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @PatchMapping("/profile/name")
     public ApiResponseTemplate<Void> updateName(@RequestBody @Valid UpdateNameRequest request) {
-        seniorMyPageService.updateName(request);
+        seniorMyPageCommandService.updateName(request);
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2004")
                 .message("이름 수정 성공")
@@ -74,7 +76,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @PatchMapping(value = "/profile/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponseTemplate<Void> updateProfileImage(@ModelAttribute @Valid ProfileImageUploadRequest request) {
-        seniorMyPageService.updateProfileImage(request.image());
+        seniorMyPageCommandService.updateProfileImage(request.image());
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2005")
                 .message("프로필 이미지 수정 성공")
@@ -84,7 +86,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @PatchMapping("/profile/phone")
     public ApiResponseTemplate<Void> updatePhoneNumber(@RequestBody @Valid UpdatePhoneRequest request) {
-        seniorMyPageService.updatePhoneNumber(request);
+        seniorMyPageCommandService.updatePhoneNumber(request);
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2006")
                 .message("전화번호 수정 성공")
@@ -94,7 +96,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @GetMapping("/points/history")
     public ApiResponseTemplate<PointHistoryResponse> getPointHistory() {
-        PointHistoryResponse response = seniorMyPageService.getPointHistory();
+        PointHistoryResponse response = seniorMyPageQueryService.getPointHistory();
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2007")
                 .message("포인트 내역 조회 성공")
@@ -104,7 +106,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @GetMapping("/emergency-contact")
     public ApiResponseTemplate<EmergencyContactResponse> getEmergencyContacts() {
-        EmergencyContactResponse response = seniorMyPageService.getEmergencyContacts();
+        EmergencyContactResponse response = seniorMyPageQueryService.getEmergencyContacts();
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2008")
                 .message("비상연락처 조회 성공")
@@ -114,7 +116,7 @@ public class SeniorMyPageController implements SeniorMyPageDocs {
     @Override
     @PatchMapping("/emergency-contact/{memberId}")
     public ApiResponseTemplate<Void> updateRepresentativeContact(@PathVariable Long memberId) {
-        seniorMyPageService.updateRepresentativeContact(memberId);
+        seniorMyPageCommandService.updateRepresentativeContact(memberId);
         return ApiResponseTemplate.ok()
                 .code("MYPAGE_2009")
                 .message("대표 비상연락처 변경 성공")
