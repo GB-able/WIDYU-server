@@ -323,6 +323,7 @@ erDiagram
 | `PaymentStatus` | `READY`, `DONE`, `PARTIAL_CANCELED`, `CANCELED` |
 | `PaymentOrderStatus` | `CREATED`, `PAID`, `CANCELED`, `EXPIRED` |
 | `PointHistoryType` | `EARN`, `USE` |
+| `HeartRateStatus` | `NORMAL`, `CAUTION`, `EMERGENCY`, `ANOMALY`, `UNKNOWN` |
 
 ## 주요 인덱스
 

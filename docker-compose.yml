@@ -123,7 +123,7 @@ services:
 
   # AI Server (심박수 이상치 판별)
   widyu-ai:
-    image: rchagnhoon/widyu-ai-ver2:latest
+    image: ryuchanghoon/widyu-ai-ver7:latest
     container_name: widyu-ai
     restart: unless-stopped
     ports:

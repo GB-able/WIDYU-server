@@ -31,7 +31,9 @@ public interface HeartRateDocs {
 
                     **HeartRateStatus 상태값**:
                     - `NORMAL`: 정상
-                    - `ANOMALY`: 비정상 (이상치 감지)
+                    - `CAUTION`: 주의
+                    - `EMERGENCY`: 긴급
+                    - `ANOMALY`: 기존 이상 상태 데이터
                     - `UNKNOWN`: 판별 불가 (데이터 없음)
                     """
     )
@@ -57,14 +59,14 @@ public interface HeartRateDocs {
                                             """
                             ),
                             @ExampleObject(
-                                    name = "이상 심박수",
+                                    name = "긴급 심박수",
                                     value = """
                                             {
                                               "code": "HEART_2001",
                                               "message": "심박수 이상치 조회 완료",
                                               "data": {
                                                 "memberId": 1023,
-                                                "heartRateStatus": "ANOMALY",
+                                                "heartRateStatus": "EMERGENCY",
                                                 "heartRate": 180,
                                                 "measuredAt": "2026-02-01T15:48:00"
                                               }

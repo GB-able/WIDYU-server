@@ -69,8 +69,8 @@ class HeartRatePersistenceServiceTest {
     }
 
     @Test
-    @DisplayName("이상 판정을 저장하면 peak 심박수로 Emergency를 저장한다")
-    void 이상_판정을_저장하면_peak_심박수로_Emergency를_저장한다() {
+    @DisplayName("긴급 판정을 저장하면 peak 심박수로 Emergency를 저장한다")
+    void 긴급_판정을_저장하면_peak_심박수로_Emergency를_저장한다() {
         // given
         Long memberId = 1L;
         LocalDateTime batchStart = LocalDateTime.of(2026, 1, 1, 15, 0, 0);
@@ -86,12 +86,12 @@ class HeartRatePersistenceServiceTest {
         HeartRateResult result = heartRatePersistenceService.saveAnalysis(
                 memberId,
                 request,
-                HeartRateStatus.ANOMALY,
+                HeartRateStatus.EMERGENCY,
                 true
         );
 
         // then
-        assertThat(result.getStatus()).isEqualTo(HeartRateStatus.ANOMALY);
+        assertThat(result.getStatus()).isEqualTo(HeartRateStatus.EMERGENCY);
         then(heartRateEmergencyRepository).should().save(emergencyCaptor.capture());
         HeartRateEmergency emergency = emergencyCaptor.getValue();
         assertThat(emergency.getHeartRate()).isEqualTo(84);

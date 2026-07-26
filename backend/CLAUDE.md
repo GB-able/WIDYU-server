@@ -207,12 +207,13 @@ spring:
 
 ### 심박수 AI 이상치 감지 (`heart` 도메인)
 1. 웨어러블에서 심박수 15개 값 수집
-2. AI 서비스로 전송: `POST http://<ai-server>:5000` — JSON 배열 15개 값
-3. 응답: `0` (정상) / `1` (이상)
-4. 이상 감지 시 보호자에게 FCM 알림 + `HeartRateEmergency` DB 기록
+2. 활동 상태(`REST`, `LOW`, `ACTIVE`, `UNKNOWN`)와 함께 WebSocket 배치 전송
+3. 서버가 측정 시각 순서대로 AI `POST /api/hr`에 단건 JSON 15회 전송
+4. 응답 `level`: `NORMAL` / `CAUTION` / `EMERGENCY`
+5. `alert=true`인 `EMERGENCY` 감지 시 `HeartRateEmergency` DB 기록
 - REST(`HeartRateController`)와 WebSocket(`HeartRateWebSocketController`) 모두 지원
 
-**AI 서비스**: Docker `rchagnhoon/widyu-ai-ver2:latest`, port 5000, 멀티 아키텍처 이미지
+**AI 서비스**: Docker `ryuchanghoon/widyu-ai-ver7:latest`, port 5000, 멀티 아키텍처 이미지
 
 ## Database & Persistence
 

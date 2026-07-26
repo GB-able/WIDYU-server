@@ -58,8 +58,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 
 # AI 심박수 서비스
-docker pull rchagnhoon/widyu-ai-ver2:latest
-docker run -p 5000:5000 rchagnhoon/widyu-ai-ver2:latest
+docker pull ryuchanghoon/widyu-ai-ver7:latest
+docker run -p 5000:5000 ryuchanghoon/widyu-ai-ver7:latest
 ```
 
 ### CI/CD Pipeline (GitHub Actions)
