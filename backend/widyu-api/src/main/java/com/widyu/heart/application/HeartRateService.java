@@ -2,6 +2,7 @@ package com.widyu.heart.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
@@ -51,18 +52,21 @@ public class HeartRateService {
             return getHeartRateStatus(memberId);
         }
 
-        List<Integer> heartRateValues = request.heartRates().stream()
-                .map(HeartRateMeasurement::heartRate)
-                .toList();
+        DetectionResult detection = heartRateAnomalyDetector.detect(
+                memberId,
+                request.heartRates(),
+                request.normalizedContext()
+        );
 
-        boolean isAbnormal = heartRateAnomalyDetector.detectAnomaly(heartRateValues);
-
-        HeartRateStatus status = resolveStatus(isAbnormal);
-
-        HeartRateResult result = heartRatePersistenceService.saveAnalysis(memberId, request, status, isAbnormal);
+        HeartRateResult result = heartRatePersistenceService.saveAnalysis(
+                memberId,
+                request,
+                detection.status(),
+                detection.emergency()
+        );
 
         log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
-                memberId, status, result.getHeartRate(), result.getMeasuredAt());
+                memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt());
 
         return HeartRateStatusResponse.from(result);
     }
@@ -187,13 +191,6 @@ public class HeartRateService {
         return events.stream()
                 .max(Comparator.comparing(HeartRateEvent::getMeasuredAt))
                 .orElse(null);
-    }
-
-    private HeartRateStatus resolveStatus(boolean isAbnormal) {
-        if (isAbnormal) {
-            return HeartRateStatus.ANOMALY;
-        }
-        return HeartRateStatus.NORMAL;
     }
 
     private void validateMemberExists(Long memberId) {

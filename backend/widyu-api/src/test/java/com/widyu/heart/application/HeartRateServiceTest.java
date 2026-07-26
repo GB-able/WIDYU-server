@@ -14,6 +14,7 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
+import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
 import com.widyu.heart.dto.response.HeartGraphPageResponse;
@@ -59,7 +60,7 @@ class HeartRateServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND)
                 .hasMessageContaining("회원을 찾을 수 없습니다.");
-        then(heartRateAnomalyDetector).should(never()).detectAnomaly(any());
+        then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), any());
         then(heartRatePersistenceService).should(never())
                 .saveAnalysis(anyLong(), any(), any(HeartRateStatus.class), anyBoolean());
     }
@@ -164,7 +165,7 @@ class HeartRateServiceTest {
         // then
         assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.NORMAL);
         assertThat(response.heartRate()).isEqualTo(75);
-        then(heartRateAnomalyDetector).should(never()).detectAnomaly(any());
+        then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), any());
         then(heartRateEventRepository).should(never()).saveAll(any());
         then(heartRateEmergencyRepository).should(never()).save(any());
     }
@@ -183,7 +184,8 @@ class HeartRateServiceTest {
 
         given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
-        given(heartRateAnomalyDetector.detectAnomaly(any())).willReturn(false);
+        given(heartRateAnomalyDetector.detect(memberId, measurements, "UNKNOWN"))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false));
         HeartRateResult savedResult = HeartRateResult.of(memberId, HeartRateStatus.NORMAL, 84, batchStart.plusSeconds(14));
         given(heartRatePersistenceService.saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false))
                 .willReturn(savedResult);
@@ -194,7 +196,7 @@ class HeartRateServiceTest {
         // then
         assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.NORMAL);
         assertThat(response.heartRate()).isEqualTo(84);
-        then(heartRateAnomalyDetector).should().detectAnomaly(any());
+        then(heartRateAnomalyDetector).should().detect(memberId, measurements, "UNKNOWN");
         then(heartRatePersistenceService).should()
                 .saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false);
     }
@@ -213,7 +215,7 @@ class HeartRateServiceTest {
 
         given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
-        given(heartRateAnomalyDetector.detectAnomaly(any()))
+        given(heartRateAnomalyDetector.detect(memberId, measurements, "UNKNOWN"))
                 .willThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "AI 서버와의 통신에 실패했습니다."));
 
         // when & then

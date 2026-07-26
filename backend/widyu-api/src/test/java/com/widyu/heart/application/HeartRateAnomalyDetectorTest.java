@@ -5,17 +5,29 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.properties.AiProperties;
+import com.widyu.heart.HeartRateStatus;
+import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
+import com.widyu.heart.dto.request.HeartRateMeasurement;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -24,6 +36,7 @@ import org.springframework.web.client.RestTemplate;
 class HeartRateAnomalyDetectorTest {
 
     @Mock private RestTemplate aiRestTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     @DisplayName("심박수 데이터가 15개가 아니면 BAD_REQUEST 예외를 던진다")
@@ -32,7 +45,7 @@ class HeartRateAnomalyDetectorTest {
         HeartRateAnomalyDetector detector = detector();
 
         // when & then
-        assertThatThrownBy(() -> detector.detectAnomaly(List.of(70, 71, 72)))
+        assertThatThrownBy(() -> detector.detect(1L, measurements().subList(0, 3), "REST"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST)
                 .hasMessageContaining("심박수 데이터는 정확히 15개여야 합니다.");
@@ -43,37 +56,113 @@ class HeartRateAnomalyDetectorTest {
     void AI_서버_통신_실패_시_예외가_발생한다() {
         // given
         HeartRateAnomalyDetector detector = detector();
-        given(aiRestTemplate.postForObject(eq("http://ai-server/check"), any(), eq(String.class)))
+        given(aiRestTemplate.postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class)))
                 .willThrow(new RestClientException("connection refused"));
 
         // when & then
-        assertThatThrownBy(() -> detector.detectAnomaly(fifteenHeartRates()))
+        assertThatThrownBy(() -> detector.detect(1L, measurements(), "REST"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INTERNAL_SERVER_ERROR)
                 .hasMessageContaining("AI 서버와의 통신에 실패했습니다.");
     }
 
     @Test
-    @DisplayName("AI 서버가 Abnormal을 반환하면 이상 상태로 판단한다")
-    void AI_서버가_Abnormal을_반환하면_이상_상태로_판단한다() {
+    @DisplayName("측정값을 시간순 JSON으로 전송하면 가장 높은 상태와 긴급 여부를 반환한다")
+    void 측정값을_시간순_JSON으로_전송하면_가장높은_상태를_반환한다() {
         // given
         HeartRateAnomalyDetector detector = detector();
-        given(aiRestTemplate.postForObject(eq("http://ai-server/check"), any(), eq(String.class)))
-                .willReturn("{\"result\":\"Abnormal\"}");
+        AtomicInteger callCount = new AtomicInteger();
+        given(aiRestTemplate.postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class)))
+                .willAnswer(invocation -> {
+                    int call = callCount.incrementAndGet();
+                    if (call == 5) {
+                        return "{\"alert\":false,\"level\":\"CAUTION\"}";
+                    }
+                    if (call == 10) {
+                        return """
+                                {
+                                  "alert": true,
+                                  "layer": "L0",
+                                  "level": "EMERGENCY",
+                                  "reason": "tachycardia",
+                                  "bpm": 160.0,
+                                  "context": "ACTIVE",
+                                  "timestamp": 1785034809.0,
+                                  "held_seconds": 30.0,
+                                  "baseline_source": "PRIOR",
+                                  "sample_count": 10
+                                }
+                                """;
+                    }
+                    return "{\"alert\":false,\"level\":\"NORMAL\"}";
+                });
+        List<HeartRateMeasurement> reversed = measurements().stream()
+                .sorted(Comparator.comparing(HeartRateMeasurement::measuredAt).reversed())
+                .toList();
 
         // when
-        boolean result = detector.detectAnomaly(fifteenHeartRates());
+        DetectionResult result = detector.detect(1023L, reversed, "ACTIVE");
 
         // then
-        assertThat(result).isTrue();
+        assertThat(result.status()).isEqualTo(HeartRateStatus.EMERGENCY);
+        assertThat(result.emergency()).isTrue();
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        then(aiRestTemplate).should(times(15))
+                .postForObject(eq("http://ai-server/api/hr"), requestCaptor.capture(), eq(String.class));
+
+        JsonNode firstRequest = objectMapper.valueToTree(requestCaptor.getAllValues().getFirst().getBody());
+        assertThat(firstRequest.get("user_id").asText()).isEqualTo("1023");
+        assertThat(firstRequest.get("bpm").asInt()).isEqualTo(70);
+        assertThat(firstRequest.get("context").asText()).isEqualTo("ACTIVE");
+        assertThat(firstRequest.get("timestamp").asDouble()).isEqualTo(
+                LocalDateTime.of(2026, 7, 26, 12, 0)
+                        .atZone(ZoneId.of("Asia/Seoul"))
+                        .toEpochSecond()
+        );
+    }
+
+    @Test
+    @DisplayName("AI 서버가 지원하지 않는 level을 반환하면 INTERNAL_SERVER_ERROR 예외를 던진다")
+    void AI_서버가_지원하지않는_level을_반환하면_예외가_발생한다() {
+        // given
+        HeartRateAnomalyDetector detector = detector();
+        given(aiRestTemplate.postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class)))
+                .willReturn("{\"alert\":false,\"level\":\"UNKNOWN\"}");
+
+        // when & then
+        assertThatThrownBy(() -> detector.detect(1L, measurements(), "UNKNOWN"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INTERNAL_SERVER_ERROR)
+                .hasMessageContaining("올바르지 않은 응답");
+    }
+
+    @Test
+    @DisplayName("CAUTION 응답은 alert가 true여도 긴급으로 판단하지 않는다")
+    void CAUTION_응답은_alert가_true여도_긴급으로_판단하지않는다() {
+        // given
+        HeartRateAnomalyDetector detector = detector();
+        given(aiRestTemplate.postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class)))
+                .willReturn("{\"alert\":true,\"level\":\"CAUTION\"}");
+
+        // when
+        DetectionResult result = detector.detect(1L, measurements(), "REST");
+
+        // then
+        assertThat(result.status()).isEqualTo(HeartRateStatus.CAUTION);
+        assertThat(result.emergency()).isFalse();
     }
 
     private HeartRateAnomalyDetector detector() {
         AiProperties properties = new AiProperties(new AiProperties.Server("http://ai-server"));
-        return new HeartRateAnomalyDetector(aiRestTemplate, properties, new ObjectMapper());
+        return new HeartRateAnomalyDetector(aiRestTemplate, properties, objectMapper);
     }
 
-    private List<Integer> fifteenHeartRates() {
-        return List.of(70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84);
+    private List<HeartRateMeasurement> measurements() {
+        LocalDateTime batchStart = LocalDateTime.of(2026, 7, 26, 12, 0);
+        return java.util.stream.IntStream.range(0, 15)
+                .mapToObj(i -> new HeartRateMeasurement(70 + i, batchStart.plusSeconds(i)))
+                .toList();
     }
 }

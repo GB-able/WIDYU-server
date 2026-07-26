@@ -33,7 +33,7 @@ public class HeartRatePersistenceService {
             Long memberId,
             HeartRateSendRequest request,
             HeartRateStatus status,
-            boolean isAbnormal
+            boolean isEmergency
     ) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
@@ -55,7 +55,7 @@ public class HeartRatePersistenceService {
                 .toList();
         heartRateEventRepository.saveAll(events);
 
-        if (isAbnormal) {
+        if (isEmergency) {
             saveEmergency(member, request, latestMeasurement);
         }
 
