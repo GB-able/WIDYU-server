@@ -1,7 +1,8 @@
 package com.widyu.heart.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -115,7 +116,7 @@ public class HeartRateAnomalyDetector {
     }
 
     private record AiHeartRateRequest(
-            String user_id,
+            @JsonProperty("user_id") String userId,
             Integer bpm,
             String context,
             Double timestamp

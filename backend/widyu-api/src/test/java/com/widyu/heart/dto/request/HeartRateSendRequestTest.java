@@ -18,10 +18,13 @@ class HeartRateSendRequestTest {
     @DisplayName("활동 상태가 공백이면 UNKNOWN으로 정규화하고 허용값이 아니면 거절한다")
     void 활동상태가_공백이면_UNKNOWN으로_정규화하고_허용값이_아니면_거절한다() {
         HeartRateSendRequest blankContext = request(70, " ");
+        HeartRateSendRequest nullContext = request(70, null);
         HeartRateSendRequest invalidContext = request(70, "SLEEP");
 
         assertThat(blankContext.normalizedContext()).isEqualTo("UNKNOWN");
+        assertThat(nullContext.normalizedContext()).isEqualTo("UNKNOWN");
         assertThat(validator.validate(blankContext)).isEmpty();
+        assertThat(validator.validate(nullContext)).isEmpty();
         assertThat(validator.validate(invalidContext)).isNotEmpty();
     }
 
