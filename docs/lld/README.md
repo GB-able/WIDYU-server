@@ -68,3 +68,4 @@ LLD가 필요 없는 PR은 PR 본문에 `LLD: N/A - <사유>`를 남긴다.
 | LLD-0017 | 부분 취소 멱등성 보장 | Approved | - |
 | LLD-0018 | 마이페이지 조회·명령 책임 분리 | Draft | #441 |
 | LLD-0019 | 개인화 심박 이상 감지 AI 연동 | Approved | #446 |
+| LLD-0020 | 심박 EMERGENCY 보호자 FCM 알림 | Approved | #448 |

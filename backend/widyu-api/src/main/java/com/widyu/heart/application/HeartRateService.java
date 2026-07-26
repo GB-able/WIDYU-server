@@ -35,6 +35,7 @@ public class HeartRateService {
 
     private final HeartRateAnomalyDetector heartRateAnomalyDetector;
     private final HeartRatePersistenceService heartRatePersistenceService;
+    private final HeartRateEmergencyNotificationService heartRateEmergencyNotificationService;
     private final HeartRateResultRepository heartRateResultRepository;
     private final HeartRateEventRepository heartRateEventRepository;
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
@@ -64,6 +65,10 @@ public class HeartRateService {
                 detection.status(),
                 detection.emergency()
         );
+
+        if (detection.emergency()) {
+            heartRateEmergencyNotificationService.notifyGuardians(memberId);
+        }
 
         log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
                 memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt());

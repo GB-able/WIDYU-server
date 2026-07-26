@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 
 import com.widyu.global.error.BusinessException;
@@ -41,6 +41,7 @@ class HeartRateServiceTest {
 
     @Mock private HeartRateAnomalyDetector heartRateAnomalyDetector;
     @Mock private HeartRatePersistenceService heartRatePersistenceService;
+    @Mock private HeartRateEmergencyNotificationService heartRateEmergencyNotificationService;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HeartRateEventRepository heartRateEventRepository;
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
@@ -168,6 +169,7 @@ class HeartRateServiceTest {
         then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), any());
         then(heartRateEventRepository).should(never()).saveAll(any());
         then(heartRateEmergencyRepository).should(never()).save(any());
+        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
     }
 
     @Test
@@ -199,6 +201,63 @@ class HeartRateServiceTest {
         then(heartRateAnomalyDetector).should().detect(memberId, measurements, "UNKNOWN");
         then(heartRatePersistenceService).should()
                 .saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false);
+        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
+    }
+
+    @Test
+    @DisplayName("신규 긴급 배치를 저장하면 보호자에게 알림을 요청한다")
+    void 신규_긴급_배치를_저장하면_보호자에게_알림을_요청한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime batchStart = LocalDateTime.of(2026, 1, 1, 11, 0, 0);
+        List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
+                .mapToObj(i -> new HeartRateMeasurement(160, batchStart.plusSeconds(i)))
+                .toList();
+        HeartRateSendRequest request = HeartRateSendRequest.of(measurements, "서울시");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateResult savedResult = HeartRateResult.of(
+                memberId, HeartRateStatus.EMERGENCY, 160, batchStart.plusSeconds(14));
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
+        given(heartRateAnomalyDetector.detect(memberId, measurements, "UNKNOWN"))
+                .willReturn(new DetectionResult(HeartRateStatus.EMERGENCY, true));
+        given(heartRatePersistenceService.saveAnalysis(memberId, request, HeartRateStatus.EMERGENCY, true))
+                .willReturn(savedResult);
+
+        // when
+        heartRateService.processHeartRates(memberId, request);
+
+        // then
+        then(heartRateEmergencyNotificationService).should().notifyGuardians(memberId);
+    }
+
+    @Test
+    @DisplayName("신규 주의 배치를 저장해도 보호자 알림을 요청하지 않는다")
+    void 신규_주의_배치를_저장해도_보호자_알림을_요청하지_않는다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime batchStart = LocalDateTime.of(2026, 1, 1, 11, 30, 0);
+        List<HeartRateMeasurement> measurements = java.util.stream.IntStream.range(0, 15)
+                .mapToObj(i -> new HeartRateMeasurement(110, batchStart.plusSeconds(i)))
+                .toList();
+        HeartRateSendRequest request = HeartRateSendRequest.of(measurements, "서울시");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateResult savedResult = HeartRateResult.of(
+                memberId, HeartRateStatus.CAUTION, 110, batchStart.plusSeconds(14));
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, batchStart)).willReturn(false);
+        given(heartRateAnomalyDetector.detect(memberId, measurements, "UNKNOWN"))
+                .willReturn(new DetectionResult(HeartRateStatus.CAUTION, false));
+        given(heartRatePersistenceService.saveAnalysis(memberId, request, HeartRateStatus.CAUTION, false))
+                .willReturn(savedResult);
+
+        // when
+        heartRateService.processHeartRates(memberId, request);
+
+        // then
+        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
     }
 
     @Test
