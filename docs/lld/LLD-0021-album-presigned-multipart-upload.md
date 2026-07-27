@@ -277,7 +277,11 @@ AlbumUploadSessionFile {
   - S3 Lifecycle 규칙 1: `AbortIncompleteMultipartUpload` — 시작 1일 후 미완료 multipart 자동 중단
   - S3 Lifecycle 규칙 2: prefix `albums/staging/` — 7일 후 객체 만료
   - CORS 설정: 앱/웹 클라이언트의 S3 직접 PUT 허용 (`PUT`, `ETag` 헤더 노출)
-- 성능 참고: 초기 응답은 URL 발급만 수행하므로 파일 크기와 무관하게 짧아진다. 전체 영상 처리 시간은 동일(서버가 S3에서 재다운로드).
+- 성능 실측 (2026-07-27, 동일 머신·로컬 서버 + 실제 S3 ap-northeast-2, 파일 크기별 5회 평균 — 상세: `apiDocs/api/album/presigned-upload-benchmark.md`):
+  - 첫 API 응답 (280MB): 동기 8,727ms → 비동기 서버 경유 2,329ms → **세션 발급 169ms (누적 -98%)**
+  - 세션 발급은 파일 크기와 무관한 상수: 10/100/280MB에서 107/173/169ms (파트 수 2→29개)
+  - albumId 확보까지 총 시간(발급+S3 파트 업로드+complete)은 서버 경유와 유사하나, 요청 스레드·서버 인바운드 대역폭(건당 최대 280MB)을 점유하지 않음
+  - 전체 영상 처리 시간은 동일(서버가 S3에서 재다운로드) — 개선 대상은 응답성과 서버 자원
 
 ## 9. 미결정 사항 (Open Questions)
 
