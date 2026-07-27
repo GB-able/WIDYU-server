@@ -105,6 +105,13 @@ public enum ErrorCode {
     ALBUM_UNLOCK_SENIOR_ONLY(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4030", "시니어 회원만 앨범을 해금할 수 있습니다."),
     ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
 
+    // 앨범 직접 업로드 관련
+    ALBUM_UPLOAD_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_UPLOAD_4040", "업로드 세션을 찾을 수 없거나 만료되었습니다."),
+    ALBUM_UPLOAD_SESSION_FORBIDDEN(HttpStatus.FORBIDDEN, "ALBUM_UPLOAD_4030", "본인의 업로드 세션만 사용할 수 있습니다."),
+    ALBUM_UPLOAD_INCOMPLETE(HttpStatus.BAD_REQUEST, "ALBUM_UPLOAD_4001", "완료되지 않은 업로드 파트가 있습니다."),
+    ALBUM_UPLOAD_FILE_MISMATCH(HttpStatus.BAD_REQUEST, "ALBUM_UPLOAD_4002", "업로드된 파일이 요청 정보와 일치하지 않습니다."),
+    ALBUM_UPLOAD_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "ALBUM_UPLOAD_4090", "업로드 완료 처리가 이미 진행 중입니다."),
+
     // 결제 관련
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),

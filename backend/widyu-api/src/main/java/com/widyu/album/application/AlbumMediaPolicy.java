@@ -50,18 +50,62 @@ public class AlbumMediaPolicy {
         }
 
         MediaSummary s = summarize(files);
-        if (s.total() > MAX_TOTAL || s.photos() > MAX_PHOTO || s.videos() > MAX_VIDEO) {
-            throw new BusinessException(
-                    ErrorCode.BAD_REQUEST,
-                    "전체 최대 8개, 사진 최대 8개, 동영상 최대 3개까지 업로드 가능합니다."
-            );
-        }
+        validateCounts(s);
 
         for (MultipartFile f : files) {
             String ct = contentTypeOrThrow(f);
 
             validateAllowedType(ct);
             validateSize(ct, f.getSize());
+        }
+    }
+
+    public void validateMetadata(List<MediaMetadata> files) {
+        if (files == null || files.isEmpty()) {
+            throw new BusinessException(ErrorCode.FILE_IS_EMPTY);
+        }
+
+        MediaSummary s = summarizeMetadata(files);
+        validateCounts(s);
+
+        for (MediaMetadata file : files) {
+            if (file.fileSize() <= 0) {
+                throw new BusinessException(ErrorCode.FILE_IS_EMPTY, "파일 크기가 올바르지 않습니다.");
+            }
+            validateAllowedType(file.contentType());
+            validateSize(file.contentType(), file.fileSize());
+        }
+    }
+
+    private MediaSummary summarizeMetadata(List<MediaMetadata> files) {
+        int photos = 0;
+        int videos = 0;
+
+        for (MediaMetadata file : files) {
+            String ct = file.contentType();
+            if (ct == null) {
+                throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+            }
+
+            if (isImage(ct)) {
+                photos++;
+                continue;
+            }
+            if (isVideo(ct)) {
+                videos++;
+                continue;
+            }
+            throw new BusinessException(ErrorCode.INVALID_FILE_TYPE);
+        }
+        return new MediaSummary(photos, videos, photos + videos);
+    }
+
+    private static void validateCounts(MediaSummary s) {
+        if (s.total() > MAX_TOTAL || s.photos() > MAX_PHOTO || s.videos() > MAX_VIDEO) {
+            throw new BusinessException(
+                    ErrorCode.BAD_REQUEST,
+                    "전체 최대 8개, 사진 최대 8개, 동영상 최대 3개까지 업로드 가능합니다."
+            );
         }
     }
 
@@ -97,4 +141,6 @@ public class AlbumMediaPolicy {
     }
 
     public record MediaSummary(int photos, int videos, int total) {}
+
+    public record MediaMetadata(String contentType, long fileSize) {}
 }

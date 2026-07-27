@@ -5,6 +5,7 @@ import com.widyu.album.repository.AlbumRepository;
 import com.widyu.fcm.event.album.dto.AlbumCreatedEvent;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.infrastructure.s3.S3DirectUploadService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -32,13 +33,45 @@ public class AlbumVideoProcessingService {
 
     private final AlbumRepository albumRepository;
     private final AlbumFileService albumFileService;
+    private final S3DirectUploadService s3DirectUploadService;
     private final ApplicationEventPublisher eventPublisher;
 
     public record VideoEntry(int index, File tempFile, String originalFileName, String contentType) {}
 
+    public record StagedVideoEntry(int index, String objectKey, String originalFileName, String contentType) {}
+
     @Async
     @Transactional
     public void processVideosAsync(Long albumId, Long memberId, List<VideoEntry> videoEntries) {
+        processVideos(albumId, memberId, videoEntries);
+    }
+
+    @Async
+    @Transactional
+    public void processStagedVideosAsync(Long albumId, Long memberId, List<StagedVideoEntry> stagedEntries) {
+        List<VideoEntry> videoEntries = new ArrayList<>();
+
+        try {
+            for (StagedVideoEntry entry : stagedEntries) {
+                File tempFile = s3DirectUploadService.downloadToTempFile(entry.objectKey());
+                videoEntries.add(new VideoEntry(entry.index(), tempFile, entry.originalFileName(), entry.contentType()));
+            }
+        } catch (Exception e) {
+            log.error("스테이징 영상 다운로드 실패: albumId={}, error={}", albumId, e.getMessage(), e);
+            deleteTempFiles(videoEntries);
+            deleteStagedObjects(stagedEntries);
+            albumRepository.findById(albumId).ifPresent(Album::delete);
+            return;
+        }
+
+        try {
+            processVideos(albumId, memberId, videoEntries);
+        } finally {
+            deleteStagedObjects(stagedEntries);
+        }
+    }
+
+    private void processVideos(Long albumId, Long memberId, List<VideoEntry> videoEntries) {
         Map<Integer, String> videoUrls = new HashMap<>();
         Map<Integer, String> thumbnailUrls = new HashMap<>();
         Map<Integer, Integer> durations = new HashMap<>();
@@ -67,12 +100,26 @@ public class AlbumVideoProcessingService {
             albumFileService.cleanupUploadedFiles(uploadedUrls);
             albumRepository.findById(albumId).ifPresent(Album::delete);
         } finally {
-            for (VideoEntry entry : videoEntries) {
-                try {
-                    Files.deleteIfExists(entry.tempFile().toPath());
-                } catch (IOException ignored) {
-                    log.warn("비디오 임시 파일 삭제 실패: path={}", entry.tempFile().getAbsolutePath());
-                }
+            deleteTempFiles(videoEntries);
+        }
+    }
+
+    private void deleteTempFiles(List<VideoEntry> videoEntries) {
+        for (VideoEntry entry : videoEntries) {
+            try {
+                Files.deleteIfExists(entry.tempFile().toPath());
+            } catch (IOException ignored) {
+                log.warn("비디오 임시 파일 삭제 실패: path={}", entry.tempFile().getAbsolutePath());
+            }
+        }
+    }
+
+    private void deleteStagedObjects(List<StagedVideoEntry> stagedEntries) {
+        for (StagedVideoEntry entry : stagedEntries) {
+            try {
+                s3DirectUploadService.deleteObject(entry.objectKey());
+            } catch (Exception e) {
+                log.warn("스테이징 원본 삭제 실패: key={}, error={}", entry.objectKey(), e.getMessage());
             }
         }
     }

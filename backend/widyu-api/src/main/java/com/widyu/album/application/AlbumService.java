@@ -36,9 +36,12 @@ public class AlbumService {
     public Long saveAlbum(Member member, String content,
                           List<String> mediaUrls, List<String> thumbnailUrls, List<Integer> durations,
                           boolean hasVideos) {
-        Album album = hasVideos
-                ? Album.createAlbumForProcessing(member, content, mediaUrls, thumbnailUrls, durations)
-                : Album.createAlbumWithMetadata(member, content, mediaUrls, thumbnailUrls, durations);
+        Album album;
+        if (hasVideos) {
+            album = Album.createAlbumForProcessing(member, content, mediaUrls, thumbnailUrls, durations);
+        } else {
+            album = Album.createAlbumWithMetadata(member, content, mediaUrls, thumbnailUrls, durations);
+        }
         Album saved = albumRepository.save(album);
 
         if (!hasVideos) {
@@ -79,6 +82,15 @@ public class AlbumService {
         album.delete();
 
         log.info("앨범 삭제 완료: albumId={}, memberId={}", albumId, currentMember.getId());
+    }
+
+    /**
+     * 업로드 후처리 실패 보상용 시스템 삭제 — 소유자 검증 없이 상태와 무관하게 삭제 처리한다
+     */
+    @Transactional
+    public void deleteAlbumBySystem(Long albumId) {
+        albumRepository.findById(albumId).ifPresent(Album::delete);
+        log.warn("앨범 보상 삭제 처리: albumId={}", albumId);
     }
 
     @Transactional(readOnly = true)
