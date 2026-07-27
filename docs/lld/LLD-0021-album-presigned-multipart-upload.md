@@ -158,14 +158,14 @@ AlbumUploadSessionFile {
 
 - `request/AlbumUploadSessionCreateRequest(List<FileMetadata> files)`
 - `request/AlbumUploadCompleteRequest(String content, List<CompletedFile> files)`
-- `response/AlbumUploadSessionResponse` — `from()` 팩토리
+- `response/AlbumUploadSessionResponse` — `of()` 팩토리
 - `response/AlbumUploadAcceptedResponse` — `from()` 팩토리 추가 (기존 record 재사용)
 
 ## 5. 처리 흐름
 
 ### 5-1. 세션 발급 (`AlbumUploadSessionFacadeImpl.createUploadSession`)
 
-```
+```text
 1. @CurrentMember 인증 → memberUtil.getCurrentMember()
 2. AlbumMediaPolicy.validateMetadata(files)
    - 개수(전체 8, 사진 8, 영상 3), 허용 contentType, 크기(사진 10MB, 영상 2GB), fileSize > 0
@@ -180,7 +180,7 @@ AlbumUploadSessionFile {
 
 ### 5-2. 업로드 완료 (`AlbumUploadSessionFacadeImpl.completeUpload`)
 
-```
+```text
 1. @CurrentMember 인증
 2. 세션 조회 — 없으면 ALBUM_UPLOAD_SESSION_NOT_FOUND (만료 포함)
 3. 소유자 검증 — 불일치 시 ALBUM_UPLOAD_SESSION_FORBIDDEN
@@ -209,7 +209,7 @@ AlbumUploadSessionFile {
 
 ### 5-3. 스테이징 영상 비동기 처리 (`AlbumVideoProcessingService.processStagedVideosAsync`)
 
-```
+```text
 @Async @Transactional
 1. StagedVideoEntry(index, objectKey, originalFileName, contentType)별
    S3DirectUploadService.downloadToTempFile(objectKey) → File

@@ -172,8 +172,9 @@ public class S3DirectUploadServiceImpl implements S3DirectUploadService {
 
     @Override
     public File downloadToTempFile(String objectKey) {
+        Path tempPath = null;
         try {
-            Path tempPath = Files.createTempFile("staged_" + UUID.randomUUID(), extensionSuffix(objectKey));
+            tempPath = Files.createTempFile("staged_" + UUID.randomUUID(), extensionSuffix(objectKey));
             Files.delete(tempPath);
 
             GetObjectRequest request = GetObjectRequest.builder()
@@ -183,9 +184,22 @@ public class S3DirectUploadServiceImpl implements S3DirectUploadService {
 
             s3Client.getObject(request, tempPath);
             return tempPath.toFile();
-        } catch (IOException e) {
+        } catch (Exception e) {
+            // 다운로드 중 실패하면 부분 파일이 남을 수 있으므로 호출자에게 전달되기 전에 정리한다
+            deletePartialFileQuietly(tempPath);
             log.error("S3 객체 다운로드 실패: key={}, error={}", objectKey, e.getMessage());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    private void deletePartialFileQuietly(Path tempPath) {
+        if (tempPath == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(tempPath);
+        } catch (IOException e) {
+            log.warn("부분 다운로드 파일 삭제 실패: path={}, error={}", tempPath, e.getMessage());
         }
     }
 
