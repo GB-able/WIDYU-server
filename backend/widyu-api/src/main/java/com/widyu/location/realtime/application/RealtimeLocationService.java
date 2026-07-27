@@ -18,6 +18,7 @@ import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.parentlocation.LocationType;
 import com.widyu.parentlocation.ParentLocation;
 import java.time.LocalDateTime;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -167,6 +168,14 @@ public class RealtimeLocationService {
                 .toList();
     }
 
+    public Boolean getOutingStatus(Long memberId) {
+        StayInfo stayInfo = getStayInfo(memberId);
+        if (stayInfo == null) {
+            return null;
+        }
+        return !LocationType.HOME.name().equals(stayInfo.locationType());
+    }
+
     /**
      * 특정 시니어의 마지막 위치 조회 (REST API용)
      * @param memberId 시니어의 Member ID
@@ -185,21 +194,14 @@ public class RealtimeLocationService {
         Member seniorMember = seniorProfile.getMember();
 
         // 체류 시간 및 위치 타입 정보 조회 (memberId 기준)
-        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         LocalDateTime stayStartTime = LocalDateTime.now();
         String locationType = null;
         StayInfo stayInfo = null;
 
-        try {
-            Object stayObj = redisTemplate.opsForValue().get(stayKey);
-            if (stayObj instanceof StayInfo info) {
-                stayInfo = info;
-                stayStartTime = stayInfo.startTime();
-                locationType = stayInfo.locationType();
-            }
-        } catch (Exception e) {
-            log.warn("StayInfo 역직렬화 실패 (stale data) - stayKey: {}, 삭제 후 재생성", stayKey, e);
-            redisTemplate.delete(stayKey);
+        stayInfo = getStayInfo(memberId);
+        if (stayInfo != null) {
+            stayStartTime = stayInfo.startTime();
+            locationType = stayInfo.locationType();
         }
 
         // SeniorLocation(5분 TTL) 우선 조회, 만료 시 StayInfo(24시간 TTL)로 fallback
@@ -230,6 +232,20 @@ public class RealtimeLocationService {
                 locationType,
                 locationName
         );
+    }
+
+    private StayInfo getStayInfo(Long memberId) {
+        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
+        try {
+            Object stayObj = redisTemplate.opsForValue().get(stayKey);
+            if (stayObj instanceof StayInfo stayInfo) {
+                return stayInfo;
+            }
+        } catch (Exception e) {
+            log.warn("StayInfo 역직렬화 실패 (stale data) - stayKey: {}, 삭제 후 재생성", stayKey, e);
+            redisTemplate.delete(stayKey);
+        }
+        return null;
     }
 
     /**

@@ -13,6 +13,7 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.home.dto.response.GuardianSeniorListResponse;
+import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.FamilyMembership;
@@ -50,6 +51,7 @@ public class GuardianHomeService {
     private final HealthScheduleRepository healthScheduleRepository;
     private final WalkRepository walkRepository;
     private final HomeAlbumRecommendationService albumRecommendationService;
+    private final RealtimeLocationService realtimeLocationService;
 
     public GuardianHomeCardsResponse getHomeCards(Long memberId) {
         Member guardian = memberUtil.getCurrentMember();
@@ -60,7 +62,8 @@ public class GuardianHomeService {
         Member senior = resolveSenior(memberId, guardian);
         LocalDate today = LocalDate.now();
 
-        return new GuardianHomeCardsResponse(
+        return GuardianHomeCardsResponse.of(
+                realtimeLocationService.getOutingStatus(senior.getId()),
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
                 getScoredAlbums(senior, today),
