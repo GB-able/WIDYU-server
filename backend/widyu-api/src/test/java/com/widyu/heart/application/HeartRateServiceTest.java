@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("HeartRateService 예외 처리 단위 테스트")
@@ -41,7 +43,7 @@ class HeartRateServiceTest {
 
     @Mock private HeartRateAnomalyDetector heartRateAnomalyDetector;
     @Mock private HeartRatePersistenceService heartRatePersistenceService;
-    @Mock private HeartRateEmergencyNotificationService heartRateEmergencyNotificationService;
+    @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HeartRateEventRepository heartRateEventRepository;
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
@@ -169,7 +171,7 @@ class HeartRateServiceTest {
         then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), any());
         then(heartRateEventRepository).should(never()).saveAll(any());
         then(heartRateEmergencyRepository).should(never()).save(any());
-        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
+        then(eventPublisher).should(never()).publishEvent(any(HeartRateEmergencyEvent.class));
     }
 
     @Test
@@ -201,12 +203,12 @@ class HeartRateServiceTest {
         then(heartRateAnomalyDetector).should().detect(memberId, measurements, "UNKNOWN");
         then(heartRatePersistenceService).should()
                 .saveAnalysis(memberId, newRequest, HeartRateStatus.NORMAL, false);
-        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
+        then(eventPublisher).should(never()).publishEvent(any(HeartRateEmergencyEvent.class));
     }
 
     @Test
-    @DisplayName("신규 긴급 배치를 저장하면 보호자에게 알림을 요청한다")
-    void 신규_긴급_배치를_저장하면_보호자에게_알림을_요청한다() {
+    @DisplayName("신규 긴급 배치를 저장하면 심박 긴급 이벤트를 발행한다")
+    void 신규_긴급_배치를_저장하면_심박_긴급_이벤트를_발행한다() {
         // given
         Long memberId = 1L;
         LocalDateTime batchStart = LocalDateTime.of(2026, 1, 1, 11, 0, 0);
@@ -229,7 +231,7 @@ class HeartRateServiceTest {
         heartRateService.processHeartRates(memberId, request);
 
         // then
-        then(heartRateEmergencyNotificationService).should().notifyGuardians(memberId);
+        then(eventPublisher).should().publishEvent(new HeartRateEmergencyEvent(memberId));
     }
 
     @Test
@@ -257,7 +259,7 @@ class HeartRateServiceTest {
         heartRateService.processHeartRates(memberId, request);
 
         // then
-        then(heartRateEmergencyNotificationService).should(never()).notifyGuardians(anyLong());
+        then(eventPublisher).should(never()).publishEvent(any(HeartRateEmergencyEvent.class));
     }
 
     @Test

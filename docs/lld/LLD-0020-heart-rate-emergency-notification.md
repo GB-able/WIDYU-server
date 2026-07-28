@@ -36,10 +36,11 @@ EMERGENCY만 즉시 알리고 CAUTION은 후속 정책으로 남긴다.
 
 1. `HeartRateService.processHeartRates()`는 기존 배치 시작 시각 멱등성을 확인한다.
 2. 새 배치가 `EMERGENCY`로 판정되면 `HeartRatePersistenceService.saveAnalysis()`가 응급기록을 포함해 저장한다.
-3. 저장 성공 뒤 `HeartRateEmergencyNotificationService`가 시니어와 같은 가족의 보호자 목록을 조회한다.
-4. 보호자마다 기존 `FcmService.sendMessageToUser()`를 `HEART_MESSAGE` 카테고리로 호출한다.
-5. 보호자별 발송 예외는 기록하고 다음 보호자 발송을 계속한다.
-6. 중복 배치는 기존 상태를 즉시 반환하므로 알림 단계에 도달하지 않는다.
+3. 저장 성공 뒤 `HeartRateService`가 `HeartRateEmergencyEvent`를 발행한다.
+4. `HeartRateEmergencyNotificationService` 리스너가 시니어와 같은 가족의 보호자 목록을 조회한다.
+5. 보호자마다 기존 `FcmService.sendMessageToUser()`를 `HEART_MESSAGE` 카테고리로 호출한다.
+6. 보호자별 발송 예외는 기록하고 다음 보호자 발송을 계속한다.
+7. 중복 배치는 기존 상태를 즉시 반환하므로 알림 단계에 도달하지 않는다.
 
 ## 4. 알림 내용
 

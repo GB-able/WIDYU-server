@@ -3,6 +3,7 @@ package com.widyu.heart.application;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
@@ -11,6 +12,7 @@ import com.widyu.member.repository.MemberRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -22,8 +24,9 @@ public class HeartRateEmergencyNotificationService {
     private final MemberRepository memberRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
 
-    public void notifyGuardians(Long memberId) {
-        Member seniorMember = memberRepository.findById(memberId).orElse(null);
+    @EventListener
+    public void handleHeartRateEmergency(HeartRateEmergencyEvent event) {
+        Member seniorMember = memberRepository.findById(event.memberId()).orElse(null);
         if (seniorMember == null) {
             return;
         }

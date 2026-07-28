@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.then;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
@@ -57,7 +58,7 @@ class HeartRateEmergencyNotificationServiceTest {
         given(senior.getProfileImage()).willReturn("profile-image");
 
         // when
-        heartRateEmergencyNotificationService.notifyGuardians(1L);
+        heartRateEmergencyNotificationService.handleHeartRateEmergency(new HeartRateEmergencyEvent(1L));
 
         // then
         then(fcmService).should().sendMessageToUser(eq(2L), notificationCaptor.capture());
@@ -89,9 +90,10 @@ class HeartRateEmergencyNotificationServiceTest {
                 .given(fcmService).sendMessageToUser(eq(2L), any());
 
         // when
-        heartRateEmergencyNotificationService.notifyGuardians(1L);
+        heartRateEmergencyNotificationService.handleHeartRateEmergency(new HeartRateEmergencyEvent(1L));
 
         // then
+        then(fcmService).should().sendMessageToUser(eq(2L), any());
         then(fcmService).should().sendMessageToUser(eq(3L), any());
     }
 
