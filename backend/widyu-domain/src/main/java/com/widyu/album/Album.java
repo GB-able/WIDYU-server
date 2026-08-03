@@ -128,16 +128,19 @@ public class Album extends BaseTimeEntity {
     public void completeVideoProcessing(Map<Integer, String> videoUrlsByIndex,
                                         Map<Integer, String> thumbnailUrlsByIndex,
                                         Map<Integer, Integer> durationsByIndex) {
-        for (Map.Entry<Integer, String> entry : videoUrlsByIndex.entrySet()) {
-            this.mediaUrls.set(entry.getKey(), entry.getValue());
-        }
-        for (Map.Entry<Integer, String> entry : thumbnailUrlsByIndex.entrySet()) {
-            this.thumbnailUrls.set(entry.getKey(), entry.getValue());
-        }
-        for (Map.Entry<Integer, Integer> entry : durationsByIndex.entrySet()) {
-            this.durations.set(entry.getKey(), entry.getValue());
-        }
+        replaceValuesByIndex(this.mediaUrls, videoUrlsByIndex);
+        replaceValuesByIndex(this.thumbnailUrls, thumbnailUrlsByIndex);
+        replaceValuesByIndex(this.durations, durationsByIndex);
         this.status = Status.ACTIVE;
+    }
+
+    private <T> void replaceValuesByIndex(List<T> values, Map<Integer, T> valuesByIndex) {
+        for (Map.Entry<Integer, T> entry : valuesByIndex.entrySet()) {
+            while (values.size() <= entry.getKey()) {
+                values.add(null);
+            }
+            values.set(entry.getKey(), entry.getValue());
+        }
     }
 
     public int getPhotoCount() {
