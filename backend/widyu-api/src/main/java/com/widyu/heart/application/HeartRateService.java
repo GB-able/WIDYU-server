@@ -2,6 +2,7 @@ package com.widyu.heart.application;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
@@ -25,6 +26,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,7 @@ public class HeartRateService {
 
     private final HeartRateAnomalyDetector heartRateAnomalyDetector;
     private final HeartRatePersistenceService heartRatePersistenceService;
+    private final ApplicationEventPublisher eventPublisher;
     private final HeartRateResultRepository heartRateResultRepository;
     private final HeartRateEventRepository heartRateEventRepository;
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
@@ -64,6 +67,10 @@ public class HeartRateService {
                 detection.status(),
                 detection.emergency()
         );
+
+        if (detection.emergency()) {
+            eventPublisher.publishEvent(new HeartRateEmergencyEvent(memberId));
+        }
 
         log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
                 memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt());

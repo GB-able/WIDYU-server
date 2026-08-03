@@ -225,7 +225,7 @@ AlbumNotificationListener (@EventListener, 동기)
 | HealthScheduleNotificationListener | HealthSchedule 이벤트 | HEALTH_SCHEDULE |
 | WalkNotificationListener | Walk 이벤트 | WALK |
 | MedicineScheduleNotificationListener | MedicineSchedule 이벤트 | MEDICINE_SCHEDULE |
-| (heart 도메인 내부) | 심박수 이상 감지 | HEART_MESSAGE |
+| HeartRateEmergencyNotificationService | HeartRateEmergencyEvent | HEART_MESSAGE |
 
 ### 5-4. 비활성 유저 스케줄 알림
 

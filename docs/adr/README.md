@@ -66,3 +66,4 @@ ADR 커버리지는 100%를 목표로 하지 않는다. 대신 다음 영역은 
 | [ADR-0011](ADR-0011-album-notification-side-effect-isolation.md) | 앨범 알림 부수효과 격리 정책 | Accepted | 2026-07-21 |
 | [ADR-0012](ADR-0012-payment-cancel-idempotency.md) | 부분 취소 멱등성 및 직렬화 정책 | Accepted | 2026-07-25 |
 | [ADR-0013](ADR-0013-heart-rate-personalized-ai-contract.md) | 개인화 심박 AI 단건 계약 연동 | Accepted | 2026-07-26 |
+| [ADR-0014](ADR-0014-heart-rate-emergency-notification.md) | 심박 EMERGENCY 보호자 FCM 알림 정책 | Accepted | 2026-07-26 |
