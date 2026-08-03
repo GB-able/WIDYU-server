@@ -24,8 +24,9 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT a FROM Album a JOIN FETCH a.member WHERE a.id = :id")
     Optional<Album> findByIdWithMember(@Param("id") Long id);
 
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' ORDER BY a.createdAt DESC, a.id DESC")
-    org.springframework.data.domain.Slice<Long> findLatestAlbumIds(Pageable pageable);
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.member.id IN :memberIds ORDER BY a.createdAt DESC, a.id DESC")
+    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByMemberIds(@Param("memberIds") List<Long> memberIds,
+                                                                                Pageable pageable);
 
     @Query("SELECT DISTINCT a FROM Album a LEFT JOIN FETCH a.mediaUrls LEFT JOIN FETCH a.thumbnailUrls LEFT JOIN FETCH a.durations WHERE a.id IN :albumIds ORDER BY a.createdAt DESC, a.id DESC")
     List<Album> findAlbumsWithCollectionsByIds(@Param("albumIds") List<Long> albumIds);
@@ -33,13 +34,15 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("""
             SELECT a.id FROM Album a
             WHERE a.status = 'ACTIVE'
+              AND a.member.id IN :memberIds
               AND (a.createdAt < :lastCreatedAt
                    OR (a.createdAt = :lastCreatedAt AND a.id < :lastId))
             ORDER BY a.createdAt DESC, a.id DESC
             """)
-    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostId(
+    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdAndMemberIds(
             @Param("lastCreatedAt") LocalDateTime lastCreatedAt,
             @Param("lastId") Long lastId,
+            @Param("memberIds") List<Long> memberIds,
             Pageable pageable
     );
 
@@ -64,23 +67,29 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("SELECT COUNT(a) FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :start AND a.createdAt < :end")
     long countActiveAlbumsCreatedBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
-    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay ORDER BY a.createdAt DESC, a.id DESC")
-    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDate(@Param("startOfDay") LocalDateTime startOfDay, @Param("startOfNextDay") LocalDateTime startOfNextDay, Pageable pageable);
+    @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.member.id IN :memberIds AND a.createdAt >= :startOfDay AND a.createdAt < :startOfNextDay ORDER BY a.createdAt DESC, a.id DESC")
+    org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByDateAndMemberIds(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("startOfNextDay") LocalDateTime startOfNextDay,
+            @Param("memberIds") List<Long> memberIds,
+            Pageable pageable);
 
     @Query("""
             SELECT a.id FROM Album a
             WHERE a.status = 'ACTIVE'
+              AND a.member.id IN :memberIds
               AND a.createdAt >= :startOfDay
               AND a.createdAt < :startOfNextDay
               AND (a.createdAt < :lastCreatedAt
                    OR (a.createdAt = :lastCreatedAt AND a.id < :lastId))
             ORDER BY a.createdAt DESC, a.id DESC
             """)
-    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdByDate(
+    org.springframework.data.domain.Slice<Long> findAlbumIdsAfterPostIdByDateAndMemberIds(
             @Param("lastCreatedAt") LocalDateTime lastCreatedAt,
             @Param("lastId") Long lastId,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("startOfNextDay") LocalDateTime startOfNextDay,
+            @Param("memberIds") List<Long> memberIds,
             Pageable pageable
     );
 
