@@ -76,7 +76,7 @@ album
 ```
 
 `Album.completeVideoProcessing(videoUrlsByIndex, thumbnailUrlsByIndex, durationsByIndex)`:
-- index별 placeholder를 실제 URL/길이로 교체
+- index별 placeholder를 실제 URL/길이로 교체한다. `@ElementCollection`은 null placeholder를 저장하지 않으므로, 재조회된 컬렉션이 비어 있으면 대상 index까지 확장한 뒤 교체한다.
 - `status = ACTIVE`로 전환
 
 ### Async 작업 DTO
