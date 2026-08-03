@@ -6,9 +6,9 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
-import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +23,7 @@ public class HeartRateEmergencyNotificationService {
     private final FcmService fcmService;
     private final MemberRepository memberRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
 
     @EventListener
     public void handleHeartRateEmergency(HeartRateEmergencyEvent event) {
@@ -31,13 +32,13 @@ public class HeartRateEmergencyNotificationService {
             return;
         }
 
-        SeniorProfile seniorProfile = seniorMember.getSeniorProfile();
-        if (seniorProfile == null || seniorProfile.getFamily() == null) {
+        Long familyId = seniorProfileRepository.findFamilyIdByMemberId(event.memberId()).orElse(null);
+        if (familyId == null) {
             return;
         }
 
         List<FamilyMembership> memberships = familyMembershipRepository
-                .findAllByFamilyIdWithGuardian(seniorProfile.getFamily().getId());
+                .findAllByFamilyIdWithGuardian(familyId);
         FcmSendDto notification = FcmSendDto.builder()
                 .title(seniorMember.getName() + "님의 심박수 이상이 감지되었습니다")
                 .content("현재 상태를 확인해주세요.")

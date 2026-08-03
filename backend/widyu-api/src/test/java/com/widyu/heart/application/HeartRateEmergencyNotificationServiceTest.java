@@ -9,12 +9,11 @@ import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
-import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
-import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +31,7 @@ class HeartRateEmergencyNotificationServiceTest {
     @Mock private FcmService fcmService;
     @Mock private MemberRepository memberRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
 
     @InjectMocks
     private HeartRateEmergencyNotificationService heartRateEmergencyNotificationService;
@@ -41,16 +41,12 @@ class HeartRateEmergencyNotificationServiceTest {
     void 심박_긴급_상태가_발생하면_가족_보호자에게_알림을_발송한다() {
         // given
         Member senior = org.mockito.Mockito.mock(Member.class);
-        SeniorProfile seniorProfile = org.mockito.Mockito.mock(SeniorProfile.class);
-        Family family = org.mockito.Mockito.mock(Family.class);
         FamilyMembership membership = org.mockito.Mockito.mock(FamilyMembership.class);
         Member guardian = org.mockito.Mockito.mock(Member.class);
         ArgumentCaptor<FcmSendDto> notificationCaptor = ArgumentCaptor.forClass(FcmSendDto.class);
 
         given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
-        given(senior.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getFamily()).willReturn(family);
-        given(family.getId()).willReturn(10L);
+        given(seniorProfileRepository.findFamilyIdByMemberId(1L)).willReturn(Optional.of(10L));
         given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L)).willReturn(List.of(membership));
         given(membership.getGuardian()).willReturn(guardian);
         given(guardian.getId()).willReturn(2L);
@@ -73,15 +69,11 @@ class HeartRateEmergencyNotificationServiceTest {
     void 한_보호자_알림_발송이_실패해도_다음_보호자_알림을_계속_발송한다() {
         // given
         Member senior = org.mockito.Mockito.mock(Member.class);
-        SeniorProfile seniorProfile = org.mockito.Mockito.mock(SeniorProfile.class);
-        Family family = org.mockito.Mockito.mock(Family.class);
         FamilyMembership firstMembership = guardianMembership(2L);
         FamilyMembership secondMembership = guardianMembership(3L);
 
         given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
-        given(senior.getSeniorProfile()).willReturn(seniorProfile);
-        given(seniorProfile.getFamily()).willReturn(family);
-        given(family.getId()).willReturn(10L);
+        given(seniorProfileRepository.findFamilyIdByMemberId(1L)).willReturn(Optional.of(10L));
         given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L))
                 .willReturn(List.of(firstMembership, secondMembership));
         given(senior.getName()).willReturn("시니어");
