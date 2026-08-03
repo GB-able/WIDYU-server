@@ -1,5 +1,6 @@
 package com.widyu.member.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
@@ -13,7 +14,9 @@ import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,7 @@ class FamilyAccessServiceTest {
 
     @Mock private MemberRepository memberRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
 
     @InjectMocks
     private FamilyAccessService familyAccessService;
@@ -114,6 +118,29 @@ class FamilyAccessServiceTest {
         assertThatThrownBy(() -> familyAccessService.verifyGuardianLeader(1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("가족 구성원 ID 조회 시 같은 가족의 시니어와 보호자를 포함한다")
+    void 가족_구성원_ID_조회_시_같은_가족_회원이_포함된다() {
+        // given
+        Member guardian = member(1L, MemberType.GUARDIAN);
+        Member senior = member(2L, MemberType.SENIOR);
+        Member anotherGuardian = member(3L, MemberType.GUARDIAN);
+        Family family = Family.createFamily("ABC123");
+        SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
+                senior, family, "서울시", "INV1234", LocalDate.of(1950, 1, 1));
+        FamilyMembership membership = FamilyMembership.createMembership(family, anotherGuardian);
+
+        given(familyMembershipRepository.findFamilyIdByGuardianId(1L)).willReturn(Optional.of(10L));
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(10L)).willReturn(List.of(seniorProfile));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(10L)).willReturn(List.of(membership));
+
+        // when
+        List<Long> memberIds = familyAccessService.getFamilyMemberIds(guardian);
+
+        // then
+        assertThat(memberIds).containsExactly(1L, 2L, 3L);
     }
 
     private Member member(Long id, MemberType type) {

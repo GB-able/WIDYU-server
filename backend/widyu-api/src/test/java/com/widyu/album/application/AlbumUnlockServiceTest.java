@@ -3,6 +3,7 @@ package com.widyu.album.application;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -20,6 +21,7 @@ import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.Optional;
@@ -42,6 +44,7 @@ class AlbumUnlockServiceTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private PointHistoryRepository pointHistoryRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
+    @Mock private FamilyAccessService familyAccessService;
 
     @InjectMocks
     private AlbumUnlockService albumUnlockService;
@@ -199,5 +202,27 @@ class AlbumUnlockServiceTest {
         assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_UNLOCK_INSUFFICIENT_BALANCE);
+    }
+
+    @Test
+    @DisplayName("가족 외 앨범 해금 시도 시 FORBIDDEN 예외를 던진다")
+    void 가족_외_앨범_해금_시_예외가_발생한다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        Member albumOwner = mock(Member.class);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(albumOwner);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        willThrow(new BusinessException(ErrorCode.FORBIDDEN)).given(familyAccessService)
+                .verifySameFamily(senior, albumOwner);
+
+        // when & then
+        assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
     }
 }

@@ -7,6 +7,9 @@ import com.widyu.member.MemberType;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +19,30 @@ public class FamilyAccessService {
 
     private final MemberRepository memberRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
+    private final SeniorProfileRepository seniorProfileRepository;
+
+    public List<Long> getFamilyMemberIds(Member member) {
+        List<Long> memberIds = new ArrayList<>();
+        memberIds.add(member.getId());
+
+        Long familyId = findFamilyId(member);
+        if (familyId == null) {
+            return memberIds;
+        }
+
+        seniorProfileRepository.findAllByFamilyIdWithMember(familyId)
+                .forEach(seniorProfile -> memberIds.add(seniorProfile.getMember().getId()));
+        familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId)
+                .forEach(membership -> memberIds.add(membership.getGuardian().getId()));
+        return memberIds.stream().distinct().toList();
+    }
+
+    public void verifySameFamily(Member member, Member targetMember) {
+        if (getFamilyMemberIds(member).contains(targetMember.getId())) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "같은 가족의 앨범만 접근할 수 있습니다.");
+    }
 
     public void verifyFamilyAccess(Long guardianId, Long targetMemberId) {
         Member targetMember = memberRepository.findById(targetMemberId)
@@ -66,5 +93,11 @@ public class FamilyAccessService {
         if (!isLeader) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "방장만 수행할 수 있습니다.");
         }
+    }
+
+    private Long findFamilyId(Member member) {
+        return familyMembershipRepository.findFamilyIdByGuardianId(member.getId())
+                .or(() -> seniorProfileRepository.findFamilyIdByMemberId(member.getId()))
+                .orElse(null);
     }
 }
