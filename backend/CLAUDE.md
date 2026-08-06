@@ -1,229 +1,62 @@
 # backend/CLAUDE.md
 
-백엔드 상세 설계 문서입니다. 공통 규칙은 루트 [CLAUDE.md](../CLAUDE.md)를 참조하세요.
-
-## Global Package Structure
-
-`com.widyu.global` 패키지의 공통 인프라:
-
-| 패키지 | 역할 |
-|--------|------|
-| `config/` | Spring 설정 (Security, WebSocket, S3, Redis 등) |
-| `security/` | JWT 인증, 필터, UserDetailsService |
-| `websocket/` | WebSocket 설정, JWT 핸드셰이크·채널 인터셉터 |
-| `aspect/` | AOP (`@ValidateFamilyAccess`, 로깅 등) |
-| `error/` | 글로벌 예외 처리, 커스텀 예외 |
-| `filter/` | 서블릿 필터 (CORS, 로깅) |
-| `util/` | 유틸 클래스 (날짜, 전화번호, 파일) |
-| `properties/` | `@ConfigurationProperties` YAML 바인딩 |
-| `infrastructure/` | 외부 서비스 클라이언트 (S3, FCM, OAuth, SMS) |
+백엔드 도메인 지도·불변식·주의사항입니다. 공통 규칙·아키텍처 패턴은 루트 [CLAUDE.md](../CLAUDE.md)를 참조하세요.
+상세 설계·의사결정은 [docs/lld](../docs/lld)·[docs/adr](../docs/adr)에 있으니 해당 도메인 작업 전 먼저 읽으세요.
 
 ## Core Domain Modules
 
+`com.widyu.global`은 공통 인프라 (`config`, `security`, `websocket`, `aspect`, `error`, `filter`, `util`, `properties`, `infrastructure`). 도메인 패키지는 아래:
+
 ### `auth` — 인증
-- Multi-provider OAuth (Apple, Naver, Kakao) + 로컬 SMS 인증
-- 토큰 3종: Access Token, Refresh Token, Temporary Token (회원가입 플로우용)
-- **SMS 인증 플로우**: SMS 발송 → 인증코드 검증 → Temporary Token 발급 → 회원가입 → JWT 발급
+- Multi-provider OAuth (Apple/Naver/Kakao) + 로컬 SMS 인증
+- 토큰 3종: Access(단기, `Bearer`) / Refresh(Redis TTL) / Temporary(회원가입 1회용, 30분)
+- SMS 플로우: 발송 → 코드 검증 → Temporary Token → 회원가입 → JWT. Apple은 전화번호 별도 수집. → ADR-0002, LLD-0004
 
-### `member` — 회원
-- `Member` 엔티티 + `MemberType` enum (SENIOR/GUARDIAN), `MemberRole` enum (ADMIN/USER/TEMPORARY)
-- **가족 도메인 모델** (다중 시니어 지원):
-  - `Family`: 가족 그룹 엔티티. `familyCode` (6자) 보유. 시니어 등록 시 자동 생성
-  - `FamilyMembership`: 보호자-가족 연결. `isLeader`(방장), `isRepresentative`(대표 비상연락처), `nickname` 보유
-  - `SeniorProfile`: 시니어 프로필. `Family` FK로 소속 가족 참조. `inviteCode` (7자) 보유
-  - **핵심 제약**: 회원 1명은 가족 1개에만 소속 (시니어: `SeniorProfile.family` FK; 보호자: `FamilyMembership` unique)
-  - 가족 1개에 시니어 여러 명 + 보호자 여러 명 연결 가능
-- `PointHistory`: 포인트 적립(EARN) / 사용(USE) 내역 기록
-
-### `mypage` — 마이페이지
-- 시니어/보호자 마이페이지 분리: `SeniorMyPageService`, `GuardianMyPageService`, `MyPageProfileService`
-- 프로필 수정, 포인트 내역, 가족 정보 등 조회
+### `member` — 회원 (가족 도메인)
+- `Member` + `MemberType`(SENIOR/GUARDIAN), `MemberRole`(ADMIN/USER/TEMPORARY)
+- **가족 모델 (다중 시니어)**:
+  - `Family`: 가족 그룹, `familyCode`(6자). 시니어 등록 시 자동 생성
+  - `FamilyMembership`: 보호자-가족 연결. `isLeader`(방장)·`isRepresentative`(대표 비상연락처)·`nickname`
+  - `SeniorProfile`: 시니어 프로필, `Family` FK, `inviteCode`(7자)
+  - **핵심 불변식**: 회원 1명 = 가족 1개 (시니어 `SeniorProfile.family` FK / 보호자 `FamilyMembership` unique). 가족 1개에 시니어·보호자 다수 가능
+- `PointHistory`: 적립(EARN)/사용(USE) 내역. → ADR-0003
 
 ### `album` — 앨범
-- 사진/영상 CRUD + S3 업로드
-- `AlbumLike`, `AlbumComment` (2단계: 댓글+답글), `AlbumView`, `AlbumUnlock`
-- FFmpeg 영상 썸네일 생성
-- **비동기 업로드 파이프라인**: photos 즉시 업로드(sync) → videos `@Async` 백그라운드 처리
+- 사진/영상 CRUD + S3. `AlbumLike`·`AlbumComment`(댓글+답글 2단계)·`AlbumView`·`AlbumUnlock`
+- **불변식**: Feed 쿼리는 `status=ACTIVE`만 (PROCESSING 자동 제외). Status enum: ACTIVE/INACTIVE/DELETED/PROCESSING
+- 비동기 업로드: 사진 즉시(sync) → 영상 `@Async`(FFmpeg 썸네일→S3→ACTIVE, 실패 시 DELETED). → LLD-0006·0012·0013, ADR-0004·0010·0011
+- 잠금해제: 50포인트, `AlbumUnlock`, 이후 영구 접근
 
 ### `fcm` — 푸시 알림
-- `@EventListener` 기반 이벤트 아키텍처
-- `MemberNotificationSetting`: 카테고리별 알림 ON/OFF 설정 (회원당 카테고리 unique)
-- `FcmCategory` 카테고리: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE
-- 이벤트 리스너: `album`, `goal/walk`, `goal/healthschedule`, `medicineschedule`, `safezone`
-- 비활성 유저 스케줄 알림 (3/5/7일)
+- `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
+- `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE
+- 비활성 유저 스케줄 알림(3/5/7일). → LLD-0002·0014
 
 ### `pay` — 결제·포인트
-- 포인트 기반 잠금해제 (앨범당 50포인트)
-- 시니어 가입 시 100포인트 지급, `PointHistory`로 내역 기록
-- TossPayments 연동
+- **불변식**: 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동
+- 결제 트랜잭션 경계·멱등성은 → LLD-0003·0015·0016·0017, ADR-0012
 
 ### `goal` — 건강 목표
-- `medicine`: 복약 스케줄 + 알람 기반 인증
-- `walk`: 걷기 추적 (`SeniorProfile.defaultWalkGoal`로 기본 목표 설정)
-- `healthschedule`: 건강 스케줄 관리
-- `addressbookmark`: 주소 북마크
-- `home`: 목표 홈 화면 — 가족 멤버 목록 조회 (`GoalHomeService`)
+- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
-- 심박수 이상치 감지 AI 연동 (`HeartRateAnomalyDetector`)
-- **REST + WebSocket 이중 지원**: `HeartRateController`(REST) + `HeartRateWebSocketController`(WebSocket)
-- **WebSocket 플로우**:
-  - 시니어 → `/app/heart-rate/send` (15개 값 전송)
-  - 보호자 구독 → `/topic/heart-rate/{memberId}` (분석 결과 브로드캐스트)
-  - 발신자 ACK → `/user/queue/heart-rate/result`
-- 심박수 이상 감지 시 보호자 FCM 알림 + `HeartRateEmergency` 기록
-- `HeartMessageService`: 심박수 기반 메시지 서비스
+- 심박 15개 값 배치 → AI(`POST /api/hr`) 단건 15회 → `level` NORMAL/CAUTION/EMERGENCY
+- `alert=true`인 EMERGENCY 시 `HeartRateEmergency` 기록 + 보호자 FCM
+- REST(`HeartRateController`) + WebSocket(`HeartRateWebSocketController`) 이중 지원
+  - 시니어 → `/app/heart-rate/send` / 보호자 구독 `/topic/heart-rate/{memberId}` / ACK `/user/queue/heart-rate/result`
+- AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000. → LLD-0010·0019·0020, ADR-0008·0013·0014
 
 ### `location` — 실시간 위치
-- `realtime`: WebSocket 엔드포인트 (실시간 위치 업데이트·궤적)
-- `parentlocation`: 시니어 프로필 위치 관리 (REST)
-- STOMP: 시니어 발신 → 보호자 구독
+- `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
+- 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 
-## Key Architectural Patterns
+### `mypage`
+- 시니어/보호자 분리(`SeniorMyPageService`·`GuardianMyPageService`·`MyPageProfileService`). Query/Command 분리 → LLD-0018
 
-### Facade 패턴
-```java
-// AlbumFacade: S3 업로드, 썸네일, FCM 알림 조합
-// HealthScheduleFacade: 건강 스케줄 관련 서비스 조합
-```
+## Redis 임시 데이터
 
-### Strategy + Factory (OAuth)
-```java
-SocialLoginStrategy strategy = strategyFactory.getStrategy(provider); // APPLE/KAKAO/NAVER
-strategy.login(request);
-```
-
-### AOP 기반 인가
-```java
-@ValidateFamilyAccess(memberIdParam = "memberId")
-public ResponseEntity<?> getWalkDetail(@RequestParam Long memberId) {
-    // 자동으로 보호자-시니어 family connection 검증
-}
-```
-
-### Event-Driven (앨범 → FCM)
-```java
-// AlbumService → applicationEventPublisher.publishEvent(new AlbumLikedEvent(...))
-// AlbumNotificationListener @EventListener → FCM 발송
-```
-
-### WebSocket STOMP 흐름
-```java
-// 시니어가 /app/location/update로 위치 전송
-@MessageMapping("/location/update")
-@SendToUser("/queue/location/ack")  // 발신자에게 ACK
-public LocationUpdateResponse updateLocation(@Payload LocationUpdateRequest request) {
-    // 서비스가 /topic/location/{seniorId}로 브로드캐스트
-    return service.updateAndBroadcast(request);
-}
-```
-
-## Configuration Profiles
-
-```yaml
-spring:
-  profiles:
-    group:
-      local: "local, datasource, fcm, pay, s3"
-      dev:   "dev, datasource, fcm, pay, s3"
-      test:  "test, fcm, pay, s3"
-```
-
-| YAML 파일 | 내용 |
-|-----------|------|
-| `application-datasource.yml` | DB (MySQL/H2) |
-| `application-security.yml` | JWT 시크릿·만료 시간 |
-| `application-oauth.yml` | Apple·Naver·Kakao 설정 |
-| `application-fcm.yml` | Firebase 서비스 계정 |
-| `application-pay.yml` | TossPayments |
-| `application-redis.yml` | Redis 연결 |
-| `application-s3.yml` | AWS S3 자격증명·버킷 |
-| `application-coolsms.yml` | SMS 인증 |
-| `application-video.yml` | FFmpeg 경로·멀티파트 제한 |
-| `application-medicine.yml` | 약품 API |
-| `application-actuator.yml` | Actuator 엔드포인트 |
-
-## Key Business Logic
-
-### 인증 플로우
-
-**로컬 회원가입 (SMS 인증)**
-1. `POST /api/auth/guardian/sms/send` — SMS 발송
-2. `POST /api/auth/guardian/sms/verify` → Temporary Token 발급
-3. `POST /api/auth/guardian/signup` (Temporary Token 헤더) → JWT 발급
-4. Temporary Token TTL: 30분 (`TemporaryMember.ttl = 1800`)
-
-**OAuth 플로우**
-1. 소셜 로그인 → 기존 유저: JWT 즉시 발급 / 신규 유저: Social Temporary Token
-2. 신규 유저는 전화번호 제공 후 가입 완료
-3. Apple: 개인정보 정책상 전화번호 별도 수집
-
-**토큰 관리**
-- Access Token: 단기, `Authorization: Bearer` 헤더
-- Refresh Token: Redis TTL 저장, Access Token 재발급용
-- Temporary Token: 회원가입 플로우 1회용, Redis `TemporaryMember`로 저장
-
-### 회원 역할
-- **시니어(Senior)**: 앨범 생성, 포인트 관리, 7자리 초대코드로 보호자 초대 (UI에서는 "부모"로 표현). `SeniorProfile.family` FK로 가족 소속
-- **보호자(Guardian)**: 앨범 조회·상호작용, 포인트로 프리미엄 콘텐츠 잠금해제. `FamilyMembership`으로 가족 소속
-- **가족 접근 검증**: `@ValidateFamilyAccess` AOP — `FamilyMembership` ↔ `SeniorProfile.family` JPQL 크로스 조인으로 보호자의 시니어 접근 권한 확인
-
-### 앨범 시스템
-
-**비동기 업로드 파이프라인**
-1. 사진 → S3 즉시 업로드 (sync)
-2. 영상 → 임시 `File`로 변환 (MultipartFile은 요청 종료 후 삭제됨)
-3. 앨범 DB 저장 (`Status.PROCESSING`)
-4. API `202 Accepted` + `albumId` 반환
-5. `AlbumVideoProcessingService.processVideosAsync()`: FFmpeg → S3 → DB `ACTIVE` 업데이트 → FCM
-6. 실패 시: `Status.DELETED`
-
-**Status enum**: `ACTIVE`, `INACTIVE`, `DELETED`, `PROCESSING`
-- Feed 쿼리는 `status = ACTIVE`만 조회 → `PROCESSING` 앨범 자동 제외
-- MySQL ENUM에 값 추가 시 수동 ALTER 필요 (`ddl-auto: update` 미지원)
-
-**소셜 기능**
-- 2단계 댓글 (댓글 + 답글)
-- 좋아요/취소
-- 조회수 (유저당 최초 1회)
-- 포인트 잠금해제: 50포인트, `AlbumUnlock` 엔티티, 잠금해제 후 영구 접근
-
-### 복약 스케줄
-- 알람 시간 ±30분 이내에만 인증 제출 가능
-- 같은 날 동일 스케줄 중복 제출 불가
-- 월별 복약 준수율 통계 제공
-
-### 포인트 경제
-- 시니어 가입 시 100포인트 지급
-- 앨범 잠금해제: 50포인트 차감
-- 문화비 지원 혜택 연동
-
-### 실시간 위치 추적
-1. 시니어가 JWT 인증으로 WebSocket 연결
-2. `/app/location/update`로 GPS 좌표 전송
-3. 서버가 family connection 검증 후 보호자에게 브로드캐스트
-4. 보호자는 `/topic/location/{seniorId}` 구독
-5. 위치 이력은 Redis 저장 (configurable retention)
-
-### 심박수 AI 이상치 감지 (`heart` 도메인)
-1. 웨어러블에서 심박수 15개 값 수집
-2. 활동 상태(`REST`, `LOW`, `ACTIVE`, `UNKNOWN`)와 함께 WebSocket 배치 전송
-3. 서버가 측정 시각 순서대로 AI `POST /api/hr`에 단건 JSON 15회 전송
-4. 응답 `level`: `NORMAL` / `CAUTION` / `EMERGENCY`
-5. `alert=true`인 `EMERGENCY` 감지 시 `HeartRateEmergency` DB 기록
-- REST(`HeartRateController`)와 WebSocket(`HeartRateWebSocketController`) 모두 지원
-
-**AI 서비스**: Docker `ryuchanghoon/widyu-ai-ver7:latest`, port 5000, 멀티 아키텍처 이미지
-
-## Database & Persistence
-
-### MySQL (운영)
-- `widyu-domain`에 `@Entity` 엔티티
-- `BaseTimeEntity`로 `createdAt`/`updatedAt` 자동 관리
-- 관계: `@OneToMany`, `@ManyToOne`, `@OneToOne`
-
-### Redis (임시 데이터)
-쿼리 캐시가 아닌 **TTL 기반 임시 저장** 용도:
+쿼리 캐시가 아닌 **TTL 기반 임시 저장**. `@RedisHash` + `@TimeToLive`로 자동 만료.
 
 | 키 | 용도 |
 |----|------|
@@ -233,35 +66,32 @@ spring:
 | `OAuthState` | OAuth CSRF 방지 |
 | `SeniorLocation` | 실시간 위치 + 이력 |
 
-`@RedisHash` + `@TimeToLive`로 자동 만료.
+## 설정 · 외부 연동
 
-### QueryDSL
-- Q-클래스: `build/generated/sources/annotationProcessor/java/main`
-- 엔티티 변경 후 `./gradlew compileJava`로 재생성
-- 복잡한 조인·동적 조건 쿼리에 사용
+- **Profile**: `application.yml`에 그룹(local/dev/test) 정의, 관심사별 `application-*.yml` 분리(datasource·security·oauth·fcm·pay·redis·s3·coolsms·video·medicine·actuator).
+- **외부 연동**: Firebase FCM, AWS S3(버킷 정책 접근제어, `PUBLIC_READ` ACL 미사용), Apple/Naver/Kakao OAuth, TossPayments, Coolsms(SMS), FFmpeg, 공공 약품 API, AI Heart Rate(Flask).
+- **엔티티/영속성**: `@Entity`는 `widyu-domain`, `BaseTimeEntity`로 `createdAt`/`updatedAt` 자동. 테스트는 H2 in-memory(`application-test.yml`).
 
-### H2 (테스트)
-- `application-test.yml`에 in-memory DB 설정
+## 백엔드 코딩 주의사항
 
-## External Integrations
+- **Swagger**: `controller/docs/`에 별도 `Docs` 인터페이스로 문서화 — 컨트롤러 본문은 깔끔하게 유지.
+- **`@Async` 비동기**:
+  - `@Async` 메서드는 **별도 빈**에 배치 (self-invocation 프록시 우회 방지)
+  - `MultipartFile`은 요청 종료 후 삭제되므로 `File`로 변환해 async 스레드에 전달
+  - 새 스레드는 호출자 트랜잭션을 전파받지 못하므로, DB 작업이 있는 `@Async` 메서드에는 `@Transactional`을 직접 선언한다 (훅이 누락 시 경고)
+  - 임시 파일은 `finally`에서 삭제
+- **MySQL ENUM**: `ddl-auto: update`는 기존 ENUM 컬럼에 새 값을 추가하지 않음 → 수동 실행 필요:
+  `ALTER TABLE <table> MODIFY COLUMN <col> ENUM('A','B','NEW') NOT NULL`
 
-| 서비스 | 용도 |
-|--------|------|
-| Firebase FCM | 푸시 알림, 서비스 계정 인증 |
-| AWS S3 | 미디어 파일 저장 (버킷 정책으로 접근 제어, `PUBLIC_READ` ACL 미사용) |
-| Apple OAuth | JWT 기반, 공개키 동적 조회 |
-| Naver OAuth | REST API |
-| Kakao OAuth | REST API |
-| TossPayments | 카드·가상계좌·계좌이체·간편결제 |
-| Coolsms | SMS 인증코드 (국내 서비스) |
-| FFmpeg | 영상 썸네일 생성·처리 |
-| 공공 약품 API | 복약 스케줄 약품 정보 조회 |
-| AI Heart Rate Service | Flask ML 서비스, 심박수 이상치 감지 |
+## 테스트 작성 규칙
 
-## Security Implementation
+**프레임워크**: JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), H2 in-memory (`application-test.yml`).
 
-- **JWT**: Stateless (Access + Refresh), 시크릿 3개 (`application-security.yml`), Refresh는 Redis 저장
-- **OAuth2**: Strategy 패턴으로 멀티 프로바이더, `OAuthState`(Redis)로 CSRF 방지
-- **SMS 인증**: 로컬 회원가입 필수, Coolsms로 전화번호 검증
-- **역할 기반 접근**: `MemberType` enum (SENIOR/GUARDIAN), `@ValidateFamilyAccess` AOP
-- **CORS**: 크로스 오리진 요청 허용 설정
+1. **DAMP > DRY** — `@BeforeEach`로 상태 공유 금지. 반복 객체 생성은 Fixture 클래스로 분리해 각 테스트를 독립적으로 유지한다.
+2. **결과를 검증한다** — `verify(...)` 같은 구현 호출이 아니라 상태 변화를 검증 (`assertEquals(Status.PASS, applicant.getStatus())`).
+3. **AAA 패턴** — `// given / when / then` 주석으로 구분한다.
+4. **명세에 비즈니스 행위를 담는다** — 메서드명은 한글 언더스코어(`관리자_정보로_가입한다`), `@DisplayName`은 `<행위>하면 <결과>한다/반환한다/예외가 발생한다` 형식. "성공·실패·테스트" 접미사 금지.
+5. **BDDMockito** — `given(...).willReturn(...)` 사용 (`when/thenReturn` 금지).
+6. **예외 테스트** — `assertThatThrownBy(() -> ...).isInstanceOf(BusinessException.class)`.
+
+**테스트 구분**: Unit(도메인 모델·비즈니스 로직) / Integration(주요 흐름·DB 등 외부 의존성) / E2E(사용자 흐름 전체).
