@@ -60,7 +60,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-rules.sh`로 아래 **코드 작성 원칙**을 자동 검사합니다. 작업 순서:
 
 1. 관련 도메인 문서 확인 (backend/CLAUDE.md → 해당 도메인 섹션)
-2. 변경 계획 작성 (어떤 파일, 왜)
+2. 변경 계획 + 완료 조건 작성 (어떤 파일·왜, 그리고 "무엇이 되면 done"인지 검증 가능한 성공 기준으로)
 3. 코드 수정 (훅이 규칙 자동 검사)
 4. 테스트: `bash scripts/harness/run-module-tests.sh`
 5. 엔티티 변경 시 `./gradlew compileJava`
