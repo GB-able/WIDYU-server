@@ -6,7 +6,7 @@
 
 **Pages**: Dashboard (KPI·경고 카드·주간 추이 차트), Members, Families, Albums, Payments, Notifications, Logs, DevTools (개발 환경 전용)
 
-**인증**: authStore(Zustand)에 JWT 저장, PrivateRoute로 보호. 백엔드 `/api/admin/login` 연동.
+**인증**: JWT를 `localStorage`(`admin_token` 키)에 저장하고 authStore(Zustand)로 노출, PrivateRoute로 보호. 백엔드 `AdminAuthController`(`/api/v1/auth/admin/login`) 연동, refresh는 `/api/v1/auth/admin/refresh`.
 
 **Dev**:
 ```bash

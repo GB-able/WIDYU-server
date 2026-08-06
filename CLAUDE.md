@@ -36,7 +36,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 **핵심 규칙**: 엔티티는 `widyu-domain`, 리포지토리는 `widyu-api`.
 
 ### DDD Layered Structure
-```
+```text
 {domain}/
 ├── controller/         # REST 엔드포인트
 │   └── docs/           # Swagger 문서 인터페이스 (컨트롤러와 분리)
@@ -49,7 +49,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 ### Key Architectural Patterns
 - **Facade** — 여러 서비스를 조합하는 복잡한 오퍼레이션 (`AlbumFacade`, `HealthScheduleFacade`)
 - **Strategy + Factory** — OAuth 제공자별 로그인 처리 (`SocialLoginStrategyFactory`)
-- **AOP** — `@ValidateFamilyAccess`로 가디언-시니어 접근 권한 자동 검증 (`FamilyMembership` ↔ `SeniorProfile.family` 크로스 조인)
+- **AOP** — `@ValidateFamilyAccess`로 가디언-시니어 접근 권한 자동 검증 (`FamilyAccessAspect`가 `seniorId`를 추출해 `FamilyMembershipRepository`로 관계 확인, ADR-0002)
 - **Event-Driven** — `@EventListener`로 도메인 간 결합 제거 (앨범 이벤트 → FCM 알림)
 - **QueryDSL** — 복잡한 조건 쿼리, `./gradlew compileJava`로 Q-클래스 재생성
 - **WebSocket STOMP** — JWT 핸드셰이크 인터셉터로 인증, `SimpMessagingTemplate`으로 브로드캐스트, 위치는 Redis 저장

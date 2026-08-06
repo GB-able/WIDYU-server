@@ -78,7 +78,7 @@
 - **`@Async` 비동기**:
   - `@Async` 메서드는 **별도 빈**에 배치 (self-invocation 프록시 우회 방지)
   - `MultipartFile`은 요청 종료 후 삭제되므로 `File`로 변환해 async 스레드에 전달
-  - 새 스레드 = 새 트랜잭션 → `@Async` 메서드에 `@Transactional` 필요 (훅이 누락 시 경고)
+  - 새 스레드는 호출자 트랜잭션을 전파받지 못하므로, DB 작업이 있는 `@Async` 메서드에는 `@Transactional`을 직접 선언한다 (훅이 누락 시 경고)
   - 임시 파일은 `finally`에서 삭제
 - **MySQL ENUM**: `ddl-auto: update`는 기존 ENUM 컬럼에 새 값을 추가하지 않음 → 수동 실행 필요:
   `ALTER TABLE <table> MODIFY COLUMN <col> ENUM('A','B','NEW') NOT NULL`

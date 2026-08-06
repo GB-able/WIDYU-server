@@ -85,6 +85,9 @@ Closes #<N>
 - [ ] `@Async` 메서드에 `@Transactional` 확인
 - [ ] LLD 인수조건 전체 충족
 
+## 리뷰 포인트
+<리뷰어가 집중할 질문 1개로 좁혀 작성합니다.>
+
 ## Open Questions (LLD 미결정 사항)
 <LLD의 Open Questions를 그대로 옮깁니다. 없으면 "없습니다.">
 
