@@ -19,10 +19,10 @@ public class PaymentMapper {
                 .paymentKey(dto.getPaymentKey())
                 .orderId(dto.getOrderId())
                 .orderName(dto.getOrderName())
-                .amount(dto.getAmount())
+                .amount(dto.getResolvedAmount())
                 .canceledAmount(0)
                 .canceledPointAmount(0)
-                .status(dto.getStatus() != null ? dto.getStatus() : PaymentStatus.DONE)
+                .status(resolveStatus(dto))
                 .requestedAt(dto.getRequestedAt())
                 .approvedAt(dto.getApprovedAt())
                 .cultureExpense(dto.isCultureExpense())
@@ -72,5 +72,12 @@ public class PaymentMapper {
         }
 
         return payment;
+    }
+
+    private static PaymentStatus resolveStatus(PaymentConfirmResponse dto) {
+        if (dto.getStatus() != null) {
+            return dto.getStatus();
+        }
+        return PaymentStatus.DONE;
     }
 }

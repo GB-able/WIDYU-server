@@ -18,4 +18,8 @@ public record CancelRequest(
     public CancelRequest(String cancelReason, Integer cancelAmount) {
         this(cancelReason, cancelAmount, null);
     }
+
+    public static CancelRequest of(String cancelReason, Integer cancelAmount, String idempotencyKey) {
+        return new CancelRequest(cancelReason, cancelAmount, idempotencyKey);
+    }
 }
