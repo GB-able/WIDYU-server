@@ -8,6 +8,7 @@ import com.widyu.album.repository.AlbumLikeRepository;
 import com.widyu.album.repository.AlbumRepository;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.member.Member;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.util.MemberUtil;
 import java.time.LocalDate;
@@ -38,17 +39,30 @@ public class AlbumFeedService {
     private final AlbumLikeRepository albumLikeRepository;
     private final AlbumViewRepository albumViewRepository;
     private final MemberUtil memberUtil;
+    private final FamilyAccessService familyAccessService;
 
     @Transactional(readOnly = true)
     public CursorPage<AlbumFeedResponse> getAlbumFeed(AlbumFeedRequest request) {
         final Member currentMember = memberUtil.getCurrentMember();
+        List<Long> familyMemberIds = familyAccessService.getFamilyMemberIds(currentMember);
+        LocalDateTime lastCreatedAt = null;
+        Long lastAlbumId = null;
+        LocalDate date = null;
+        if (request.hasCursor()) {
+            lastCreatedAt = request.lastCreatedAt();
+            lastAlbumId = request.lastAlbumId();
+        }
+        if (request.hasDate()) {
+            date = LocalDate.parse(request.date());
+        }
 
         // 1) 앨범 ID 커서 페이지 조회 (size+1 로 hasNext 판단)
         Pageable pageable = pagePlusOne(ALBUM_FEED_SIZE);
         Slice<Long> idSlice = findAlbumIdSlice(
-                request.hasCursor() ? request.lastCreatedAt() : null,
-                request.hasCursor() ? request.lastAlbumId() : null,
-                request.hasDate() ? LocalDate.parse(request.date()) : null,
+                lastCreatedAt,
+                lastAlbumId,
+                date,
+                familyMemberIds,
                 pageable);
 
         // 2) 상세 조회 (ID 순서 보존)
@@ -70,10 +84,12 @@ public class AlbumFeedService {
 
     @Transactional(readOnly = true)
     public CursorPage<AlbumMediaResponse> getMediaFeed(LocalDateTime lastCreatedAt, Long lastPostId) {
+        Member currentMember = memberUtil.getCurrentMember();
+        List<Long> familyMemberIds = familyAccessService.getFamilyMemberIds(currentMember);
         Pageable pageable = pagePlusOne(MEDIA_FEED_SIZE);
 
         // 1) 앨범 ID 커서 페이지
-        Slice<Long> idSlice = findAlbumIdSlice(lastCreatedAt, lastPostId, null, pageable);
+        Slice<Long> idSlice = findAlbumIdSlice(lastCreatedAt, lastPostId, null, familyMemberIds, pageable);
 
         // 2) 상세 조회 (ID 순서 보존)
         List<Long> albumIds = idSlice.getContent();
@@ -87,9 +103,11 @@ public class AlbumFeedService {
 
         // 4) 커서는 마지막 앨범의 (createdAt, albumId)
         boolean hasNext = idSlice.hasNext();
-        String nextCursor = albumMediaResponses.isEmpty()
-                ? null
-                : buildCursor(albumMediaResponses.getLast().createdAt(), albumMediaResponses.getLast().postId());
+        String nextCursor = null;
+        if (!albumMediaResponses.isEmpty()) {
+            AlbumMediaResponse last = albumMediaResponses.getLast();
+            nextCursor = buildCursor(last.createdAt(), last.postId());
+        }
 
         return new CursorPage<>(albumMediaResponses, nextCursor, hasNext);
     }
@@ -98,18 +116,23 @@ public class AlbumFeedService {
         return PageRequest.of(0, size + 1);
     }
 
-    private Slice<Long> findAlbumIdSlice(LocalDateTime lastCreatedAt, Long lastPostId, LocalDate date, Pageable pageable) {
+    private Slice<Long> findAlbumIdSlice(LocalDateTime lastCreatedAt, Long lastPostId, LocalDate date,
+                                         List<Long> familyMemberIds, Pageable pageable) {
         if (date != null) {
             LocalDateTime startOfDay = date.atStartOfDay();
             LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
-            return (lastCreatedAt != null)
-                    ? albumRepository.findAlbumIdsAfterPostIdByDate(lastCreatedAt, lastPostId, startOfDay, startOfNextDay, pageable)
-                    : albumRepository.findLatestAlbumIdsByDate(startOfDay, startOfNextDay, pageable);
-        } else {
-            return (lastCreatedAt != null)
-                    ? albumRepository.findAlbumIdsAfterPostId(lastCreatedAt, lastPostId, pageable)
-                    : albumRepository.findLatestAlbumIds(pageable);
+            if (lastCreatedAt != null) {
+                return albumRepository.findAlbumIdsAfterPostIdByDateAndMemberIds(
+                        lastCreatedAt, lastPostId, startOfDay, startOfNextDay, familyMemberIds, pageable);
+            }
+            return albumRepository.findLatestAlbumIdsByDateAndMemberIds(
+                    startOfDay, startOfNextDay, familyMemberIds, pageable);
         }
+        if (lastCreatedAt != null) {
+            return albumRepository.findAlbumIdsAfterPostIdAndMemberIds(
+                    lastCreatedAt, lastPostId, familyMemberIds, pageable);
+        }
+        return albumRepository.findLatestAlbumIdsByMemberIds(familyMemberIds, pageable);
     }
 
     private String buildCursor(LocalDateTime createdAt, Long albumId) {

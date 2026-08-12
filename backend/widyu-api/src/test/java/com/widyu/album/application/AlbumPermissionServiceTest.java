@@ -3,6 +3,8 @@ package com.widyu.album.application;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 
 import com.widyu.album.Album;
@@ -10,6 +12,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.application.FamilyAccessService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +27,9 @@ class AlbumPermissionServiceTest {
 
     @Mock
     private AlbumUnlockService albumUnlockService;
+
+    @Mock
+    private FamilyAccessService familyAccessService;
 
     @InjectMocks
     private AlbumPermissionService albumPermissionService;
@@ -43,7 +49,7 @@ class AlbumPermissionServiceTest {
     }
 
     @Test
-    @DisplayName("보호자(GUARDIAN)는 해금 없이 모든 앨범을 조회할 수 있다")
+    @DisplayName("같은 가족의 보호자(GUARDIAN)는 해금 없이 앨범을 조회할 수 있다")
     void 보호자는_해금_없이_앨범_조회_가능() {
         // given
         Member guardian = mock(Member.class);
@@ -55,6 +61,7 @@ class AlbumPermissionServiceTest {
 
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(owner);
+        allowFamilyAccess(guardian, owner);
 
         // when & then
         assertThatNoException().isThrownBy(() -> albumPermissionService.checkViewPermission(album, guardian));
@@ -74,6 +81,7 @@ class AlbumPermissionServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(owner);
         given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(true);
+        allowFamilyAccess(senior, owner);
 
         // when & then
         assertThatNoException().isThrownBy(() -> albumPermissionService.checkViewPermission(album, senior));
@@ -93,10 +101,36 @@ class AlbumPermissionServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(owner);
         given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(false);
+        allowFamilyAccess(senior, owner);
 
         // when & then
         assertThatThrownBy(() -> albumPermissionService.checkViewPermission(album, senior))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_UNLOCK_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("가족 외 앨범을 보호자가 조회하면 FORBIDDEN 예외를 던진다")
+    void 가족_외_앨범_보호자_조회_시_예외가_발생한다() {
+        // given
+        Member guardian = mock(Member.class);
+        given(guardian.getId()).willReturn(2L);
+
+        Member owner = mock(Member.class);
+        given(owner.getId()).willReturn(1L);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(owner);
+        willThrow(new BusinessException(ErrorCode.FORBIDDEN)).given(familyAccessService)
+                .verifySameFamily(guardian, owner);
+
+        // when & then
+        assertThatThrownBy(() -> albumPermissionService.checkViewPermission(album, guardian))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    private void allowFamilyAccess(Member member, Member targetMember) {
+        willDoNothing().given(familyAccessService).verifySameFamily(member, targetMember);
     }
 }

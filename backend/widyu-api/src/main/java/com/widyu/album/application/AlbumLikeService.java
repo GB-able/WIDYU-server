@@ -25,6 +25,7 @@ public class AlbumLikeService {
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final AlbumPermissionService albumPermissionService;
 
     @Transactional
     public void likeAlbum(Long albumId) {
@@ -32,6 +33,7 @@ public class AlbumLikeService {
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+        albumPermissionService.checkFamilyAccess(album, currentMember);
 
         if (albumLikeRepository.existsByAlbumAndMember(album, currentMember)) {
             throw new BusinessException(ErrorCode.ALBUM_ALREADY_LIKED);
@@ -57,6 +59,7 @@ public class AlbumLikeService {
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+        albumPermissionService.checkFamilyAccess(album, currentMember);
 
         AlbumLike albumLike = albumLikeRepository.findByAlbumAndMember(album, currentMember)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_LIKED));

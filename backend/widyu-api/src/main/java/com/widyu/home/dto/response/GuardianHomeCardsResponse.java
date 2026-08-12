@@ -15,6 +15,9 @@ import java.util.List;
 
 public record GuardianHomeCardsResponse(
 
+        @Schema(description = "외출 여부 (true=외출 중, false=집, null=최근 위치 없음)", example = "true")
+        Boolean isOuting,
+
         @Schema(description = "심박수 · 착용 상태")
         HeartRateInfo heartRate,
 
@@ -33,6 +36,17 @@ public record GuardianHomeCardsResponse(
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final long WEARING_THRESHOLD_SECONDS = 30;
+
+    public static GuardianHomeCardsResponse of(
+            Boolean isOuting,
+            HeartRateInfo heartRate,
+            MedicineInfo medicine,
+            List<AlbumInfo> albums,
+            HealthScheduleInfo healthSchedule,
+            WalkInfo walk
+    ) {
+        return new GuardianHomeCardsResponse(isOuting, heartRate, medicine, albums, healthSchedule, walk);
+    }
 
     public record HeartRateInfo(
             @Schema(description = "워치 착용 여부 (최근 30초 이내 심박 데이터 수신 시 true)", example = "true")
@@ -65,6 +79,7 @@ public record GuardianHomeCardsResponse(
         }
     }
 
+    @Schema(name = "GuardianHomeMedicineInfo")
     public record MedicineInfo(
             @Schema(description = "오늘 총 복용 예정 횟수 (동그라미 개수)", example = "6")
             Integer totalCount,
@@ -103,6 +118,7 @@ public record GuardianHomeCardsResponse(
         }
     }
 
+    @Schema(name = "GuardianHomeHealthScheduleInfo")
     public record HealthScheduleInfo(
             @Schema(description = "건강 일정 ID", example = "3")
             Long scheduleId,

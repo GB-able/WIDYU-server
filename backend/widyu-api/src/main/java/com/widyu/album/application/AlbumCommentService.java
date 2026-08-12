@@ -26,6 +26,7 @@ public class AlbumCommentService {
     private final AlbumRepository albumRepository;
     private final MemberUtil memberUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final AlbumPermissionService albumPermissionService;
 
     @Transactional
     public AlbumCommentResponse createComment(Long albumId, AlbumCommentCreateRequest request) {
@@ -33,6 +34,7 @@ public class AlbumCommentService {
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+        albumPermissionService.checkFamilyAccess(album, currentMember);
 
         AlbumComment comment;
         if (request.parentCommentId() != null) {

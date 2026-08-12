@@ -3,6 +3,8 @@ package com.widyu.album.application;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,6 +41,7 @@ class AlbumCommentServiceTest {
     @Mock private AlbumRepository albumRepository;
     @Mock private MemberUtil memberUtil;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private AlbumPermissionService albumPermissionService;
 
     @InjectMocks
     private AlbumCommentService albumCommentService;
@@ -57,6 +60,7 @@ class AlbumCommentServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
 
         AlbumComment savedComment = mock(AlbumComment.class);
         given(savedComment.getId()).willReturn(100L);
@@ -92,6 +96,7 @@ class AlbumCommentServiceTest {
         given(album.getId()).willReturn(10L);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
 
         AlbumComment parentComment = mock(AlbumComment.class);
         given(parentComment.getAlbum()).willReturn(album);
@@ -125,6 +130,7 @@ class AlbumCommentServiceTest {
 
         Album album = mock(Album.class);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
 
         AlbumComment parentComment = mock(AlbumComment.class);
         given(parentComment.getAlbum()).willReturn(album);
@@ -241,5 +247,26 @@ class AlbumCommentServiceTest {
         assertThatThrownBy(() -> albumCommentService.deleteComment(100L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_COMMENT_NOT_OWNER);
+    }
+
+    @Test
+    @DisplayName("가족 외 앨범 댓글 작성 시 FORBIDDEN 예외를 던진다")
+    void 가족_외_앨범_댓글_작성_시_예외가_발생한다() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        Album album = mock(Album.class);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        willThrow(new BusinessException(ErrorCode.FORBIDDEN)).given(albumPermissionService)
+                .checkFamilyAccess(album, currentMember);
+
+        // when & then
+        assertThatThrownBy(() -> albumCommentService.createComment(10L, new AlbumCommentCreateRequest("댓글", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    private void allowFamilyAccess(Album album, Member member) {
+        willDoNothing().given(albumPermissionService).checkFamilyAccess(album, member);
     }
 }

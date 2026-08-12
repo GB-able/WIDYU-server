@@ -150,6 +150,21 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
+    @DisplayName("집 밖의 체류 위치이면 외출 중으로 반환한다")
+    void 집_밖의_체류위치이면_외출중으로_반환한다() {
+        // given
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1"))
+                .willReturn(StayInfo.of(37.5, 127.0, null, null));
+
+        // when
+        Boolean isOuting = realtimeLocationService.getOutingStatus(1L);
+
+        // then
+        assertThat(isOuting).isTrue();
+    }
+
+    @Test
     @DisplayName("연결되지 않은 보호자가 이동 경로 조회 시 FORBIDDEN 예외를 던진다")
     void 연결되지_않은_보호자_이동_경로_조회_시_예외가_발생한다() {
         // given

@@ -10,6 +10,7 @@ import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.global.entity.Status;
@@ -31,6 +32,7 @@ public class AlbumUnlockService {
     private final ApplicationEventPublisher eventPublisher;
     private final PointHistoryRepository pointHistoryRepository;
     private final SeniorProfileRepository seniorProfileRepository;
+    private final FamilyAccessService familyAccessService;
 
     private static final long DEFAULT_UNLOCK_PRICE = 50;
 
@@ -40,6 +42,8 @@ public class AlbumUnlockService {
 
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
+
+        familyAccessService.verifySameFamily(currentMember, album.getMember());
 
         // 1. 본인 앨범 해금 방지
         if (album.getMember().getId().equals(currentMember.getId())) {
