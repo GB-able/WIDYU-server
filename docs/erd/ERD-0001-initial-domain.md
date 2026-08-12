@@ -311,6 +311,7 @@ erDiagram
 | `OAuthState` | - | - | state |
 | `PhoneChangeVerified` | - | - | verified |
 | `TemporaryMember` | - | - | member 임시 정보 |
+| `AlbumUploadSession` | `albumUploadSession:{uuid}` | 21600s (대기) / 600s (완료) | memberId, status, albumId, files(objectKey·uploadId·partCount) |
 
 ## Enum 값
 

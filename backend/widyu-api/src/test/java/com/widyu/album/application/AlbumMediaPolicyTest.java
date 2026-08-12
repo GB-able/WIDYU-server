@@ -66,6 +66,79 @@ class AlbumMediaPolicyTest {
                 .hasMessageContaining("사진은 최대 10MB");
     }
 
+    @Test
+    @DisplayName("메타데이터 검증에서 정상 파일 목록이면 예외가 발생하지 않는다")
+    void 메타데이터_정상_파일_목록이면_예외가_발생하지_않는다() {
+        // given
+        List<AlbumMediaPolicy.MediaMetadata> files = List.of(
+                new AlbumMediaPolicy.MediaMetadata("image/jpeg", 1024L),
+                new AlbumMediaPolicy.MediaMetadata("video/mp4", 1024L * 1024L)
+        );
+
+        // when & then
+        org.assertj.core.api.Assertions.assertThatCode(() -> albumMediaPolicy.validateMetadata(files))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("메타데이터 검증에서 파일 크기가 0 이하면 FILE_IS_EMPTY 예외를 던진다")
+    void 메타데이터_파일_크기가_0_이하면_예외가_발생한다() {
+        // given
+        List<AlbumMediaPolicy.MediaMetadata> files = List.of(
+                new AlbumMediaPolicy.MediaMetadata("image/jpeg", 0L)
+        );
+
+        // when & then
+        assertThatThrownBy(() -> albumMediaPolicy.validateMetadata(files))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_IS_EMPTY)
+                .hasMessageContaining("파일 크기가 올바르지 않습니다.");
+    }
+
+    @Test
+    @DisplayName("메타데이터 검증에서 지원하지 않는 타입이면 INVALID_FILE_TYPE 예외를 던진다")
+    void 메타데이터_지원하지_않는_타입이면_예외가_발생한다() {
+        // given
+        List<AlbumMediaPolicy.MediaMetadata> files = List.of(
+                new AlbumMediaPolicy.MediaMetadata("application/pdf", 1024L)
+        );
+
+        // when & then
+        assertThatThrownBy(() -> albumMediaPolicy.validateMetadata(files))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_FILE_TYPE);
+    }
+
+    @Test
+    @DisplayName("메타데이터 검증에서 동영상 개수를 초과하면 BAD_REQUEST 예외를 던진다")
+    void 메타데이터_동영상_개수를_초과하면_예외가_발생한다() {
+        // given
+        List<AlbumMediaPolicy.MediaMetadata> files = java.util.stream.IntStream.range(0, 4)
+                .mapToObj(i -> new AlbumMediaPolicy.MediaMetadata("video/mp4", 1024L))
+                .toList();
+
+        // when & then
+        assertThatThrownBy(() -> albumMediaPolicy.validateMetadata(files))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST)
+                .hasMessageContaining("동영상 최대 3개");
+    }
+
+    @Test
+    @DisplayName("메타데이터 검증에서 동영상 크기 제한을 초과하면 FILE_TOO_LARGE 예외를 던진다")
+    void 메타데이터_동영상_크기_제한을_초과하면_예외가_발생한다() {
+        // given
+        List<AlbumMediaPolicy.MediaMetadata> files = List.of(
+                new AlbumMediaPolicy.MediaMetadata("video/mp4", AlbumMediaPolicy.MAX_VIDEO_BYTES + 1)
+        );
+
+        // when & then
+        assertThatThrownBy(() -> albumMediaPolicy.validateMetadata(files))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TOO_LARGE)
+                .hasMessageContaining("동영상은 최대 2GB");
+    }
+
     private MultipartFile mockFile(String contentType, long size) {
         MultipartFile file = mock(MultipartFile.class);
         given(file.getContentType()).willReturn(contentType);

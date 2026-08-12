@@ -2,6 +2,9 @@ package com.widyu.global;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.widyu.album.AlbumUploadSession;
+import com.widyu.album.AlbumUploadSessionFile;
+import com.widyu.album.AlbumUploadSessionStatus;
 import com.widyu.auth.TemporaryMember;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
@@ -65,6 +68,34 @@ class RedisHashDeserializationTest {
         assertThat(read.getId()).isEqualTo(origin.getId());
         assertThat(read.getName()).isEqualTo("홍길동");
         assertThat(read.getPhoneNumber()).isEqualTo("01012345678");
+    }
+
+    @Test
+    @DisplayName("AlbumUploadSession을 저장 후 다시 읽으면 중첩 파일 목록까지 원본 값이 복원된다")
+    void 앨범업로드세션_역직렬화() {
+        // given
+        final AlbumUploadSession origin = AlbumUploadSession.createWaiting("session-1", 1L, java.util.List.of(
+                AlbumUploadSessionFile.photo(0, "photo.jpg", "image/jpeg", 1024L, "albums/staging/1/session-1/0_abc.jpg"),
+                AlbumUploadSessionFile.video(1, "video.mp4", "video/mp4", 2048L,
+                        "albums/staging/1/session-1/1_def.mp4", "upload-id", 3)
+        )).complete(100L);
+        final RedisData sink = new RedisData();
+        converter.write(origin, sink);
+
+        // when
+        final AlbumUploadSession read = converter.read(AlbumUploadSession.class, sink);
+
+        // then
+        assertThat(read.getId()).isEqualTo("session-1");
+        assertThat(read.getMemberId()).isEqualTo(1L);
+        assertThat(read.getStatus()).isEqualTo(AlbumUploadSessionStatus.COMPLETED);
+        assertThat(read.getAlbumId()).isEqualTo(100L);
+        assertThat(read.getTtl()).isEqualTo(AlbumUploadSession.COMPLETED_TTL_SECONDS);
+        assertThat(read.getFiles()).hasSize(2);
+        assertThat(read.getFiles().get(0).getObjectKey()).isEqualTo("albums/staging/1/session-1/0_abc.jpg");
+        assertThat(read.getFiles().get(1).getUploadId()).isEqualTo("upload-id");
+        assertThat(read.getFiles().get(1).getPartCount()).isEqualTo(3);
+        assertThat(read.getVideoFiles()).hasSize(1);
     }
 
     @Test
