@@ -56,3 +56,7 @@ kakao:
 oauth:
   kakao:
     client-id: test-kakao-client-id
+
+widyu:
+  scheduling:
+    enabled: false

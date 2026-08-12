@@ -20,12 +20,12 @@ public class PaymentErrorDecoder implements ErrorDecoder {
 
     private String readBody(Response response) {
         if (response.body() == null) {
-            return "PG 요청에 실패했습니다.";
+            return "";
         }
-        try {
-            return new String(response.body().asInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        try (java.io.InputStream bodyStream = response.body().asInputStream()) {
+            return new String(bodyStream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            return "PG 요청에 실패했습니다.";
+            return "";
         }
     }
 

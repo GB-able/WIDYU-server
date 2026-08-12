@@ -245,7 +245,6 @@ public class PaymentService {
         return "NOT_CANCELABLE_PAYMENT".equals(errorCode)
                 || "NOT_CANCELABLE_AMOUNT".equals(errorCode)
                 || "EXCEED_MAX_REFUND_DUE".equals(errorCode)
-                || "REJECT_CARD_PAYMENT".equals(errorCode)
                 || "INVALID_REQUEST".equals(errorCode);
     }
 
@@ -258,7 +257,10 @@ public class PaymentService {
     }
 
     private boolean isApprovalTerminalStatus(com.widyu.pay.PaymentStatus status) {
-        return status == com.widyu.pay.PaymentStatus.ABORTED || status == com.widyu.pay.PaymentStatus.EXPIRED;
+        return status == com.widyu.pay.PaymentStatus.ABORTED
+                || status == com.widyu.pay.PaymentStatus.EXPIRED
+                || status == com.widyu.pay.PaymentStatus.CANCELED
+                || status == com.widyu.pay.PaymentStatus.PARTIAL_CANCELED;
     }
 
     private void validateSeniorMember(Member member) {

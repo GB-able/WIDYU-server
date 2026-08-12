@@ -248,15 +248,15 @@ class PaymentIntegrationTest {
         paymentService.cancelPayment("pay_777777", cancelRequest);
         PaymentConfirmResponse duplicatedResponse = paymentService.cancelPayment("pay_777777", cancelRequest);
 
-        Payment payment = paymentRepository.findByPaymentKey("pay_777777").orElseThrow();
-        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow();
-        List<com.widyu.member.PointHistory> pointHistories =
-                pointHistoryRepository.findAllBySeniorProfileIdOrderByCreatedAtDesc(seniorProfile.getId());
-
         assertThatThrownBy(() -> paymentService.cancelPayment(
                 "pay_777777",
                 new CancelRequest("부분 취소", null, "cancel-request-duplicate")
         )).isInstanceOf(BusinessException.class);
+
+        Payment payment = paymentRepository.findByPaymentKey("pay_777777").orElseThrow();
+        SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow();
+        List<com.widyu.member.PointHistory> pointHistories =
+                pointHistoryRepository.findAllBySeniorProfileIdOrderByCreatedAtDesc(seniorProfile.getId());
 
         assertThat(duplicatedResponse.getStatus()).isEqualTo(PaymentStatus.PARTIAL_CANCELED);
         assertThat(duplicatedResponse.getCancellations()).hasSize(1);
@@ -365,6 +365,7 @@ class PaymentIntegrationTest {
         assertThat(seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow().getPoints())
                 .isEqualTo(10100L);
         PaymentCancel stoppedCancel = paymentCancelRepository.findById(pendingCancel.getId()).orElseThrow();
+        assertThat(stoppedCancel.isAborted()).isTrue();
         assertThat(stoppedCancel.getRecoveryStoppedAt()).isNotNull();
 
         given(memberUtil.getCurrentMember()).willReturn(reloadCurrentMember(currentMember.getId()));
@@ -374,6 +375,26 @@ class PaymentIntegrationTest {
         )).isInstanceOf(BusinessException.class);
         assertThat(seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow().getPoints())
                 .isEqualTo(10100L);
+
+        given(memberUtil.getCurrentMember()).willReturn(reloadCurrentMember(currentMember.getId()));
+        given(paymentClient.cancelPayment(
+                org.mockito.ArgumentMatchers.eq("pay_444444"),
+                any(),
+                org.mockito.ArgumentMatchers.anyString()
+        )).willReturn(createGatewayResponse(
+                "pay_444444",
+                orderResponse.orderId(),
+                "포인트 충전 10,000원",
+                PaymentStatus.PARTIAL_CANCELED,
+                3000
+        ));
+        PaymentConfirmResponse newKeyCancelResponse = paymentService.cancelPayment(
+                "pay_444444",
+                new CancelRequest("부분 취소", 3000, "cancel-stop-2")
+        );
+        assertThat(newKeyCancelResponse.getStatus()).isEqualTo(PaymentStatus.PARTIAL_CANCELED);
+        assertThat(seniorProfileRepository.findByMemberId(currentMember.getId()).orElseThrow().getPoints())
+                .isEqualTo(7100L);
     }
 
     @Test

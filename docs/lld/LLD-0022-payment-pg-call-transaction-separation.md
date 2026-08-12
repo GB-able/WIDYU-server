@@ -74,12 +74,14 @@ GET /v1/payments/{paymentKey}
 
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `status` | ENUM | NOT NULL | `PENDING`, `COMPLETED` |
+| `status` | ENUM | NOT NULL | `PENDING`, `COMPLETED`, `ABORTED`(PG 미반영 확인 후 복구 포기) |
+| `idempotency_key` | VARCHAR(100) | NULL, `(payment_id, idempotency_key)` UNIQUE | 클라이언트 멱등 키 (ADR-0012, 전액 취소 하위호환 NULL) |
+| `requested_cancel_amount` | INT | NULL | 원본 요청의 취소 금액 — 전액 취소(금액 생략)는 NULL로 보존해 동일 키 재요청 비교에 사용 |
 | `pg_idempotency_key` | VARCHAR(36) | NOT NULL, UNIQUE | 서버 생성 UUID |
 | `canceled_at` | DATETIME | NULL | PG 취소 완료 시각 |
 | `retry_count`, `next_retry_at`, `last_error_code`, `recovery_stopped_at` | INT, DATETIME, VARCHAR, DATETIME | - | 취소 복구 제어와 오류 코드 |
 
-`PaymentCancel`은 PG 호출 전에 `PENDING`으로 저장한다. 포인트 환수와 `Payment` 누적 취소 금액은 `COMPLETED` 전환 트랜잭션에서만 변경한다.
+`PaymentCancel`은 PG 호출 전에 `PENDING`으로 저장하고, 환수 포인트를 같은 선점 트랜잭션에서 예약(차감)한다. `Payment` 누적 취소 금액은 `COMPLETED` 전환 트랜잭션에서만 변경한다. `ABORTED` 전환 트랜잭션에서 예약 포인트를 반환하며, 이후 새 취소 요청을 막지 않는다.
 
 ## 5. 처리 흐름
 
@@ -160,7 +162,7 @@ ALTER TABLE payment_order
     ADD COLUMN approval_recovery_stopped_at DATETIME NULL;
 
 ALTER TABLE payment_cancel
-    ADD COLUMN status ENUM('PENDING', 'COMPLETED') NOT NULL DEFAULT 'COMPLETED',
+    ADD COLUMN status ENUM('PENDING', 'COMPLETED', 'ABORTED') NOT NULL DEFAULT 'COMPLETED',
     ADD COLUMN pg_idempotency_key VARCHAR(36) NULL,
     MODIFY COLUMN canceled_at DATETIME NULL,
     ADD COLUMN retry_count INT NOT NULL DEFAULT 0,

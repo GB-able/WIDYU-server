@@ -139,6 +139,9 @@ public class PaymentTransactionService {
         PaymentCancel existingCancellation = findCancellationByIdempotencyKey(payment, cancelRequest);
         if (existingCancellation != null) {
             validateExistingCancellationRequest(existingCancellation, cancelRequest);
+            if (existingCancellation.isAborted()) {
+                throw new BusinessException(ErrorCode.PAYMENT_FAILED, "중단된 취소 요청입니다. 새로운 멱등 키로 다시 요청해주세요.");
+            }
             if (!existingCancellation.isPending()) {
                 return CancellationClaim.completed(PaymentConfirmResponse.from(payment));
             }
@@ -239,8 +242,8 @@ public class PaymentTransactionService {
     public void stopCancellationRecovery(PaymentCancellationCommand command, String errorCode) {
         paymentCancelRepository.findByIdForUpdate(command.cancellationId()).ifPresent(paymentCancel -> {
             if (paymentCancel.isPending() && Objects.equals(paymentCancel.getPgIdempotencyKey(), command.pgIdempotencyKey())) {
-                // 중단 직전 PG 조회에서 취소 미반영이 확인된 경우다 — 예약 포인트를 돌려주고 정합은 수동 처리에 맡긴다
-                paymentCancel.stopRecovery(errorCode, ZonedDateTime.now());
+                // 중단 직전 PG 조회에서 취소 미반영이 확인된 경우다 — ABORTED로 종결해 새 취소 요청을 막지 않고 예약 포인트를 돌려준다
+                paymentCancel.abort(errorCode, ZonedDateTime.now());
                 releaseReservedRefundPoints(paymentCancel.getPayment(), paymentCancel);
             }
         });

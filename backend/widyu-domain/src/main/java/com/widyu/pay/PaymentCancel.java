@@ -122,6 +122,18 @@ public class PaymentCancel extends BaseTimeEntity {
         return recoveryStoppedAt != null;
     }
 
+    public boolean isAborted() {
+        return status == PaymentCancelStatus.ABORTED;
+    }
+
+    // PG 미반영이 확인된 채 복구를 포기하는 종결 전이 — 이후 새 취소 요청을 막지 않는다
+    public void abort(String errorCode, ZonedDateTime stoppedAt) {
+        this.status = PaymentCancelStatus.ABORTED;
+        this.lastErrorCode = errorCode;
+        this.recoveryStoppedAt = stoppedAt;
+        this.nextRetryAt = null;
+    }
+
     public void complete(ZonedDateTime completedAt) {
         this.status = PaymentCancelStatus.COMPLETED;
         this.canceledAt = completedAt;

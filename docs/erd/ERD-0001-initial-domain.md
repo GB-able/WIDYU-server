@@ -229,8 +229,13 @@ erDiagram
         Long payment_id FK
         PaymentCancelStatus status
         String idempotencyKey
+        Integer requestedCancelAmount
         String pgIdempotencyKey UK
         ZonedDateTime canceledAt
+        Integer retryCount
+        ZonedDateTime nextRetryAt
+        String lastErrorCode
+        ZonedDateTime recoveryStoppedAt
     }
 
     MemberFcmToken {
@@ -333,7 +338,7 @@ erDiagram
 | `ProgressStatus` | `UPCOMING`, `INCOMPLETE`, `COMPLETED` |
 | `PaymentStatus` | `READY`, `IN_PROGRESS`, `WAITING_FOR_DEPOSIT`, `DONE`, `PARTIAL_CANCELED`, `CANCELED`, `ABORTED`, `EXPIRED` |
 | `PaymentOrderStatus` | `CREATED`, `APPROVING`, `PAID`, `CANCELED`, `EXPIRED` |
-| `PaymentCancelStatus` | `PENDING`, `COMPLETED` |
+| `PaymentCancelStatus` | `PENDING`, `COMPLETED`, `ABORTED` |
 | `PointHistoryType` | `EARN`, `USE` |
 | `HeartRateStatus` | `NORMAL`, `CAUTION`, `EMERGENCY`, `ANOMALY`, `UNKNOWN` |
 
@@ -350,6 +355,7 @@ erDiagram
 | `album_like` | UK | `(album_id, member_id)` | 중복 좋아요 방지 |
 | `album_unlock` | UK | `(album_id, member_id)` | 중복 해금 방지 |
 | `payment_cancel` | UK `uk_payment_cancel_pg_idempotency_key` | `(pg_idempotency_key)` | PG 요청 재실행 식별 |
+| `payment_cancel` | UK `uk_payment_cancel_payment_idempotency_key` | `(payment_id, idempotency_key)` | 클라이언트 멱등 키 중복 방지 (ADR-0012) |
 
 ## 도메인별 조회 기준
 

@@ -1,5 +1,8 @@
 -- 운영 DB에서 애플리케이션 배포 전에 1회 실행합니다.
 -- ddl-auto: update는 기존 MySQL ENUM에 새 값을 추가하지 않습니다.
+-- 선행 조건: ADR-0012 마이그레이션(payment_cancel.idempotency_key 컬럼과
+--   uk_payment_cancel_payment_idempotency_key UNIQUE (payment_id, idempotency_key))이
+--   먼저 적용되어 있어야 합니다.
 
 ALTER TABLE payment
     MODIFY COLUMN status ENUM('READY', 'IN_PROGRESS', 'WAITING_FOR_DEPOSIT', 'DONE', 'PARTIAL_CANCELED', 'CANCELED', 'ABORTED', 'EXPIRED') NOT NULL;
@@ -20,7 +23,7 @@ ALTER TABLE payment_order
     ADD INDEX idx_payment_order_approval_recovery (status, approval_next_retry_at);
 
 ALTER TABLE payment_cancel
-    ADD COLUMN status ENUM('PENDING', 'COMPLETED') NOT NULL DEFAULT 'COMPLETED',
+    ADD COLUMN status ENUM('PENDING', 'COMPLETED', 'ABORTED') NOT NULL DEFAULT 'COMPLETED',
     ADD COLUMN pg_idempotency_key VARCHAR(36) NULL,
     MODIFY COLUMN canceled_at DATETIME NULL,
     ADD COLUMN retry_count INT NOT NULL DEFAULT 0,

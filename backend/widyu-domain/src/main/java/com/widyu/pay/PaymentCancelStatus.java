@@ -2,5 +2,6 @@ package com.widyu.pay;
 
 public enum PaymentCancelStatus {
     PENDING,
-    COMPLETED
+    COMPLETED,
+    ABORTED
 }

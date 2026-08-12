@@ -38,8 +38,18 @@
    - PG 호출 중 포인트가 다른 곳에 사용되어 취소 확정 시 환수가 실패하는 레이스를 막기 위해, 검증만 하지 않고 실제로 차감한다.
 5. PG 취소가 성공하면 응답의 상태(`CANCELED`/`PARTIAL_CANCELED`)와 누적 취소 금액(`totalAmount - balanceAmount`)을 검증한 뒤 취소를 확정한다. 포인트는 이미 예약(차감)되어 있으므로 추가 차감하지 않는다.
 6. 예약 포인트 해제(반환) 경로:
-   - 최종 오류(`NOT_CANCELABLE_PAYMENT` 등)로 취소를 포기하는 `releaseCancellation`
-   - 멱등 키 보존 기간(15일) 만료로 복구를 중단하는 `stopCancellationRecovery` (중단 직전 PG 조회에서 취소 미반영이 확인된 경우이며, 정합은 수동 대사로 마무리한다)
+   - 최종 오류(`NOT_CANCELABLE_PAYMENT` 등)로 취소를 포기하는 `releaseCancellation` (PENDING 행 제거)
+   - 멱등 키 보존 기간(15일) 만료로 복구를 포기하는 `stopCancellationRecovery` (`ABORTED` 전이 — 중단 직전 PG 조회에서 취소 미반영이 확인된 경우이며, 이후 새 취소 요청을 막지 않는다)
+   - 단, PG 누적 취소 금액 불일치로 대사를 보류하는 경우(`holdCancellationForReconciliation`)는 환불이 이미 반영됐을 수 있어 예약을 유지한 채 수동 정합을 기다린다
+
+### 예약·반환 멱등성 계약
+
+| 전이 | 트랜잭션 | 포인트 연산 | 멱등 가드 |
+| --- | --- | --- | --- |
+| 선점(예약) | `PENDING` 저장과 같은 트랜잭션 | 차감 | `point_history.operation_key` UNIQUE `PAYMENT_CANCEL:{cancelId}` — 재실행 시 DB 제약이 이중 차감 차단, 실패 시 선점째 롤백 |
+| `PENDING → COMPLETED` | 결과 반영 트랜잭션 | 없음 (이미 예약됨) | `pg_idempotency_key` 일치 + `isPending()` 검사 |
+| 해제 (`releaseCancellation`) | 행 제거와 같은 트랜잭션 | 반환 | `PAYMENT_CANCEL_RELEASE:{cancelId}` UNIQUE + `isPending()` 검사 — 반환 중 종료 시 트랜잭션째 롤백 |
+| `PENDING → ABORTED` | 상태 전이와 같은 트랜잭션 | 반환 | 위와 동일. `ABORTED`는 재요청 시 거부되고 새 멱등 키의 취소를 막지 않는다 |
 
 ## 4. 인수조건
 
