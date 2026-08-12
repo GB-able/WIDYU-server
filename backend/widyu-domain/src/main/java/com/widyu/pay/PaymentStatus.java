@@ -1,8 +1,12 @@
 package com.widyu.pay;
 
 public enum PaymentStatus {
-    READY,      // 결제 준비
-    DONE,   // 결제 승인 완료
+    READY,
+    IN_PROGRESS,
+    WAITING_FOR_DEPOSIT,
+    DONE,
     PARTIAL_CANCELED,
-    CANCELED;   // 결제 취소
+    CANCELED,
+    ABORTED,
+    EXPIRED
 }

@@ -118,6 +118,10 @@ public class Payment {
         cancellation.assignPayment(this);
     }
 
+    public void removeCancellation(PaymentCancel cancellation) {
+        this.cancellations.remove(cancellation);
+    }
+
     public boolean isOwnedBy(Long memberId) {
         return member != null && Objects.equals(member.getId(), memberId);
     }
@@ -139,6 +143,10 @@ public class Payment {
         this.canceledPointAmount += cancelPointAmount;
         this.cancelReason = reason;
         this.canceledAt = canceledAt;
-        this.status = this.canceledAmount >= this.amount ? PaymentStatus.CANCELED : PaymentStatus.PARTIAL_CANCELED;
+        if (this.canceledAmount >= this.amount) {
+            this.status = PaymentStatus.CANCELED;
+            return;
+        }
+        this.status = PaymentStatus.PARTIAL_CANCELED;
     }
 }

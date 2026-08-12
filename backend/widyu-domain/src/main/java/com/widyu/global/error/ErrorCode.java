@@ -115,6 +115,7 @@ public enum ErrorCode {
     // 결제 관련
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAY_5000", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAY_4040", "결제 정보를 찾을 수 없습니다."),
+    PAYMENT_PROCESSING(HttpStatus.CONFLICT, "PAY_4090", "결제가 처리 중입니다. 잠시 후 다시 시도해주세요."),
 
     // 포인트 관련
     POINT_CONCURRENT_UPDATE(HttpStatus.CONFLICT, "POINT_4090", "포인트 처리가 동시에 요청되었습니다. 잠시 후 다시 시도해주세요."),

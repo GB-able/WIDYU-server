@@ -1,5 +1,7 @@
 package com.widyu.pay.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.widyu.pay.Payment;
 import com.widyu.pay.PaymentCancel;
 import com.widyu.pay.PaymentCard;
@@ -23,6 +25,14 @@ public class PaymentConfirmResponse {
     private String orderId;
     private String orderName;
     private int amount;
+
+    // Toss 응답 역직렬화 전용 — 공개 API 응답 JSON에는 노출하지 않는다 (LLD-0022 응답 형식 유지)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private Integer totalAmount;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private Integer balanceAmount;
+
     private int taxExemptionAmount;
     private PaymentStatus status;
     private ZonedDateTime requestedAt;
@@ -94,6 +104,8 @@ public class PaymentConfirmResponse {
         response.orderId = payment.getOrderId();
         response.orderName = payment.getOrderName();
         response.amount = payment.getAmount();
+        response.totalAmount = payment.getAmount();
+        response.balanceAmount = payment.getRemainingAmount();
         response.status = payment.getStatus();
         response.requestedAt = payment.getRequestedAt();
         response.approvedAt = payment.getApprovedAt();
@@ -102,6 +114,7 @@ public class PaymentConfirmResponse {
         response.remainingAmount = payment.getRemainingAmount();
         response.cultureExpense = payment.isCultureExpense();
         response.cancellations = payment.getCancellations().stream()
+                .filter(paymentCancel -> !paymentCancel.isPending())
                 .map(PaymentConfirmResponse::mapCancelHistory)
                 .toList();
 
@@ -150,6 +163,24 @@ public class PaymentConfirmResponse {
         }
 
         return response;
+    }
+
+    // Toss 응답은 결제 금액을 totalAmount로 반환한다 — amount는 내부 생성 응답(from)에서만 채워진다
+    @JsonIgnore
+    public int getResolvedAmount() {
+        if (totalAmount != null) {
+            return totalAmount;
+        }
+        return amount;
+    }
+
+    // Toss 응답에는 내부 canceledAmount 필드가 없으므로 totalAmount - balanceAmount로 누적 취소 금액을 계산한다
+    @JsonIgnore
+    public Integer getGatewayCanceledAmount() {
+        if (totalAmount == null || balanceAmount == null) {
+            return null;
+        }
+        return totalAmount - balanceAmount;
     }
 
     private static CancelHistory mapCancelHistory(PaymentCancel paymentCancel) {

@@ -75,6 +75,12 @@ public class SeniorProfileService {
     @RetryOnPointConflict
     @Transactional
     public void addPointsToMember(Long memberId, Long points, String description) {
+        addPointsToMember(memberId, points, description, null);
+    }
+
+    @RetryOnPointConflict
+    @Transactional
+    public void addPointsToMember(Long memberId, Long points, String description, String operationKey) {
         if (points == null || points <= 0) {
             log.warn("유효하지 않은 포인트 적립 시도: memberId={}, points={}", memberId, points);
             return;
@@ -84,7 +90,7 @@ public class SeniorProfileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SENIOR_PROFILE_NOT_FOUND));
 
         seniorProfile.addPoints(points);
-        pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, description));
+        pointHistoryRepository.save(PointHistory.earn(seniorProfile, points, description, operationKey));
         log.info("포인트 적립 완료: memberId={}, addedPoints={}, totalPoints={}",
                 memberId, points, seniorProfile.getPoints());
     }
@@ -92,6 +98,12 @@ public class SeniorProfileService {
     @RetryOnPointConflict
     @Transactional
     public void deductPointsFromMember(Long memberId, Long points, String description) {
+        deductPointsFromMember(memberId, points, description, null);
+    }
+
+    @RetryOnPointConflict
+    @Transactional
+    public void deductPointsFromMember(Long memberId, Long points, String description, String operationKey) {
         if (points == null || points <= 0) {
             log.warn("유효하지 않은 포인트 차감 시도: memberId={}, points={}", memberId, points);
             return;
@@ -105,7 +117,7 @@ public class SeniorProfileService {
         }
 
         seniorProfile.deductPoints(points);
-        pointHistoryRepository.save(PointHistory.use(seniorProfile, points, description));
+        pointHistoryRepository.save(PointHistory.use(seniorProfile, points, description, operationKey));
         log.info("포인트 차감 완료: memberId={}, deductedPoints={}, totalPoints={}",
                 memberId, points, seniorProfile.getPoints());
     }
