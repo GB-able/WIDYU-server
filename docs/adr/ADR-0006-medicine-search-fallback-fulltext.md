@@ -23,7 +23,7 @@
 - 자체 DB 결과가 없을 때만 공공 API `getDrbEasyDrugList`를 호출한다.
 - 외부 API 응답은 `itemSeq` 기준으로 신규 데이터만 저장한다.
 - 공공 API 응답 내부 중복과 동시 저장 경쟁은 `seenSeqs`, 기존 `itemSeq` 조회, `DataIntegrityViolationException` 후 DB 재조회로 흡수한다.
-- 배치 동기화는 100건 단위 청크로 호출하고 호출 사이에 300ms 대기한다.
+- 배치는 매월 1일 03:00에 100건 단위 청크로 신규 데이터를 보충하고 호출 사이에 300ms 대기한다. 페이지 실패는 최대 3회 재시도한다.
 
 성능 기준은 `apiDocs/blog/medicine-api-troubleshooting.md`의 SQL 벤치마크를 따른다.
 수만 건 규모 데이터에서 평균 검색 시간이 `593ms → 111ms`로 줄어든 것을 기준 수치로 기록한다.
@@ -59,6 +59,7 @@
 
 ### 부정 / 트레이드오프
 - 자체 DB 데이터가 최신 공공 API와 일시적으로 다를 수 있다.
+- 배치는 신규 `itemSeq`만 저장하므로 기존 의약품의 수정·삭제는 반영하지 않는 backfill이다.
 - 단일 글자 검색은 FULLTEXT 대신 prefix LIKE를 사용하므로 검색 품질과 성능 특성이 다르다.
 - 동시 신규 검색 시 INSERT 경쟁이 발생할 수 있으며, 현재는 DB 예외 후 재조회로 흡수한다.
 
