@@ -25,7 +25,7 @@
 - 2글자 이상 FULLTEXT 검색, 1글자 prefix LIKE 검색
 - 외부 공공 API fallback
 - `itemSeq` 기준 중복 제거와 신규 약품 저장
-- 공공 API 데이터 배치 동기화
+- 공공 API 신규 데이터 backfill 배치
 
 ### Out of scope
 - 약품 삭제·수정 동기화 정책
@@ -151,19 +151,23 @@ GET {medicine.api.url}/getDrbEasyDrugList
 
 현재 구현은 INSERT 경쟁을 락으로 막지 않고, DB 제약과 재조회로 흡수한다.
 
-### 5-3. 배치 동기화 (`MedicineSyncScheduler`)
+### 5-3. 월간 신규 데이터 backfill (`MedicineSyncScheduler`)
 
 ```
 @Scheduled(cron = "0 0 3 1 * *")  ← 매월 1일 03:00
   page = 1
   while true:
-    1. fetchAllMedicines(serviceKey, 100, page, "json")
-    2. 응답 없음 또는 items empty → 종료
-    3. externalMedicineService.upsertMedicines(items)
-    4. items.size < 100 → 마지막 페이지로 보고 종료
-    5. page++
-    6. Thread.sleep(300ms)
+    1. fetchAllMedicines(serviceKey, 100, page, "json")와 upsert를 한 페이지 작업으로 처리
+    2. 페이지 실패 시 1초, 2초 간격으로 최대 3회 재시도
+    3. 재시도 소진 → 오류 로그 후 배치 종료
+    4. items empty → 종료
+    5. 실제 신규 INSERT 건수를 totalSynced에 누적
+    6. items.size < 100 → 마지막 페이지로 보고 종료
+    7. page++
+    8. Thread.sleep(300ms)
 ```
+
+기존 `itemSeq`는 갱신·삭제하지 않고 건너뛴다. 따라서 이 배치는 전체 데이터 동기화가 아니라 신규 약품을 보충하는 backfill이다. 사용자가 검색한 신규 약품은 DB miss 시 외부 API fallback으로 즉시 저장된다.
 
 ## 6. 예외 / 에러 처리
 
@@ -173,8 +177,7 @@ GET {medicine.api.url}/getDrbEasyDrugList
 | 외부 API 응답 null/body null | 빈 `medicines` 목록 반환 |
 | 외부 API 호출/파싱 실패 | log.error 후 빈 목록 반환 |
 | `DataIntegrityViolationException` | log.warn 후 FULLTEXT DB 재조회 |
-| 배치 중 API 응답 없음 | log.warn 후 배치 종료 |
-| 배치 중 예외 | log.error 후 배치 종료 |
+| 배치 페이지 API 응답 없음·저장 실패 | 최대 3회 지수 백오프 재시도 후 log.error와 함께 배치 종료 |
 
 ## 7. 인수조건 (Acceptance Criteria)
 
@@ -186,6 +189,7 @@ GET {medicine.api.url}/getDrbEasyDrugList
 - [x] 외부 API 응답 내부 중복 `itemSeq`는 한 번만 저장한다
 - [x] 중복 INSERT 예외 발생 시 DB를 재조회해 정상 응답을 반환한다
 - [x] 배치 동기화는 100건 단위 청크와 300ms 호출 간격을 사용한다
+- [x] 배치 페이지 실패는 최대 3회 재시도하고, 성공 페이지의 신규 INSERT만 누적한다
 - [x] Swagger에 약품 검색 응답이 반영된다
 
 ## 8. 영향 범위 / 마이그레이션

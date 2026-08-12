@@ -11,8 +11,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 공공 의약품 API 데이터를 자체 DB에 주기적으로 동기화
- * - 매일 새벽 3시 실행 (트래픽 없는 시간대)
+ * 공공 의약품 API의 신규 데이터를 자체 DB에 주기적으로 보충
+ * - 매월 1일 새벽 3시 실행 (트래픽 없는 시간대)
  * - 100건 단위 청크 처리로 DB 부하 분산
  * - 신규 약품만 INSERT (기존 데이터 스킵)
  */
@@ -23,6 +23,8 @@ public class MedicineSyncScheduler {
 
     private static final int CHUNK_SIZE = 100;
     private static final long API_CALL_DELAY_MS = 300; // 공공 API 부하 방지
+    private static final int MAX_PAGE_ATTEMPTS = 3;
+    private static final long INITIAL_RETRY_DELAY_MS = 1_000;
 
     private final MedicineApiClient medicineApiClient;
     private final ExternalMedicineService externalMedicineService;
@@ -31,37 +33,33 @@ public class MedicineSyncScheduler {
     @Scheduled(cron = "0 0 3 1 * *")
     public void syncMedicineData() {
         log.info("의약품 DB 동기화 시작");
+        int totalSynced = syncMedicinePages();
+        log.info("의약품 DB 동기화 완료 - 총 {}건 처리", totalSynced);
+    }
+
+    int syncMedicinePages() {
         int page = 1;
         int totalSynced = 0;
 
         while (true) {
             try {
-                MedicineApiResponse response = medicineApiClient.fetchAllMedicines(
-                        medicineProperties.api().serviceKey(),
-                        CHUNK_SIZE,
-                        page,
-                        "json"
-                );
-
-                if (response == null || response.body() == null) {
-                    log.warn("의약품 API 응답 없음 - page: {}", page);
+                PageSyncResult pageSyncResult = syncPageWithRetry(page);
+                if (pageSyncResult == null) {
+                    log.error("의약품 동기화 중단 - 재시도 소진 page: {}", page);
                     break;
                 }
 
-                List<MedicineApiResponse.MedicineItem> items = response.body().items() != null
-                        ? response.body().items()
-                        : (response.body().item() != null ? response.body().item() : List.of());
-
-                if (items.isEmpty()) {
+                if (pageSyncResult.fetchedCount() == 0) {
                     log.info("의약품 동기화 완료 - 마지막 페이지: {}", page);
                     break;
                 }
 
-                externalMedicineService.upsertMedicines(items);
-                totalSynced += items.size();
+                totalSynced += pageSyncResult.insertedCount();
                 log.debug("의약품 동기화 진행 중 - page: {}, 누적: {}건", page, totalSynced);
 
-                if (items.size() < CHUNK_SIZE) break; // 마지막 페이지
+                if (pageSyncResult.fetchedCount() < CHUNK_SIZE) {
+                    break;
+                }
 
                 page++;
                 Thread.sleep(API_CALL_DELAY_MS);
@@ -70,12 +68,54 @@ public class MedicineSyncScheduler {
                 Thread.currentThread().interrupt();
                 log.warn("의약품 동기화 인터럽트 - page: {}", page);
                 break;
-            } catch (Exception e) {
-                log.error("의약품 동기화 실패 - page: {}, error: {}", page, e.getMessage(), e);
-                break;
             }
         }
 
-        log.info("의약품 DB 동기화 완료 - 총 {}건 처리", totalSynced);
+        return totalSynced;
+    }
+
+    private PageSyncResult syncPageWithRetry(int page) throws InterruptedException {
+        long retryDelayMs = INITIAL_RETRY_DELAY_MS;
+        for (int attempt = 1; attempt <= MAX_PAGE_ATTEMPTS; attempt++) {
+            try {
+                MedicineApiResponse response = medicineApiClient.fetchAllMedicines(
+                        medicineProperties.api().serviceKey(),
+                        CHUNK_SIZE,
+                        page,
+                        "json"
+                );
+                List<MedicineApiResponse.MedicineItem> items = extractItems(response);
+                if (items.isEmpty()) {
+                    return new PageSyncResult(0, 0);
+                }
+                List<?> saved = externalMedicineService.upsertMedicines(items);
+                return new PageSyncResult(items.size(), saved.size());
+            } catch (Exception e) {
+                log.warn("의약품 동기화 페이지 실패 - page: {}, attempt: {}/{}, error: {}",
+                        page, attempt, MAX_PAGE_ATTEMPTS, e.getMessage());
+                if (attempt == MAX_PAGE_ATTEMPTS) {
+                    break;
+                }
+                Thread.sleep(retryDelayMs);
+                retryDelayMs *= 2;
+            }
+        }
+        return null;
+    }
+
+    private List<MedicineApiResponse.MedicineItem> extractItems(MedicineApiResponse response) {
+        if (response == null || response.body() == null) {
+            throw new IllegalStateException("의약품 API 응답이 비어있습니다.");
+        }
+        if (response.body().items() != null) {
+            return response.body().items();
+        }
+        if (response.body().item() != null) {
+            return response.body().item();
+        }
+        return List.of();
+    }
+
+    private record PageSyncResult(int fetchedCount, int insertedCount) {
     }
 }
