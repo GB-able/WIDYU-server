@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Approved |
-| Issue | #469 |
+| Issue | - |
 | 관련 ADR | ADR-0004 (미디어 업로드 전략) |
 | 작성자 | dongkyunKim |
 | 작성일 | 2026-07-05 |
@@ -99,7 +99,7 @@ record VideoEntry(int index, File tempFile, String originalFileName, String cont
    - video/*: MultipartFile을 temp File로 변환 후 VideoEntry 생성
    - 영상 위치에는 mediaUrls="", thumbnailUrls=null, durations=null placeholder 저장
 3. AlbumService.saveAlbum(..., hasVideos)
-   - 영상 없음: ACTIVE 앨범 저장 후 AlbumCreatedEvent 발행 및 업로더 완료 알림
+   - 영상 없음: ACTIVE 앨범 저장 후 AlbumCreatedEvent 발행
    - 영상 있음: PROCESSING 앨범 저장, 이벤트 발행 보류
 4. 영상이 있으면 AlbumVideoProcessingService.processVideosAsync(albumId, memberId, videoEntries)
 5. HTTP 202 + albumId 반환
@@ -118,7 +118,7 @@ record VideoEntry(int index, File tempFile, String originalFileName, String cont
    - durations[index]
 4. Album 조회
 5. album.completeVideoProcessing(...)
-6. AlbumCreatedEvent 발행 및 업로더 완료 알림
+6. AlbumCreatedEvent 발행
 7. finally: 모든 VideoEntry.tempFile 삭제
 ```
 

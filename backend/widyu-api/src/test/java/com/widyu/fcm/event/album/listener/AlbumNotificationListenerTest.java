@@ -168,6 +168,8 @@ class AlbumNotificationListenerTest {
         // when & then
         assertThatCode(() -> albumNotificationListener.handleAlbumCreated(new AlbumCreatedEvent(10L, 1L)))
                 .doesNotThrowAnyException();
+        then(fcmService).should().sendMessageToUser(eq(1L), argThat(dto ->
+                dto.title().equals("앨범 업로드가 완료되었어요!")));
         then(fcmService).should().sendMessageToUser(eq(2L), any(FcmSendDto.class));
         then(fcmService).should().sendMessageToUser(eq(3L), any(FcmSendDto.class));
     }
