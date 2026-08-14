@@ -19,7 +19,7 @@ public interface AlbumCalendarDocs {
     @Operation(
             summary = "앨범 캘린더 날짜 조회",
             description = """
-                    특정 연도(year)와 월(month)에 로그인한 사용자가 작성한 앨범이 존재하는 일(day) 목록을 조회합니다.
+                    특정 연도(year)와 월(month)에 현재 가족이 작성한 앨범이 존재하는 일(day) 목록을 조회합니다.
                     반환값은 앨범이 존재하는 날짜들의 정수 배열입니다.
                     """
     )
