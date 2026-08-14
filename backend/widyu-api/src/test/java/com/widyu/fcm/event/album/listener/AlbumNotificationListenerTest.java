@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.never;
 
 import com.widyu.album.repository.AlbumRepository;
 import com.widyu.album.repository.AlbumViewRepository;
+import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.event.album.dto.AlbumCommentedEvent;
@@ -79,6 +81,24 @@ class AlbumNotificationListenerTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND)
                 .hasMessageContaining("회원을 찾을 수 없습니다.");
         then(fcmService).should(never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
+    }
+
+    @Test
+    @DisplayName("앨범 생성이 완료되면 업로더에게 완료 알림을 전송한다")
+    void 앨범_생성_완료_시_업로더에게_완료_알림을_전송한다() {
+        // given
+        Member author = member(1L);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(author));
+
+        // when
+        albumNotificationListener.handleAlbumCreated(new AlbumCreatedEvent(10L, 1L));
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(1L), argThat(dto ->
+                dto.title().equals("앨범 업로드가 완료되었어요!")
+                        && dto.content().equals("업로드한 앨범을 확인해보세요.")
+                        && dto.fcmCategory() == FcmCategory.ALBUM
+        ));
     }
 
     @Test
@@ -148,6 +168,8 @@ class AlbumNotificationListenerTest {
         // when & then
         assertThatCode(() -> albumNotificationListener.handleAlbumCreated(new AlbumCreatedEvent(10L, 1L)))
                 .doesNotThrowAnyException();
+        then(fcmService).should().sendMessageToUser(eq(1L), argThat(dto ->
+                dto.title().equals("앨범 업로드가 완료되었어요!")));
         then(fcmService).should().sendMessageToUser(eq(2L), any(FcmSendDto.class));
         then(fcmService).should().sendMessageToUser(eq(3L), any(FcmSendDto.class));
     }

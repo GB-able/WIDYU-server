@@ -51,6 +51,12 @@ public class AlbumNotificationListener {
         Member author = memberRepository.findById(event.authorId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
 
+        sendNotificationToSpecificMember(
+                event.authorId(),
+                "앨범 업로드가 완료되었어요!",
+                "업로드한 앨범을 확인해보세요."
+        );
+
         String title = author.getName() + "님이 새로운 소식을 전했어요!";
         String content = "새로운 앨범을 확인해보세요.";
 
