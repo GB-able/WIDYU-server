@@ -6,6 +6,7 @@ import com.widyu.album.Album;
 import com.widyu.album.repository.AlbumCalendarRepository;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.member.Member;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.global.entity.Status;
 import com.widyu.global.util.MemberUtil;
 import java.time.LocalDate;
@@ -26,15 +27,17 @@ public class AlbumCalendarService {
     private final AlbumCalendarRepository albumRepository;
     private final AlbumViewRepository albumViewRepository;
     private final MemberUtil memberUtil;
+    private final FamilyAccessService familyAccessService;
 
     public List<Integer> getDaysWithEvents(int year, int month) {
         Member member = memberUtil.getCurrentMember();
+        List<Long> familyMemberIds = familyAccessService.getFamilyMemberIds(member);
         YearMonth yearMonth = YearMonth.of(year, month);
         LocalDateTime start = yearMonth.atDay(1).atStartOfDay();
-        LocalDateTime end = yearMonth.atEndOfMonth().atTime(23, 59, 59);
+        LocalDateTime end = yearMonth.plusMonths(1).atDay(1).atStartOfDay();
 
-        return albumRepository.findAllByMemberAndCreatedAtBetweenAndStatus(
-                        member, start, end, Status.ACTIVE)
+        return albumRepository.findAllByMemberIdInAndCreatedAtGreaterThanEqualAndCreatedAtLessThanAndStatus(
+                        familyMemberIds, start, end, Status.ACTIVE)
                 .stream()
                 .map(album -> album.getCreatedAt().getDayOfMonth())
                 .distinct()
@@ -58,7 +61,10 @@ public class AlbumCalendarService {
         }
 
         boolean hasNext = albums.size() > pageSize;
-        List<Album> pageAlbums = hasNext ? albums.subList(0, pageSize) : albums;
+        List<Album> pageAlbums = albums;
+        if (hasNext) {
+            pageAlbums = albums.subList(0, pageSize);
+        }
 
         List<FamilyAlbumResponse> albumResponses = pageAlbums.stream()
                 .map(album -> {
@@ -67,7 +73,10 @@ public class AlbumCalendarService {
                 })
                 .collect(Collectors.toList());
 
-        Long nextCursor = hasNext ? pageAlbums.get(pageSize - 1).getId() : null;
+        Long nextCursor = null;
+        if (hasNext) {
+            nextCursor = pageAlbums.get(pageSize - 1).getId();
+        }
 
         return FamilyAlbumPageResponse.of(albumResponses, hasNext, nextCursor);
     }

@@ -1,7 +1,6 @@
 package com.widyu.album.repository;
 
 import com.widyu.album.Album;
-import com.widyu.member.Member;
 import com.widyu.global.entity.Status;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -9,8 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface AlbumCalendarRepository extends JpaRepository<Album, Long> {
-    List<Album> findAllByMemberAndCreatedAtBetweenAndStatus(
-            Member member, LocalDateTime start, LocalDateTime end, Status status
+    List<Album> findAllByMemberIdInAndCreatedAtGreaterThanEqualAndCreatedAtLessThanAndStatus(
+            List<Long> memberIds, LocalDateTime start, LocalDateTime end, Status status
     );
 
     @Query("""
