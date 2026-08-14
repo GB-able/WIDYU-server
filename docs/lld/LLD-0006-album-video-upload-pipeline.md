@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Approved |
-| Issue | - |
+| Issue | #469 |
 | 관련 ADR | ADR-0004 (미디어 업로드 전략) |
 | 작성자 | dongkyunKim |
 | 작성일 | 2026-07-05 |
@@ -26,6 +26,7 @@
 - 영상 압축, 길이 추출, 썸네일 생성
 - 영상/썸네일 S3 업로드
 - `Album.PROCESSING → ACTIVE` 상태 전환
+- 앨범 ACTIVE 완료 이벤트를 통한 업로더 완료 알림
 - 실패 시 처리 중 앨범 삭제 처리
 - 임시 파일 정리
 
@@ -98,7 +99,7 @@ record VideoEntry(int index, File tempFile, String originalFileName, String cont
    - video/*: MultipartFile을 temp File로 변환 후 VideoEntry 생성
    - 영상 위치에는 mediaUrls="", thumbnailUrls=null, durations=null placeholder 저장
 3. AlbumService.saveAlbum(..., hasVideos)
-   - 영상 없음: ACTIVE 앨범 저장 후 AlbumCreatedEvent 발행
+   - 영상 없음: ACTIVE 앨범 저장 후 AlbumCreatedEvent 발행 및 업로더 완료 알림
    - 영상 있음: PROCESSING 앨범 저장, 이벤트 발행 보류
 4. 영상이 있으면 AlbumVideoProcessingService.processVideosAsync(albumId, memberId, videoEntries)
 5. HTTP 202 + albumId 반환
@@ -117,7 +118,7 @@ record VideoEntry(int index, File tempFile, String originalFileName, String cont
    - durations[index]
 4. Album 조회
 5. album.completeVideoProcessing(...)
-6. AlbumCreatedEvent 발행
+6. AlbumCreatedEvent 발행 및 업로더 완료 알림
 7. finally: 모든 VideoEntry.tempFile 삭제
 ```
 
@@ -187,6 +188,7 @@ HTTP 202 이후 async 실패는 클라이언트 요청에 직접 예외로 반�
 - [x] 앨범 업로드 API는 영상 처리 완료를 기다리지 않고 HTTP 202와 albumId를 반환한다
 - [x] 영상이 없는 앨범은 즉시 ACTIVE로 저장되고 AlbumCreatedEvent가 발행된다
 - [x] 영상이 있는 앨범은 PROCESSING으로 저장되고 async 완료 후 ACTIVE로 전환된다
+- [x] 사진 저장 및 영상 ACTIVE 전환 완료 후 업로더에게 ALBUM 알림이 발송된다
 - [x] async 완료 전까지 영상 URL/썸네일/길이는 placeholder로 저장된다
 - [x] 압축 완료 File은 길이 추출과 썸네일 생성에 직접 전달되어 추가 복사를 만들지 않는다
 - [x] 썸네일은 영상 길이의 10% 지점, 최소 1초에서 추출된다

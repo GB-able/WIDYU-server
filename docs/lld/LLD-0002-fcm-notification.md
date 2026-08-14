@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Approved |
-| Issue | - |
+| Issue | #469 |
 | 관련 ADR | ADR-0003 (DB/엔티티 설계), ADR-0005 (알림 목록 커서 페이징) |
 | 작성자 | dongkyunKim |
 | 작성일 | 2026-07-05 |
@@ -27,6 +27,7 @@
 - 알림 DB 저장 (`FcmNotification`) 및 읽음 처리
 - 커서 기반 알림 목록 조회 (id 단일 커서, pageSize=10)
 - 이벤트 리스너: 앨범(5종), 안전구역 이탈, 건강 스케줄, 걷기, 복약, 심박수
+- 앨범 생성 완료 시 업로더에게 ALBUM 알림 발송
 - 비활성 유저 스케줄 알림 (매일 오전 10시, 3/5/7일)
 - 응원 알림 직접 발송 API
 
@@ -205,7 +206,7 @@ record FcmSendDto(String title, String content, FcmCategory fcmCategory, String 
   └─ applicationEventPublisher.publishEvent(AlbumCreatedEvent(authorId, albumId))
 
 AlbumNotificationListener (@EventListener, 동기)
-  ├─ handleAlbumCreated → 시니어의 가족 보호자 전원에게 ALBUM 알림
+  ├─ handleAlbumCreated → 업로더에게 완료 알림 + 가족 구성원에게 새 앨범 ALBUM 알림
   ├─ handleAlbumViewed  → 보호자가 시니어의 모든 앨범을 다 봤을 때 시니어에게 알림
   ├─ handleAlbumCommented → 앨범 작성자에게 ALBUM 알림 (자기 댓글 제외)
   ├─ handleAlbumLiked    → 앨범 작성자에게 ALBUM 알림 (자기 좋아요 제외)
@@ -266,6 +267,7 @@ GET /api/v1/fcm?category=ALL&cursor=42
 ## 7. 인수조건 (Acceptance Criteria)
 
 - [x] 앨범 생성 시 가족 보호자 전원에게 ALBUM 카테고리 알림이 발송된다
+- [x] 사진 앨범 저장 및 영상 앨범 ACTIVE 전환 완료 시 업로더에게 ALBUM 카테고리 알림이 발송된다
 - [x] 카테고리 알림 설정 OFF 시 해당 카테고리 알림이 발송되지 않는다
 - [x] 다중 기기 보유 회원은 active 토큰 기기 전체에 알림이 발송된다
 - [x] 로그인 시 기존 토큰은 재활성화하고, 신규 토큰은 저장한다
