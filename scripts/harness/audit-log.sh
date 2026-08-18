@@ -10,8 +10,10 @@ STATE_DIR="$ROOT/.claude/state"
 
 mkdir -p "$AUDIT_DIR" "$STATE_DIR"
 
-# TTL 청소 — 2시간 경과 상태 파일 삭제 (모든 훅 공통 시작부에서 실행)
-find "$STATE_DIR" -type f -mmin +120 -delete 2>/dev/null || true
+# TTL 청소 — 24시간 경과 상태 파일 삭제 (모든 훅 공통 시작부에서 실행)
+# 2시간이던 시절에는 긴 세션 도중 codex-round 상태가 지워져 무한 루프 방지 카운터와
+# 검수 지문이 함께 리셋됐다. 세션 길이보다 넉넉해야 한다.
+find "$STATE_DIR" -type f -mmin +1440 -delete 2>/dev/null || true
 
 # stdin 을 Python 에 직접 전달 (heredoc escaping 없이)
 python3 "$ROOT/scripts/harness/audit-log.py" "$AUDIT_DIR" "$ROOT" || true
