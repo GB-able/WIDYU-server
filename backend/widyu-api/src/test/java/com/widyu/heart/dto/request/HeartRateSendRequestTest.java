@@ -15,17 +15,49 @@ class HeartRateSendRequestTest {
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
-    @DisplayName("활동 상태가 공백이면 UNKNOWN으로 정규화하고 허용값이 아니면 거절한다")
-    void 활동상태가_공백이면_UNKNOWN으로_정규화하고_허용값이_아니면_거절한다() {
+    @DisplayName("활동 상태가 null이거나 공백이면 통과시키고 허용값이 아니면 거절한다")
+    void 활동상태가_null이거나_공백이면_통과시키고_허용값이_아니면_거절한다() {
+        // given
         HeartRateSendRequest blankContext = request(70, " ");
         HeartRateSendRequest nullContext = request(70, null);
         HeartRateSendRequest invalidContext = request(70, "SLEEP");
 
-        assertThat(blankContext.normalizedContext()).isEqualTo("UNKNOWN");
-        assertThat(nullContext.normalizedContext()).isEqualTo("UNKNOWN");
+        // when & then
         assertThat(validator.validate(blankContext)).isEmpty();
         assertThat(validator.validate(nullContext)).isEmpty();
         assertThat(validator.validate(invalidContext)).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("앱이 어떤 활동 상태를 보내도 AI에는 UNKNOWN으로 전달한다")
+    void 앱이_어떤_활동상태를_보내도_UNKNOWN으로_전달한다() {
+        // given
+        // AI가 context=REST(L1)에서 위급을 판정하지 못해 고정 임계값(L0) 경로로 고정한다 (#477)
+        HeartRateSendRequest restContext = request(70, "REST");
+        HeartRateSendRequest activeContext = request(70, "ACTIVE");
+        HeartRateSendRequest lowContext = request(70, "LOW");
+        HeartRateSendRequest blankContext = request(70, " ");
+        HeartRateSendRequest nullContext = request(70, null);
+
+        // when & then
+        assertThat(restContext.normalizedContext()).isEqualTo("UNKNOWN");
+        assertThat(activeContext.normalizedContext()).isEqualTo("UNKNOWN");
+        assertThat(lowContext.normalizedContext()).isEqualTo("UNKNOWN");
+        assertThat(blankContext.normalizedContext()).isEqualTo("UNKNOWN");
+        assertThat(nullContext.normalizedContext()).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("활동 상태를 고정해도 앱이 보낸 원본은 그대로 보존한다")
+    void 활동상태를_고정해도_원본은_그대로_보존한다() {
+        // given
+        // rawContext 로그로 앱의 전송 여부를 관측해야 하므로 원본이 남아야 한다
+        HeartRateSendRequest restContext = request(70, "REST");
+        HeartRateSendRequest nullContext = request(70, null);
+
+        // when & then
+        assertThat(restContext.context()).isEqualTo("REST");
+        assertThat(nullContext.context()).isNull();
     }
 
     @Test

@@ -22,7 +22,7 @@
 
 - 변경 모듈: widyu-api, widyu-domain
 - WebSocket `HeartRateSendRequest`에 배치 수준 `context`를 추가한다.
-- `REST`, `LOW`, `ACTIVE`, `UNKNOWN`만 허용하고 null·빈 문자열·공백은 `UNKNOWN`으로 정규화한다.
+- `context`는 `REST`, `LOW`, `ACTIVE`, `UNKNOWN`과 공백만 허용한다. null·빈 문자열·공백은 `UNKNOWN`으로 정규화하고, 그 밖의 값은 요청 검증 단계에서 거절한다.
 - 심박수 입력 범위를 1~299로 검증한다. AI가 0과 300을 400으로 거부하므로 같은 범위로 맞춘다.
 - 15개 측정값을 측정 시각 오름차순으로 AI `POST /api/hr`에 순차 전송한다.
 - AI의 `NORMAL`, `CAUTION`, `EMERGENCY`를 기존 심박 상태·이벤트에 반영한다.
@@ -131,7 +131,11 @@ AI 내부 판별 방식은 `context`에 따라 갈린다. 아래는 `ryuchanghoo
 정상 심박 35개로 개인 기준선을 만든 뒤 급등시킨 경우에도 같았다. 반면 `ACTIVE`·`UNKNOWN`·`LOW`(L0 경로)는
 동일 조건에서 31초째 `EMERGENCY`(`tachycardia`)를 반환했다.
 따라서 앱이 `context=REST`를 보내기 시작하면 휴식 중 위급 상황을 감지하지 못할 수 있다.
-AI 담당자 확인 전까지 `context` 전송 정책을 변경하지 않는다.
+
+**개인화보다 위급 감지를 우선해, AI에 전달하는 `context`를 `UNKNOWN`으로 고정한다.**
+`HeartRateSendRequest.normalizedContext()`가 앱이 보낸 값과 무관하게 `UNKNOWN`을 반환하므로 판정은 항상 L0 경로를 탄다.
+앱이 보낸 원본은 `context()`로 접근할 수 있고 처리 로그의 `rawContext`에 남는다.
+AI가 L1 경로에서도 위급을 판정하게 되면 원래 정규화 로직으로 되돌린다(#477).
 
 WebSocket 응답 예시:
 
@@ -176,18 +180,26 @@ Facade와 신규 의존성은 추가하지 않는다.
 발신자에게 `/user/queue/errors`로 `{"error": <예외 클래스명>, "message": <메시지>}`를 전달한다.
 클라이언트는 이 큐를 구독해 실패를 인지해야 한다.
 
-- 심박 데이터가 15개가 아니면 `BAD_REQUEST`를 반환한다.
-- 심박수가 1 미만 또는 299 초과이면 요청 검증 단계에서 거절한다. 워치 미착용 시 올라올 수 있는 0을 서버에서 거르지 않으면 AI가 400을 반환하고, 그 실패가 `BusinessException`으로 바뀌어 배치 15개 전체가 저장되지 않는다. 서버에서 먼저 거르면 실패 지점이 검증 단계로 드러나고 AI 호출 15회와 트랜잭션을 낭비하지 않는다.
-- `context`가 허용값 또는 공백이 아니면 요청 검증 단계에서 거절한다.
-- AI 통신 실패, 빈 응답, 지원하지 않는 `level`은 `INTERNAL_SERVER_ERROR`를 반환하고 배치를 저장하지 않는다.
+| 조건 | 발신자가 받는 `error` | 배치 저장 |
+| --- | --- | --- |
+| 심박 데이터가 15개가 아님 | `BusinessException` (`BAD_REQUEST`) | 안 함 |
+| 심박수가 1 미만 또는 299 초과 | `MethodArgumentNotValidException` | 안 함 |
+| 정규화 후 `context`가 허용값이 아님 | `MethodArgumentNotValidException` | 안 함 |
+| AI 통신 실패·빈 응답·지원하지 않는 `level` | `BusinessException` (`INTERNAL_SERVER_ERROR`) | 안 함 |
+
+`BusinessException`의 `ErrorCode`는 HTTP 응답이 아니라 예외의 분류이며, WebSocket 경로에서는 상태 코드로 변환되지 않고 위 payload의 `message`에만 반영된다.
+
+- 심박수 범위를 서버에서 먼저 거르는 이유: 워치 미착용 시 올라올 수 있는 0을 통과시키면 AI가 400을 반환하고, 그 실패가 `BusinessException`으로 바뀌어 배치 15개 전체가 저장되지 않는다. 검증 단계에서 거르면 실패 지점이 드러나고 AI 호출 15회와 트랜잭션을 낭비하지 않는다.
 - AI 호출이 일부 성공한 뒤 실패하면 AI 서비스의 개인 기준선 상태는 이미 변경될 수 있다. 재처리 정책은 기존 배치 멱등성 범위 밖으로 둔다.
 
 ## 7. 인수조건 (Acceptance Criteria)
 
 - [x] AI 요청은 JSON이며 `user_id`, `bpm`, `context`, `timestamp`를 포함한다.
 - [x] 15개 측정값을 측정 시각 순서대로 AI에 호출한다.
-- [x] null·빈 문자열·공백 `context`는 `UNKNOWN`으로 전달한다.
-- [x] 허용되지 않은 `context`와 1~299 밖의 심박수는 거절한다.
+- [x] null·빈 문자열·공백 `context`는 `UNKNOWN`으로 정규화한다.
+- [x] `REST`, `LOW`, `ACTIVE`, `UNKNOWN`, 공백이 아닌 `context`는 요청 검증 단계에서 거절한다.
+- [x] 1~299 밖의 심박수는 요청 검증 단계에서 거절한다.
+- [x] AI에는 정규화 결과와 무관하게 `UNKNOWN`을 전달한다(#477 확인 전까지).
 - [x] AI `NORMAL`, `CAUTION`, `EMERGENCY` 중 배치 내 가장 높은 상태를 저장·반환한다.
 - [x] `alert=true`인 `EMERGENCY`만 `HeartRateEmergency` 저장 대상으로 전달한다.
 - [x] AI 실패 시 `HeartRateResult`, `HeartRateEvent`, `HeartRateEmergency`를 저장하지 않는다.
