@@ -26,6 +26,15 @@ fi
 
 mkdir -p "$ROOT/.claude"
 
+# .agents/skills 는 Codex 용 경로라 Claude Code 가 자동 탐색하지 않는다.
+# SKILL.md 에 name/description 프론트매터가 이미 있으므로 심링크만 걸면
+# 그대로 슬래시 커맨드로 잡힌다. (CLAUDE.md 문장에만 의존하면 로딩이 확률적이다)
+# settings.json 존재 여부와 무관하게 걸어야 한다 — 아래 조기 종료보다 앞에 둔다.
+if [[ ! -e "$ROOT/.claude/skills" ]]; then
+  ln -s ../.agents/skills "$ROOT/.claude/skills"
+  echo "✅ 스킬 연결: .claude/skills → .agents/skills"
+fi
+
 if [[ -f "$TARGET" && "$FORCE" != "--force" ]]; then
   echo "ℹ️  $TARGET 이미 존재합니다. 덮어쓰려면 --force 옵션을 사용하세요."
   echo "   현재 설정 유지."

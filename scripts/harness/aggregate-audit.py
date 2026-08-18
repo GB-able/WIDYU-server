@@ -6,7 +6,7 @@
       --out path  : 출력 파일 경로 (기본 stdout)
 
 지표 (harness-step8-measurement-plan.md §2.5):
-  1. Codex REQUEST_CHANGES율 (+ APPROVE 도달률, 평균 라운드)
+  1. Codex 수정요구(BLOCKER)율 (+ APPROVE 도달률, 평균 라운드)
   2. 정적 규칙 위반율 (java_rule_check 이벤트 기반)
   3. 워크플로 이탈 수 (workflow_risk / operational_code_on_protected_branch 태그)
   4. 파이프라인 단계별 도달률 (pipeline_step 이벤트 — 미수집 시 N/A)
@@ -23,6 +23,10 @@ import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+# 수정 요구 판정의 verdict 문자열. on-stop.sh 는 BLOCKER 를 기록하고,
+# 3-arm 실험기 로그에는 REQUEST_CHANGES 가 남아 있어 양쪽을 모두 센다.
+_RC_VERDICTS = ("BLOCKER", "REQUEST_CHANGES")
 
 # ---------------------------------------------------------------------------
 # 인수
@@ -93,9 +97,9 @@ total = len(events)
 codex_events = [e for e in events if e.get("event") == "codex_review"]
 n_codex = len(codex_events)
 n_approve = sum(1 for e in codex_events if e.get("verdict") == "APPROVE")
-n_rc = sum(1 for e in codex_events if e.get("verdict") == "REQUEST_CHANGES")
+n_rc = sum(1 for e in codex_events if e.get("verdict") in _RC_VERDICTS)
 n_failed = sum(1 for e in codex_events if e.get("verdict") == "FAILED")
-rounds = [e.get("round", 0) for e in codex_events if e.get("verdict") == "REQUEST_CHANGES"]
+rounds = [e.get("round", 0) for e in codex_events if e.get("verdict") in _RC_VERDICTS]
 avg_round = (sum(rounds) / len(rounds)) if rounds else 0
 # APPROVE 도달률: 세션 중 최종 APPROVE 로 끝난 세션 수 (session_id 기준 마지막 verdict)
 last_verdict: dict[str, str] = {}
@@ -178,7 +182,7 @@ if n_codex == 0:
 else:
     lines.append(f"| 항목 | 값 |")
     lines.append(f"|---|---|")
-    lines.append(f"| REQUEST_CHANGES율 | {pct(rc_rate)} ({n_rc}/{n_codex}) |")
+    lines.append(f"| BLOCKER율 | {pct(rc_rate)} ({n_rc}/{n_codex}) |")
     lines.append(f"| 최종 APPROVE 도달률 | {pct(approve_reach_rate)} |")
     lines.append(f"| RC 평균 라운드 | {avg_round:.1f} |")
     lines.append(f"| FAILED (Codex 실행 실패) | {n_failed}건 |")

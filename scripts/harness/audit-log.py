@@ -88,10 +88,20 @@ _BEARER_RE = re.compile(r"(?i)Bearer\s+([A-Za-z0-9\-_.~+/=]{4,})")
 _URL_USERINFO_RE = re.compile(r"(?i)://([^:@/\s]+):([^@\s]{3,})@")
 
 # Step 3: key=value / key: value / key="value" 형태 키워드 매칭
+#
+# 키워드 앞뒤의 이름 조각을 함께 삼켜야 한다. 그러지 않으면 AWS_ACCESS_KEY_ID 처럼
+# suffix 가 붙은 표준 변수명에서 구분자 그룹이 빈 문자열로 매칭되고 값 그룹이 "_ID" 를
+# 먹어, 정작 뒤따르는 실제 키가 그대로 남는다. 구분자도 반드시 존재해야 한다.
+# 키워드는 _ / - 로 구분되는 식별자 토큰 경계에서만 인정한다. 임의 substring 을
+# 허용하면 "tokenizer" 같은 평범한 단어가 걸려 뒤 인자까지 통째로 마스킹된다.
+# 구분자는 반드시 있어야 하되 키·값의 따옴표를 함께 삼켜야 한다.
+# ("KEY": "secret" / KEY="secret" 형태에서 값이 그대로 남으면 안 된다)
 _REDACT_RE = re.compile(
-    r"(?i)(token|secret|password|passwd|authorization|bearer|jwt"
-    r"|credential|api[_\-]?key|db_password|jwt_secret)"
-    r"([=:\s\"']*)"
+    r"(?i)\b((?:[a-z0-9]+[_\-])*"
+    r"(?:token|secret|password|passwd|authorization|bearer|jwt|credential"
+    r"|api[_\-]?key|access[_\-]?key|private[_\-]?key)"
+    r"(?:[_\-][a-z0-9]+)*)"
+    r"([\"']?[ \t]*[=:][ \t]*[\"']?|[ \t]+[\"']?)"
     r"([^\s\"'&]{3,})"
 )
 
@@ -121,9 +131,13 @@ _DANGEROUS = [
     re.compile(r"git\s+restore\b"),
     re.compile(r"git\s+clean\s+\S*f"),
 ]
-# rm -rf 는 위험 경로에 한해 dangerous
+# rm -rf 는 위험 경로에 한해 dangerous.
+# 경로 매칭은 rm 자신의 인자 안으로 제한한다. `.*?` 로 줄 전체를 훑으면
+# `rm -rf tmpdir && git clone .../scripts` 처럼 뒤쪽에 우연히 걸리는 단어까지
+# 위험으로 찍혀 오탐률이 100% 가 된다. 셸 구분자에서 끊는다.
+# 공백은 [ \t] 로 제한한다. \s 는 개행까지 삼켜 다음 줄의 경로를 rm 인자로 오인한다.
 _RM_DANGEROUS_PATH = re.compile(
-    r"rm\s+-[rf]{1,2}\s+.*?(src|\.git|backend|admin|scripts)\b"
+    r"rm[ \t]+-[rf]{1,2}[ \t]+(?:[^\s;&|]+[ \t]+)*[^\s;&|]*(src|\.git|backend|admin|scripts)\b"
 )
 _GIT_WRITE = re.compile(r"\bgit\s+(commit|push|merge)\b")
 _TEST = re.compile(r"gradlew.*test|run-module-tests")
