@@ -14,7 +14,7 @@ public interface HeartRateEmergencyRepository extends JpaRepository<HeartRateEme
 
     Optional<HeartRateEmergency> findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(Long memberId, LocalDateTime since);
 
-    Optional<HeartRateEmergency> findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(Long memberId, LocalDateTime since);
+    boolean existsByMemberIdAndMeasuredAtAfter(Long memberId, LocalDateTime since);
 
     long countByMemberId(Long memberId);
     long countByMeasuredAtAfter(LocalDateTime measuredAt);

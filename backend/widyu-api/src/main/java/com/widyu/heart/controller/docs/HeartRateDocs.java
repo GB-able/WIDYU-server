@@ -114,20 +114,10 @@ public interface HeartRateDocs {
     );
 
     @Operation(
-            summary = "위험 심박수 감지 여부 (5분 연장 사이클)",
+            summary = "최근 15분 내 위험 심박수 감지 여부",
             description = """
-                    현재 위험 상태인지 조회합니다.
+                    최근 15분 이내에 위급상황(EMERGENCY)으로 기록된 심박수가 있는지 여부만 반환합니다.
                     보호자에게 FCM 긴급 알림이 발송되는 것과 동일한 기준(`alert=true` + `EMERGENCY`)입니다.
-
-                    **판정 방식**: 위험이 감지되면 그 시점부터 5분간 위험 상태를 유지하고,
-                    그 안에 다시 감지되면 **마지막 감지 시각 기준으로 5분 연장**됩니다.
-                    5분 동안 추가 감지가 없으면 사이클이 종료됩니다.
-
-                    예) 0분 0초 감지 → 5분 0초까지 위험. 3분 0초에 재감지 → 8분 0초까지 위험.
-
-                    `cycleExpiresAt`은 현재 사이클이 종료되는 시각입니다.
-                    이 시각까지는 재조회 없이 위험 상태로 표시해도 되며, 그 전에 재감지되면 값이 뒤로 밀립니다.
-                    감지되지 않은 경우 `detected=false`, `emergency=null`, `cycleExpiresAt=null`입니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회
@@ -147,13 +137,7 @@ public interface HeartRateDocs {
                                               "code": "HEART_2006",
                                               "message": "최근 심박수 위험 감지 여부 조회 완료",
                                               "data": {
-                                                "detected": true,
-                                                "emergency": {
-                                                  "heartRate": 178,
-                                                  "measuredAt": "2026-02-01T15:48:00",
-                                                  "location": "서울시 강남구"
-                                                },
-                                                "cycleExpiresAt": "2026-02-01T15:53:00"
+                                                "detected": true
                                               }
                                             }
                                             """
@@ -165,9 +149,7 @@ public interface HeartRateDocs {
                                               "code": "HEART_2006",
                                               "message": "최근 심박수 위험 감지 여부 조회 완료",
                                               "data": {
-                                                "detected": false,
-                                                "emergency": null,
-                                                "cycleExpiresAt": null
+                                                "detected": false
                                               }
                                             }
                                             """
