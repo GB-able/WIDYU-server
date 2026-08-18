@@ -21,8 +21,23 @@ set -uo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT_DIR" || exit 3
 
-CHANGED=$(git status --porcelain --untracked-files=all 2>/dev/null \
-  | sed -E 's/^...//; s/^.* -> //' \
+# on-stop.sh 의 _changed_java 와 동일한 NUL 기반 감지. 줄 파싱을 남겨두면
+# 공백이 든 경로에서 변경을 못 보고 NO_JAVA_CHANGES 로 그냥 승인해 버린다.
+CHANGED=$(git status --porcelain -z --untracked-files=all 2>/dev/null \
+  | python3 -c "
+import sys
+data = sys.stdin.buffer.read().split(b'\0')
+i = 0
+while i < len(data):
+    entry = data[i]
+    i += 1
+    if len(entry) < 4:
+        continue
+    status, path = entry[:2], entry[3:]
+    if b'R' in status or b'C' in status:
+        i += 1
+    sys.stdout.buffer.write(path + b'\n')
+" 2>/dev/null \
   | grep -E '\.java$' \
   | grep -E '^backend/(widyu-api|widyu-domain)/src/main/java/' \
   | grep -vE '/generated/' || true)
@@ -79,8 +94,17 @@ SUGGESTIONS:
 EOF
 
 REPORT_FILE="$(mktemp -t codex-review.XXXXXX)"
-CODEX_BIN="$(command -v codex)"
+CODEX_BIN="$(command -v codex || true)"
 TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+
+# codex 미설치 시 빈 문자열로 실행돼 "command not found" 로 흘러가면
+# 원인이 네트워크·인증 실패와 구분되지 않는다. 명시적으로 알린다.
+if [[ -z "$CODEX_BIN" ]]; then
+  echo "CODEX_FAILED"
+  echo "codex 실행 파일을 찾을 수 없습니다 (PATH 확인 필요)."
+  rm -f "$REPORT_FILE"
+  exit 3
+fi
 
 run_codex() {
   if [[ -n "$TIMEOUT_BIN" ]]; then
