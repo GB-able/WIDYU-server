@@ -4,6 +4,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.heart.dto.request.HeartMessageRequest;
 import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
+import com.widyu.heart.dto.response.RecentEmergencyResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDateTime;
 
 @Tag(name = "Heart Rate", description = "심박수 관련 API")
 public interface HeartRateDocs {
@@ -112,10 +114,71 @@ public interface HeartRateDocs {
     );
 
     @Operation(
+            summary = "최근 15분 내 위험 심박수 감지 여부",
+            description = """
+                    최근 15분 이내에 위급상황(EMERGENCY)으로 기록된 심박수가 있는지 조회합니다.
+                    보호자에게 FCM 긴급 알림이 발송되는 것과 동일한 기준(`alert=true` + `EMERGENCY`)입니다.
+
+                    감지된 경우 가장 최근 위급 기록의 심박수·측정 시각·위치를 함께 반환하고,
+                    없으면 `detected=false`, `emergency=null`을 반환합니다.
+
+                    **접근 권한**:
+                    - memberId 미입력 시: 본인 조회
+                    - memberId 입력 시: 가족 연결된 경우에만 조회 가능
+                    """
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = {
+                            @ExampleObject(
+                                    name = "감지됨",
+                                    value = """
+                                            {
+                                              "code": "HEART_2006",
+                                              "message": "최근 심박수 위험 감지 여부 조회 완료",
+                                              "data": {
+                                                "detected": true,
+                                                "emergency": {
+                                                  "heartRate": 178,
+                                                  "measuredAt": "2026-02-01T15:48:00",
+                                                  "location": "서울시 강남구"
+                                                }
+                                              }
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "감지 안 됨",
+                                    value = """
+                                            {
+                                              "code": "HEART_2006",
+                                              "message": "최근 심박수 위험 감지 여부 조회 완료",
+                                              "data": {
+                                                "detected": false,
+                                                "emergency": null
+                                              }
+                                            }
+                                            """
+                            )
+                    }
+            )
+    )
+    ApiResponseTemplate<RecentEmergencyResponse> getRecentEmergency(
+            @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
+            Long memberId
+    );
+
+    @Operation(
             summary = "심박수 그래프 최초 조회",
             description = """
                     심박수 그래프 화면 최초 진입 시 호출합니다.
-                    현재 심박수, 오늘의 최대/최소, 최초 이상치 탐지 정보, 전체 이벤트, 위급상황 히스토리를 반환합니다.
+                    현재 심박수, 최근 24시간 최대/최소, 최초 이상치 탐지 정보, 최근 24시간 이벤트, 위급상황 히스토리를 반환합니다.
+
+                    `heartGraph`의 이벤트·최대/최소·최초 이상치는 모두 **최근 24시간** 범위입니다.
+                    `emergencyHistory`는 기간 제한 없는 전체 위급상황 이력입니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회
@@ -131,8 +194,17 @@ public interface HeartRateDocs {
     @Operation(
             summary = "심박수 그래프 갱신",
             description = """
-                    심박수 그래프를 갱신할 때 호출합니다.
-                    현재 심박수, 최대/최소, 최근 5개 이벤트, 위급상황 히스토리를 반환합니다.
+                    심박수 그래프를 갱신할 때 호출합니다. 초당 폴링에 사용할 수 있습니다.
+
+                    **`since` 사용법 (권장)**:
+                    직전 응답에서 받은 마지막 이벤트의 `measuredAt`을 `since`로 넘기면 그 이후 신규 이벤트만 반환합니다.
+                    워치가 15개 배치로 전송하므로, 초당 폴링이어도 배치 도착 시 누락 없이 여러 점을 한 번에 받습니다.
+                    신규 이벤트가 없으면 `events`는 빈 배열이며 `current`는 항상 채워집니다.
+
+                    `since` 미입력 시에는 기존 동작대로 최근 5개 이벤트를 반환합니다.
+                    `since`가 24시간 이전이면 24시간 전으로 잘라냅니다.
+
+                    `current.measuredAt`은 갱신 응답에도 포함됩니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회
@@ -142,7 +214,9 @@ public interface HeartRateDocs {
     @ApiResponse(responseCode = "200", description = "갱신 성공")
     ApiResponseTemplate<HeartGraphPageResponse> getHeartGraphRefresh(
             @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
-            Long memberId
+            Long memberId,
+            @Parameter(description = "이 시각 이후의 신규 이벤트만 조회 (미입력 시 최근 5개)", example = "2026-02-01T15:48:00")
+            LocalDateTime since
     );
 
     @Operation(
