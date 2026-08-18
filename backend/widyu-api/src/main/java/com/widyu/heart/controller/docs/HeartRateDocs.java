@@ -193,7 +193,10 @@ public interface HeartRateDocs {
                     이 경우에도 `current`의 현재 심박수와 상태는 채워집니다.
 
                     `heartGraph`의 이벤트·최대/최소·최초 이상치는 모두 사이클 범위 기준입니다.
-                    `emergencyHistory`는 기간 제한 없는 전체 위급상황 이력이라 사이클과 무관하게 항상 반환됩니다.
+                    `emergencyHistory`의 `emergencyCount`·`events`는 기간 제한 없는 전체 위급상황 이력이라
+                    사이클과 무관하게 항상 반환됩니다.
+                    `emergencyHistory.totalDuration`은 **진행 중인 사이클의 지속 시간(분)** 으로,
+                    첫 감지부터 마지막 감지까지의 간격입니다. 단발 감지이거나 사이클이 없으면 0입니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회

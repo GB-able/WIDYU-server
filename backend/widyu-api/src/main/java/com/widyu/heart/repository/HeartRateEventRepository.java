@@ -27,9 +27,6 @@ public interface HeartRateEventRepository extends JpaRepository<HeartRateEvent, 
     @Query("SELECT MIN(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId AND h.measuredAt > :since")
     Optional<Integer> findMinHeartRateByMemberIdSince(@Param("memberId") Long memberId, @Param("since") LocalDateTime since);
 
-    @Query("SELECT TIMESTAMPDIFF(MINUTE, MIN(h.measuredAt), MAX(h.measuredAt)) FROM HeartRateEvent h WHERE h.member.id = :memberId")
-    Optional<Integer> findTotalDurationMinutesByMemberId(@Param("memberId") Long memberId);
-
     @Modifying
     @Query("DELETE FROM HeartRateEvent h WHERE h.measuredAt < :before")
     int deleteByMeasuredAtBefore(@Param("before") LocalDateTime before);
