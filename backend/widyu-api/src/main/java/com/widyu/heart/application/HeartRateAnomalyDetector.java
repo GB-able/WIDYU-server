@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IntSummaryStatistics;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -63,7 +64,7 @@ public class HeartRateAnomalyDetector {
             }
         }
 
-        logBatchSummary(memberId, context, status, responses, startedAt);
+        logBatchSummary(memberId, context, status, sortedMeasurements, responses, startedAt);
 
         return new DetectionResult(status, emergency);
     }
@@ -71,25 +72,60 @@ public class HeartRateAnomalyDetector {
     /**
      * 배치 단위로 AI 판정 근거를 남긴다. 개인화(layer=L1, baselineSource=PERSONAL)가 실제로 적용되는지와
      * AI 순차 호출이 조회 지연에 얼마나 기여하는지를 운영에서 확인하기 위한 로그다.
+     * <p>
+     * AI는 이상 범위가 30초를 넘게 끊김 없이 이어져야 EMERGENCY를 판정하고, 중간에 정상값이 하나라도
+     * 섞이면 지속 시간을 처음부터 다시 센다. 배치 하나는 15개뿐이라 단독으로는 조건을 채울 수 없으므로,
+     * "왜 이상값을 보냈는데 NORMAL인가"를 판단하려면 배치에 실제로 담겨 온 심박 분포와 측정 구간이 필요하다.
+     * <p>
+     * 심박 수치는 개인 건강정보이므로 어느 프로파일에서도 기본 비활성화하고, 진단이 필요한 순간에만
+     * {@code LOGGING_LEVEL_COM_WIDYU_HEART=DEBUG}로 켰다가 끈다. 측정 시각은 남기지 않는다.
+     * 배치가 언제 들어왔는지는 로그 자체의 타임스탬프로 확인할 수 있고, 판정에 필요한 것은 구간 길이뿐이다.
      */
     private void logBatchSummary(
             Long memberId,
             String context,
             HeartRateStatus status,
+            List<HeartRateMeasurement> sortedMeasurements,
             List<AiHeartRateResponse> responses,
             long startedAt
     ) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+
         long elapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
-        log.info(
-                "심박 배치 AI 판정: memberId={}, context={}, status={}, 소요={}ms, layer={}, baselineSource={}, sampleCount={}, 이상사유={}",
+        log.debug(
+                "심박 배치 AI 판정: memberId={}, context={}, status={}, 소요={}ms, {}, layer={}, baselineSource={}, sampleCount={}, 이상사유={}",
                 memberId,
                 context,
                 status,
                 elapsedMillis,
+                describeBatch(sortedMeasurements),
                 distinctValues(responses, AiHeartRateResponse::layer),
                 distinctValues(responses, AiHeartRateResponse::baselineSource),
                 lastSampleCount(responses),
                 abnormalReasons(responses)
+        );
+    }
+
+    /**
+     * 배치에 담겨 온 심박 분포와 구간 길이. 이상값이 배치 전체를 채웠는지 일부만 튀었는지 구분한다.
+     * 측정 시각은 개인 활동 시간대를 드러내므로 남기지 않고 구간 길이만 계산한다.
+     */
+    private String describeBatch(List<HeartRateMeasurement> sortedMeasurements) {
+        IntSummaryStatistics bpmStats = sortedMeasurements.stream()
+                .mapToInt(HeartRateMeasurement::heartRate)
+                .summaryStatistics();
+        long spanSeconds = Duration.between(
+                sortedMeasurements.getFirst().measuredAt(),
+                sortedMeasurements.getLast().measuredAt()
+        ).toSeconds();
+        return String.format(
+                "bpm=[%d~%d 평균%.0f], 구간=%d초",
+                bpmStats.getMin(),
+                bpmStats.getMax(),
+                bpmStats.getAverage(),
+                spanSeconds
         );
     }
 
