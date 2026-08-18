@@ -29,10 +29,19 @@ class HeartRateSendRequestTest {
     }
 
     @Test
-    @DisplayName("심박수는 0을 허용하고 300을 초과하면 거절한다")
-    void 심박수는_0을_허용하고_300을_초과하면_거절한다() {
-        assertThat(validator.validate(request(0, "REST"))).isEmpty();
+    @DisplayName("AI가 거부하는 심박수 0과 300은 요청 단계에서 거절한다")
+    void AI가_거부하는_심박수_0과_300은_요청단계에서_거절한다() {
+        // AI는 bpm 0·300에 400을 반환한다. 서버가 통과시키면 배치 15개 전체가 저장되지 않는다.
+        assertThat(validator.validate(request(0, "REST"))).isNotEmpty();
+        assertThat(validator.validate(request(300, "REST"))).isNotEmpty();
         assertThat(validator.validate(request(301, "REST"))).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("AI가 허용하는 심박수 경계값 1과 299는 통과시킨다")
+    void AI가_허용하는_심박수_경계값_1과_299는_통과시킨다() {
+        assertThat(validator.validate(request(1, "REST"))).isEmpty();
+        assertThat(validator.validate(request(299, "REST"))).isEmpty();
     }
 
     private HeartRateSendRequest request(int firstHeartRate, String context) {

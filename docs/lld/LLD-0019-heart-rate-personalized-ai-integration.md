@@ -23,7 +23,7 @@
 - 변경 모듈: widyu-api, widyu-domain
 - WebSocket `HeartRateSendRequest`에 배치 수준 `context`를 추가한다.
 - `REST`, `LOW`, `ACTIVE`, `UNKNOWN`만 허용하고 null·빈 문자열·공백은 `UNKNOWN`으로 정규화한다.
-- 심박수 입력 범위를 0~300으로 검증한다.
+- 심박수 입력 범위를 1~299로 검증한다. AI가 0과 300을 400으로 거부하므로 같은 범위로 맞춘다.
 - 15개 측정값을 측정 시각 오름차순으로 AI `POST /api/hr`에 순차 전송한다.
 - AI의 `NORMAL`, `CAUTION`, `EMERGENCY`를 기존 심박 상태·이벤트에 반영한다.
 - 배치 중 `alert=true`인 `EMERGENCY`가 하나 이상이면 `HeartRateEmergency`를 저장한다.
@@ -64,7 +64,7 @@ WebSocket 요청:
 ```
 
 - `heartRates`: 정확히 15개
-- `heartRate`: 정수, 0~300
+- `heartRate`: 정수, 1~299 (AI가 0과 300을 거부한다. 응답 메시지는 `BPM must be between 0 and 300`이지만 실제 통과 범위는 양끝 배타적이다)
 - `context`: `REST`, `LOW`, `ACTIVE`, `UNKNOWN`; null·빈 문자열·공백은 `UNKNOWN`
 
 AI 요청:
@@ -116,14 +116,22 @@ AI 응답 전체:
 `level`과 `reason`은 서로 다른 축이다. `level`은 심각도, `reason`은 사유이며 서맥·빈맥 구분은 `reason`에만 존재한다.
 `HeartRateStatus`에는 심각도만 저장되므로 조회 API로는 이상 사유를 알 수 없다.
 
-AI 내부 판별 방식은 `context`에 따라 갈린다.
+AI 내부 판별 방식은 `context`에 따라 갈린다. 아래는 `ryuchanghoon/widyu-ai-ver7:latest` 컨테이너에 직접 요청해 확인한 실측 결과다(2026-08-18).
 
 | `context` | 판별 계층 | 기준 |
 | --- | --- | --- |
-| `REST` | L1 (개인 기준선) | 초기 심박 30개 수집 후 개인 기준선 생성. 개인 평균에서 일정 범위 이상 벗어난 상태가 지속되면 이상 |
+| `REST` | L1 (개인 기준선) | 초기 심박 30개 수집 후 개인 기준선 생성 |
 | `LOW`, `ACTIVE`, `UNKNOWN` | L0 (고정 임계값) | 서맥·빈맥·극저심박이 30초 이상 지속되면 이상 |
 
-**개인화는 `context=REST`에서만 동작한다.** 앱이 `context`를 보내지 않아 `UNKNOWN`으로 정규화되면 개인 기준선은 만들어지지 않고 고정 임계값 판정만 수행된다.
+`baseline_source`는 `context`와 무관하게 30개 수집 후 `PERSONAL`로 바뀐다. `context`에 따라 갈리는 것은
+**판정 계층(`layer`)뿐**이므로, 개인화 적용 여부는 `baseline_source`가 아니라 `layer`로 판단해야 한다.
+`REST`가 아닌 경우 `sample_count`는 30에서 멈춘다.
+
+**확인 필요**: 실측에서 `context=REST`(L1 경로)는 190bpm을 60초 지속시켜도 `EMERGENCY`를 반환하지 않았다.
+정상 심박 35개로 개인 기준선을 만든 뒤 급등시킨 경우에도 같았다. 반면 `ACTIVE`·`UNKNOWN`·`LOW`(L0 경로)는
+동일 조건에서 31초째 `EMERGENCY`(`tachycardia`)를 반환했다.
+따라서 앱이 `context=REST`를 보내기 시작하면 휴식 중 위급 상황을 감지하지 못할 수 있다.
+AI 담당자 확인 전까지 `context` 전송 정책을 변경하지 않는다.
 
 WebSocket 응답 예시:
 
@@ -164,7 +172,7 @@ Facade와 신규 의존성은 추가하지 않는다.
 ## 6. 예외 / 에러 처리
 
 - 심박 데이터가 15개가 아니면 `BAD_REQUEST`를 반환한다.
-- 심박수가 0 미만 또는 300 초과이면 요청 검증 오류를 반환한다.
+- 심박수가 1 미만 또는 299 초과이면 요청 검증 오류를 반환한다. 워치 미착용 시 올라올 수 있는 0을 서버에서 거르지 않으면 AI가 400을 반환해 배치 15개 전체가 저장되지 않는다.
 - `context`가 허용값 또는 공백이 아니면 요청 검증 오류를 반환한다.
 - AI 통신 실패, 빈 응답, 지원하지 않는 `level`은 `INTERNAL_SERVER_ERROR`를 반환하고 배치를 저장하지 않는다.
 - AI 호출이 일부 성공한 뒤 실패하면 AI 서비스의 개인 기준선 상태는 이미 변경될 수 있다. 재처리 정책은 기존 배치 멱등성 범위 밖으로 둔다.
@@ -174,7 +182,7 @@ Facade와 신규 의존성은 추가하지 않는다.
 - [x] AI 요청은 JSON이며 `user_id`, `bpm`, `context`, `timestamp`를 포함한다.
 - [x] 15개 측정값을 측정 시각 순서대로 AI에 호출한다.
 - [x] null·빈 문자열·공백 `context`는 `UNKNOWN`으로 전달한다.
-- [x] 허용되지 않은 `context`와 0~300 밖의 심박수는 거절한다.
+- [x] 허용되지 않은 `context`와 1~299 밖의 심박수는 거절한다.
 - [x] AI `NORMAL`, `CAUTION`, `EMERGENCY` 중 배치 내 가장 높은 상태를 저장·반환한다.
 - [x] `alert=true`인 `EMERGENCY`만 `HeartRateEmergency` 저장 대상으로 전달한다.
 - [x] AI 실패 시 `HeartRateResult`, `HeartRateEvent`, `HeartRateEmergency`를 저장하지 않는다.
@@ -192,7 +200,8 @@ Facade와 신규 의존성은 추가하지 않는다.
 
 ## 9. 미결정 사항 (Open Questions)
 
-없음.
+- `context=REST`(L1 경로)에서 위급 상황이 감지되지 않는 이유. AI 담당자 확인이 필요하다. 답변 전까지 `context` 전송 정책을 바꾸지 않는다.
+- 워치가 실제로 `context`를 전송하는지. 서버 로그의 `rawContext`로 확인한다.
 
 ## 10. 참고
 
