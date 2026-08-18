@@ -9,6 +9,7 @@
 | 관련 ADR | ADR-0013 |
 | 작성자 | Codex |
 | 작성일 | 2026-07-26 |
+| 개정일 | 2026-08-18 (AI ver7 배포 명세 반영) |
 
 ## 1. 목적 / 배경
 
@@ -82,14 +83,47 @@ Content-Type: application/json
 }
 ```
 
-AI 응답에서 사용하는 필드:
+`timestamp`는 AI 명세상 선택값이며 미입력 시 AI 서버 현재 시각이 적용된다. 백엔드는 측정 시각 순서를 보존해야 하므로 항상 명시한다.
+
+AI 응답 전체:
 
 ```json
 {
   "alert": true,
-  "level": "EMERGENCY"
+  "layer": "L0",
+  "level": "EMERGENCY",
+  "reason": "tachycardia",
+  "bpm": 160.0,
+  "context": "ACTIVE",
+  "timestamp": 1784952000.0,
+  "held_seconds": 30.0,
+  "baseline_source": "PRIOR",
+  "sample_count": 10
 }
 ```
+
+백엔드가 역직렬화하는 필드는 `alert`, `level` 둘뿐이며, 나머지는 `@JsonIgnoreProperties(ignoreUnknown = true)`로 폐기한다.
+
+| 필드 | 값 | 백엔드 사용 |
+| --- | --- | --- |
+| `alert` | `false` 정상 / `true` 이상 감지 | 사용 (위급상황 저장 판정) |
+| `level` | `NORMAL`, `CAUTION`, `EMERGENCY` | 사용 (`HeartRateStatus`로 저장) |
+| `layer` | `L0` 고정 임계값 / `L1` 개인 기준선 | 미사용 |
+| `reason` | `normal`, `flatline_arrest`(극저심박), `bradycardia`(서맥), `tachycardia`(빈맥), `resting_tachycardia`(휴식기 빈맥), `personal_hr_high`, `personal_hr_low` | 미사용 |
+| `baseline_source` | `PRIOR` 기본 기준선 / `PERSONAL` 개인 기준선 | 미사용 |
+| `bpm`, `context`, `timestamp`, `held_seconds`, `sample_count` | 요청 에코 및 판정 근거 | 미사용 |
+
+`level`과 `reason`은 서로 다른 축이다. `level`은 심각도, `reason`은 사유이며 서맥·빈맥 구분은 `reason`에만 존재한다.
+`HeartRateStatus`에는 심각도만 저장되므로 조회 API로는 이상 사유를 알 수 없다.
+
+AI 내부 판별 방식은 `context`에 따라 갈린다.
+
+| `context` | 판별 계층 | 기준 |
+| --- | --- | --- |
+| `REST` | L1 (개인 기준선) | 초기 심박 30개 수집 후 개인 기준선 생성. 개인 평균에서 일정 범위 이상 벗어난 상태가 지속되면 이상 |
+| `LOW`, `ACTIVE`, `UNKNOWN` | L0 (고정 임계값) | 서맥·빈맥·극저심박이 30초 이상 지속되면 이상 |
+
+**개인화는 `context=REST`에서만 동작한다.** 앱이 `context`를 보내지 않아 `UNKNOWN`으로 정규화되면 개인 기준선은 만들어지지 않고 고정 임계값 판정만 수행된다.
 
 WebSocket 응답 예시:
 

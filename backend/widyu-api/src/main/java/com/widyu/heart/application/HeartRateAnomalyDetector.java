@@ -9,9 +9,16 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.global.properties.AiProperties;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
+import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
@@ -27,6 +34,7 @@ import org.springframework.web.client.RestTemplate;
 public class HeartRateAnomalyDetector {
 
     private static final ZoneId HEART_RATE_ZONE = ZoneId.of("Asia/Seoul");
+    private static final String NORMAL_REASON = "normal";
 
     private final RestTemplate aiRestTemplate;
     private final AiProperties aiProperties;
@@ -41,17 +49,73 @@ public class HeartRateAnomalyDetector {
                 .sorted(Comparator.comparing(HeartRateMeasurement::measuredAt))
                 .toList();
 
+        long startedAt = System.nanoTime();
+        List<AiHeartRateResponse> responses = new ArrayList<>();
         HeartRateStatus status = HeartRateStatus.NORMAL;
         boolean emergency = false;
         for (HeartRateMeasurement measurement : sortedMeasurements) {
             AiHeartRateResponse response = requestAnalysis(memberId, measurement, context);
+            responses.add(response);
             HeartRateStatus nextStatus = parseStatus(response);
             status = higherStatus(status, nextStatus);
             if (Boolean.TRUE.equals(response.alert()) && nextStatus == HeartRateStatus.EMERGENCY) {
                 emergency = true;
             }
         }
+
+        logBatchSummary(memberId, context, status, responses, startedAt);
+
         return new DetectionResult(status, emergency);
+    }
+
+    /**
+     * 배치 단위로 AI 판정 근거를 남긴다. 개인화(layer=L1, baselineSource=PERSONAL)가 실제로 적용되는지와
+     * AI 순차 호출이 조회 지연에 얼마나 기여하는지를 운영에서 확인하기 위한 로그다.
+     */
+    private void logBatchSummary(
+            Long memberId,
+            String context,
+            HeartRateStatus status,
+            List<AiHeartRateResponse> responses,
+            long startedAt
+    ) {
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+        log.info(
+                "심박 배치 AI 판정: memberId={}, context={}, status={}, 소요={}ms, layer={}, baselineSource={}, sampleCount={}, 이상사유={}",
+                memberId,
+                context,
+                status,
+                elapsedMillis,
+                distinctValues(responses, AiHeartRateResponse::layer),
+                distinctValues(responses, AiHeartRateResponse::baselineSource),
+                lastSampleCount(responses),
+                abnormalReasons(responses)
+        );
+    }
+
+    private Set<String> distinctValues(
+            List<AiHeartRateResponse> responses,
+            Function<AiHeartRateResponse, String> extractor
+    ) {
+        return responses.stream()
+                .map(extractor)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Set<String> abnormalReasons(List<AiHeartRateResponse> responses) {
+        return responses.stream()
+                .map(AiHeartRateResponse::reason)
+                .filter(Objects::nonNull)
+                .filter(reason -> !NORMAL_REASON.equals(reason))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Integer lastSampleCount(List<AiHeartRateResponse> responses) {
+        if (responses.isEmpty()) {
+            return null;
+        }
+        return responses.getLast().sampleCount();
     }
 
     private AiHeartRateResponse requestAnalysis(
@@ -139,10 +203,18 @@ public class HeartRateAnomalyDetector {
         }
     }
 
+    /**
+     * 판정에 사용하는 필드는 {@code alert}, {@code level} 뿐이고 나머지는 로그 관측용이다.
+     * 영속화 범위는 LLD-0019를 따른다.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record AiHeartRateResponse(
             Boolean alert,
-            String level
+            String level,
+            String layer,
+            String reason,
+            @JsonProperty("baseline_source") String baselineSource,
+            @JsonProperty("sample_count") Integer sampleCount
     ) {
     }
 }

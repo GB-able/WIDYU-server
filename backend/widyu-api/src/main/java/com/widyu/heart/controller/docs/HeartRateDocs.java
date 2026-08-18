@@ -4,6 +4,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.heart.dto.request.HeartMessageRequest;
 import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
+import com.widyu.heart.dto.response.RecentEmergencyResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDateTime;
 
 @Tag(name = "Heart Rate", description = "심박수 관련 API")
 public interface HeartRateDocs {
@@ -112,10 +114,89 @@ public interface HeartRateDocs {
     );
 
     @Operation(
-            summary = "심박수 그래프 최초 조회",
+            summary = "위험 심박수 감지 여부 (5분 연장 사이클)",
             description = """
-                    심박수 그래프 화면 최초 진입 시 호출합니다.
-                    현재 심박수, 오늘의 최대/최소, 최초 이상치 탐지 정보, 전체 이벤트, 위급상황 히스토리를 반환합니다.
+                    현재 위험 상태인지 조회합니다.
+                    보호자에게 FCM 긴급 알림이 발송되는 것과 동일한 기준(`alert=true` + `EMERGENCY`)입니다.
+
+                    **판정 방식**: 위험이 감지되면 그 시점부터 5분간 위험 상태를 유지하고,
+                    그 안에 다시 감지되면 **마지막 감지 시각 기준으로 5분 연장**됩니다.
+                    5분 동안 추가 감지가 없으면 사이클이 종료됩니다.
+
+                    예) 0분 0초 감지 → 5분 0초까지 위험. 3분 0초에 재감지 → 8분 0초까지 위험.
+
+                    `cycleExpiresAt`은 현재 사이클이 종료되는 시각입니다.
+                    이 시각까지는 재조회 없이 위험 상태로 표시해도 되며, 그 전에 재감지되면 값이 뒤로 밀립니다.
+                    감지되지 않은 경우 `detected=false`, `emergency=null`, `cycleExpiresAt=null`입니다.
+
+                    **접근 권한**:
+                    - memberId 미입력 시: 본인 조회
+                    - memberId 입력 시: 가족 연결된 경우에만 조회 가능
+                    """
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "조회 성공",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = {
+                            @ExampleObject(
+                                    name = "감지됨",
+                                    value = """
+                                            {
+                                              "code": "HEART_2006",
+                                              "message": "최근 심박수 위험 감지 여부 조회 완료",
+                                              "data": {
+                                                "detected": true,
+                                                "emergency": {
+                                                  "heartRate": 178,
+                                                  "measuredAt": "2026-02-01T15:48:00",
+                                                  "location": "서울시 강남구"
+                                                },
+                                                "cycleExpiresAt": "2026-02-01T15:53:00"
+                                              }
+                                            }
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "감지 안 됨",
+                                    value = """
+                                            {
+                                              "code": "HEART_2006",
+                                              "message": "최근 심박수 위험 감지 여부 조회 완료",
+                                              "data": {
+                                                "detected": false,
+                                                "emergency": null,
+                                                "cycleExpiresAt": null
+                                              }
+                                            }
+                                            """
+                            )
+                    }
+            )
+    )
+    ApiResponseTemplate<RecentEmergencyResponse> getRecentEmergency(
+            @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
+            Long memberId
+    );
+
+    @Operation(
+            summary = "심박수 그래프 최초 조회 (응급 화면)",
+            description = """
+                    응급 상황 심박수 그래프 화면 최초 진입 시 호출합니다.
+
+                    **조회 범위는 진행 중인 위급 사이클입니다.** 사이클 시작(첫 위험 감지) **5분 전**부터
+                    현재까지의 이벤트를 반환합니다. 이상해지기 직전의 정상 구간을 함께 보여주기 위한 여유입니다.
+                    사이클 판정은 `/emergency/recent`와 동일한 5분 연장 규칙을 따릅니다.
+
+                    **진행 중인 사이클이 없으면 `events`는 빈 배열이고 `firstEmergency`·최대/최소는 null입니다.**
+                    이 경우에도 `current`의 현재 심박수와 상태는 채워집니다.
+
+                    `heartGraph`의 이벤트·최대/최소·최초 이상치는 모두 사이클 범위 기준입니다.
+                    `emergencyHistory`의 `emergencyCount`·`events`는 기간 제한 없는 전체 위급상황 이력이라
+                    사이클과 무관하게 항상 반환됩니다.
+                    `emergencyHistory.totalDuration`은 **진행 중인 사이클의 지속 시간(분)** 으로,
+                    첫 감지부터 마지막 감지까지의 간격입니다. 단발 감지이거나 사이클이 없으면 0입니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회
@@ -131,8 +212,19 @@ public interface HeartRateDocs {
     @Operation(
             summary = "심박수 그래프 갱신",
             description = """
-                    심박수 그래프를 갱신할 때 호출합니다.
-                    현재 심박수, 최대/최소, 최근 5개 이벤트, 위급상황 히스토리를 반환합니다.
+                    심박수 그래프를 갱신할 때 호출합니다. 초당 폴링에 사용할 수 있습니다.
+
+                    **`since` 사용법 (권장)**:
+                    직전 응답에서 받은 마지막 이벤트의 `measuredAt`을 `since`로 넘기면 그 이후 신규 이벤트만 반환합니다.
+                    워치가 15개 배치로 전송하므로, 초당 폴링이어도 배치 도착 시 누락 없이 여러 점을 한 번에 받습니다.
+                    신규 이벤트가 없으면 `events`는 빈 배열이며 `current`는 항상 채워집니다.
+
+                    `since` 미입력 시에는 기존 동작대로 최근 5개 이벤트를 반환합니다.
+                    `since`가 사이클 조회 범위(사이클 시작 5분 전)보다 과거이면 그 시작점으로 잘라냅니다.
+
+                    **진행 중인 위급 사이클이 없으면 `events`는 빈 배열입니다.** 최초 조회와 동일한 규칙입니다.
+
+                    `current.measuredAt`은 갱신 응답에도 포함됩니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회
@@ -142,7 +234,9 @@ public interface HeartRateDocs {
     @ApiResponse(responseCode = "200", description = "갱신 성공")
     ApiResponseTemplate<HeartGraphPageResponse> getHeartGraphRefresh(
             @Parameter(description = "조회할 회원 ID (미입력 시 본인)", example = "1023")
-            Long memberId
+            Long memberId,
+            @Parameter(description = "이 시각 이후의 신규 이벤트만 조회 (미입력 시 최근 5개)", example = "2026-02-01T15:48:00")
+            LocalDateTime since
     );
 
     @Operation(

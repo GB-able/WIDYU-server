@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.never;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
+import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
@@ -20,6 +22,7 @@ import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
 import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
+import com.widyu.heart.dto.response.RecentEmergencyResponse;
 import com.widyu.heart.repository.HeartRateEmergencyRepository;
 import com.widyu.heart.repository.HeartRateEventRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
@@ -32,6 +35,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -88,58 +92,392 @@ class HeartRateServiceTest {
     }
 
     @Test
-    @DisplayName("그래프 갱신 시 최신 결과가 없으면 최근 이벤트 중 마지막 값을 현재 심박수로 반환한다")
-    void 그래프갱신시_최신결과가_없으면_최근이벤트_마지막값을_현재심박수로_반환한다() {
+    @DisplayName("진행 중인 위급 사이클이 없으면 그래프 최초 조회는 빈 이벤트를 반환한다")
+    void 위급사이클이_없으면_그래프최초조회는_빈_이벤트를_반환한다() {
+        // given
         Long memberId = 1L;
+        LocalDateTime expiredAt = LocalDateTime.now().minusMinutes(30);
+        HeartRateEvent latestEvent = heartRateEvent(82, LocalDateTime.now().minusSeconds(31), HeartRateStatus.NORMAL);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(170, expiredAt)));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(Optional.of(latestEvent));
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+
+        // then
+        assertThat(response.heartGraph().events()).isEmpty();
+        assertThat(response.heartGraph().current().heartRate()).isEqualTo(82);
+        assertThat(response.heartGraph().current().maxHeartRate()).isNull();
+        assertThat(response.emergencyHistory().events()).hasSize(1);
+        then(heartRateEventRepository).should(never())
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("위급 이력의 지속 시간은 첫 감지부터 마지막 감지까지의 분이다")
+    void 위급이력의_지속시간은_첫_감지부터_마지막_감지까지다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime firstDetectedAt = LocalDateTime.now().minusMinutes(11);
+        LocalDateTime secondDetectedAt = LocalDateTime.now().minusMinutes(7);
+        LocalDateTime lastDetectedAt = LocalDateTime.now().minusMinutes(3);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(
+                        heartRateEmergency(190, lastDetectedAt),
+                        heartRateEmergency(185, secondDetectedAt),
+                        heartRateEmergency(180, firstDetectedAt)
+                ));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(List.of());
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+        given(heartRateEmergencyRepository.findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+
+        // then
+        assertThat(response.emergencyHistory().totalDuration()).isEqualTo(8);
+        assertThat(response.emergencyHistory().emergencyCount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("진행 중인 사이클이 없으면 위급 이력의 지속 시간은 0이다")
+    void 진행중인_사이클이_없으면_지속시간은_0이다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime expiredAt = LocalDateTime.now().minusMinutes(30);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(170, expiredAt)));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+
+        // then
+        assertThat(response.emergencyHistory().totalDuration()).isZero();
+        assertThat(response.emergencyHistory().emergencyCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("위급 기록이 한 번도 없으면 그래프 최초 조회는 빈 이벤트를 반환한다")
+    void 위급기록이_없으면_그래프최초조회는_빈_이벤트를_반환한다() {
+        // given
+        Long memberId = 1L;
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(List.of());
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+
+        // then
+        assertThat(response.heartGraph().events()).isEmpty();
+        assertThat(response.heartGraph().current().status()).isEqualTo(HeartRateStatus.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("그래프 최초 조회는 사이클 시작 5분 전부터의 이벤트를 반환한다")
+    void 그래프최초조회는_사이클시작_5분전부터의_이벤트를_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
+        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(31);
+        HeartRateEvent firstEvent = heartRateEvent(75, LocalDateTime.now().minusSeconds(45), HeartRateStatus.NORMAL);
+        HeartRateEvent latestEvent = heartRateEvent(82, lastMeasuredAt, HeartRateStatus.EMERGENCY);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(180, cycleStart)));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(List.of(firstEvent, latestEvent));
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(82));
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(75));
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(Optional.of(latestEvent));
+        given(heartRateEmergencyRepository.findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+
+        // then
+        assertThat(response.heartGraph().events()).hasSize(2);
+        assertThat(response.heartGraph().current().heartRate()).isEqualTo(82);
+        assertThat(response.heartGraph().current().measuredAt()).isEqualTo(lastMeasuredAt);
+        assertThat(response.heartGraph().current().maxHeartRate()).isEqualTo(82);
+
+        ArgumentCaptor<LocalDateTime> windowCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(heartRateEventRepository).should()
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), windowCaptor.capture());
+        assertThat(windowCaptor.getValue()).isEqualTo(cycleStart.minusMinutes(5));
+    }
+
+    @Test
+    @DisplayName("위급 기록이 5분 이내 간격으로 이어지면 사이클 시작은 가장 이른 감지 시각이 된다")
+    void 위급기록이_5분이내로_이어지면_사이클시작은_가장_이른_감지시각이다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime firstDetectedAt = LocalDateTime.now().minusMinutes(11);
+        LocalDateTime secondDetectedAt = LocalDateTime.now().minusMinutes(7);
+        LocalDateTime lastDetectedAt = LocalDateTime.now().minusMinutes(3);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(
+                        heartRateEmergency(190, lastDetectedAt),
+                        heartRateEmergency(185, secondDetectedAt),
+                        heartRateEmergency(180, firstDetectedAt)
+                ));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(List.of());
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+        given(heartRateEmergencyRepository.findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        heartRateService.getHeartGraph(memberId);
+
+        // then
+        ArgumentCaptor<LocalDateTime> windowCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(heartRateEventRepository).should()
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), windowCaptor.capture());
+        assertThat(windowCaptor.getValue()).isEqualTo(firstDetectedAt.minusMinutes(5));
+    }
+
+    @Test
+    @DisplayName("위급 기록 간격이 5분을 넘으면 이전 사이클은 조회 범위에서 제외한다")
+    void 위급기록_간격이_5분을_넘으면_이전_사이클은_제외한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime previousCycleAt = LocalDateTime.now().minusMinutes(40);
+        LocalDateTime currentCycleAt = LocalDateTime.now().minusMinutes(2);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(
+                        heartRateEmergency(190, currentCycleAt),
+                        heartRateEmergency(180, previousCycleAt)
+                ));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(List.of());
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+        given(heartRateEmergencyRepository.findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        heartRateService.getHeartGraph(memberId);
+
+        // then
+        ArgumentCaptor<LocalDateTime> windowCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(heartRateEventRepository).should()
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), windowCaptor.capture());
+        assertThat(windowCaptor.getValue()).isEqualTo(currentCycleAt.minusMinutes(5));
+    }
+
+    @Test
+    @DisplayName("그래프 갱신 시 최신 결과가 없으면 가장 최근 이벤트를 현재 심박수로 반환하고 측정 시각도 포함한다")
+    void 그래프갱신시_최신결과가_없으면_최근이벤트를_현재심박수로_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
         LocalDateTime firstMeasuredAt = LocalDateTime.now().minusSeconds(45);
         LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(31);
         HeartRateEvent firstEvent = heartRateEvent(75, firstMeasuredAt, HeartRateStatus.NORMAL);
         HeartRateEvent latestEvent = heartRateEvent(82, lastMeasuredAt, HeartRateStatus.ANOMALY);
 
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(180, cycleStart)));
         given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
-        given(heartRateEventRepository.findMaxHeartRateByMemberId(memberId)).willReturn(Optional.of(82));
-        given(heartRateEventRepository.findMinHeartRateByMemberId(memberId)).willReturn(Optional.of(75));
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(82));
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(75));
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(Optional.of(latestEvent));
         given(heartRateEventRepository.findTop5ByMemberIdOrderByMeasuredAtDesc(memberId))
                 .willReturn(List.of(latestEvent, firstEvent));
-        given(heartRateEmergencyRepository.countByMemberId(memberId)).willReturn(0L);
-        given(heartRateEventRepository.findTotalDurationMinutesByMemberId(memberId)).willReturn(Optional.empty());
-        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(List.of());
 
-        HeartGraphPageResponse response = heartRateService.getHeartGraphRefresh(memberId);
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraphRefresh(memberId, null);
 
+        // then
         assertThat(response.heartGraph().current().heartRate()).isEqualTo(82);
+        assertThat(response.heartGraph().current().measuredAt()).isEqualTo(lastMeasuredAt);
         assertThat(response.heartGraph().current().status()).isEqualTo(HeartRateStatus.ANOMALY);
         assertThat(response.heartGraph().current().maxHeartRate()).isEqualTo(82);
         assertThat(response.heartGraph().current().minHeartRate()).isEqualTo(75);
     }
 
     @Test
-    @DisplayName("그래프 최초 조회 시 최신 결과가 없으면 전체 이벤트 중 마지막 값을 현재 심박수로 반환한다")
-    void 그래프최초조회시_최신결과가_없으면_전체이벤트_마지막값을_현재심박수로_반환한다() {
+    @DisplayName("그래프 갱신에 since를 넘기면 그 이후 신규 이벤트만 반환한다")
+    void 그래프갱신에_since를_넘기면_신규이벤트만_반환한다() {
+        // given
         Long memberId = 1L;
-        LocalDateTime firstMeasuredAt = LocalDateTime.now().minusSeconds(45);
-        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(31);
-        HeartRateEvent firstEvent = heartRateEvent(75, firstMeasuredAt, HeartRateStatus.NORMAL);
-        HeartRateEvent latestEvent = heartRateEvent(82, lastMeasuredAt, HeartRateStatus.ANOMALY);
+        LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
+        LocalDateTime since = LocalDateTime.now().minusSeconds(20);
+        LocalDateTime newMeasuredAt = LocalDateTime.now().minusSeconds(5);
+        HeartRateEvent newEvent = heartRateEvent(90, newMeasuredAt, HeartRateStatus.NORMAL);
 
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(180, cycleStart)));
         given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
-        given(heartRateEventRepository.findByMemberIdOrderByMeasuredAtAsc(memberId))
-                .willReturn(List.of(firstEvent, latestEvent));
-        given(heartRateEventRepository.findMaxHeartRateByMemberId(memberId)).willReturn(Optional.of(82));
-        given(heartRateEventRepository.findMinHeartRateByMemberId(memberId)).willReturn(Optional.of(75));
-        given(heartRateEmergencyRepository.findFirstByMemberIdOrderByMeasuredAtAsc(memberId))
-                .willReturn(Optional.empty());
-        given(heartRateEmergencyRepository.countByMemberId(memberId)).willReturn(0L);
-        given(heartRateEventRepository.findTotalDurationMinutesByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(90));
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.of(70));
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(Optional.of(newEvent));
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(memberId, since))
+                .willReturn(List.of(newEvent));
+
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraphRefresh(memberId, since);
+
+        // then
+        assertThat(response.heartGraph().events()).hasSize(1);
+        assertThat(response.heartGraph().events().getFirst().measuredAt()).isEqualTo(newMeasuredAt);
+        then(heartRateEventRepository).should(never()).findTop5ByMemberIdOrderByMeasuredAtDesc(anyLong());
+    }
+
+    @Test
+    @DisplayName("그래프 갱신 since가 사이클 조회 범위보다 과거이면 범위 시작점으로 잘라 조회한다")
+    void 그래프갱신_since가_사이클범위보다_과거이면_범위시작점으로_잘라_조회한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
+        LocalDateTime tooOldSince = LocalDateTime.now().minusDays(3);
+
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(180, cycleStart)));
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMaxHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findMinHeartRateByMemberIdSince(eq(memberId), any())).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), any()))
+                .willReturn(List.of());
+
+        // when
+        heartRateService.getHeartGraphRefresh(memberId, tooOldSince);
+
+        // then
+        ArgumentCaptor<LocalDateTime> sinceCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(heartRateEventRepository).should()
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(eq(memberId), sinceCaptor.capture());
+        assertThat(sinceCaptor.getValue()).isEqualTo(cycleStart.minusMinutes(5));
+    }
+
+    @Test
+    @DisplayName("진행 중인 위급 사이클이 없으면 그래프 갱신도 빈 이벤트를 반환한다")
+    void 위급사이클이_없으면_그래프갱신도_빈_이벤트를_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime since = LocalDateTime.now().minusSeconds(20);
+
         given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(List.of());
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)).willReturn(Optional.empty());
 
-        HeartGraphPageResponse response = heartRateService.getHeartGraph(memberId);
+        // when
+        HeartGraphPageResponse response = heartRateService.getHeartGraphRefresh(memberId, since);
 
-        assertThat(response.heartGraph().current().heartRate()).isEqualTo(82);
-        assertThat(response.heartGraph().current().measuredAt()).isEqualTo(lastMeasuredAt);
-        assertThat(response.heartGraph().current().status()).isEqualTo(HeartRateStatus.ANOMALY);
-        assertThat(response.heartGraph().current().maxHeartRate()).isEqualTo(82);
-        assertThat(response.heartGraph().current().minHeartRate()).isEqualTo(75);
+        // then
+        assertThat(response.heartGraph().events()).isEmpty();
+        then(heartRateEventRepository).should(never())
+                .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("위험 사이클 안에 위급 기록이 있으면 감지됨과 해당 기록을 반환한다")
+    void 위험사이클_안에_위급기록이_있으면_감지됨을_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.now().minusMinutes(3);
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateEmergency emergency = HeartRateEmergency.of(member, 178, measuredAt, "서울시 강남구");
+
+        given(heartRateEmergencyRepository
+                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
+                .willReturn(Optional.of(emergency));
+
+        // when
+        RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
+
+        // then
+        assertThat(response.detected()).isTrue();
+        assertThat(response.emergency().heartRate()).isEqualTo(178);
+        assertThat(response.emergency().measuredAt()).isEqualTo(measuredAt);
+        assertThat(response.emergency().location()).isEqualTo("서울시 강남구");
+    }
+
+    @Test
+    @DisplayName("위험 사이클 만료 시각은 마지막 감지 시각의 5분 뒤로 연장된다")
+    void 위험사이클_만료시각은_마지막_감지시각의_5분뒤다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime lastDetectedAt = LocalDateTime.now().minusMinutes(2);
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateEmergency emergency = HeartRateEmergency.of(member, 180, lastDetectedAt, "서울시 강남구");
+
+        given(heartRateEmergencyRepository
+                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
+                .willReturn(Optional.of(emergency));
+
+        // when
+        RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
+
+        // then
+        assertThat(response.cycleExpiresAt()).isEqualTo(lastDetectedAt.plusMinutes(5));
+        assertThat(response.cycleExpiresAt()).isAfter(LocalDateTime.now());
+    }
+
+    @Test
+    @DisplayName("위험 사이클이 종료되었으면 감지되지 않음을 반환한다")
+    void 위험사이클이_종료되었으면_감지되지_않음을_반환한다() {
+        // given
+        Long memberId = 1L;
+        given(heartRateEmergencyRepository
+                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
+
+        // then
+        assertThat(response.detected()).isFalse();
+        assertThat(response.emergency()).isNull();
+        assertThat(response.cycleExpiresAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("위험 사이클 조회는 5분 전을 기준 시각으로 사용한다")
+    void 위험사이클_조회는_5분전을_기준시각으로_사용한다() {
+        // given
+        Long memberId = 1L;
+        given(heartRateEmergencyRepository
+                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
+                .willReturn(Optional.empty());
+
+        // when
+        heartRateService.getRecentEmergency(memberId);
+
+        // then
+        ArgumentCaptor<LocalDateTime> sinceCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(heartRateEmergencyRepository).should()
+                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), sinceCaptor.capture());
+        assertThat(sinceCaptor.getValue()).isBetween(
+                LocalDateTime.now().minusMinutes(6), LocalDateTime.now().minusMinutes(4));
     }
 
     // TEST-012: 심박 수집 배치 멱등성 검증
@@ -322,5 +660,10 @@ class HeartRateServiceTest {
     private HeartRateEvent heartRateEvent(Integer heartRate, LocalDateTime measuredAt, HeartRateStatus status) {
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         return HeartRateEvent.of(member, heartRate, measuredAt, status);
+    }
+
+    private HeartRateEmergency heartRateEmergency(Integer heartRate, LocalDateTime measuredAt) {
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        return HeartRateEmergency.of(member, heartRate, measuredAt, "서울시 강남구");
     }
 }

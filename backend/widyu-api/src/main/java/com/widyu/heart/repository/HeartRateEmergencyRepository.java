@@ -12,7 +12,9 @@ public interface HeartRateEmergencyRepository extends JpaRepository<HeartRateEme
 
     List<HeartRateEmergency> findByMemberIdOrderByMeasuredAtDesc(Long memberId);
 
-    Optional<HeartRateEmergency> findFirstByMemberIdOrderByMeasuredAtAsc(Long memberId);
+    Optional<HeartRateEmergency> findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(Long memberId, LocalDateTime since);
+
+    Optional<HeartRateEmergency> findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(Long memberId, LocalDateTime since);
 
     long countByMemberId(Long memberId);
     long countByMeasuredAtAfter(LocalDateTime measuredAt);

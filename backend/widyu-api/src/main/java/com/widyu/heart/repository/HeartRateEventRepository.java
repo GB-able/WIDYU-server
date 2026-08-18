@@ -15,22 +15,17 @@ public interface HeartRateEventRepository extends JpaRepository<HeartRateEvent, 
 
     boolean existsByMemberIdAndMeasuredAt(Long memberId, LocalDateTime measuredAt);
 
-    List<HeartRateEvent> findByMemberIdOrderByMeasuredAtAsc(Long memberId);
+    List<HeartRateEvent> findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(Long memberId, LocalDateTime since);
 
     List<HeartRateEvent> findTop5ByMemberIdOrderByMeasuredAtDesc(Long memberId);
 
     Optional<HeartRateEvent> findFirstByMemberIdOrderByMeasuredAtDesc(Long memberId);
 
-    List<HeartRateEvent> findTop15ByMemberIdOrderByMeasuredAtDesc(Long memberId);
+    @Query("SELECT MAX(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId AND h.measuredAt > :since")
+    Optional<Integer> findMaxHeartRateByMemberIdSince(@Param("memberId") Long memberId, @Param("since") LocalDateTime since);
 
-    @Query("SELECT MAX(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId")
-    Optional<Integer> findMaxHeartRateByMemberId(@Param("memberId") Long memberId);
-
-    @Query("SELECT MIN(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId")
-    Optional<Integer> findMinHeartRateByMemberId(@Param("memberId") Long memberId);
-
-    @Query("SELECT TIMESTAMPDIFF(MINUTE, MIN(h.measuredAt), MAX(h.measuredAt)) FROM HeartRateEvent h WHERE h.member.id = :memberId")
-    Optional<Integer> findTotalDurationMinutesByMemberId(@Param("memberId") Long memberId);
+    @Query("SELECT MIN(h.heartRate) FROM HeartRateEvent h WHERE h.member.id = :memberId AND h.measuredAt > :since")
+    Optional<Integer> findMinHeartRateByMemberIdSince(@Param("memberId") Long memberId, @Param("since") LocalDateTime since);
 
     @Modifying
     @Query("DELETE FROM HeartRateEvent h WHERE h.measuredAt < :before")

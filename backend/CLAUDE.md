@@ -41,11 +41,15 @@
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
-- 심박 15개 값 배치 → AI(`POST /api/hr`) 단건 15회 → `level` NORMAL/CAUTION/EMERGENCY
+- 심박 15개 값 배치 → AI(`POST /api/hr`) 단건 15회 순차 → `level` NORMAL/CAUTION/EMERGENCY 중 배치 최댓값
 - `alert=true`인 EMERGENCY 시 `HeartRateEmergency` 기록 + 보호자 FCM
+- **AI 응답 중 `alert`·`level`만 사용**. `reason`(서맥·빈맥 등 사유)·`layer`(L0 고정임계값/L1 개인기준선)·`baseline_source`는 폐기 — 개인화는 `context=REST`에서만 동작
 - REST(`HeartRateController`) + WebSocket(`HeartRateWebSocketController`) 이중 지원
   - 시니어 → `/app/heart-rate/send` / 보호자 구독 `/topic/heart-rate/{memberId}` / ACK `/user/queue/heart-rate/result`
-- AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000. → LLD-0010·0019·0020, ADR-0008·0013·0014
+- **위급 사이클**: 위험 감지 후 5분 유지, 그 안에 재감지되면 마지막 감지 기준 연장. "마지막 감지 + 5분" == "최근 5분 내 감지 존재"이므로 상태를 저장하지 않고 조회 윈도우로만 판정 (`/emergency/recent`)
+- **조회 범위 규칙**: 그래프는 응급 화면이므로 events·max·min·firstEmergency가 **진행 중인 사이클 시작 5분 전 ~ 현재**. 사이클 없으면 빈 배열. `emergencyHistory`의 count·events는 전체 기간이지만 `totalDuration`은 현재 사이클 지속 시간(첫 감지~마지막 감지, 분). 갱신(`/graph/refresh`)은 `since` 지정 시 그 이후 신규 이벤트만, 미지정 시 최근 5개
+- 조회 지연은 정상 — 배치 저장 시점에만 갱신됨(워치 배치 주기 + AI 15회 순차 호출)
+- AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
