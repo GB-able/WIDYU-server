@@ -4,6 +4,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
+import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
@@ -24,6 +25,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,7 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class HeartRateService {
 
-    private static final Duration GRAPH_WINDOW = Duration.ofHours(24);
+    /** 사이클 시작 이전으로 더 보여줄 구간. 이상해지기 직전의 정상 심박을 함께 보여주기 위한 여유다. */
+    private static final Duration GRAPH_LEAD_IN = Duration.ofMinutes(5);
 
     /**
      * 위급상황 사이클 유지 시간. 위험이 감지되면 그 시점부터 이 시간만큼 위험 상태를 유지하고,
@@ -108,7 +111,12 @@ public class HeartRateService {
 
     @Transactional(readOnly = true)
     public HeartGraphPageResponse getHeartGraph(Long memberId) {
-        LocalDateTime windowStart = graphWindowStart();
+        List<HeartRateEmergency> emergencies = heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId);
+        LocalDateTime windowStart = findGraphWindowStart(emergencies);
+
+        if (windowStart == null) {
+            return emptyGraph(memberId, HeartGraphResponse::forInitialEmpty, emergencies);
+        }
 
         List<HeartRateEventResponse> events = heartRateEventRepository
                 .findByMemberIdAndMeasuredAtAfterOrderByMeasuredAtAsc(memberId, windowStart)
@@ -124,12 +132,17 @@ public class HeartRateService {
         HeartGraphResponse heartGraph = HeartGraphResponse.forInitial(
                 buildCurrent(memberId, windowStart), firstEmergency, events);
 
-        return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId));
+        return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId, emergencies));
     }
 
     @Transactional(readOnly = true)
     public HeartGraphPageResponse getHeartGraphRefresh(Long memberId, LocalDateTime since) {
-        LocalDateTime windowStart = graphWindowStart();
+        List<HeartRateEmergency> emergencies = heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId);
+        LocalDateTime windowStart = findGraphWindowStart(emergencies);
+
+        if (windowStart == null) {
+            return emptyGraph(memberId, HeartGraphResponse::forRefreshEmpty, emergencies);
+        }
 
         List<HeartRateEventResponse> events = findRefreshEvents(memberId, since, windowStart)
                 .stream()
@@ -138,7 +151,52 @@ public class HeartRateService {
 
         HeartGraphResponse heartGraph = HeartGraphResponse.forRefresh(buildCurrent(memberId, windowStart), events);
 
-        return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId));
+        return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId, emergencies));
+    }
+
+    /**
+     * 그래프는 진행 중인 위급 사이클을 보여주는 화면이므로, 사이클 시작 시각에서
+     * {@link #GRAPH_LEAD_IN}만큼 앞선 지점을 조회 시작점으로 쓴다. 이상해지기 직전의 정상 구간을
+     * 함께 보여주기 위해서다. 진행 중인 사이클이 없으면 null을 반환해 빈 그래프로 응답한다.
+     */
+    private LocalDateTime findGraphWindowStart(List<HeartRateEmergency> emergenciesDesc) {
+        LocalDateTime cycleStart = findActiveCycleStart(emergenciesDesc);
+        if (cycleStart == null) {
+            return null;
+        }
+        return cycleStart.minus(GRAPH_LEAD_IN);
+    }
+
+    /**
+     * 최신 기록부터 과거로 훑으며 간격이 {@link #EMERGENCY_CYCLE_WINDOW} 이내로 이어지는 구간의
+     * 첫 감지 시각을 찾는다. 가장 최근 감지가 이미 만료됐으면 진행 중인 사이클이 없다.
+     */
+    private LocalDateTime findActiveCycleStart(List<HeartRateEmergency> emergenciesDesc) {
+        LocalDateTime expiredBefore = LocalDateTime.now().minus(EMERGENCY_CYCLE_WINDOW);
+        LocalDateTime cycleStart = null;
+        LocalDateTime newer = null;
+
+        for (HeartRateEmergency emergency : emergenciesDesc) {
+            LocalDateTime measuredAt = emergency.getMeasuredAt();
+            if (newer == null && !measuredAt.isAfter(expiredBefore)) {
+                return null;
+            }
+            if (newer != null && newer.minus(EMERGENCY_CYCLE_WINDOW).isAfter(measuredAt)) {
+                break;
+            }
+            cycleStart = measuredAt;
+            newer = measuredAt;
+        }
+        return cycleStart;
+    }
+
+    private HeartGraphPageResponse emptyGraph(
+            Long memberId,
+            Function<HeartGraphCurrentResponse, HeartGraphResponse> graphFactory,
+            List<HeartRateEmergency> emergencies
+    ) {
+        HeartGraphResponse heartGraph = graphFactory.apply(buildCurrentWithoutRange(memberId));
+        return HeartGraphPageResponse.of(heartGraph, buildEmergencyHistory(memberId, emergencies));
     }
 
     /**
@@ -161,7 +219,14 @@ public class HeartRateService {
     private HeartGraphCurrentResponse buildCurrent(Long memberId, LocalDateTime windowStart) {
         Integer maxHeartRate = heartRateEventRepository.findMaxHeartRateByMemberIdSince(memberId, windowStart).orElse(null);
         Integer minHeartRate = heartRateEventRepository.findMinHeartRateByMemberIdSince(memberId, windowStart).orElse(null);
+        return buildCurrent(memberId, maxHeartRate, minHeartRate);
+    }
 
+    private HeartGraphCurrentResponse buildCurrentWithoutRange(Long memberId) {
+        return buildCurrent(memberId, null, null);
+    }
+
+    private HeartGraphCurrentResponse buildCurrent(Long memberId, Integer maxHeartRate, Integer minHeartRate) {
         HeartRateResult latest = heartRateResultRepository.findByMemberId(memberId).orElse(null);
         if (latest != null) {
             return HeartGraphCurrentResponse.of(
@@ -183,23 +248,16 @@ public class HeartRateService {
         );
     }
 
-    private LocalDateTime graphWindowStart() {
-        return LocalDateTime.now().minus(GRAPH_WINDOW);
-    }
-
     private void validateMemberExists(Long memberId) {
         memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
     }
 
-    private EmergencyHistoryResponse buildEmergencyHistory(Long memberId) {
-        long emergencyCount = heartRateEmergencyRepository.countByMemberId(memberId);
+    private EmergencyHistoryResponse buildEmergencyHistory(Long memberId, List<HeartRateEmergency> emergenciesDesc) {
         int totalDuration = heartRateEventRepository.findTotalDurationMinutesByMemberId(memberId).orElse(0);
-        List<EmergencyEventResponse> emergencyEvents = heartRateEmergencyRepository
-                .findByMemberIdOrderByMeasuredAtDesc(memberId)
-                .stream()
+        List<EmergencyEventResponse> emergencyEvents = emergenciesDesc.stream()
                 .map(EmergencyEventResponse::from)
                 .toList();
-        return EmergencyHistoryResponse.of(emergencyCount, totalDuration, emergencyEvents);
+        return EmergencyHistoryResponse.of(emergenciesDesc.size(), totalDuration, emergencyEvents);
     }
 }
