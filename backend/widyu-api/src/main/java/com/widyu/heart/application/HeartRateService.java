@@ -84,9 +84,10 @@ public class HeartRateService {
             eventPublisher.publishEvent(new HeartRateEmergencyEvent(memberId));
         }
 
+        // 심박 수치·측정 시각은 개인 건강정보이므로 남기지 않는다. 배치 상세는 HeartRateAnomalyDetector의 DEBUG 로그를 본다.
         // rawContext는 앱이 context를 실제로 보내는지 확인하기 위한 값이다 (미전송이면 null·공백, LLD-0019)
-        log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}, rawContext=[{}]",
-                memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt(), request.context());
+        log.info("심박수 분석 완료: memberId={}, status={}, rawContext=[{}]",
+                memberId, detection.status(), request.context());
 
         return HeartRateStatusResponse.from(result);
     }

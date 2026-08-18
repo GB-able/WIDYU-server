@@ -21,6 +21,8 @@ public record HeartRateSendRequest(
         String context
 ) {
 
+    private static final String FALLBACK_CONTEXT = "UNKNOWN";
+
     public static HeartRateSendRequest of(List<HeartRateMeasurement> heartRates, String location) {
         return new HeartRateSendRequest(heartRates, location, "UNKNOWN");
     }
@@ -29,10 +31,19 @@ public record HeartRateSendRequest(
         return new HeartRateSendRequest(heartRates, location, context);
     }
 
+    /**
+     * AI에 전달할 활동 상태. 앱이 무엇을 보내든 현재는 항상 {@code UNKNOWN}이다.
+     * <p>
+     * AI는 {@code context=REST}일 때만 개인 기준선(L1) 경로로 판정하는데, 실측에서 이 경로는 190bpm을
+     * 60초 지속시켜도 위급으로 판정하지 않았다(#477). 반면 {@code UNKNOWN}을 포함한 고정 임계값(L0)
+     * 경로는 정상적으로 감지한다. 개인화보다 위급 감지를 우선해 L0 경로로 고정한다.
+     * <p>
+     * 앱이 보낸 원본은 {@link #context()}로 접근할 수 있고 처리 로그의 {@code rawContext}에 남는다.
+     */
     public String normalizedContext() {
-        if (context == null || context.isBlank()) {
-            return "UNKNOWN";
-        }
-        return context;
+        // TODO(#477): AI가 L1 경로에서도 위급을 판정하게 되면 아래 정규화 로직으로 되돌린다.
+        //  if (context == null || context.isBlank()) return FALLBACK_CONTEXT;
+        //  return context;
+        return FALLBACK_CONTEXT;
     }
 }

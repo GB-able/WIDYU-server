@@ -22,8 +22,8 @@
 
 - 변경 모듈: widyu-api, widyu-domain
 - WebSocket `HeartRateSendRequest`에 배치 수준 `context`를 추가한다.
-- `REST`, `LOW`, `ACTIVE`, `UNKNOWN`만 허용하고 null·빈 문자열·공백은 `UNKNOWN`으로 정규화한다.
-- 심박수 입력 범위를 0~300으로 검증한다.
+- `context`는 `REST`, `LOW`, `ACTIVE`, `UNKNOWN`과 공백만 허용한다. null·빈 문자열·공백은 `UNKNOWN`으로 정규화하고, 그 밖의 값은 요청 검증 단계에서 거절한다.
+- 심박수 입력 범위를 1~299로 검증한다. AI가 0과 300을 400으로 거부하므로 같은 범위로 맞춘다.
 - 15개 측정값을 측정 시각 오름차순으로 AI `POST /api/hr`에 순차 전송한다.
 - AI의 `NORMAL`, `CAUTION`, `EMERGENCY`를 기존 심박 상태·이벤트에 반영한다.
 - 배치 중 `alert=true`인 `EMERGENCY`가 하나 이상이면 `HeartRateEmergency`를 저장한다.
@@ -64,7 +64,7 @@ WebSocket 요청:
 ```
 
 - `heartRates`: 정확히 15개
-- `heartRate`: 정수, 0~300
+- `heartRate`: 정수, 1~299 (AI가 0과 300을 거부한다. 응답 메시지는 `BPM must be between 0 and 300`이지만 실제 통과 범위는 양끝 배타적이다)
 - `context`: `REST`, `LOW`, `ACTIVE`, `UNKNOWN`; null·빈 문자열·공백은 `UNKNOWN`
 
 AI 요청:
@@ -116,14 +116,26 @@ AI 응답 전체:
 `level`과 `reason`은 서로 다른 축이다. `level`은 심각도, `reason`은 사유이며 서맥·빈맥 구분은 `reason`에만 존재한다.
 `HeartRateStatus`에는 심각도만 저장되므로 조회 API로는 이상 사유를 알 수 없다.
 
-AI 내부 판별 방식은 `context`에 따라 갈린다.
+AI 내부 판별 방식은 `context`에 따라 갈린다. 아래는 `ryuchanghoon/widyu-ai-ver7:latest` 컨테이너에 직접 요청해 확인한 실측 결과다(2026-08-18).
 
 | `context` | 판별 계층 | 기준 |
 | --- | --- | --- |
-| `REST` | L1 (개인 기준선) | 초기 심박 30개 수집 후 개인 기준선 생성. 개인 평균에서 일정 범위 이상 벗어난 상태가 지속되면 이상 |
+| `REST` | L1 (개인 기준선) | 초기 심박 30개 수집 후 개인 기준선 생성 |
 | `LOW`, `ACTIVE`, `UNKNOWN` | L0 (고정 임계값) | 서맥·빈맥·극저심박이 30초 이상 지속되면 이상 |
 
-**개인화는 `context=REST`에서만 동작한다.** 앱이 `context`를 보내지 않아 `UNKNOWN`으로 정규화되면 개인 기준선은 만들어지지 않고 고정 임계값 판정만 수행된다.
+`baseline_source`는 `context`와 무관하게 30개 수집 후 `PERSONAL`로 바뀐다. `context`에 따라 갈리는 것은
+**판정 계층(`layer`)뿐**이므로, 개인화 적용 여부는 `baseline_source`가 아니라 `layer`로 판단해야 한다.
+`REST`가 아닌 경우 `sample_count`는 30에서 멈춘다.
+
+**확인 필요**: 실측에서 `context=REST`(L1 경로)는 190bpm을 60초 지속시켜도 `EMERGENCY`를 반환하지 않았다.
+정상 심박 35개로 개인 기준선을 만든 뒤 급등시킨 경우에도 같았다. 반면 `ACTIVE`·`UNKNOWN`·`LOW`(L0 경로)는
+동일 조건에서 31초째 `EMERGENCY`(`tachycardia`)를 반환했다.
+따라서 앱이 `context=REST`를 보내기 시작하면 휴식 중 위급 상황을 감지하지 못할 수 있다.
+
+**개인화보다 위급 감지를 우선해, AI에 전달하는 `context`를 `UNKNOWN`으로 고정한다.**
+`HeartRateSendRequest.normalizedContext()`가 앱이 보낸 값과 무관하게 `UNKNOWN`을 반환하므로 판정은 항상 L0 경로를 탄다.
+앱이 보낸 원본은 `context()`로 접근할 수 있고 처리 로그의 `rawContext`에 남는다.
+AI가 L1 경로에서도 위급을 판정하게 되면 원래 정규화 로직으로 되돌린다(#477).
 
 WebSocket 응답 예시:
 
@@ -163,24 +175,50 @@ Facade와 신규 의존성은 추가하지 않는다.
 
 ## 6. 예외 / 에러 처리
 
-- 심박 데이터가 15개가 아니면 `BAD_REQUEST`를 반환한다.
-- 심박수가 0 미만 또는 300 초과이면 요청 검증 오류를 반환한다.
-- `context`가 허용값 또는 공백이 아니면 요청 검증 오류를 반환한다.
-- AI 통신 실패, 빈 응답, 지원하지 않는 `level`은 `INTERNAL_SERVER_ERROR`를 반환하고 배치를 저장하지 않는다.
+심박 배치 전송은 WebSocket `@MessageMapping` 경로뿐이므로 HTTP 상태 코드는 관여하지 않는다.
+`@Valid` 위반과 처리 중 예외는 `WebSocketExceptionHandler`(`@MessageExceptionHandler`)가 받아
+발신자에게 `/user/queue/errors`로 `{"error": <예외 클래스명>, "message": <메시지>}`를 전달한다.
+클라이언트는 이 큐를 구독해 실패를 인지해야 한다.
+
+| 조건 | 발신자가 받는 `error` | 배치 저장 |
+| --- | --- | --- |
+| 심박 데이터가 15개가 아님 | `BusinessException` (`BAD_REQUEST`) | 안 함 |
+| 심박수가 1 미만 또는 299 초과 | `MethodArgumentNotValidException` | 안 함 |
+| 정규화 후 `context`가 허용값이 아님 | `MethodArgumentNotValidException` | 안 함 |
+| AI 통신 실패·빈 응답·지원하지 않는 `level` | `BusinessException` (`INTERNAL_SERVER_ERROR`) | 안 함 |
+
+`BusinessException`의 `ErrorCode`는 HTTP 응답이 아니라 예외의 분류이며, WebSocket 경로에서는 상태 코드로 변환되지 않고 위 payload의 `message`에만 반영된다.
+
+- 심박수 범위를 서버에서 먼저 거르는 이유: 워치 미착용 시 올라올 수 있는 0을 통과시키면 AI가 400을 반환하고, 그 실패가 `BusinessException`으로 바뀌어 배치 15개 전체가 저장되지 않는다. 검증 단계에서 거르면 실패 지점이 드러나고 AI 호출 15회와 트랜잭션을 낭비하지 않는다.
 - AI 호출이 일부 성공한 뒤 실패하면 AI 서비스의 개인 기준선 상태는 이미 변경될 수 있다. 재처리 정책은 기존 배치 멱등성 범위 밖으로 둔다.
 
 ## 7. 인수조건 (Acceptance Criteria)
 
 - [x] AI 요청은 JSON이며 `user_id`, `bpm`, `context`, `timestamp`를 포함한다.
 - [x] 15개 측정값을 측정 시각 순서대로 AI에 호출한다.
-- [x] null·빈 문자열·공백 `context`는 `UNKNOWN`으로 전달한다.
-- [x] 허용되지 않은 `context`와 0~300 밖의 심박수는 거절한다.
+- [x] null·빈 문자열·공백 `context`는 `UNKNOWN`으로 정규화한다.
+- [x] `REST`, `LOW`, `ACTIVE`, `UNKNOWN`, 공백이 아닌 `context`는 요청 검증 단계에서 거절한다.
+- [x] 1~299 밖의 심박수는 요청 검증 단계에서 거절한다.
+- [x] AI에는 정규화 결과와 무관하게 `UNKNOWN`을 전달한다(#477 확인 전까지).
 - [x] AI `NORMAL`, `CAUTION`, `EMERGENCY` 중 배치 내 가장 높은 상태를 저장·반환한다.
 - [x] `alert=true`인 `EMERGENCY`만 `HeartRateEmergency` 저장 대상으로 전달한다.
 - [x] AI 실패 시 `HeartRateResult`, `HeartRateEvent`, `HeartRateEmergency`를 저장하지 않는다.
 - [x] Docker Compose가 `ryuchanghoon/widyu-ai-ver7:latest`를 사용한다.
 - [x] 기존 `ANOMALY` 상태 데이터와 조회 계약이 호환된다.
 - [x] `./gradlew compileJava`와 `bash scripts/harness/run-module-tests.sh`가 통과한다.
+
+## 7-1. 진단 로그
+
+`HeartRateAnomalyDetector`는 배치 판정 근거를 한 줄로 남긴다. 여기에는 회원 식별자와 심박 분포가 함께
+포함되므로 개인 건강정보로 취급하고 아래 제약을 둔다.
+
+- 레벨은 `DEBUG`이며 운영 프로파일에서는 활성화하지 않는다.
+- 활성화 대상은 패키지가 아니라 `com.widyu.heart.application.HeartRateAnomalyDetector` 클래스로 한정한다.
+  패키지 단위로 켜면 `HeartRateWebSocketController`의 `memberId` 로그까지 함께 남는다.
+- 개별 심박값 15개는 남기지 않고 최소·최대·평균과 구간 길이만 기록한다. 측정 시각은 남기지 않는다.
+- 개발 환경의 한시적 활성화는 진단 목적이 끝나면 해제한다.
+
+`INFO`로 상시 남는 값은 `memberId`, `status`, `rawContext`이며 심박 수치는 포함하지 않는다.
 
 ## 8. 영향 범위 / 마이그레이션
 
@@ -192,7 +230,8 @@ Facade와 신규 의존성은 추가하지 않는다.
 
 ## 9. 미결정 사항 (Open Questions)
 
-없음.
+- `context=REST`(L1 경로)에서 위급 상황이 감지되지 않는 이유. AI 담당자 확인이 필요하다. 답변 전까지 `context` 전송 정책을 바꾸지 않는다.
+- 워치가 실제로 `context`를 전송하는지. 서버 로그의 `rawContext`로 확인한다.
 
 ## 10. 참고
 
