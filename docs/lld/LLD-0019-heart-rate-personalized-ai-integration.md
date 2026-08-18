@@ -207,6 +207,19 @@ Facade와 신규 의존성은 추가하지 않는다.
 - [x] 기존 `ANOMALY` 상태 데이터와 조회 계약이 호환된다.
 - [x] `./gradlew compileJava`와 `bash scripts/harness/run-module-tests.sh`가 통과한다.
 
+## 7-1. 진단 로그
+
+`HeartRateAnomalyDetector`는 배치 판정 근거를 한 줄로 남긴다. 여기에는 회원 식별자와 심박 분포가 함께
+포함되므로 개인 건강정보로 취급하고 아래 제약을 둔다.
+
+- 레벨은 `DEBUG`이며 운영 프로파일에서는 활성화하지 않는다.
+- 활성화 대상은 패키지가 아니라 `com.widyu.heart.application.HeartRateAnomalyDetector` 클래스로 한정한다.
+  패키지 단위로 켜면 `HeartRateWebSocketController`의 `memberId` 로그까지 함께 남는다.
+- 개별 심박값 15개는 남기지 않고 최소·최대·평균과 구간 길이만 기록한다. 측정 시각은 남기지 않는다.
+- 개발 환경의 한시적 활성화는 진단 목적이 끝나면 해제한다.
+
+`INFO`로 상시 남는 값은 `memberId`, `status`, `rawContext`이며 심박 수치는 포함하지 않는다.
+
 ## 8. 영향 범위 / 마이그레이션
 
 - `HeartRateSendRequest`에 선택적 `context` 필드가 추가된다. 기존 미전송 클라이언트는 `UNKNOWN`으로 처리된다.
