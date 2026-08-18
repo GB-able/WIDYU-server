@@ -41,9 +41,13 @@ public class HeartRateAnomalyDetector {
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 측정값을 시각 오름차순으로 AI에 순차 전달한다. 배치(15개)와 단건(1개) 경로가 함께 사용한다.
+     * 배치 크기 검증은 요청 DTO의 {@code @Size}가 담당한다.
+     */
     public DetectionResult detect(Long memberId, List<HeartRateMeasurement> measurements, String context) {
-        if (measurements.size() != 15) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "심박수 데이터는 정확히 15개여야 합니다.");
+        if (measurements.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "심박수 데이터가 비어 있습니다.");
         }
 
         List<HeartRateMeasurement> sortedMeasurements = measurements.stream()
