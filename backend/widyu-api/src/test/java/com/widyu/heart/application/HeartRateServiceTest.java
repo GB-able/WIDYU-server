@@ -20,6 +20,7 @@ import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
+import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.dto.response.HeartGraphPageResponse;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import com.widyu.heart.dto.response.RecentEmergencyResponse;
@@ -445,6 +446,104 @@ class HeartRateServiceTest {
                 .existsByMemberIdAndMeasuredAtAfter(eq(memberId), sinceCaptor.capture());
         assertThat(sinceCaptor.getValue()).isBetween(
                 LocalDateTime.now().minusMinutes(16), LocalDateTime.now().minusMinutes(14));
+    }
+
+    // 단건 전송 경로 (LLD-0023)
+
+    @Test
+    @DisplayName("측정값 1건을 받으면 AI를 한 번 호출하고 저장한 결과를 반환한다")
+    void 측정값_1건을_받으면_AI를_한번_호출하고_저장한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 8, 18, 22, 0, 0);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(78, measuredAt, "서울시", "REST");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateResult savedResult = HeartRateResult.of(memberId, HeartRateStatus.NORMAL, 78, measuredAt);
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(false);
+        given(heartRateAnomalyDetector.detect(eq(memberId), any(), eq("UNKNOWN")))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false));
+        given(heartRatePersistenceService.saveMeasurement(memberId, request, HeartRateStatus.NORMAL, false))
+                .willReturn(savedResult);
+
+        // when
+        HeartRateStatusResponse response = heartRateService.processHeartRate(memberId, request);
+
+        // then
+        assertThat(response.heartRate()).isEqualTo(78);
+        assertThat(response.measuredAt()).isEqualTo(measuredAt);
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.NORMAL);
+        then(eventPublisher).should(never()).publishEvent(any(HeartRateEmergencyEvent.class));
+    }
+
+    @Test
+    @DisplayName("같은 측정 시각을 재전송하면 저장 없이 기존 상태를 반환한다")
+    void 같은_측정시각을_재전송하면_저장없이_기존상태를_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 8, 18, 22, 0, 0);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(78, measuredAt, "서울시", "REST");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateResult existingResult = HeartRateResult.of(memberId, HeartRateStatus.CAUTION, 120, measuredAt);
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(true);
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.of(existingResult));
+
+        // when
+        HeartRateStatusResponse response = heartRateService.processHeartRate(memberId, request);
+
+        // then
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.CAUTION);
+        then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), any());
+        then(heartRatePersistenceService).should(never())
+                .saveMeasurement(anyLong(), any(), any(HeartRateStatus.class), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("단건이 위급으로 판정되면 심박 긴급 이벤트를 발행한다")
+    void 단건이_위급으로_판정되면_긴급이벤트를_발행한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 8, 18, 22, 0, 0);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(190, measuredAt, "서울시", "ACTIVE");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        HeartRateResult savedResult = HeartRateResult.of(memberId, HeartRateStatus.EMERGENCY, 190, measuredAt);
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(false);
+        given(heartRateAnomalyDetector.detect(eq(memberId), any(), eq("UNKNOWN")))
+                .willReturn(new DetectionResult(HeartRateStatus.EMERGENCY, true));
+        given(heartRatePersistenceService.saveMeasurement(memberId, request, HeartRateStatus.EMERGENCY, true))
+                .willReturn(savedResult);
+
+        // when
+        heartRateService.processHeartRate(memberId, request);
+
+        // then
+        then(eventPublisher).should().publishEvent(new HeartRateEmergencyEvent(memberId));
+    }
+
+    @Test
+    @DisplayName("단건 처리 중 AI 판정이 실패하면 저장하지 않는다")
+    void 단건_처리중_AI판정이_실패하면_저장하지_않는다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 8, 18, 22, 0, 0);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(78, measuredAt, "서울시", "REST");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(false);
+        given(heartRateAnomalyDetector.detect(eq(memberId), any(), eq("UNKNOWN")))
+                .willThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "AI 서버와의 통신에 실패했습니다."));
+
+        // when & then
+        assertThatThrownBy(() -> heartRateService.processHeartRate(memberId, request))
+                .isInstanceOf(BusinessException.class);
+        then(heartRatePersistenceService).should(never())
+                .saveMeasurement(anyLong(), any(), any(HeartRateStatus.class), anyBoolean());
     }
 
     // TEST-012: 심박 수집 배치 멱등성 검증

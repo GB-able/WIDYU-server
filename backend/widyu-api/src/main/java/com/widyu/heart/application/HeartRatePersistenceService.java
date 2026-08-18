@@ -8,6 +8,7 @@ import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
+import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.repository.HeartRateEmergencyRepository;
 import com.widyu.heart.repository.HeartRateEventRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
@@ -57,6 +58,34 @@ public class HeartRatePersistenceService {
 
         if (isEmergency) {
             saveEmergency(member, request, latestMeasurement);
+        }
+
+        return result;
+    }
+
+    /**
+     * 측정값 1건을 저장한다. 배치와 달리 최신값 추출이 필요 없고 이벤트도 한 건만 남는다(LLD-0023).
+     */
+    @Transactional
+    public HeartRateResult saveMeasurement(
+            Long memberId,
+            HeartRateSingleRequest request,
+            HeartRateStatus status,
+            boolean isEmergency
+    ) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+
+        HeartRateResult result = HeartRateResult.of(
+                memberId, status, request.heartRate(), request.measuredAt());
+        heartRateResultRepository.save(result);
+
+        heartRateEventRepository.save(
+                HeartRateEvent.of(member, request.heartRate(), request.measuredAt(), status));
+
+        if (isEmergency) {
+            heartRateEmergencyRepository.save(HeartRateEmergency.of(
+                    member, request.heartRate(), request.measuredAt(), request.location()));
         }
 
         return result;

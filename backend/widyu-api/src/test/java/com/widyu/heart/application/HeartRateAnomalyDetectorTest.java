@@ -39,16 +39,35 @@ class HeartRateAnomalyDetectorTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    @DisplayName("심박수 데이터가 15개가 아니면 BAD_REQUEST 예외를 던진다")
-    void 심박수_데이터가_15개가_아니면_예외가_발생한다() {
+    @DisplayName("심박수 데이터가 비어 있으면 BAD_REQUEST 예외를 던진다")
+    void 심박수_데이터가_비어있으면_예외가_발생한다() {
         // given
         HeartRateAnomalyDetector detector = detector();
 
         // when & then
-        assertThatThrownBy(() -> detector.detect(1L, measurements().subList(0, 3), "REST"))
+        assertThatThrownBy(() -> detector.detect(1L, List.of(), "REST"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST)
-                .hasMessageContaining("심박수 데이터는 정확히 15개여야 합니다.");
+                .hasMessageContaining("심박수 데이터가 비어 있습니다.");
+    }
+
+    @Test
+    @DisplayName("측정값이 한 건이어도 AI를 호출해 판정한다")
+    void 측정값이_한건이어도_AI를_호출해_판정한다() {
+        // given
+        // 단건 전송 경로는 15개 제약 없이 같은 detect()를 사용한다 (LLD-0023)
+        HeartRateAnomalyDetector detector = detector();
+        given(aiRestTemplate.postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class)))
+                .willReturn("{\"alert\":true,\"level\":\"EMERGENCY\"}");
+
+        // when
+        DetectionResult result = detector.detect(1L, measurements().subList(0, 1), "UNKNOWN");
+
+        // then
+        assertThat(result.status()).isEqualTo(HeartRateStatus.EMERGENCY);
+        assertThat(result.emergency()).isTrue();
+        then(aiRestTemplate).should(times(1))
+                .postForObject(eq("http://ai-server/api/hr"), any(), eq(String.class));
     }
 
     @Test

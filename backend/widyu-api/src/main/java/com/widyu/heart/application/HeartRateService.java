@@ -9,6 +9,7 @@ import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.dto.request.HeartRateSendRequest;
+import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.dto.response.EmergencyEventResponse;
 import com.widyu.heart.dto.response.EmergencyHistoryResponse;
 import com.widyu.heart.dto.response.HeartGraphCurrentResponse;
@@ -91,6 +92,36 @@ public class HeartRateService {
         // rawContext는 앱이 context를 실제로 보내는지 확인하기 위한 값이다 (미전송이면 null·공백, LLD-0019)
         log.info("심박수 분석 완료: memberId={}, status={}, rawContext=[{}]",
                 memberId, detection.status(), request.context());
+
+        return HeartRateStatusResponse.from(result);
+    }
+
+    /**
+     * 측정값 1건을 즉시 판정·저장한다. 배치와 달리 수신 시점에 최신값이 갱신되므로 조회 지연이 없다(LLD-0023).
+     */
+    public HeartRateStatusResponse processHeartRate(Long memberId, HeartRateSingleRequest request) {
+        validateMemberExists(memberId);
+
+        if (heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, request.measuredAt())) {
+            return getHeartRateStatus(memberId);
+        }
+
+        DetectionResult detection = heartRateAnomalyDetector.detect(
+                memberId,
+                List.of(request.toMeasurement()),
+                request.normalizedContext()
+        );
+
+        HeartRateResult result = heartRatePersistenceService.saveMeasurement(
+                memberId,
+                request,
+                detection.status(),
+                detection.emergency()
+        );
+
+        if (detection.emergency()) {
+            eventPublisher.publishEvent(new HeartRateEmergencyEvent(memberId));
+        }
 
         return HeartRateStatusResponse.from(result);
     }
