@@ -399,75 +399,42 @@ class HeartRateServiceTest {
     }
 
     @Test
-    @DisplayName("위험 사이클 안에 위급 기록이 있으면 감지됨과 해당 기록을 반환한다")
-    void 위험사이클_안에_위급기록이_있으면_감지됨을_반환한다() {
+    @DisplayName("최근 15분 내 위급 기록이 있으면 감지됨을 반환한다")
+    void 최근_15분내_위급기록이_있으면_감지됨을_반환한다() {
         // given
         Long memberId = 1L;
-        LocalDateTime measuredAt = LocalDateTime.now().minusMinutes(3);
-        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
-        HeartRateEmergency emergency = HeartRateEmergency.of(member, 178, measuredAt, "서울시 강남구");
-
-        given(heartRateEmergencyRepository
-                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
-                .willReturn(Optional.of(emergency));
+        given(heartRateEmergencyRepository.existsByMemberIdAndMeasuredAtAfter(eq(memberId), any()))
+                .willReturn(true);
 
         // when
         RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
 
         // then
         assertThat(response.detected()).isTrue();
-        assertThat(response.emergency().heartRate()).isEqualTo(178);
-        assertThat(response.emergency().measuredAt()).isEqualTo(measuredAt);
-        assertThat(response.emergency().location()).isEqualTo("서울시 강남구");
     }
 
     @Test
-    @DisplayName("위험 사이클 만료 시각은 마지막 감지 시각의 5분 뒤로 연장된다")
-    void 위험사이클_만료시각은_마지막_감지시각의_5분뒤다() {
+    @DisplayName("최근 15분 내 위급 기록이 없으면 감지되지 않음을 반환한다")
+    void 최근_15분내_위급기록이_없으면_감지되지_않음을_반환한다() {
         // given
         Long memberId = 1L;
-        LocalDateTime lastDetectedAt = LocalDateTime.now().minusMinutes(2);
-        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
-        HeartRateEmergency emergency = HeartRateEmergency.of(member, 180, lastDetectedAt, "서울시 강남구");
-
-        given(heartRateEmergencyRepository
-                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
-                .willReturn(Optional.of(emergency));
-
-        // when
-        RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
-
-        // then
-        assertThat(response.cycleExpiresAt()).isEqualTo(lastDetectedAt.plusMinutes(5));
-        assertThat(response.cycleExpiresAt()).isAfter(LocalDateTime.now());
-    }
-
-    @Test
-    @DisplayName("위험 사이클이 종료되었으면 감지되지 않음을 반환한다")
-    void 위험사이클이_종료되었으면_감지되지_않음을_반환한다() {
-        // given
-        Long memberId = 1L;
-        given(heartRateEmergencyRepository
-                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
-                .willReturn(Optional.empty());
+        given(heartRateEmergencyRepository.existsByMemberIdAndMeasuredAtAfter(eq(memberId), any()))
+                .willReturn(false);
 
         // when
         RecentEmergencyResponse response = heartRateService.getRecentEmergency(memberId);
 
         // then
         assertThat(response.detected()).isFalse();
-        assertThat(response.emergency()).isNull();
-        assertThat(response.cycleExpiresAt()).isNull();
     }
 
     @Test
-    @DisplayName("위험 사이클 조회는 5분 전을 기준 시각으로 사용한다")
-    void 위험사이클_조회는_5분전을_기준시각으로_사용한다() {
+    @DisplayName("위급 감지 조회는 15분 전을 기준 시각으로 사용한다")
+    void 위급감지_조회는_15분전을_기준시각으로_사용한다() {
         // given
         Long memberId = 1L;
-        given(heartRateEmergencyRepository
-                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), any()))
-                .willReturn(Optional.empty());
+        given(heartRateEmergencyRepository.existsByMemberIdAndMeasuredAtAfter(eq(memberId), any()))
+                .willReturn(false);
 
         // when
         heartRateService.getRecentEmergency(memberId);
@@ -475,9 +442,9 @@ class HeartRateServiceTest {
         // then
         ArgumentCaptor<LocalDateTime> sinceCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         then(heartRateEmergencyRepository).should()
-                .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(eq(memberId), sinceCaptor.capture());
+                .existsByMemberIdAndMeasuredAtAfter(eq(memberId), sinceCaptor.capture());
         assertThat(sinceCaptor.getValue()).isBetween(
-                LocalDateTime.now().minusMinutes(6), LocalDateTime.now().minusMinutes(4));
+                LocalDateTime.now().minusMinutes(16), LocalDateTime.now().minusMinutes(14));
     }
 
     // TEST-012: 심박 수집 배치 멱등성 검증
