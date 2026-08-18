@@ -57,7 +57,11 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 
 ## AI 하네스 워크플로우
 
-Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-rules.sh`로 아래 **코드 작성 원칙**을 자동 검사합니다. 작업 순서:
+Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-rules.sh`로 아래 **코드 작성 원칙**을 자동 검사합니다. 라인 단위 규칙은 HEAD 대비 **추가된 라인만** 봅니다(기존 코드의 위반은 무관한 수정을 막지 않습니다. 파일 전체 검사는 `HARNESS_FULL_FILE=1`).
+
+응답 종료 시에는 `on-stop.sh`가 정적 규칙 → `compileJava` → Codex 시맨틱 검수를 순서대로 실행합니다. 같은 diff는 두 번 검수하지 않고, `auth`·`pay`·`global/security` 변경은 크기와 무관하게 항상 Codex 검수를 거칩니다.
+
+작업 순서:
 
 1. 관련 도메인 문서 확인 (backend/CLAUDE.md → 해당 도메인 섹션)
 2. 변경 계획 + 완료 조건 작성 (어떤 파일·왜, 그리고 "무엇이 되면 done"인지 검증 가능한 성공 기준으로)
