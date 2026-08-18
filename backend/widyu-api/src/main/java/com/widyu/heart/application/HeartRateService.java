@@ -75,8 +75,9 @@ public class HeartRateService {
             eventPublisher.publishEvent(new HeartRateEmergencyEvent(memberId));
         }
 
-        log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}",
-                memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt());
+        // rawContext는 앱이 context를 실제로 보내는지 확인하기 위한 값이다 (미전송이면 null·공백, LLD-0019)
+        log.info("심박수 분석 완료: memberId={}, status={}, heartRate={}, measuredAt={}, rawContext=[{}]",
+                memberId, detection.status(), result.getHeartRate(), result.getMeasuredAt(), request.context());
 
         return HeartRateStatusResponse.from(result);
     }
