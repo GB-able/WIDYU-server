@@ -36,7 +36,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class HeartRateService {
 
     private static final Duration GRAPH_WINDOW = Duration.ofHours(24);
-    private static final Duration RECENT_EMERGENCY_WINDOW = Duration.ofMinutes(15);
+
+    /**
+     * 위급상황 사이클 유지 시간. 위험이 감지되면 그 시점부터 이 시간만큼 위험 상태를 유지하고,
+     * 그 안에 다시 감지되면 마지막 감지 시각 기준으로 연장된다.
+     * "마지막 감지 + 5분"과 "최근 5분 내 감지 존재"는 동치이므로 사이클 상태를 따로 저장하지 않는다.
+     */
+    private static final Duration EMERGENCY_CYCLE_WINDOW = Duration.ofMinutes(5);
 
     private final HeartRateAnomalyDetector heartRateAnomalyDetector;
     private final HeartRatePersistenceService heartRatePersistenceService;
@@ -92,10 +98,11 @@ public class HeartRateService {
 
     @Transactional(readOnly = true)
     public RecentEmergencyResponse getRecentEmergency(Long memberId) {
-        LocalDateTime since = LocalDateTime.now().minus(RECENT_EMERGENCY_WINDOW);
+        LocalDateTime since = LocalDateTime.now().minus(EMERGENCY_CYCLE_WINDOW);
         return heartRateEmergencyRepository
                 .findFirstByMemberIdAndMeasuredAtAfterOrderByMeasuredAtDesc(memberId, since)
-                .map(RecentEmergencyResponse::from)
+                .map(emergency -> RecentEmergencyResponse.from(
+                        emergency, emergency.getMeasuredAt().plus(EMERGENCY_CYCLE_WINDOW)))
                 .orElseGet(RecentEmergencyResponse::notDetected);
     }
 
