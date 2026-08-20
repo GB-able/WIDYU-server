@@ -14,6 +14,15 @@ public record SeniorGoalHomeResponse(
         @Schema(description = "병원 일정 정보")
         HospitalInfo hospital
 ) {
+
+    public static SeniorGoalHomeResponse of(
+            MedicineInfo medicine,
+            StepsInfo steps,
+            HospitalInfo hospital
+    ) {
+        return new SeniorGoalHomeResponse(medicine, steps, hospital);
+    }
+
     @Schema(description = "약 스케줄 정보")
     public record MedicineInfo(
             @Schema(description = "약 스케줄 ID", example = "1")

@@ -99,7 +99,7 @@ public class GoalHomeService {
         // Hospital 정보
         SeniorGoalHomeResponse.HospitalInfo hospitalInfo = getUpcomingHospitalInfo(currentMember);
 
-        return new SeniorGoalHomeResponse(medicineInfo, stepsInfo, hospitalInfo);
+        return SeniorGoalHomeResponse.of(medicineInfo, stepsInfo, hospitalInfo);
     }
 
     /**
