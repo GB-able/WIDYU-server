@@ -5,8 +5,8 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Approved |
-| Issue | #489 |
-| 관련 ADR | ADR-0019 |
+| Issue | #489, #491, #492 |
+| 관련 ADR | ADR-0019, ADR-0020 |
 | 작성자 | dongkyunKim |
 | 작성일 | 2026-08-20 |
 
@@ -26,12 +26,14 @@
 - 이번 주 일별 달성률 계산 결과 재사용
 - 기존 응답을 보존하는 단위 테스트
 - 동일 조건의 After SQL·행 수·Buffer Pool·p50/p95 측정
+- 기간 복약 인증 조회의 조인 제거와 `(member_id, verified_at)` 복합 인덱스 추가 (#492, ADR-0019 후속 조치)
+- 보호자 API 가족 접근 검증과 누락 방지 정적 테스트 (#491, ADR-0020)
 
 ### Out of scope
 
 - Redis/Spring Cache 도입
 - DB 쿼리 병렬 실행
-- 신규 테이블·컬럼·인덱스 추가
+- 신규 테이블·컬럼 추가 (인덱스는 재측정 근거를 확보해 In scope로 옮겼다 — ADR-0019 후속 조치)
 - 목표 홈의 오늘 상세 카드와 가족 목록 조회 변경
 - API 요청·응답 필드 변경
 - cold-cache 전용 MySQL 벤치마크
@@ -107,13 +109,16 @@ GET /api/v1/goals/home/guardian/stats?memberId={seniorMemberId}
 - [x] 보호자 이번 주 일별 달성률 결과를 이번 주 전체 달성률 계산에 재사용한다.
 - [x] Before 응답 SHA-256과 After 응답 SHA-256이 동일하다.
 - [x] 동일 조건에서 SQL 수, 검사 행, Buffer Pool 읽기, p50/p95를 After 측정하고 개인 벤치마크 문서에 기록한다.
+- [x] 기간 복약 인증 조회의 검사 행이 전체 인증 이력이 아니라 조회 창에 비례한다.
+- [x] 보호자 API가 가족이 아닌 시니어의 `memberId`에 대해 `FORBIDDEN`을 반환한다.
+- [x] 가족 접근 검증을 거치지 않는 핸들러가 있으면 테스트가 실패한다.
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다.
 
 ## 8. 영향 범위 / 마이그레이션
 
 - `GoalHomeService` 내부 조회·집계 순서만 변경한다.
-- 기존 Repository 메서드를 재사용하며 DB 마이그레이션은 없다.
-- API·Swagger·클라이언트 변경은 없다.
+- 기존 Repository 메서드를 재사용한다. `medication_proof`에 인덱스 1개가 추가되며 `ddl-auto: update`로 다음 기동 시 생성된다. 운영에 별도 마이그레이션 절차가 있으면 `CREATE INDEX idx_medication_proof_member_verified ON medication_proof (member_id, verified_at)`를 수동 실행한다.
+- API·Swagger·클라이언트 요청·응답 필드 변경은 없다. 다만 다른 가족의 `memberId`로 보호자 API를 호출하던 클라이언트가 있었다면 이제 `FORBIDDEN`을 받는다.
 - 개인 벤치마크 문서는 `.gitignore` 대상이며 PR에 포함하지 않는다.
 
 ## 9. 미결정 사항 (Open Questions)
@@ -122,8 +127,8 @@ GET /api/v1/goals/home/guardian/stats?memberId={seniorMemberId}
 
 ## 10. 참고
 
-- Issue #489
-- ADR-0019
+- Issue #489, #491, #492
+- ADR-0019, ADR-0020, ADR-0002
 - LLD-0007 약 복용 홈 일자별 조회와 복용 상태
 - LLD-0008 약 복용 스케줄 버전링
 - `apiDocs/engineering/performance/goal-home-query-pipeline-benchmark.md` (개인 로컬 문서)
