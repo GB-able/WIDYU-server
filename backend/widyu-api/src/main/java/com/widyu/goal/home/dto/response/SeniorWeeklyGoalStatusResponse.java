@@ -9,4 +9,8 @@ public record SeniorWeeklyGoalStatusResponse(
                 example = "[\"NOT_STARTED\", \"IN_PROGRESS\", \"COMPLETED\", \"FAILED\"]")
         List<DailyGoalStatus> thisWeekGoalRates
 ) {
+
+    public static SeniorWeeklyGoalStatusResponse of(List<DailyGoalStatus> thisWeekGoalRates) {
+        return new SeniorWeeklyGoalStatusResponse(thisWeekGoalRates);
+    }
 }

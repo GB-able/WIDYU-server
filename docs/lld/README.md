@@ -69,3 +69,4 @@ LLD가 필요 없는 PR은 PR 본문에 `LLD: N/A - <사유>`를 남긴다.
 | LLD-0018 | 마이페이지 조회·명령 책임 분리 | Draft | #441 |
 | LLD-0019 | 개인화 심박 이상 감지 AI 연동 | Approved | #446 |
 | LLD-0021 | 앨범 Presigned Multipart 직접 업로드 | Approved | #450 |
+| LLD-0024 | 목표 홈 주간 통계 조회 파이프라인 최적화 | Approved | #489 |

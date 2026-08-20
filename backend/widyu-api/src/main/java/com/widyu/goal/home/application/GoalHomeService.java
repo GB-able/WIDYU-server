@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -111,14 +112,15 @@ public class GoalHomeService {
         // 이번 주 일요일부터 토요일까지
         LocalDate startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
         LocalDate endOfWeek = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));
+        GoalPeriodData periodData = getGoalPeriodData(currentMember, startOfWeek, endOfWeek);
 
         List<DailyGoalStatus> weeklyStatus = new ArrayList<>();
         for (LocalDate date = startOfWeek; !date.isAfter(endOfWeek); date = date.plusDays(1)) {
-            DailyGoalStatus status = calculateDailyGoalStatus(currentMember, date);
+            DailyGoalStatus status = calculateDailyGoalStatus(periodData, date, today);
             weeklyStatus.add(status);
         }
 
-        return new SeniorWeeklyGoalStatusResponse(weeklyStatus);
+        return SeniorWeeklyGoalStatusResponse.of(weeklyStatus);
     }
 
     /**
@@ -131,21 +133,20 @@ public class GoalHomeService {
         // 지난주
         LocalDate lastWeekStart = today.minusWeeks(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
         LocalDate lastWeekEnd = lastWeekStart.plusDays(6);
-        Double lastWeekGoalRate = calculateWeeklyGoalRate(targetMember, lastWeekStart, lastWeekEnd);
 
         // 이번주
         LocalDate thisWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
         LocalDate thisWeekEnd = thisWeekStart.plusDays(6);
-        Double thisWeekGoalRate = calculateWeeklyGoalRate(targetMember, thisWeekStart, thisWeekEnd);
+        GoalPeriodData periodData = getGoalPeriodData(targetMember, lastWeekStart, thisWeekEnd);
+
+        List<Double> lastWeekGoalRates = calculateDailyGoalRates(periodData, lastWeekStart, lastWeekEnd);
+        Double lastWeekGoalRate = calculateWeeklyGoalRate(lastWeekGoalRates, lastWeekStart, today);
 
         // 이번주 일별 달성률
-        List<Double> thisWeekGoalRates = new ArrayList<>();
-        for (LocalDate date = thisWeekStart; !date.isAfter(thisWeekEnd); date = date.plusDays(1)) {
-            Double dailyRate = calculateDailyGoalRate(targetMember, date);
-            thisWeekGoalRates.add(dailyRate);
-        }
+        List<Double> thisWeekGoalRates = calculateDailyGoalRates(periodData, thisWeekStart, thisWeekEnd);
+        Double thisWeekGoalRate = calculateWeeklyGoalRate(thisWeekGoalRates, thisWeekStart, today);
 
-        return new GuardianGoalStatsResponse(lastWeekGoalRate, thisWeekGoalRate, thisWeekGoalRates);
+        return GuardianGoalStatsResponse.of(lastWeekGoalRate, thisWeekGoalRate, thisWeekGoalRates);
     }
 
     /**
@@ -257,131 +258,105 @@ public class GoalHomeService {
         );
     }
 
-    private DailyGoalStatus calculateDailyGoalStatus(Member member, LocalDate date) {
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-        LocalDate today = LocalDate.now();
-
+    private DailyGoalStatus calculateDailyGoalStatus(GoalPeriodData periodData, LocalDate date, LocalDate today) {
         // 날짜가 미래면 NOT_STARTED (기한 전)
         if (date.isAfter(today)) {
             return DailyGoalStatus.NOT_STARTED;
         }
 
-        // 약 스케줄과 걸음 수 확인
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, date);
+        GoalCounts goalCounts = calculateGoalCounts(periodData, date);
+        if (goalCounts.total() == 0) {
+            return DailyGoalStatus.NOT_STARTED; // 목표가 없으면 시작 전
+        }
 
-        Walk walk = walkRepository.findByMemberAndWalkDate(member, date).orElse(null);
+        // 상태 결정
+        if (goalCounts.completed() == goalCounts.total()) {
+            return DailyGoalStatus.COMPLETED;
+        }
+        if (date.isBefore(today)) {
+            return DailyGoalStatus.FAILED;
+        }
+        if (goalCounts.completed() > 0) {
+            return DailyGoalStatus.IN_PROGRESS;
+        }
+        return DailyGoalStatus.NOT_STARTED;
+    }
+
+    private GoalCounts calculateGoalCounts(GoalPeriodData periodData, LocalDate date) {
+        List<MedicineSchedule> schedules = periodData.schedules().stream()
+                .filter(schedule -> schedule.isEffectiveOn(date))
+                .toList();
+        Set<Long> verifiedScheduleIds = periodData.verifiedScheduleIdsByDate().getOrDefault(date, Set.of());
+        Walk walk = periodData.walksByDate().get(date);
 
         int totalGoals = schedules.size();
         if (walk != null) {
             totalGoals++;
         }
-        if (totalGoals == 0) {
-            return DailyGoalStatus.NOT_STARTED; // 목표가 없으면 시작 전
-        }
 
-        // 완료된 목표 개수
-        int completedGoals = 0;
-
-        // 약 복용 체크
-        for (MedicineSchedule schedule : schedules) {
-            boolean taken = medicationProofRepository.existsByMedicineScheduleAndVerifiedAtBetween(
-                    schedule, startOfDay, endOfDay);
-            if (taken) {
-                completedGoals++;
-            }
-        }
-
-        // 걸음 수 체크
+        int completedGoals = (int) schedules.stream()
+                .filter(schedule -> verifiedScheduleIds.contains(schedule.getId()))
+                .count();
         if (walk != null && walk.isGoalAchieved()) {
             completedGoals++;
         }
 
-        // 상태 결정
-        if (completedGoals == totalGoals) {
-            // 모든 목표 완료
-            return DailyGoalStatus.COMPLETED;
-        } else if (completedGoals > 0) {
-            // 일부 완료
-            if (date.isBefore(today)) {
-                // 기한이 지났는데 일부만 완료 = FAILED
-                return DailyGoalStatus.FAILED;
-            } else {
-                // 오늘이고 일부 완료 = IN_PROGRESS
-                return DailyGoalStatus.IN_PROGRESS;
-            }
-        } else {
-            // 아무것도 완료 안 함
-            if (date.isBefore(today)) {
-                // 기한이 지났는데 미완료 = FAILED
-                return DailyGoalStatus.FAILED;
-            } else {
-                // 오늘인데 아직 시작 안 함 = NOT_STARTED
-                return DailyGoalStatus.NOT_STARTED;
-            }
-        }
+        return new GoalCounts(totalGoals, completedGoals);
     }
 
-    private Double calculateWeeklyGoalRate(Member member, LocalDate startDate, LocalDate endDate) {
+    private List<Double> calculateDailyGoalRates(
+            GoalPeriodData periodData,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        List<Double> dailyGoalRates = new ArrayList<>();
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            GoalCounts goalCounts = calculateGoalCounts(periodData, date);
+            dailyGoalRates.add(goalCounts.rate());
+        }
+        return dailyGoalRates;
+    }
+
+    private Double calculateWeeklyGoalRate(List<Double> dailyGoalRates, LocalDate startDate, LocalDate today) {
         int totalDays = 0;
         int completedDays = 0;
+        LocalDate date = startDate;
 
-        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            // 미래 날짜는 제외
-            if (date.isAfter(LocalDate.now())) {
-                continue;
+        for (Double dailyGoalRate : dailyGoalRates) {
+            if (date.isAfter(today)) {
+                break;
             }
-
             totalDays++;
-            Double dailyRate = calculateDailyGoalRate(member, date);
-            if (dailyRate >= 1.0) { // 100% 달성
+            if (dailyGoalRate >= 1.0) {
                 completedDays++;
             }
+            date = date.plusDays(1);
         }
 
         if (totalDays == 0) {
             return 0.0;
         }
-
         return (double) completedDays / totalDays;
     }
 
-    private Double calculateDailyGoalRate(Member member, LocalDate date) {
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-
-        // 약 스케줄과 걸음 수 확인
+    private GoalPeriodData getGoalPeriodData(Member member, LocalDate startDate, LocalDate endDate) {
         List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, date);
+                .findEffectiveByMemberAndDateRange(member, Status.ACTIVE, startDate, endDate);
 
-        Walk walk = walkRepository.findByMemberAndWalkDate(member, date).orElse(null);
+        Map<LocalDate, Set<Long>> verifiedScheduleIdsByDate = medicationProofRepository
+                .findByMemberIdAndDateRange(member.getId(), startDate.atStartOfDay(), endDate.atTime(LocalTime.MAX))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        proof -> proof.getVerifiedAt().toLocalDate(),
+                        Collectors.mapping(proof -> proof.getMedicineSchedule().getId(), Collectors.toSet())
+                ));
 
-        int totalGoals = schedules.size();
-        if (walk != null) {
-            totalGoals++;
-        }
-        if (totalGoals == 0) {
-            return 0.0;
-        }
+        Map<LocalDate, Walk> walksByDate = walkRepository
+                .findByMemberAndWalkDateBetweenOrderByWalkDateAsc(member, startDate, endDate)
+                .stream()
+                .collect(Collectors.toMap(Walk::getWalkDate, walk -> walk));
 
-        int completedGoals = 0;
-
-        // 약 복용 체크
-        for (MedicineSchedule schedule : schedules) {
-            boolean taken = medicationProofRepository.existsByMedicineScheduleAndVerifiedAtBetween(
-                    schedule, startOfDay, endOfDay);
-            if (taken) {
-                completedGoals++;
-            }
-        }
-
-        // 걸음 수 체크
-        if (walk != null && walk.isGoalAchieved()) {
-            completedGoals++;
-        }
-
-        return (double) completedGoals / totalGoals;
+        return new GoalPeriodData(schedules, verifiedScheduleIdsByDate, walksByDate);
     }
 
     private GuardianGoalHomeResponse.MedicineInfo getGuardianMedicineInfo(Member member, LocalDate today) {
@@ -512,5 +487,22 @@ public class GoalHomeService {
 
         return memberRepository.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 사용자입니다."));
+    }
+
+    private record GoalPeriodData(
+            List<MedicineSchedule> schedules,
+            Map<LocalDate, Set<Long>> verifiedScheduleIdsByDate,
+            Map<LocalDate, Walk> walksByDate
+    ) {
+    }
+
+    private record GoalCounts(int total, int completed) {
+
+        private double rate() {
+            if (total == 0) {
+                return 0.0;
+            }
+            return (double) completed / total;
+        }
     }
 }
