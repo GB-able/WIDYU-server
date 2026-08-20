@@ -57,7 +57,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 
 ## AI 하네스 워크플로우
 
-Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-rules.sh`로 아래 **코드 작성 원칙**을 자동 검사합니다. 라인 단위 규칙은 HEAD 대비 **추가된 라인만** 봅니다(기존 코드의 위반은 무관한 수정을 막지 않습니다. 파일 전체 검사는 `HARNESS_FULL_FILE=1`).
+Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-rules.sh`로 아래 **훅이 차단하는 규칙 6개**를 검사합니다. 라인 단위 규칙은 HEAD 대비 **추가된 라인만** 봅니다(기존 코드의 위반은 무관한 수정을 막지 않습니다. 파일 전체 검사는 `HARNESS_FULL_FILE=1`).
 
 응답 종료 시에는 `on-stop.sh`가 정적 규칙 → `compileJava` → Codex 시맨틱 검수를 순서대로 실행합니다. 같은 diff는 두 번 검수하지 않고, `auth`·`pay`·`global/security` 변경은 크기와 무관하게 항상 Codex 검수를 거칩니다.
 
@@ -69,11 +69,33 @@ Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-r
 4. 테스트: `bash scripts/harness/run-module-tests.sh`
 5. 엔티티 변경 시 `./gradlew compileJava`
 
-## 코드 작성 원칙 (훅 강제)
+## 코드 작성 원칙
+
+훅이 차단하는 규칙 — `validate-java-rules.sh`의 규칙 1~6과 일대일 대응합니다.
 
 1. **삼항 연산자 금지** — 조건 분기는 `if/else` 또는 early return으로 작성한다
 2. **DTO 팩토리 메서드** — 서비스에서 `new DTO(...)` 직접 생성 금지. DTO의 `from()`/`of()` 정적 팩토리를 호출한다
-3. **Early return** — 조건이 맞지 않으면 일찍 반환해 중첩을 줄인다
-4. **단일 책임 메서드** — 한 메서드는 한 가지 일만 한다
-5. **의미 있는 이름** — 축약어 없이 의도가 드러나는 이름을 쓴다
-6. **계층·모듈 경계** — Controller는 Repository 직접 import 금지(Service 경유), `@Entity`는 widyu-domain, Repository는 widyu-api, `@Async` 메서드에 `@Transactional` 필수
+3. **Controller → Repository 직접 접근 금지** — Service를 경유한다
+4. **`@Entity`는 widyu-domain에만** 둔다
+5. **Repository는 widyu-api에만** 둔다
+6. **`@Async` 메서드에 `@Transactional` 필수** — 새 스레드는 호출자 트랜잭션을 전파받지 못한다
+
+훅이 검사하지 않는 권장 규칙 — 리뷰에서 확인합니다.
+
+- **Early return** — 조건이 맞지 않으면 일찍 반환해 중첩을 줄인다
+
+<!-- 단일 책임·의미 있는 이름 항목은 검증 기준이 없어 제거했습니다 (#486). 되살릴 때는
+     "PR 리뷰에서 위반을 가리킬 수 있는가" 기준을 통과하는 문장으로 다시 쓰세요. -->
+
+# Compact instructions
+
+압축할 때 아래를 우선 보존합니다.
+
+- 현재 작업의 LLD·ADR 인수조건, 미해결 Codex BLOCKER 지적
+- 확정한 설계와 그 근거 (기각한 대안 포함)
+- 변경한 파일 경로와 남은 작업
+
+탐색 흔적, 막다른 길, 중복된 도구 출력은 버려도 됩니다.
+
+압축 후 백엔드 코드를 계속 다루면 `backend/CLAUDE.md`를 다시 읽으세요. nested CLAUDE.md는
+루트와 달리 자동 재주입되지 않아, 참조 문장만 남고 도메인 규칙·테스트 작성 규칙은 사라집니다.
