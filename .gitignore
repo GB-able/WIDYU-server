@@ -47,10 +47,12 @@ out/
 src/main/resources/firebase/
 *.json
 !admin/*.json
-!scripts/harness/settings-template.json
 
 # claude
-.claude/
+# settings.json 은 Project 스코프(팀 공유 권한·훅)라 추적한다.
+# settings.local.json·audit/·state/·worktrees/ 등 나머지는 개인·런타임 산출물이므로 제외.
+.claude/*
+!.claude/settings.json
 apiDocs/
 docs/architecture/
 

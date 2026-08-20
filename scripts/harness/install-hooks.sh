@@ -1,50 +1,68 @@
 #!/usr/bin/env bash
-# install-hooks.sh — .claude/settings.json 에 harness 훅을 설치한다.
+# install-hooks.sh — Codex 용 .agents/skills 를 Claude Code 가 찾도록 심링크를 건다.
 #
-# 사용: bash scripts/harness/install-hooks.sh [--force]
-#   --force : 기존 settings.json 을 덮어쓴다 (기본은 이미 있으면 건너뜀)
+# 사용: bash scripts/harness/install-hooks.sh
 #
-# 이 PR 에서 추가된 훅 구성:
+# 훅 설정(.claude/settings.json)은 이제 git 으로 추적되므로 복사 단계가 없다.
+# clone·pull 하면 아래 훅이 그대로 적용된다:
 #   PostToolUse(Edit|Write) → on-file-edit.sh + audit-log.sh
 #   PostToolUse(Bash)       → audit-log.sh
 #   Stop                    → on-stop.sh + audit-log.sh
-#
-# .claude/ 는 .gitignore 대상이므로 settings.json 을 직접 추적할 수 없다.
-# 이 스크립트를 실행해 templates/settings-template.json 을 .claude/settings.json 으로 설치한다.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-TEMPLATE="$ROOT/scripts/harness/settings-template.json"
-TARGET="$ROOT/.claude/settings.json"
-FORCE="${1:-}"
-
-if [[ ! -f "$TEMPLATE" ]]; then
-  echo "❌ 템플릿 없음: $TEMPLATE" >&2
-  exit 1
-fi
+SETTINGS="$ROOT/.claude/settings.json"
 
 mkdir -p "$ROOT/.claude"
 
 # .agents/skills 는 Codex 용 경로라 Claude Code 가 자동 탐색하지 않는다.
 # SKILL.md 에 name/description 프론트매터가 이미 있으므로 심링크만 걸면
 # 그대로 슬래시 커맨드로 잡힌다. (CLAUDE.md 문장에만 의존하면 로딩이 확률적이다)
-# settings.json 존재 여부와 무관하게 걸어야 한다 — 아래 조기 종료보다 앞에 둔다.
-if [[ ! -e "$ROOT/.claude/skills" ]]; then
-  ln -s ../.agents/skills "$ROOT/.claude/skills"
-  echo "✅ 스킬 연결: .claude/skills → .agents/skills"
+# -e 로 판정하면 안 된다. 일반 파일·디렉터리에도 참이라 링크가 없는데 "존재"로 보고하고,
+# 반대로 깨진 심링크에는 거짓이라 ln 이 "File exists" 로 죽는다 (set -e 로 스크립트 중단).
+SKILL_LINK="$ROOT/.claude/skills"
+SKILL_TARGET="../.agents/skills"
+
+if [[ -L "$SKILL_LINK" ]]; then
+  CURRENT_TARGET="$(readlink "$SKILL_LINK")"
+  if [[ "$CURRENT_TARGET" == "$SKILL_TARGET" ]]; then
+    echo "✅ 스킬 링크 확인: .claude/skills → $SKILL_TARGET"
+  else
+    echo "❌ .claude/skills 가 다른 대상을 가리킵니다: $CURRENT_TARGET" >&2
+    echo "   기대값: $SKILL_TARGET — 확인 후 직접 지우고 다시 실행하세요." >&2
+    exit 1
+  fi
+elif [[ -e "$SKILL_LINK" ]]; then
+  echo "❌ .claude/skills 가 심링크가 아닌 일반 파일·디렉터리입니다." >&2
+  echo "   내용을 확인한 뒤 옮기거나 지우고 다시 실행하세요." >&2
+  exit 1
+else
+  ln -s "$SKILL_TARGET" "$SKILL_LINK"
+  echo "✅ 스킬 연결: .claude/skills → $SKILL_TARGET"
 fi
 
-if [[ -f "$TARGET" && "$FORCE" != "--force" ]]; then
-  echo "ℹ️  $TARGET 이미 존재합니다. 덮어쓰려면 --force 옵션을 사용하세요."
-  echo "   현재 설정 유지."
+# 존재만 보면 추적되지 않은 옛 로컬 파일을 팀 정책 파일로 잘못 보고한다.
+# 그 상태로 pull 하면 "untracked working tree file would be overwritten" 로 막힌다.
+if git -C "$ROOT" ls-files --error-unmatch -- .claude/settings.json >/dev/null 2>&1; then
+  echo "✅ 훅 설정 확인: $SETTINGS (git 추적 파일)"
   exit 0
 fi
 
-cp "$TEMPLATE" "$TARGET"
-echo "✅ 훅 설치 완료: $TARGET"
-echo ""
-echo "   활성화된 훅:"
-echo "   • PostToolUse(Edit|Write) → on-file-edit.sh (규칙 검사) + audit-log.sh"
-echo "   • PostToolUse(Bash)       → audit-log.sh (명령 기록)"
-echo "   • Stop                    → on-stop.sh (Codex 검수) + audit-log.sh"
+{
+  echo "❌ .claude/settings.json 이 git 추적 상태가 아닙니다."
+  echo ""
+  if [[ -f "$SETTINGS" ]]; then
+    echo "   예전 install-hooks.sh 가 복사해 둔 로컬 파일로 보입니다. 아래 순서로 전환하세요."
+    echo "     1) 개인 허용 규칙이 있으면 .claude/settings.local.json 으로 옮깁니다"
+    echo "     2) cp .claude/settings.json /tmp/settings.json.bak   # 백업"
+    echo "     3) rm .claude/settings.json"
+    echo "     4) git pull origin develop"
+  else
+    echo "   develop 을 최신화하면 팀 공유 설정이 내려옵니다."
+    echo "     git pull origin develop"
+  fi
+  echo ""
+  echo "   전환 후 이 스크립트를 다시 실행하세요."
+} >&2
+exit 1
