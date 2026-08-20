@@ -1,5 +1,6 @@
 package com.widyu.goal.home.controller;
 
+import com.widyu.global.annotation.ValidateFamilyAccess;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.goal.home.application.GoalHomeService;
 import com.widyu.goal.home.controller.docs.GoalHomeDocs;
@@ -55,6 +56,7 @@ public class GoalHomeController implements GoalHomeDocs {
 
     @Override
     @GetMapping("/guardian/stats")
+    @ValidateFamilyAccess(memberIdParam = "memberId")
     public ApiResponseTemplate<GuardianGoalStatsResponse> getGuardianGoalStats(
             @RequestParam(required = false) Long memberId
     ) {
@@ -67,6 +69,7 @@ public class GoalHomeController implements GoalHomeDocs {
 
     @Override
     @GetMapping("/guardian")
+    @ValidateFamilyAccess(memberIdParam = "memberId")
     public ApiResponseTemplate<GuardianGoalHomeResponse> getGuardianGoalHome(
             @RequestParam(required = false) Long memberId
     ) {
