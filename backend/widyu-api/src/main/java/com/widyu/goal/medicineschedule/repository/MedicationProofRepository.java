@@ -21,7 +21,7 @@ public interface MedicationProofRepository extends JpaRepository<MedicationProof
     );
 
     @Query("SELECT mp FROM MedicationProof mp " +
-           "WHERE mp.medicineSchedule.member.id = :memberId " +
+           "WHERE mp.member.id = :memberId " +
            "AND mp.verifiedAt BETWEEN :startDate AND :endDate")
     List<MedicationProof> findByMemberIdAndDateRange(
             @Param("memberId") Long memberId,
