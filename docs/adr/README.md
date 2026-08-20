@@ -67,3 +67,4 @@ ADR 커버리지는 100%를 목표로 하지 않는다. 대신 다음 영역은 
 | [ADR-0012](ADR-0012-payment-cancel-idempotency.md) | 부분 취소 멱등성 및 직렬화 정책 | Accepted | 2026-07-25 |
 | [ADR-0013](ADR-0013-heart-rate-personalized-ai-contract.md) | 개인화 심박 AI 단건 계약 연동 | Accepted | 2026-07-26 |
 | [ADR-0015](ADR-0015-album-presigned-multipart-upload.md) | 앨범 미디어 Presigned Multipart 직접 업로드 | Accepted | 2026-07-27 |
+| [ADR-0018](ADR-0018-claude-code-sandbox-not-adopted.md) | Claude Code 샌드박스 미도입 — 비밀 파일 차단과 테스트 실행의 트레이드오프 | Accepted | 2026-08-20 |
