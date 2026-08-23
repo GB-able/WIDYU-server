@@ -104,7 +104,7 @@ class GuardianHomeServiceTest {
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
         given(realtimeLocationService.getOutingStatus(any())).willReturn(true);
@@ -118,8 +118,8 @@ class GuardianHomeServiceTest {
     }
 
     @Test
-    @DisplayName("오늘 건강 일정이 없으면 healthSchedule은 null을 반환한다")
-    void 오늘_건강일정이_없으면_healthSchedule은_null을_반환한다() {
+    @DisplayName("다가오는 건강 일정이 없으면 healthSchedule은 null을 반환한다")
+    void 다가오는_건강일정이_없으면_healthSchedule은_null을_반환한다() {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
         Member senior = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
@@ -133,7 +133,7 @@ class GuardianHomeServiceTest {
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
@@ -160,7 +160,7 @@ class GuardianHomeServiceTest {
         given(seniorProfileRepository.findAllByFamilyIdWithMember(any())).willReturn(List.of(seniorProfile));
         given(heartRateResultRepository.findByMemberId(any())).willReturn(Optional.empty());
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
@@ -197,7 +197,7 @@ class GuardianHomeServiceTest {
                 .willReturn(List.of(schedule1, schedule2));
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
                 .willReturn(List.of());
-        given(healthScheduleRepository.findByMemberIdAndDate(any(), any(), any())).willReturn(List.of());
+        given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 

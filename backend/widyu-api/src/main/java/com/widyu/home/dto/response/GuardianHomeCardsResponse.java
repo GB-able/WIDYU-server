@@ -123,6 +123,9 @@ public record GuardianHomeCardsResponse(
             @Schema(description = "건강 일정 ID", example = "3")
             Long scheduleId,
 
+            @Schema(description = "일정 이름", example = "내과 정기검진")
+            String scheduleName,
+
             @Schema(description = "일정 일시", example = "2026-06-16T14:00:00")
             @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
             LocalDateTime scheduledAt,
@@ -133,6 +136,7 @@ public record GuardianHomeCardsResponse(
         public static HealthScheduleInfo from(HealthSchedule schedule) {
             return new HealthScheduleInfo(
                     schedule.getId(),
+                    schedule.getScheduleName(),
                     schedule.getScheduledAt(),
                     schedule.getPlaceAddress()
             );
