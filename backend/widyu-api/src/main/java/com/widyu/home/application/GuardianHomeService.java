@@ -9,7 +9,6 @@ import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
-import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.home.dto.response.GuardianSeniorListResponse;
@@ -67,7 +66,7 @@ public class GuardianHomeService {
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
                 getScoredAlbums(senior, today),
-                getHealthScheduleInfo(senior, today),
+                getHealthScheduleInfo(senior),
                 getWalkInfo(senior, today)
         );
     }
@@ -164,10 +163,9 @@ public class GuardianHomeService {
                 .toList();
     }
 
-    private GuardianHomeCardsResponse.HealthScheduleInfo getHealthScheduleInfo(Member senior, LocalDate today) {
-        return healthScheduleRepository.findByMemberIdAndDate(senior.getId(), today.atStartOfDay(), today.plusDays(1).atStartOfDay())
-                .stream()
-                .min(Comparator.comparing(HealthSchedule::getScheduledAt))
+    private GuardianHomeCardsResponse.HealthScheduleInfo getHealthScheduleInfo(Member senior) {
+        return healthScheduleRepository
+                .findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(senior.getId(), LocalDateTime.now())
                 .map(GuardianHomeCardsResponse.HealthScheduleInfo::from)
                 .orElse(null);
     }
