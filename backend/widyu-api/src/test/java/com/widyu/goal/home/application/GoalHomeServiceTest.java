@@ -196,6 +196,48 @@ class GoalHomeServiceTest {
         assertThat(response.thisWeekGoalRates()).containsExactlyElementsOf(expected);
     }
 
+    @Test
+    @DisplayName("오늘 남은 알람이 없으면 마지막 알람을 다음 알람으로 반환한다")
+    void 오늘_남은_알람이_없으면_마지막_알람을_반환한다() {
+        // given
+        Member member = mock(Member.class);
+        List<MedicineSchedule> schedules = List.of(
+                alarmSchedule(member, 1L, LocalTime.of(8, 0)),
+                alarmSchedule(member, 2L, LocalTime.of(13, 0)),
+                alarmSchedule(member, 3L, LocalTime.of(20, 0)));
+
+        // when
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 0));
+
+        // then
+        assertThat(nextSchedule.getId()).isEqualTo(3L);
+        assertThat(nextSchedule.getAlarmTime()).isEqualTo(LocalTime.of(20, 0));
+    }
+
+    @Test
+    @DisplayName("오늘 남은 알람이 있으면 가장 가까운 알람을 다음 알람으로 반환한다")
+    void 오늘_남은_알람이_있으면_가장_가까운_알람을_반환한다() {
+        // given
+        Member member = mock(Member.class);
+        List<MedicineSchedule> schedules = List.of(
+                alarmSchedule(member, 1L, LocalTime.of(8, 0)),
+                alarmSchedule(member, 2L, LocalTime.of(13, 0)),
+                alarmSchedule(member, 3L, LocalTime.of(20, 0)));
+
+        // when
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(9, 0));
+
+        // then
+        assertThat(nextSchedule.getId()).isEqualTo(2L);
+        assertThat(nextSchedule.getAlarmTime()).isEqualTo(LocalTime.of(13, 0));
+    }
+
+    private MedicineSchedule alarmSchedule(Member member, Long id, LocalTime alarmTime) {
+        MedicineSchedule schedule = MedicineSchedule.create(member, alarmTime);
+        ReflectionTestUtils.setField(schedule, "id", id);
+        return schedule;
+    }
+
     private MedicineSchedule schedule(Member member, Long id, LocalDate effectiveFrom, LocalDate effectiveTo) {
         MedicineSchedule schedule = MedicineSchedule.create(member, LocalTime.of(8, 0));
         ReflectionTestUtils.setField(schedule, "id", id);

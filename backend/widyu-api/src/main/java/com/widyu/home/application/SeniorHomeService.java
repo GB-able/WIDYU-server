@@ -11,6 +11,7 @@ import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
+import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -21,8 +22,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,33 +76,37 @@ public class SeniorHomeService {
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
-        Set<Long> takenScheduleIds = medicationProofRepository
+        Map<Long, MedicationProof> proofsByScheduleId = medicationProofRepository
                 .findByMemberIdAndDateRange(member.getId(), startOfDay, endOfDay)
                 .stream()
-                .map(proof -> proof.getMedicineSchedule().getId())
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(java.util.stream.Collectors.toMap(
+                        proof -> proof.getMedicineSchedule().getId(),
+                        proof -> proof,
+                        (first, second) -> first
+                ));
 
         List<SeniorHomeCardsResponse.ScheduleStatus> scheduleStatuses = schedules.stream()
                 .sorted(Comparator.comparing(MedicineSchedule::getAlarmTime))
-                .map(s -> SeniorHomeCardsResponse.ScheduleStatus.from(s, takenScheduleIds.contains(s.getId())))
+                .map(s -> SeniorHomeCardsResponse.ScheduleStatus.from(s, proofsByScheduleId.containsKey(s.getId())))
                 .toList();
 
-        MedicineSchedule nextSchedule = findNextSchedule(schedules);
+        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now());
 
         return SeniorHomeCardsResponse.MedicineInfo.from(
                 nextSchedule,
-                takenScheduleIds.size(),
+                proofsByScheduleId.size(),
                 schedules.size(),
-                scheduleStatuses
+                scheduleStatuses,
+                proofsByScheduleId.get(nextSchedule.getId())
         );
     }
 
-    private MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules) {
-        LocalTime now = LocalTime.now();
+    // 알람 시간 오름차순 정렬된 목록 기준. 오늘 남은 알람이 없으면 마지막 알람을 그대로 노출한다.
+    static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now) {
         return schedules.stream()
                 .filter(s -> s.getAlarmTime().isAfter(now))
                 .min(Comparator.comparing(MedicineSchedule::getAlarmTime))
-                .orElse(schedules.getFirst());
+                .orElse(schedules.getLast());
     }
 
     private List<SeniorHomeCardsResponse.AlbumInfo> getScoredAlbums(Member senior, LocalDate today) {

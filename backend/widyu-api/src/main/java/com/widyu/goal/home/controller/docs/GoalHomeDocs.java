@@ -97,7 +97,8 @@ public interface GoalHomeDocs {
                                                   "takenCount": 2,
                                                   "totalCount": 3,
                                                   "nextDoseCount": 4,
-                                                  "nextAlarmTime": "17:00"
+                                                  "nextAlarmTime": "17:00",
+                                                  "proofImageUrl": "https://www.widyu.shop/img"
                                                 },
                                                 "steps": {
                                                   "steps": 9829,
