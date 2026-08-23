@@ -105,10 +105,10 @@ public class MedicineScheduleService {
         YearMonth requestedMonth = YearMonth.of(year, month);
         YearMonth previousMonth = requestedMonth.minusMonths(1);
 
-        int lastMonthCount = countAchievedInMonth(targetMember.getId(), previousMonth);
-        int currentMonthCount = countAchievedInMonth(targetMember.getId(), requestedMonth);
-
         List<Double> monthlyGoalRates = calculateMonthlyGoalRates(targetMember.getId(), requestedMonth);
+
+        int lastMonthCount = countAchievedInMonth(targetMember.getId(), previousMonth);
+        int currentMonthCount = countFullyAchievedDays(monthlyGoalRates);
 
         return MedicineMonthlyResponse.of(lastMonthCount, currentMonthCount, monthlyGoalRates);
     }
@@ -281,16 +281,14 @@ public class MedicineScheduleService {
                         "존재하지 않는 사용자입니다."));
     }
 
+    // 그날 유효했던 스케줄을 모두 인증한 날만 달성일로 센다
     private int countAchievedInMonth(Long memberId, YearMonth month) {
-        LocalDateTime startDate = month.atDay(1).atStartOfDay();
-        LocalDateTime endDate = month.atEndOfMonth().atTime(LocalTime.MAX);
+        return countFullyAchievedDays(calculateMonthlyGoalRates(memberId, month));
+    }
 
-        List<com.widyu.medicine.MedicationProof> proofs = medicationProofRepository
-                .findByMemberIdAndDateRange(memberId, startDate, endDate);
-
-        return (int) proofs.stream()
-                .map(proof -> proof.getVerifiedAt().toLocalDate())
-                .distinct()
+    private int countFullyAchievedDays(List<Double> dailyRates) {
+        return (int) dailyRates.stream()
+                .filter(rate -> rate >= 1.0)
                 .count();
     }
 
