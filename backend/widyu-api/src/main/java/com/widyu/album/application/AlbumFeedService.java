@@ -173,10 +173,7 @@ public class AlbumFeedService {
                 .collect(Collectors.groupingBy(
                         view -> view.getAlbum().getId(),
                         Collectors.mapping(
-                                view -> new AlbumFeedResponse.ViewerInfo(
-                                        view.getMember().getName(),
-                                        null // TODO: 프로필 이미지 경로 추가 시 반영
-                                ),
+                                view -> AlbumFeedResponse.ViewerInfo.from(view.getMember()),
                                 Collectors.toList()
                         )
                 ));

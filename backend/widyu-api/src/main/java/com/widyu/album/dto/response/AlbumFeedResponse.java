@@ -1,6 +1,7 @@
 package com.widyu.album.dto.response;
 
 import com.widyu.album.Album;
+import com.widyu.member.Member;
 import com.widyu.album.MediaType;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,7 +29,11 @@ public record AlbumFeedResponse(
     public record ViewerInfo(
             String name,
             String profileImage
-    ) {}
+    ) {
+        public static ViewerInfo from(Member member) {
+            return new ViewerInfo(member.getName(), member.getProfileImage());
+        }
+    }
 
     public static AlbumFeedResponse from(Album album, Boolean canEdit, List<ViewerInfo> viewers) {
         String primaryVideoDuration = album.getDurations().stream()
