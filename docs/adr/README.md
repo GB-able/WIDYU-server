@@ -68,3 +68,5 @@ ADR 커버리지는 100%를 목표로 하지 않는다. 대신 다음 영역은 
 | [ADR-0013](ADR-0013-heart-rate-personalized-ai-contract.md) | 개인화 심박 AI 단건 계약 연동 | Accepted | 2026-07-26 |
 | [ADR-0015](ADR-0015-album-presigned-multipart-upload.md) | 앨범 미디어 Presigned Multipart 직접 업로드 | Accepted | 2026-07-27 |
 | [ADR-0018](ADR-0018-claude-code-sandbox-not-adopted.md) | Claude Code 샌드박스 미도입 — 비밀 파일 차단과 테스트 실행의 트레이드오프 | Accepted | 2026-08-20 |
+| [ADR-0019](ADR-0019-goal-home-query-pipeline.md) | 목표 홈 주간 통계 기간 벌크 조회 | Accepted | 2026-08-20 |
+| [ADR-0020](ADR-0020-family-access-dual-path.md) | 가족 접근 인가 이중 경로를 인정하고 정적 검증으로 강제 | Accepted | 2026-08-20 |
