@@ -104,6 +104,7 @@ public enum ErrorCode {
     ALBUM_UNLOCK_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4002", "본인의 앨범은 해금할 수 없습니다."),
     ALBUM_UNLOCK_SENIOR_ONLY(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4030", "시니어 회원만 앨범을 해금할 수 있습니다."),
     ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
+    ALBUM_UNLOCK_NOT_REQUIRED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4004", "해금이 필요하지 않은 앨범입니다."),
 
     // 앨범 직접 업로드 관련
     ALBUM_UPLOAD_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "ALBUM_UPLOAD_4040", "업로드 세션을 찾을 수 없거나 만료되었습니다."),

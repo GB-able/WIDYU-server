@@ -19,7 +19,8 @@ public record AlbumDetailResponse(
         List<ViewerInfo> viewers,
         Integer price,
         List<CommentInfo> comments,
-        boolean canEdit
+        boolean canEdit,
+        boolean isUnlocked
 ) {
 
     public record AuthorInfo(
@@ -94,7 +95,7 @@ public record AlbumDetailResponse(
     private static final int ALBUM_UNLOCK_PRICE = 50;
 
     public static AlbumDetailResponse from(Album album, Long currentUserId, List<Member> viewers,
-                                           List<AlbumComment> comments) {
+                                           List<AlbumComment> comments, boolean isUnlocked) {
         return new AlbumDetailResponse(
                 album.getId(),
                 album.getContent(),
@@ -109,7 +110,8 @@ public record AlbumDetailResponse(
                 comments.stream()
                         .map(comment -> CommentInfo.from(comment, currentUserId))
                         .toList(),
-                album.getMember().getId().equals(currentUserId)
+                album.getMember().getId().equals(currentUserId),
+                isUnlocked
         );
     }
 }

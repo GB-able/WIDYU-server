@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.album.Album;
@@ -65,6 +66,7 @@ class AlbumUnlockServiceTest {
         given(album.getMember()).willReturn(albumOwner);
         given(album.getContent()).willReturn("앨범 내용");
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
 
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         given(seniorProfile.hasEnoughPoints(50L)).willReturn(true);
@@ -120,6 +122,7 @@ class AlbumUnlockServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
@@ -142,6 +145,7 @@ class AlbumUnlockServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
 
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.empty());
 
@@ -166,6 +170,7 @@ class AlbumUnlockServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
 
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
@@ -192,6 +197,7 @@ class AlbumUnlockServiceTest {
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(albumOwner);
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
 
         SeniorProfile seniorProfile = mock(SeniorProfile.class);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
@@ -224,5 +230,30 @@ class AlbumUnlockServiceTest {
         assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("시니어가 올린 앨범을 해금하려 하면 포인트가 차감되지 않고 ALBUM_UNLOCK_NOT_REQUIRED 예외가 발생한다")
+    void 시니어가_올린_앨범_해금_시도_시_예외가_발생한다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        ReflectionTestUtils.setField(senior, "type", MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        Member albumOwner = mock(Member.class);
+        given(albumOwner.getId()).willReturn(2L);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(albumOwner);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_UNLOCK_NOT_REQUIRED);
+        verify(albumUnlockRepository, never()).save(any(AlbumUnlock.class));
+        verify(pointHistoryRepository, never()).save(any(PointHistory.class));
     }
 }

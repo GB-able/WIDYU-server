@@ -24,6 +24,7 @@ public record AlbumFeedResponse(
         List<ViewerInfo> viewers,
         LocalDateTime createdAt,
         Boolean canEdit,
+        Boolean isUnlocked,
         String videoDuration // 동영상인 경우만
 ) {
     public record ViewerInfo(
@@ -35,7 +36,7 @@ public record AlbumFeedResponse(
         }
     }
 
-    public static AlbumFeedResponse from(Album album, Boolean canEdit, List<ViewerInfo> viewers) {
+    public static AlbumFeedResponse from(Album album, Boolean canEdit, Boolean isUnlocked, List<ViewerInfo> viewers) {
         String primaryVideoDuration = album.getDurations().stream()
                 .filter(Objects::nonNull)
                 .findFirst()
@@ -59,6 +60,7 @@ public record AlbumFeedResponse(
                 viewers,
                 album.getCreatedAt(),
                 canEdit,
+                isUnlocked,
                 primaryVideoDuration
         );
     }

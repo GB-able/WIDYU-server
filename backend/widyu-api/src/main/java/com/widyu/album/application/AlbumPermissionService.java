@@ -25,22 +25,27 @@ public class AlbumPermissionService {
 
     public void checkViewPermission(Album album, Member me) {
         checkFamilyAccess(album, me);
-        switch (me) {
-            // 내가 쓴 앨범은 항상 허용
-            case Member m when album.getMember().getId().equals(m.getId()) -> {
-            }
 
-            // 같은 가족의 보호자(GUARDIAN)는 항상 허용
-            case Member m when m.getType() == MemberType.GUARDIAN -> {
-            }
-
-            // 시니어(SENIOR)인데 해금되어 있으면 허용
-            case Member m when m.getType() == MemberType.SENIOR
-                    && albumUnlockService.isAlbumUnlocked(album, m) -> {
-            }
-
-            // 나머지는 거부
-            default -> throw new BusinessException(ErrorCode.ALBUM_UNLOCK_REQUIRED);
+        // 내가 쓴 앨범은 항상 허용
+        if (album.getMember().getId().equals(me.getId())) {
+            return;
         }
+        if (isUnlockedFor(album, me)) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.ALBUM_UNLOCK_REQUIRED);
+    }
+
+    // 잠금 해제 상태 판정. 응답의 isUnlocked도 같은 규칙을 쓴다.
+    public boolean isUnlockedFor(Album album, Member me) {
+        // 같은 가족의 보호자(GUARDIAN)는 잠금 대상이 아니다
+        if (me.getType() == MemberType.GUARDIAN) {
+            return true;
+        }
+        // 시니어가 올린 앨범은 해금이 필요 없다
+        if (!album.requiresUnlock()) {
+            return true;
+        }
+        return albumUnlockService.isAlbumUnlocked(album, me);
     }
 }
