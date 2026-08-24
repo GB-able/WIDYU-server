@@ -80,6 +80,7 @@ class AlbumPermissionServiceTest {
 
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(owner);
+        given(album.requiresUnlock()).willReturn(true);
         given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(true);
         allowFamilyAccess(senior, owner);
 
@@ -100,6 +101,7 @@ class AlbumPermissionServiceTest {
 
         Album album = mock(Album.class);
         given(album.getMember()).willReturn(owner);
+        given(album.requiresUnlock()).willReturn(true);
         given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(false);
         allowFamilyAccess(senior, owner);
 
@@ -128,6 +130,26 @@ class AlbumPermissionServiceTest {
         assertThatThrownBy(() -> albumPermissionService.checkViewPermission(album, guardian))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("시니어가 올린 앨범은 같은 가족의 다른 시니어가 해금 없이 조회할 수 있다")
+    void 시니어가_올린_앨범은_다른_시니어가_해금_없이_조회_가능() {
+        // given
+        Member senior = mock(Member.class);
+        given(senior.getId()).willReturn(2L);
+        given(senior.getType()).willReturn(MemberType.SENIOR);
+
+        Member owner = mock(Member.class);
+        given(owner.getId()).willReturn(1L);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(owner);
+        given(album.requiresUnlock()).willReturn(false);
+        allowFamilyAccess(senior, owner);
+
+        // when & then
+        assertThatNoException().isThrownBy(() -> albumPermissionService.checkViewPermission(album, senior));
     }
 
     private void allowFamilyAccess(Member member, Member targetMember) {

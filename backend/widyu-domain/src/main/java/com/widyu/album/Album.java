@@ -1,6 +1,7 @@
 package com.widyu.album;
 
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.global.entity.BaseTimeEntity;
 import com.widyu.global.entity.Status;
 import jakarta.persistence.CascadeType;
@@ -141,6 +142,11 @@ public class Album extends BaseTimeEntity {
             }
             values.set(entry.getKey(), entry.getValue());
         }
+    }
+
+    // 잠금 대상은 보호자가 올린 앨범뿐이다. 시니어가 올린 앨범은 해금 없이 볼 수 있다.
+    public boolean requiresUnlock() {
+        return member.getType() == MemberType.GUARDIAN;
     }
 
     public int getPhotoCount() {

@@ -115,6 +115,8 @@ public class AlbumService {
         List<Member> viewers = albumViewService.getRecentViewers(album, 3);
 
         log.info("앨범 상세 조회 완료: albumId={}, memberId={}", albumId, currentMember.getId());
-        return AlbumDetailResponse.from(album, currentMember.getId(), viewers, comments);
+        boolean isUnlocked = albumPermissionService.isUnlockedFor(album, currentMember);
+
+        return AlbumDetailResponse.from(album, currentMember.getId(), viewers, comments, isUnlocked);
     }
 }

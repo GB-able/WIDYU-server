@@ -6,8 +6,10 @@ import com.widyu.album.dto.response.AlbumMediaResponse;
 import com.widyu.album.Album;
 import com.widyu.album.repository.AlbumLikeRepository;
 import com.widyu.album.repository.AlbumRepository;
+import com.widyu.album.repository.AlbumUnlockRepository;
 import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.application.FamilyAccessService;
 import com.widyu.global.dto.CursorPage;
 import com.widyu.global.util.MemberUtil;
@@ -18,6 +20,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +41,7 @@ public class AlbumFeedService {
     private final AlbumRepository albumRepository;
     private final AlbumLikeRepository albumLikeRepository;
     private final AlbumViewRepository albumViewRepository;
+    private final AlbumUnlockRepository albumUnlockRepository;
     private final MemberUtil memberUtil;
     private final FamilyAccessService familyAccessService;
 
@@ -166,7 +170,9 @@ public class AlbumFeedService {
                 .map(Album::getId)
                 .collect(Collectors.toList());
 
-        // canEdit: 현재 사용자가 작성한 앨범인지 확인
+        // 보호자는 잠금 대상이 아니라 해금 조회 없이 전부 열람 가능하다
+        boolean viewerExemptFromLock = currentMember.getType() == MemberType.GUARDIAN;
+        Set<Long> unlockedAlbumIds = findUnlockedAlbumIds(albumIds, currentMember);
 
         Map<Long, List<AlbumFeedResponse.ViewerInfo>> viewersMap = albumViewRepository
                 .findTop3ViewersForAlbums(albumIds).stream()
@@ -182,10 +188,21 @@ public class AlbumFeedService {
         List<AlbumFeedResponse> result = new ArrayList<>(albums.size());
         for (Album album : albums) {
             boolean canEdit = album.getMember().getId().equals(currentMember.getId());
+            boolean isUnlocked = viewerExemptFromLock
+                    || !album.requiresUnlock()
+                    || unlockedAlbumIds.contains(album.getId());
             List<AlbumFeedResponse.ViewerInfo> viewers =
                     viewersMap.getOrDefault(album.getId(), List.of());
-            result.add(AlbumFeedResponse.from(album, canEdit, viewers));
+            result.add(AlbumFeedResponse.from(album, canEdit, isUnlocked, viewers));
         }
         return result;
+    }
+
+    // 보호자는 잠금 대상이 아니므로 해금 기록을 조회하지 않는다.
+    private Set<Long> findUnlockedAlbumIds(List<Long> albumIds, Member currentMember) {
+        if (currentMember.getType() == MemberType.GUARDIAN) {
+            return Set.of();
+        }
+        return Set.copyOf(albumUnlockRepository.findUnlockedAlbumIdsByMemberAndAlbumIds(currentMember, albumIds));
     }
 }
