@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: ko-KR
+tone_instructions: "쉬운 한국어로 두괄식으로 작성하세요. 문제와 영향을 먼저 한 문장으로 말한 뒤 근거와 최소 수정안을 설명하세요. 불필요한 전문 용어, 장황한 배경 설명, 사소한 스타일 지적은 피하세요."
+
+reviews:
+  profile: chill
+  path_filters:
+    - "!**/build/**"
+    - "!admin/dist/**"
+    - "!admin/package-lock.json"
+    - "!**/*.{jar,png,jpg,jpeg,gif,svg,ico,mp4}"
+  auto_review:
+    base_branches:
+      - develop
+    drafts: false
+  path_instructions:
+    - path: "backend/widyu-domain/src/main/java/**/*.java"
+      instructions: |
+        - 엔티티와 도메인 모델만 위치하는지 확인한다.
+        - Repository, Service, Controller가 추가되면 지적한다.
+        - JPA 연관관계, 제약조건, 상태 변경이 기존 도메인 불변식을 깨지 않는지 확인한다.
+    - path: "backend/widyu-api/src/main/java/com/widyu/{auth,pay,global/security}/**/*.java"
+      instructions: |
+        - 인증·인가 누락, 입력 검증, 시크릿 노출 가능성을 우선 확인한다.
+        - 결제·포인트 로직은 트랜잭션 경계, 멱등성, 동시성으로 인한 중복 처리를 확인한다.
+    - path: "backend/**/src/test/**/*.java"
+      instructions: |
+        - LLD 인수조건과 변경된 동작의 정상·예외 경로를 검증하는지 확인한다.
+        - 구현 호출 횟수보다 결과 상태를 우선 검증하는지 확인한다.
+    - path: "admin/src/**/*.{ts,tsx}"
+      instructions: |
+        - 인증 우회와 토큰 노출 가능성을 우선 확인한다.
+        - 로딩·오류·빈 상태 처리와 기본 접근성을 확인한다.
