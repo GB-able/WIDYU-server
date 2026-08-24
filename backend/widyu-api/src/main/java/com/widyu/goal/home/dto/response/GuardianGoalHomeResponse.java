@@ -84,7 +84,13 @@ public record GuardianGoalHomeResponse(
             String name,
 
             @Schema(description = "병원 주소", example = "병원 주소")
-            String address
+            String address,
+
+            @Schema(description = "위도", example = "37.5894")
+            Double latitude,
+
+            @Schema(description = "경도", example = "127.0327")
+            Double longitude
     ) {
     }
 }

@@ -260,7 +260,9 @@ public class GoalHomeService {
                 dday,
                 nearest.getScheduledAt(),
                 nearest.getScheduleName(),
-                nearest.getPlaceAddress()
+                nearest.getPlaceAddress(),
+                nearest.getLatitude(),
+                nearest.getLongitude()
         );
     }
 
@@ -472,7 +474,9 @@ public class GoalHomeService {
                 dday,
                 nearest.getScheduledAt(),
                 nearest.getScheduleName(),
-                nearest.getPlaceAddress()
+                nearest.getPlaceAddress(),
+                nearest.getLatitude(),
+                nearest.getLongitude()
         );
     }
 
