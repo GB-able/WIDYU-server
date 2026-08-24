@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BinaryOperator;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -188,7 +189,8 @@ public class GoalHomeService {
                 .collect(Collectors.toMap(
                         proof -> proof.getMedicineSchedule().getId(),
                         proof -> proof,
-                        (first, second) -> first
+                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
+                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
         MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now());
@@ -376,7 +378,8 @@ public class GoalHomeService {
                 .collect(Collectors.toMap(
                         p -> p.getMedicineSchedule().getId(),
                         p -> p,
-                        (p1, p2) -> p1 // 중복 시 첫 번째 선택
+                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
+                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
         int totalCount = 0;

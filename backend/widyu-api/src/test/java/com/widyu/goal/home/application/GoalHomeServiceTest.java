@@ -12,6 +12,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.DailyGoalStatus;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.home.dto.response.GuardianGoalStatsResponse;
+import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
@@ -230,6 +231,41 @@ class GoalHomeServiceTest {
         // then
         assertThat(nextSchedule.getId()).isEqualTo(2L);
         assertThat(nextSchedule.getAlarmTime()).isEqualTo(LocalTime.of(13, 0));
+    }
+
+    @Test
+    @DisplayName("한 스케줄에 인증이 여러 건이면 조회 순서와 무관하게 최초 인증 이미지를 반환한다")
+    void 중복_인증이면_최초_인증_이미지를_반환한다() {
+        // given
+        LocalDate today = LocalDate.now();
+        Member member = mock(Member.class);
+        MedicineSchedule schedule = alarmSchedule(member, 1L, LocalTime.of(8, 0));
+        MedicationProof earlier = proof(schedule, member, today.atTime(8, 5), "https://cdn.widyu.shop/earlier.jpg");
+        MedicationProof later = proof(schedule, member, today.atTime(8, 25), "https://cdn.widyu.shop/later.jpg");
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
+                member, Status.ACTIVE, today)).willReturn(List.of(schedule));
+        // 조회 쿼리에 정렬이 없으므로 늦은 인증이 먼저 반환되는 순서를 재현한다.
+        given(medicationProofRepository.findByMemberIdAndDateRange(
+                11L, today.atStartOfDay(), today.atTime(LocalTime.MAX)))
+                .willReturn(List.of(later, earlier));
+        given(walkRepository.findByMemberAndWalkDate(member, today)).willReturn(Optional.empty());
+        given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
+
+        // when
+        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+
+        // then
+        assertThat(response.medicine().proofImageUrl()).isEqualTo("https://cdn.widyu.shop/earlier.jpg");
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+    }
+
+    private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
+        MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
+        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
+        return proof;
     }
 
     private MedicineSchedule alarmSchedule(Member member, Long id, LocalTime alarmTime) {
