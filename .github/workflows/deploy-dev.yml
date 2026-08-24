@@ -104,13 +104,11 @@ jobs:
             scripts/ \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/scripts/
 
+          rsync -av --delete .well-known/ admin/dist/.well-known/
+
           rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
             admin/dist/ \
             ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/admin/dist/
-
-          rsync -avz -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
-            .well-known/ \
-            ${{ env.EC2_SSH_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/widyu/admin/dist/.well-known/
 
           # rsync -avz --delete -e "ssh -i private_key.pem -o StrictHostKeyChecking=no" \
           #   monitoring/ \
