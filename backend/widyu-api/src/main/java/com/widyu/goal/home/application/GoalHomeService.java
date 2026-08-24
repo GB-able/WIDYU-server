@@ -255,15 +255,7 @@ public class GoalHomeService {
 
         int dday = (int) java.time.temporal.ChronoUnit.DAYS.between(now.toLocalDate(), nearest.getScheduledAt().toLocalDate());
 
-        return new SeniorGoalHomeResponse.HospitalInfo(
-                nearest.getId(),
-                dday,
-                nearest.getScheduledAt(),
-                nearest.getScheduleName(),
-                nearest.getPlaceAddress(),
-                nearest.getLatitude(),
-                nearest.getLongitude()
-        );
+        return SeniorGoalHomeResponse.HospitalInfo.from(nearest, dday);
     }
 
     private DailyGoalStatus calculateDailyGoalStatus(GoalPeriodData periodData, LocalDate date, LocalDate today) {
@@ -469,15 +461,7 @@ public class GoalHomeService {
 
         int dday = (int) java.time.temporal.ChronoUnit.DAYS.between(now.toLocalDate(), nearest.getScheduledAt().toLocalDate());
 
-        return new GuardianGoalHomeResponse.HospitalInfo(
-                nearest.getId(),
-                dday,
-                nearest.getScheduledAt(),
-                nearest.getScheduleName(),
-                nearest.getPlaceAddress(),
-                nearest.getLatitude(),
-                nearest.getLongitude()
-        );
+        return GuardianGoalHomeResponse.HospitalInfo.from(nearest, dday);
     }
 
     private Member getMember(Long memberId) {

@@ -3,6 +3,7 @@ package com.widyu.goal.home.dto.response;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
+import com.widyu.healthschedule.HealthSchedule;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -106,5 +107,16 @@ public record SeniorGoalHomeResponse(
             @Schema(description = "경도", example = "127.0327")
             Double longitude
     ) {
+        public static HospitalInfo from(HealthSchedule schedule, int dday) {
+            return new HospitalInfo(
+                    schedule.getId(),
+                    dday,
+                    schedule.getScheduledAt(),
+                    schedule.getScheduleName(),
+                    schedule.getPlaceAddress(),
+                    schedule.getLatitude(),
+                    schedule.getLongitude()
+            );
+        }
     }
 }
