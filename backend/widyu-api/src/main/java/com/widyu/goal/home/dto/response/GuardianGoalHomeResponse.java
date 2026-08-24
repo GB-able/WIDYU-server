@@ -2,6 +2,7 @@ package com.widyu.goal.home.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
+import com.widyu.healthschedule.HealthSchedule;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -84,7 +85,24 @@ public record GuardianGoalHomeResponse(
             String name,
 
             @Schema(description = "병원 주소", example = "병원 주소")
-            String address
+            String address,
+
+            @Schema(description = "위도", example = "37.5894")
+            Double latitude,
+
+            @Schema(description = "경도", example = "127.0327")
+            Double longitude
     ) {
+        public static HospitalInfo from(HealthSchedule schedule, int dday) {
+            return new HospitalInfo(
+                    schedule.getId(),
+                    dday,
+                    schedule.getScheduledAt(),
+                    schedule.getScheduleName(),
+                    schedule.getPlaceAddress(),
+                    schedule.getLatitude(),
+                    schedule.getLongitude()
+            );
+        }
     }
 }

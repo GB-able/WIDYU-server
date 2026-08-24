@@ -131,14 +131,22 @@ public record GuardianHomeCardsResponse(
             LocalDateTime scheduledAt,
 
             @Schema(description = "장소 주소", example = "서울특별시 성북구 고려대로 73")
-            String placeAddress
+            String placeAddress,
+
+            @Schema(description = "위도", example = "37.5894")
+            Double latitude,
+
+            @Schema(description = "경도", example = "127.0327")
+            Double longitude
     ) {
         public static HealthScheduleInfo from(HealthSchedule schedule) {
             return new HealthScheduleInfo(
                     schedule.getId(),
                     schedule.getScheduleName(),
                     schedule.getScheduledAt(),
-                    schedule.getPlaceAddress()
+                    schedule.getPlaceAddress(),
+                    schedule.getLatitude(),
+                    schedule.getLongitude()
             );
         }
     }
