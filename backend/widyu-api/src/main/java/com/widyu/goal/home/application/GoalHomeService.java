@@ -40,6 +40,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -181,34 +182,39 @@ public class GoalHomeService {
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
-        // 오늘 복용한 횟수
-        int todayTakenCount = (int) medicationProofRepository
+        // 스케줄 수정·삭제로 오늘 유효 목록에서 빠진 버전의 인증은 제외한다 (takenCount가 totalCount를 넘지 않도록)
+        Set<Long> scheduleIds = schedules.stream()
+                .map(MedicineSchedule::getId)
+                .collect(Collectors.toSet());
+
+        // 오늘 복용 인증 정보 (스케줄별 1건)
+        Map<Long, MedicationProof> proofsByScheduleId = medicationProofRepository
                 .findByMemberIdAndDateRange(member.getId(), startOfDay, endOfDay)
-                .size();
+                .stream()
+                .filter(proof -> scheduleIds.contains(proof.getMedicineSchedule().getId()))
+                .collect(Collectors.toMap(
+                        proof -> proof.getMedicineSchedule().getId(),
+                        proof -> proof,
+                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
+                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
+                ));
 
-        // 오늘 총 복용 예정 횟수
-        int todayTotalCount = schedules.size();
+        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now());
 
-        // 다음 알람 시간 찾기
-        LocalTime now = LocalTime.now();
-        MedicineSchedule nextSchedule = schedules.stream()
+        return SeniorGoalHomeResponse.MedicineInfo.from(
+                nextSchedule,
+                proofsByScheduleId.size(),
+                schedules.size(),
+                proofsByScheduleId.get(nextSchedule.getId())
+        );
+    }
+
+    // 알람 시간 오름차순 정렬된 목록 기준. 오늘 남은 알람이 없으면 마지막 알람을 그대로 노출한다.
+    static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now) {
+        return schedules.stream()
                 .filter(s -> s.getAlarmTime().isAfter(now))
                 .min(Comparator.comparing(MedicineSchedule::getAlarmTime))
-                .orElse(schedules.get(0)); // 오늘 남은 알람이 없으면 첫 번째 스케줄
-
-        // 다음 복용 예정 개수
-        int nextDoseCount = nextSchedule.getTotalCount();
-
-        // 알람 시간을 HH:mm 형태로 포맷
-        String nextAlarmTime = nextSchedule.getAlarmTime().format(TIME_FORMATTER);
-
-        return new SeniorGoalHomeResponse.MedicineInfo(
-                nextSchedule.getId(),
-                todayTakenCount,
-                todayTotalCount,
-                nextDoseCount,
-                nextAlarmTime
-        );
+                .orElse(schedules.getLast());
     }
 
     private SeniorGoalHomeResponse.StepsInfo getStepsInfo(Member member, LocalDate today) {
@@ -378,7 +384,8 @@ public class GoalHomeService {
                 .collect(Collectors.toMap(
                         p -> p.getMedicineSchedule().getId(),
                         p -> p,
-                        (p1, p2) -> p1 // 중복 시 첫 번째 선택
+                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
+                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
         int totalCount = 0;

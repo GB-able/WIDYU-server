@@ -5,6 +5,7 @@ import com.widyu.album.Album;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
+import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.walk.Walk;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -84,13 +85,17 @@ public record SeniorHomeCardsResponse(
             String nextAlarmTime,
 
             @Schema(description = "스케줄별 복용 상태 (동그라미 색상용, 알람 시간 오름차순)")
-            List<ScheduleStatus> scheduleStatuses
+            List<ScheduleStatus> scheduleStatuses,
+
+            @Schema(description = "해당 스케줄의 복용 인증 이미지 (미복용 시 null)")
+            String proofImageUrl
     ) {
         public static MedicineInfo from(
                 MedicineSchedule nextSchedule,
                 int todayTakenCount,
                 int todayTotalCount,
-                List<ScheduleStatus> scheduleStatuses
+                List<ScheduleStatus> scheduleStatuses,
+                MedicationProof proof
         ) {
             return new MedicineInfo(
                     nextSchedule.getId(),
@@ -98,8 +103,16 @@ public record SeniorHomeCardsResponse(
                     todayTotalCount,
                     nextSchedule.getTotalCount(),
                     nextSchedule.getAlarmTime().format(TIME_FORMATTER),
-                    scheduleStatuses
+                    scheduleStatuses,
+                    firstProofImageUrl(proof)
             );
+        }
+
+        private static String firstProofImageUrl(MedicationProof proof) {
+            if (proof == null || proof.getProofImageUrls().isEmpty()) {
+                return null;
+            }
+            return proof.getProofImageUrls().getFirst();
         }
     }
 

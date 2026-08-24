@@ -12,6 +12,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.DailyGoalStatus;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.home.dto.response.GuardianGoalStatsResponse;
+import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
@@ -194,6 +195,112 @@ class GoalHomeServiceTest {
             }
         }
         assertThat(response.thisWeekGoalRates()).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    @DisplayName("오늘 남은 알람이 없으면 마지막 알람을 다음 알람으로 반환한다")
+    void 오늘_남은_알람이_없으면_마지막_알람을_반환한다() {
+        // given
+        Member member = mock(Member.class);
+        List<MedicineSchedule> schedules = List.of(
+                alarmSchedule(member, 1L, LocalTime.of(8, 0)),
+                alarmSchedule(member, 2L, LocalTime.of(13, 0)),
+                alarmSchedule(member, 3L, LocalTime.of(20, 0)));
+
+        // when
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 0));
+
+        // then
+        assertThat(nextSchedule.getId()).isEqualTo(3L);
+        assertThat(nextSchedule.getAlarmTime()).isEqualTo(LocalTime.of(20, 0));
+    }
+
+    @Test
+    @DisplayName("오늘 남은 알람이 있으면 가장 가까운 알람을 다음 알람으로 반환한다")
+    void 오늘_남은_알람이_있으면_가장_가까운_알람을_반환한다() {
+        // given
+        Member member = mock(Member.class);
+        List<MedicineSchedule> schedules = List.of(
+                alarmSchedule(member, 1L, LocalTime.of(8, 0)),
+                alarmSchedule(member, 2L, LocalTime.of(13, 0)),
+                alarmSchedule(member, 3L, LocalTime.of(20, 0)));
+
+        // when
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(9, 0));
+
+        // then
+        assertThat(nextSchedule.getId()).isEqualTo(2L);
+        assertThat(nextSchedule.getAlarmTime()).isEqualTo(LocalTime.of(13, 0));
+    }
+
+    @Test
+    @DisplayName("한 스케줄에 인증이 여러 건이면 조회 순서와 무관하게 최초 인증 이미지를 반환한다")
+    void 중복_인증이면_최초_인증_이미지를_반환한다() {
+        // given
+        LocalDate today = LocalDate.now();
+        Member member = mock(Member.class);
+        MedicineSchedule schedule = alarmSchedule(member, 1L, LocalTime.of(8, 0));
+        MedicationProof earlier = proof(schedule, member, today.atTime(8, 5), "https://cdn.widyu.shop/earlier.jpg");
+        MedicationProof later = proof(schedule, member, today.atTime(8, 25), "https://cdn.widyu.shop/later.jpg");
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
+                member, Status.ACTIVE, today)).willReturn(List.of(schedule));
+        // 조회 쿼리에 정렬이 없으므로 늦은 인증이 먼저 반환되는 순서를 재현한다.
+        given(medicationProofRepository.findByMemberIdAndDateRange(
+                11L, today.atStartOfDay(), today.atTime(LocalTime.MAX)))
+                .willReturn(List.of(later, earlier));
+        given(walkRepository.findByMemberAndWalkDate(member, today)).willReturn(Optional.empty());
+        given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
+
+        // when
+        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+
+        // then
+        assertThat(response.medicine().proofImageUrl()).isEqualTo("https://cdn.widyu.shop/earlier.jpg");
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("오늘 유효 목록에서 빠진 스케줄의 인증은 복용 횟수에 포함하지 않는다")
+    void 유효하지_않은_스케줄의_인증은_복용_횟수에서_제외한다() {
+        // given: 오전에 인증한 뒤 스케줄을 수정해 구 버전이 오늘 유효 목록에서 빠진 상황
+        LocalDate today = LocalDate.now();
+        Member member = mock(Member.class);
+        MedicineSchedule closedSchedule = alarmSchedule(member, 1L, LocalTime.of(8, 0));
+        MedicineSchedule currentSchedule = alarmSchedule(member, 2L, LocalTime.of(9, 0));
+        MedicationProof closedProof = proof(closedSchedule, member, today.atTime(8, 5), "https://cdn.widyu.shop/old.jpg");
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
+                member, Status.ACTIVE, today)).willReturn(List.of(currentSchedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(
+                11L, today.atStartOfDay(), today.atTime(LocalTime.MAX)))
+                .willReturn(List.of(closedProof));
+        given(walkRepository.findByMemberAndWalkDate(member, today)).willReturn(Optional.empty());
+        given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
+
+        // when
+        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+
+        // then
+        assertThat(response.medicine().takenCount()).isZero();
+        assertThat(response.medicine().totalCount()).isEqualTo(1);
+        assertThat(response.medicine().proofImageUrl()).isNull();
+    }
+
+    private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
+        MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
+        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
+        return proof;
+    }
+
+    private MedicineSchedule alarmSchedule(Member member, Long id, LocalTime alarmTime) {
+        MedicineSchedule schedule = MedicineSchedule.create(member, alarmTime);
+        ReflectionTestUtils.setField(schedule, "id", id);
+        return schedule;
     }
 
     private MedicineSchedule schedule(Member member, Long id, LocalDate effectiveFrom, LocalDate effectiveTo) {

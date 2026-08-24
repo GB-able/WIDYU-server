@@ -1,8 +1,11 @@
 package com.widyu.goal.home.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.widyu.medicine.MedicationProof;
+import com.widyu.medicine.MedicineSchedule;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public record SeniorGoalHomeResponse(
         @Schema(description = "약 스케줄 정보")
@@ -38,8 +41,35 @@ public record SeniorGoalHomeResponse(
             Integer nextDoseCount,
 
             @Schema(description = "다음 알람 시간", example = "17:00")
-            String nextAlarmTime
+            String nextAlarmTime,
+
+            @Schema(description = "해당 스케줄의 복용 인증 이미지 (미복용 시 null)")
+            String proofImageUrl
     ) {
+        private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+
+        public static MedicineInfo from(
+                MedicineSchedule nextSchedule,
+                int takenCount,
+                int totalCount,
+                MedicationProof proof
+        ) {
+            return new MedicineInfo(
+                    nextSchedule.getId(),
+                    takenCount,
+                    totalCount,
+                    nextSchedule.getTotalCount(),
+                    nextSchedule.getAlarmTime().format(TIME_FORMATTER),
+                    firstProofImageUrl(proof)
+            );
+        }
+
+        private static String firstProofImageUrl(MedicationProof proof) {
+            if (proof == null || proof.getProofImageUrls().isEmpty()) {
+                return null;
+            }
+            return proof.getProofImageUrls().getFirst();
+        }
     }
 
     @Schema(description = "걸음 수 정보")
