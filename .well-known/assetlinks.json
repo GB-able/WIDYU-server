@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.widyu",
+      "sha256_cert_fingerprints": [
+        "93:B0:0C:A6:9A:34:B0:E7:97:50:DE:67:EB:53:8D:AD:A3:63:4D:79:62:B5:F7:AB:E4:DB:E3:10:F2:67:C8:B5"
+      ]
+    }
+  }
+]
