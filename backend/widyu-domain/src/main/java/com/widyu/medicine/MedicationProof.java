@@ -13,7 +13,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +31,10 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "medication_proof",
         indexes = @Index(name = "idx_medication_proof_member_verified",
-                columnList = "member_id, verified_at")
+                columnList = "member_id, verified_at"),
+        // 같은 날 동일 스케줄 중복 인증 차단 (애플리케이션 검사만으로는 동시 요청을 막지 못한다)
+        uniqueConstraints = @UniqueConstraint(name = "uk_medication_proof_schedule_date",
+                columnNames = {"medicine_schedule_id", "verified_date"})
 )
 public class MedicationProof extends BaseTimeEntity {
 
@@ -53,6 +59,10 @@ public class MedicationProof extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDateTime verifiedAt;
 
+    // verifiedAt의 일자 부분. datetime으로는 일자 단위 unique 제약을 걸 수 없어 따로 둔다.
+    @Column(name = "verified_date", nullable = false)
+    private LocalDate verifiedDate;
+
     @Builder(access = AccessLevel.PRIVATE)
     private MedicationProof(MedicineSchedule medicineSchedule, Member member,
                             List<String> proofImageUrls, LocalDateTime verifiedAt) {
@@ -60,6 +70,11 @@ public class MedicationProof extends BaseTimeEntity {
         this.member = member;
         this.proofImageUrls = proofImageUrls != null ? proofImageUrls : new ArrayList<>();
         this.verifiedAt = verifiedAt != null ? verifiedAt : LocalDateTime.now();
+    }
+
+    @PrePersist
+    private void applyVerifiedDate() {
+        this.verifiedDate = this.verifiedAt.toLocalDate();
     }
 
     public static MedicationProof create(MedicineSchedule medicineSchedule, Member member,

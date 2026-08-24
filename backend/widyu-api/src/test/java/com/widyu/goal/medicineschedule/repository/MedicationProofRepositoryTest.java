@@ -1,6 +1,7 @@
 package com.widyu.goal.medicineschedule.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -74,5 +76,40 @@ class MedicationProofRepositoryTest {
 
         // then
         assertThat(proofs).extracting(MedicationProof::getId).containsExactly(inRange.getId());
+    }
+
+    @Test
+    @DisplayName("같은 날 동일 스케줄에 인증을 두 건 저장하면 예외가 발생한다")
+    void 같은_날_동일_스케줄에_중복_인증하면_예외가_발생한다() {
+        // given
+        Member member = persistSenior("01055556666");
+        MedicineSchedule schedule = persistSchedule(member, LocalDate.of(2026, 8, 1));
+        persistProof(schedule, member, LocalDateTime.of(2026, 8, 10, 8, 5));
+
+        MedicationProof duplicate = MedicationProof.create(schedule, member, List.of());
+        ReflectionTestUtils.setField(duplicate, "verifiedAt", LocalDateTime.of(2026, 8, 10, 8, 25));
+
+        // when & then: 알람 허용창 안이라 시각은 다르지만 같은 날짜다.
+        // 서비스와 동일하게 리포지토리로 저장해 Spring 예외 변환까지 확인한다.
+        assertThatThrownBy(() -> medicationProofRepository.saveAndFlush(duplicate))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("날짜가 다르거나 스케줄이 다르면 중복 제약에 걸리지 않는다")
+    void 날짜나_스케줄이_다르면_중복_제약에_걸리지_않는다() {
+        // given
+        Member member = persistSenior("01077778888");
+        MedicineSchedule schedule = persistSchedule(member, LocalDate.of(2026, 8, 1));
+        MedicineSchedule anotherSchedule = persistSchedule(member, LocalDate.of(2026, 8, 1));
+        persistProof(schedule, member, LocalDateTime.of(2026, 8, 10, 8, 5));
+
+        // when
+        MedicationProof nextDay = persistProof(schedule, member, LocalDateTime.of(2026, 8, 11, 8, 5));
+        MedicationProof otherSchedule = persistProof(anotherSchedule, member, LocalDateTime.of(2026, 8, 10, 8, 5));
+
+        // then
+        assertThat(nextDay.getId()).isNotNull();
+        assertThat(otherSchedule.getId()).isNotNull();
     }
 }

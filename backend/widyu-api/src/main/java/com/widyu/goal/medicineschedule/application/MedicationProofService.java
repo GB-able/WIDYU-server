@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -83,10 +84,21 @@ public class MedicationProofService {
         List<String> imageUrls = uploadProofImages(images, currentMember.getId());
 
         MedicationProof proof = MedicationProof.create(schedule, currentMember, imageUrls);
-        medicationProofRepository.save(proof);
+        saveProof(proof, scheduleId);
 
         log.info("약 복용 인증 완료: scheduleId={}, memberId={}, verifiedAt={}",
                 scheduleId, currentMember.getId(), now);
+    }
+
+    // 위 중복 검사와 저장 사이에 다른 요청이 끼어들 수 있어, 최종 차단은 DB unique 제약이 맡는다.
+    private void saveProof(MedicationProof proof, Long scheduleId) {
+        try {
+            medicationProofRepository.saveAndFlush(proof);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("약 복용 인증 중복 저장 감지: scheduleId={}", scheduleId);
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "오늘은 이미 해당 약 복용을 인증했습니다.");
+        }
     }
 
     private List<String> uploadProofImages(List<MultipartFile> images, Long memberId) {
