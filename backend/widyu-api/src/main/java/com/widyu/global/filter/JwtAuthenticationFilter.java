@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,8 +31,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Set<String> TEMPORARY_TOKEN_PATHS = Set.of(
+            "/api/v1/auth/guardians/sign-up/local",
+            "/api/v1/auth/guardians/password",
+            "/api/v1/auth/guardians/apple/phone-number",
+            "/api/v1/auth/guardians/profile/temporary",
+            "/api/v1/auth/guardians/social/integration"
+    );
+
     private final JwtTokenProvider jwtTokenProvider;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        return TEMPORARY_TOKEN_PATHS.contains(request.getRequestURI());
+    }
 
     @Override
     protected void doFilterInternal(
