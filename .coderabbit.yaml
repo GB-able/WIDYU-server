@@ -11,6 +11,7 @@ reviews:
     - "!admin/package-lock.json"
     - "!**/*.{jar,png,jpg,jpeg,gif,svg,ico,mp4}"
   auto_review:
+    enabled: true
     base_branches:
       - develop
     drafts: false
@@ -19,16 +20,26 @@ reviews:
       instructions: |
         - 엔티티와 도메인 모델만 위치하는지 확인한다.
         - Repository, Service, Controller가 추가되면 지적한다.
-        - JPA 연관관계, 제약조건, 상태 변경이 기존 도메인 불변식을 깨지 않는지 확인한다.
-    - path: "backend/widyu-api/src/main/java/com/widyu/{auth,pay,global/security}/**/*.java"
+        - JPA 연관관계와 제약조건이 데이터 정합성을 깨뜨릴 수 있는지 확인한다.
+        - 상태 변경이 기존 도메인 불변식을 깨뜨릴 수 있는지 확인한다.
+    - path: "backend/widyu-api/src/main/java/com/widyu/{auth,global/security}/**/*.java"
       instructions: |
-        - 인증·인가 누락, 입력 검증, 시크릿 노출 가능성을 우선 확인한다.
-        - 결제·포인트 로직은 트랜잭션 경계, 멱등성, 동시성으로 인한 중복 처리를 확인한다.
+        - 인증·인가 누락과 인증 우회 가능성을 우선 확인한다.
+        - 사용자 입력 검증이 필요한 지점을 확인한다.
+        - 토큰, 키, 개인정보 등 민감한 정보가 로그나 응답에 노출될 수 있는지 확인한다.
+    - path: "backend/widyu-api/src/main/java/com/widyu/pay/**/*.java"
+      instructions: |
+        - 트랜잭션 경계가 적절한지 확인한다.
+        - 동일 요청의 재시도로 결제·포인트가 중복 처리될 수 있는지 확인한다.
+        - 동시 요청으로 상태나 잔액 정합성이 깨질 수 있는지 확인한다.
+        - 외부 API 호출이 DB 트랜잭션을 불필요하게 오래 유지시키지 않는지 확인한다.
     - path: "backend/**/src/test/**/*.java"
       instructions: |
-        - LLD 인수조건과 변경된 동작의 정상·예외 경로를 검증하는지 확인한다.
-        - 구현 호출 횟수보다 결과 상태를 우선 검증하는지 확인한다.
+        - PR 설명이나 연결된 이슈의 인수조건을 검증하는지 확인한다.
+        - 변경된 동작의 정상 경로와 주요 예외 경로를 검증하는지 확인한다.
+        - 내부 구현의 호출 횟수보다 최종 결과와 상태를 검증하는지 확인한다.
     - path: "admin/src/**/*.{ts,tsx}"
       instructions: |
         - 인증 우회와 토큰 노출 가능성을 우선 확인한다.
-        - 로딩·오류·빈 상태 처리와 기본 접근성을 확인한다.
+        - 로딩·오류·빈 상태가 적절히 처리되는지 확인한다.
+        - 기본적인 접근성 문제가 있는지 확인한다.
