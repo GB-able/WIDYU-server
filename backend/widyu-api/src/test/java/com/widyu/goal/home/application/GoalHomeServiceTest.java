@@ -262,6 +262,35 @@ class GoalHomeServiceTest {
         assertThat(response.medicine().takenCount()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("오늘 유효 목록에서 빠진 스케줄의 인증은 복용 횟수에 포함하지 않는다")
+    void 유효하지_않은_스케줄의_인증은_복용_횟수에서_제외한다() {
+        // given: 오전에 인증한 뒤 스케줄을 수정해 구 버전이 오늘 유효 목록에서 빠진 상황
+        LocalDate today = LocalDate.now();
+        Member member = mock(Member.class);
+        MedicineSchedule closedSchedule = alarmSchedule(member, 1L, LocalTime.of(8, 0));
+        MedicineSchedule currentSchedule = alarmSchedule(member, 2L, LocalTime.of(9, 0));
+        MedicationProof closedProof = proof(closedSchedule, member, today.atTime(8, 5), "https://cdn.widyu.shop/old.jpg");
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
+                member, Status.ACTIVE, today)).willReturn(List.of(currentSchedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(
+                11L, today.atStartOfDay(), today.atTime(LocalTime.MAX)))
+                .willReturn(List.of(closedProof));
+        given(walkRepository.findByMemberAndWalkDate(member, today)).willReturn(Optional.empty());
+        given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
+
+        // when
+        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+
+        // then
+        assertThat(response.medicine().takenCount()).isZero();
+        assertThat(response.medicine().totalCount()).isEqualTo(1);
+        assertThat(response.medicine().proofImageUrl()).isNull();
+    }
+
     private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
         MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
         ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);

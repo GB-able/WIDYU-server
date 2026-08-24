@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BinaryOperator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -77,9 +78,15 @@ public class SeniorHomeService {
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
+        // 스케줄 수정·삭제로 오늘 유효 목록에서 빠진 버전의 인증은 제외한다 (takenCount가 totalCount를 넘지 않도록)
+        Set<Long> scheduleIds = schedules.stream()
+                .map(MedicineSchedule::getId)
+                .collect(java.util.stream.Collectors.toSet());
+
         Map<Long, MedicationProof> proofsByScheduleId = medicationProofRepository
                 .findByMemberIdAndDateRange(member.getId(), startOfDay, endOfDay)
                 .stream()
+                .filter(proof -> scheduleIds.contains(proof.getMedicineSchedule().getId()))
                 .collect(java.util.stream.Collectors.toMap(
                         proof -> proof.getMedicineSchedule().getId(),
                         proof -> proof,
