@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/harness/pre-edit-branch-guard.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/pre-edit-branch-guard.sh\""
           }
         ]
       }
@@ -37,11 +37,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/harness/on-file-edit.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/on-file-edit.sh\""
           },
           {
             "type": "command",
-            "command": "bash scripts/harness/audit-log.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/audit-log.sh\""
           }
         ]
       },
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/harness/audit-log.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/audit-log.sh\""
           }
         ]
       }
@@ -60,11 +60,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/harness/on-stop.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/on-stop.sh\""
           },
           {
             "type": "command",
-            "command": "bash scripts/harness/audit-log.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/audit-log.sh\""
           }
         ]
       }
