@@ -5,6 +5,7 @@
 #
 # 훅 설정(.claude/settings.json)은 이제 git 으로 추적되므로 복사 단계가 없다.
 # clone·pull 하면 아래 훅이 그대로 적용된다:
+#   PreToolUse(Edit|Write)  → pre-edit-branch-guard.sh
 #   PostToolUse(Edit|Write) → on-file-edit.sh + audit-log.sh
 #   PostToolUse(Bash)       → audit-log.sh
 #   Stop                    → on-stop.sh + audit-log.sh
