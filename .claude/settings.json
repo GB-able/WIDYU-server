@@ -6,11 +6,19 @@
       "Read(./.env.*)",
       "Read(./**/application-prod.yml)",
       "Read(./**/application-secret.yml)",
-      "Read(./src/main/resources/firebase/**)",
+      "Read(./**/firebase/**)",
       "Read(./**/*.pem)",
       "Read(./**/*.p8)",
       "Bash(cat ./.env:*)",
-      "Bash(cat .env:*)"
+      "Bash(cat .env:*)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(docker compose down -v*)",
+      "Bash(docker-compose down -v*)"
     ],
     "ask": [
       "Bash(git push:*)",
@@ -27,6 +35,15 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/pre-edit-branch-guard.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/harness/pre-bash-guard.sh\""
           }
         ]
       }
