@@ -61,8 +61,18 @@ MSG
 fi
 
 # (세션 × 브랜치) ack 확인
+#
+# 슬러그만 쓰면 안 된다. tr 이 '/' 를 '-' 로 바꾸므로 feature/foo 와 feature-foo 가
+# 같은 파일명이 되고, 같은 세션에서 한쪽을 ack 한 뒤 다른 쪽으로 전환하면 확인 없이
+# 통과한다. 가드가 막으려던 드리프트가 그대로 일어난다.
+# 그래서 전체 브랜치명의 체크섬을 함께 붙인다. 슬러그는 .claude/state/ 를 눈으로
+# 훑을 때 어느 브랜치인지 알아보려고 남긴다.
+# session_id 는 앞 8자만 쓴다. on-stop.sh 의 codex-round-<sid8>.json 과 맞춘 것이고,
+# 한 머신에서 동시에 도는 세션 수를 감안하면 UUID 앞 8자로 충분하다.
 mkdir -p "$STATE_DIR"
-ack="$STATE_DIR/branch-ack-${session_id:0:8}-$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-').txt"
+branch_slug="$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')"
+branch_sum="$(printf '%s' "$branch" | cksum | cut -d' ' -f1)"
+ack="$STATE_DIR/branch-ack-${session_id:0:8}-${branch_slug}-${branch_sum}.txt"
 [[ -f "$ack" ]] && exit 0
 
 cat >&2 <<MSG
