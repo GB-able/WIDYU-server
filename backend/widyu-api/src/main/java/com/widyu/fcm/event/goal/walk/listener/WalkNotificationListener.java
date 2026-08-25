@@ -57,9 +57,9 @@ public class WalkNotificationListener {
      * 개별 미달성자에게 알림 발송
      */
     private void sendUnachievedNotification(Walk walk) {
-        String title = "오늘의 걷기 목표를 달성하지 못했어요";
-        String content = String.format("목표 %d보 중 %d보를 걸으셨어요. 조금만 더 힘내세요!",
+        String title = String.format("목표 %d보 중 %d보를 걸으셨어요. 조금만 더 힘내세요!",
                 walk.getGoalSteps(), walk.getActualSteps());
+        String content = "오늘의 걷기 목표를 확인해주세요.";
 
         FcmSendDto fcmSendDto = FcmSendDto.builder()
                 .title(title)

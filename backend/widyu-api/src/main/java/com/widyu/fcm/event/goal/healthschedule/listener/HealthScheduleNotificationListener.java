@@ -66,9 +66,9 @@ public class HealthScheduleNotificationListener {
      */
     private void sendScheduleNotification(HealthSchedule schedule) {
         String scheduledTime = schedule.getScheduledAt().format(TIME_FORMATTER);
-        String title = "건강 일정 알림";
-        String content = String.format("%s에 '%s' 일정이 있어요!",
+        String title = String.format("%s에 '%s' 일정이 있어요!",
                 scheduledTime, schedule.getScheduleName());
+        String content = "건강 일정을 잊지 말고 확인해주세요.";
 
         FcmSendDto fcmSendDto = FcmSendDto.builder()
                 .title(title)
