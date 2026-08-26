@@ -5,16 +5,20 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.medicineschedule.dto.response.MedicationProofResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.member.Member;
+import com.widyu.member.SeniorProfile;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,7 +41,7 @@ public class MedicationProofService {
     private final S3Service s3Service;
 
     @Transactional
-    public void verifyMedication(Long scheduleId, List<MultipartFile> images) {
+    public MedicationProofResponse verifyMedication(Long scheduleId, List<MultipartFile> images) {
         Member currentMember = memberUtil.getCurrentMember();
 
         MedicineSchedule schedule = medicineScheduleRepository
@@ -86,8 +90,30 @@ public class MedicationProofService {
         MedicationProof proof = MedicationProof.create(schedule, currentMember, imageUrls);
         saveProof(proof, scheduleId);
 
-        log.info("약 복용 인증 완료: scheduleId={}, memberId={}, verifiedAt={}",
-                scheduleId, currentMember.getId(), now);
+        long earnedPoints = calculateEarnedPoints(currentMember, now.toLocalDate());
+
+        log.info("약 복용 인증 완료: scheduleId={}, memberId={}, verifiedAt={}, earnedPoints={}",
+                scheduleId, currentMember.getId(), now, earnedPoints);
+
+        return MedicationProofResponse.of(currentPoints(currentMember), earnedPoints);
+    }
+
+    // 인증을 저장한 뒤의 오늘 인증 횟수로 계산해야 마지막 일정 인증에 보너스가 반영된다.
+    private long calculateEarnedPoints(Member member, LocalDate date) {
+        long proofCount = medicationProofRepository.countByMemberAndVerifiedAtBetween(
+                member, date.atStartOfDay(), date.atTime(LocalTime.MAX));
+        long totalSchedules = medicineScheduleRepository.countEffectiveByMemberAndDate(
+                member, Status.ACTIVE, date);
+        return MedicationPointPolicy.calculateEarnedPoints(proofCount, totalSchedules);
+    }
+
+    // 시니어 프로필이 없는 회원도 인증 자체는 성공해야 하므로 잔액은 0으로 내려준다.
+    private long currentPoints(Member member) {
+        SeniorProfile seniorProfile = member.getSeniorProfile();
+        if (seniorProfile == null) {
+            return 0L;
+        }
+        return Objects.requireNonNullElse(seniorProfile.getPoints(), 0L);
     }
 
     // 위 중복 검사와 저장 사이에 다른 요청이 끼어들 수 있어, 최종 차단은 DB unique 제약이 맡는다.

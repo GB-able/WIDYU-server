@@ -1,6 +1,7 @@
 package com.widyu.goal.medicineschedule.scheduler;
 
 import com.widyu.global.entity.Status;
+import com.widyu.goal.medicineschedule.application.MedicationPointPolicy;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.member.Member;
@@ -18,9 +19,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 public class MedicineScheduleRewardScheduler {
-
-    private static final long POINTS_PER_MEDICATION = 10L;
-    private static final long BONUS_POINTS_FOR_COMPLETION = 20L;
 
     private final MedicationProofRepository medicationProofRepository;
     private final MedicineScheduleRepository medicineScheduleRepository;
@@ -79,15 +77,8 @@ public class MedicineScheduleRewardScheduler {
             return;
         }
 
-        // 포인트 계산: 1회당 10p
-        long points = proofCount * POINTS_PER_MEDICATION;
-
-        // 모든 일정 완료 시 보너스 20p 추가
-        if (proofCount == totalSchedules && totalSchedules > 0) {
-            points += BONUS_POINTS_FOR_COMPLETION;
-            log.info("모든 복용 일정 완료 보너스 적용: memberId={}, proofCount={}/{}",
-                    member.getId(), proofCount, totalSchedules);
-        }
+        // 포인트 계산: 1회당 10p, 그날 유효한 일정을 모두 채우면 보너스 20p
+        long points = MedicationPointPolicy.calculateDailyPoints(proofCount, totalSchedules);
 
         // 포인트 적립
         seniorProfileService.addPointsToMember(member.getId(), points);

@@ -3,6 +3,7 @@ package com.widyu.goal.medicineschedule.controller.docs;
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.goal.medicineschedule.dto.request.CreateMedicineScheduleRequest;
 import com.widyu.goal.medicineschedule.dto.request.UpdateMedicineScheduleRequest;
+import com.widyu.goal.medicineschedule.dto.response.MedicationProofResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
@@ -466,6 +467,13 @@ public interface MedicineScheduleDocs {
                     - 알람 시간 전후 30분 이내에만 인증 가능
                     - 당일 중복 인증 불가
 
+                    **응답:**
+                    - `currentPoints`: 응답 시점의 보유 포인트입니다. 이번 인증분은 아직 반영되지 않았습니다.
+                      (시니어 프로필이 없는 회원은 0)
+                    - `earnedPoints`: 이번 인증으로 적립될 예정 포인트입니다. 기본 10p이며,
+                      이번 인증으로 그날 유효한 복용 일정을 모두 채우면 보너스 20p를 더해 30p입니다.
+                    - 포인트는 매일 자정 정산 시 실제로 적립됩니다.
+
                     **권한:**
                     - 시니어 본인만 가능
                     """
@@ -476,7 +484,7 @@ public interface MedicineScheduleDocs {
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
-    ApiResponseTemplate<Void> verifyMedication(
+    ApiResponseTemplate<MedicationProofResponse> verifyMedication(
             @Parameter(description = "약 복용 스케줄 ID", required = true)
             @PathVariable Long scheduleId,
             @Parameter(description = "약 복용 인증 이미지")
