@@ -175,6 +175,8 @@ public interface AlbumDocs {
                                                     ],
                                                     "createdAt": "2024-12-21T14:30:00",
                                                     "canEdit": true,
+                                                    "isUnlocked": false,
+                                                    "price": 50,
                                                     "videoDuration": null
                                                   }
                                                 ],
@@ -792,6 +794,7 @@ public interface AlbumDocs {
                                                 "albumId": 123,
                                                 "albumTitle": "오늘 소풍 다녀왔어요!",
                                                 "unlockedAt": "2025-09-13T12:00:00",
+                                                "remainingPoints": 50,
                                                 "message": "앨범이 해금되었습니다."
                                               }
                                             }

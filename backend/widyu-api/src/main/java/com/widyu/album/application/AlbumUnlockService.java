@@ -34,8 +34,6 @@ public class AlbumUnlockService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final FamilyAccessService familyAccessService;
 
-    private static final long DEFAULT_UNLOCK_PRICE = 50;
-
     @Transactional
     public AlbumUnlockResponse unlockAlbum(Long albumId) {
         Member currentMember = memberUtil.getCurrentMember();
@@ -75,7 +73,7 @@ public class AlbumUnlockService {
 
         // 6. 포인트 차감 및 내역 기록
         deductPoints(seniorProfile);
-        pointHistoryRepository.save(PointHistory.use(seniorProfile, DEFAULT_UNLOCK_PRICE, "앨범 해금"));
+        pointHistoryRepository.save(PointHistory.use(seniorProfile, Album.UNLOCK_PRICE, "앨범 해금"));
 
         // 7. 해금 기록 생성
         AlbumUnlock albumUnlock = AlbumUnlock.createUnlock(album, currentMember);
@@ -87,7 +85,7 @@ public class AlbumUnlockService {
                 currentMember.getId()
         ));
 
-        return AlbumUnlockResponse.from(savedUnlock);
+        return AlbumUnlockResponse.from(savedUnlock, seniorProfile.getPoints());
     }
 
     @Transactional(readOnly = true)
@@ -96,10 +94,10 @@ public class AlbumUnlockService {
     }
 
     private boolean hasEnoughBalance(SeniorProfile seniorProfile) {
-        return seniorProfile.hasEnoughPoints(DEFAULT_UNLOCK_PRICE);
+        return seniorProfile.hasEnoughPoints(Album.UNLOCK_PRICE);
     }
 
     private void deductPoints(SeniorProfile seniorProfile) {
-        seniorProfile.deductPoints(DEFAULT_UNLOCK_PRICE);
+        seniorProfile.deductPoints(Album.UNLOCK_PRICE);
     }
 }

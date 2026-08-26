@@ -9,10 +9,11 @@ public record AlbumUnlockResponse(
         Long albumId,
         String albumTitle,
         LocalDateTime unlockedAt,
+        Long remainingPoints,
         String message
 ) {
     
-    public static AlbumUnlockResponse from(AlbumUnlock albumUnlock) {
+    public static AlbumUnlockResponse from(AlbumUnlock albumUnlock, Long remainingPoints) {
         return new AlbumUnlockResponse(
                 albumUnlock.getId(),
                 albumUnlock.getAlbum().getId(),
@@ -20,6 +21,7 @@ public record AlbumUnlockResponse(
                     ? albumUnlock.getAlbum().getContent().substring(0, 50) + "..." 
                     : albumUnlock.getAlbum().getContent(),
                 albumUnlock.getUnlockedAt(),
+                remainingPoints,
                 "앨범이 해금되었습니다."
         );
     }
