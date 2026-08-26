@@ -8,6 +8,7 @@ import com.widyu.goal.medicineschedule.application.MedicineScheduleService;
 import com.widyu.goal.medicineschedule.controller.docs.MedicineScheduleDocs;
 import com.widyu.goal.medicineschedule.dto.request.CreateMedicineScheduleRequest;
 import com.widyu.goal.medicineschedule.dto.request.UpdateMedicineScheduleRequest;
+import com.widyu.goal.medicineschedule.dto.response.MedicationProofResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
@@ -143,15 +144,15 @@ public class MedicineScheduleController implements MedicineScheduleDocs {
 
     @Override
     @PostMapping("/{scheduleId}/verify")
-    public ApiResponseTemplate<Void> verifyMedication(
+    public ApiResponseTemplate<MedicationProofResponse> verifyMedication(
             @PathVariable Long scheduleId,
             @RequestPart(required = false) List<MultipartFile> medicationProofImage
     ) {
-        medicationProofService.verifyMedication(scheduleId, medicationProofImage);
+        MedicationProofResponse response = medicationProofService.verifyMedication(scheduleId, medicationProofImage);
         return ApiResponseTemplate.ok()
                 .code("MEDICINE_2008")
                 .message("약 복용 인증 성공")
-                .build();
+                .body(response);
     }
 
     @Override

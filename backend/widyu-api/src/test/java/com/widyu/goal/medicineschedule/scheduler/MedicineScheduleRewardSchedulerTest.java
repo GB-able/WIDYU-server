@@ -49,5 +49,7 @@ class MedicineScheduleRewardSchedulerTest {
         // then: 전날(어제) 유효했던 스케줄 수 기준으로 집계한다
         then(medicineScheduleRepository).should()
                 .countEffectiveByMemberAndDate(eq(member), eq(Status.ACTIVE), eq(LocalDate.now().minusDays(1)));
+        // 2회 인증 * 10p + 모든 일정 완료 보너스 20p
+        then(seniorProfileService).should().addPointsToMember(1L, 40L);
     }
 }
