@@ -25,6 +25,7 @@ public record AlbumFeedResponse(
         LocalDateTime createdAt,
         Boolean canEdit,
         Boolean isUnlocked,
+        Long price,
         String videoDuration // 동영상인 경우만
 ) {
     public record ViewerInfo(
@@ -61,6 +62,7 @@ public record AlbumFeedResponse(
                 album.getCreatedAt(),
                 canEdit,
                 isUnlocked,
+                Album.UNLOCK_PRICE,
                 primaryVideoDuration
         );
     }

@@ -15,7 +15,8 @@ public record FamilyAlbumResponse(
         Integer viewCount,
         LocalDateTime createdAt,
         AuthorInfo author,
-        List<ViewerInfo> viewers
+        List<ViewerInfo> viewers,
+        Long price
 ) {
     public static FamilyAlbumResponse from(Album album, List<Member> viewers) {
         Member member = album.getMember();
@@ -37,7 +38,8 @@ public record FamilyAlbumResponse(
                 album.getViewCount(),
                 album.getCreatedAt(),
                 AuthorInfo.from(member),
-                viewerInfos
+                viewerInfos,
+                Album.UNLOCK_PRICE
         );
     }
 

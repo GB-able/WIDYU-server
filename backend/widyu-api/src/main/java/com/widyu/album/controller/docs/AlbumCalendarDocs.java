@@ -100,7 +100,8 @@ public interface AlbumCalendarDocs {
                                                 "name": "김철수",
                                                 "profileImage": null
                                               }
-                                            ]
+                                            ],
+                                            "price": 50
                                           }
                                         ],
                                         "hasNext": true,

@@ -19,6 +19,6 @@ public interface AlbumUnlockRepository extends JpaRepository<AlbumUnlock, Long> 
     List<Long> findUnlockedAlbumIdsByMemberAndAlbumIds(@Param("member") Member member,
                                                        @Param("albumIds") List<Long> albumIds);
 
-    @Query("SELECT COUNT(au) * 50 FROM AlbumUnlock au WHERE au.member = :member")
+    @Query("SELECT COUNT(au) * " + Album.UNLOCK_PRICE + " FROM AlbumUnlock au WHERE au.member = :member")
     Long getTotalUnlockPriceByMember(@Param("member") Member member);
 }

@@ -1,5 +1,6 @@
 package com.widyu.album.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -25,6 +26,7 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -85,6 +87,41 @@ class AlbumUnlockServiceTest {
         verify(pointHistoryRepository).save(any(PointHistory.class));
         verify(albumUnlockRepository).save(any(AlbumUnlock.class));
         verify(eventPublisher).publishEvent(any(AlbumUnlockedEvent.class));
+    }
+
+    @Test
+    @DisplayName("앨범을 해금하면 포인트 차감 후 잔여 포인트가 응답에 담긴다")
+    void 앨범_해금_시_차감_후_잔여_포인트를_반환한다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        ReflectionTestUtils.setField(senior, "type", MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        Member albumOwner = mock(Member.class);
+        given(albumOwner.getId()).willReturn(2L);
+
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(albumOwner);
+        given(album.getContent()).willReturn("앨범 내용");
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        given(album.requiresUnlock()).willReturn(true);
+
+        // 가입 시 지급되는 100포인트를 가진 실제 프로필
+        SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
+                senior, null, "서울시 강남구", "ABCDEFG", LocalDate.of(1950, 1, 1));
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
+
+        given(albumUnlockRepository.existsByAlbumAndMember(album, senior)).willReturn(false);
+        given(albumUnlockRepository.save(any(AlbumUnlock.class)))
+                .willReturn(AlbumUnlock.createUnlock(album, senior));
+
+        // when
+        AlbumUnlockResponse response = albumUnlockService.unlockAlbum(10L);
+
+        // then
+        assertThat(response.remainingPoints()).isEqualTo(100L - Album.UNLOCK_PRICE);
+        assertThat(seniorProfile.getPoints()).isEqualTo(100L - Album.UNLOCK_PRICE);
     }
 
     @Test
