@@ -62,17 +62,35 @@ fi
 
 # (세션 × 브랜치) ack 확인
 #
-# 슬러그만 쓰면 안 된다. tr 이 '/' 를 '-' 로 바꾸므로 feature/foo 와 feature-foo 가
-# 같은 파일명이 되고, 같은 세션에서 한쪽을 ack 한 뒤 다른 쪽으로 전환하면 확인 없이
-# 통과한다. 가드가 막으려던 드리프트가 그대로 일어난다.
-# 그래서 전체 브랜치명의 체크섬을 함께 붙인다. 슬러그는 .claude/state/ 를 눈으로
-# 훑을 때 어느 브랜치인지 알아보려고 남긴다.
-# session_id 는 앞 8자만 쓴다. on-stop.sh 의 codex-round-<sid8>.json 과 맞춘 것이고,
-# 한 머신에서 동시에 도는 세션 수를 감안하면 UUID 앞 8자로 충분하다.
+# 파일명 키는 전체 session_id 와 전체 branch 를 함께 해시해서 만든다.
+# 어느 쪽이든 잘라 쓰면 서로 다른 (세션, 브랜치) 조합이 한 파일을 공유할 수 있고,
+# 그러면 확인 없이 통과해 이 가드가 막으려는 드리프트가 그대로 일어난다.
+#   - 슬러그만 쓰면: tr 이 '/' 를 '-' 로 바꿔 feature/foo 와 feature-foo 가 같은 파일.
+#   - session_id 앞 8자만 쓰면: ack 파일이 세션 종료 후에도 디스크에 남으므로,
+#     앞 8자가 겹치는 옛 세션의 ack 를 새 세션이 물려받는다.
+# on-stop.sh 의 codex-round-<sid8>.json 은 앞 8자를 쓰지만 그건 라운드 카운터라
+# 충돌해도 카운터를 공유하는 정도다. 여기는 게이트 우회라 위험도가 다르다.
+#
+# 해시는 sha256 앞 16자(64비트)를 쓴다. 적대적 상황이 아니고 파일도 이 머신에만
+# 있으므로 64비트로 충분하다. 슬러그를 앞에 남기는 건 .claude/state/ 를 눈으로
+# 훑을 때 어느 브랜치 것인지 알아보기 위해서다(차단 메시지가 이 경로를 안내한다).
+#
+# python3 호출이 하나 늘지만, 여기까지 오는 건 제외 경로·보호 브랜치를 모두
+# 통과한 편집뿐이라 대부분의 호출은 그 전에 끝난다.
 mkdir -p "$STATE_DIR"
 branch_slug="$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')"
-branch_sum="$(printf '%s' "$branch" | cksum | cut -d' ' -f1)"
-ack="$STATE_DIR/branch-ack-${session_id:0:8}-${branch_slug}-${branch_sum}.txt"
+ack_key="$(printf '%s\0%s' "$session_id" "$branch" | python3 -c '
+import hashlib, sys
+print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:16])
+' 2>/dev/null)"
+
+# 해시를 못 구하면 ack 를 신뢰할 수 없다. 조용히 통과시키지 말고 차단한다.
+if [[ -z "$ack_key" ]]; then
+  echo "차단: ack 키를 생성하지 못했습니다(python3 확인 필요). 안전을 위해 편집을 막습니다." >&2
+  exit 2
+fi
+
+ack="$STATE_DIR/branch-ack-${branch_slug}-${ack_key}.txt"
 [[ -f "$ack" ]] && exit 0
 
 cat >&2 <<MSG
