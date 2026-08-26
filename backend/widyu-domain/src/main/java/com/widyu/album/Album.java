@@ -37,6 +37,9 @@ import lombok.NoArgsConstructor;
 })
 public class Album extends BaseTimeEntity {
 
+    // 앨범 해금 가격. 상세·피드·해금 응답이 모두 이 값을 참조한다.
+    public static final long UNLOCK_PRICE = 50L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "album_id")

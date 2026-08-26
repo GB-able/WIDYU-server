@@ -17,7 +17,7 @@ public record AlbumDetailResponse(
         LocalDateTime createdAt,
         AuthorInfo author,
         List<ViewerInfo> viewers,
-        Integer price,
+        Long price,
         List<CommentInfo> comments,
         boolean canEdit,
         boolean isUnlocked
@@ -92,8 +92,6 @@ public record AlbumDetailResponse(
         }
     }
 
-    private static final int ALBUM_UNLOCK_PRICE = 50;
-
     public static AlbumDetailResponse from(Album album, Long currentUserId, List<Member> viewers,
                                            List<AlbumComment> comments, boolean isUnlocked) {
         return new AlbumDetailResponse(
@@ -106,7 +104,7 @@ public record AlbumDetailResponse(
                 album.getCreatedAt(),
                 AuthorInfo.from(album.getMember()),
                 viewers.stream().map(ViewerInfo::from).toList(),
-                ALBUM_UNLOCK_PRICE,
+                Album.UNLOCK_PRICE,
                 comments.stream()
                         .map(comment -> CommentInfo.from(comment, currentUserId))
                         .toList(),
