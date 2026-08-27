@@ -159,7 +159,8 @@ ALTER TABLE payment_order
     ADD COLUMN approval_retry_count INT NOT NULL DEFAULT 0,
     ADD COLUMN approval_next_retry_at DATETIME NULL,
     ADD COLUMN approval_last_error_code VARCHAR(100) NULL,
-    ADD COLUMN approval_recovery_stopped_at DATETIME NULL;
+    ADD COLUMN approval_recovery_stopped_at DATETIME NULL,
+    ADD INDEX idx_payment_order_approval_recovery (status, approval_next_retry_at);
 
 ALTER TABLE payment_cancel
     ADD COLUMN status ENUM('PENDING', 'COMPLETED', 'ABORTED') NOT NULL DEFAULT 'COMPLETED',
@@ -168,7 +169,8 @@ ALTER TABLE payment_cancel
     ADD COLUMN retry_count INT NOT NULL DEFAULT 0,
     ADD COLUMN next_retry_at DATETIME NULL,
     ADD COLUMN last_error_code VARCHAR(100) NULL,
-    ADD COLUMN recovery_stopped_at DATETIME NULL;
+    ADD COLUMN recovery_stopped_at DATETIME NULL,
+    ADD INDEX idx_payment_cancel_recovery (status, next_retry_at);
 
 UPDATE payment_cancel
 SET pg_idempotency_key = UUID()

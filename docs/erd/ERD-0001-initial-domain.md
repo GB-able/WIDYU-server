@@ -355,6 +355,8 @@ erDiagram
 | `family_membership` | UK | `(guardian_id)` | 보호자는 하나의 가족에만 속함 |
 | `album_like` | UK | `(album_id, member_id)` | 중복 좋아요 방지 |
 | `album_unlock` | UK | `(album_id, member_id)` | 중복 해금 방지 |
+| `payment_order` | `idx_payment_order_approval_recovery` | `(status, approval_next_retry_at)` | 승인 복구 대상 범위 조회 |
+| `payment_cancel` | `idx_payment_cancel_recovery` | `(status, next_retry_at)` | 취소 복구 대상 범위 조회 |
 | `payment_cancel` | UK `uk_payment_cancel_pg_idempotency_key` | `(pg_idempotency_key)` | PG 요청 재실행 식별 |
 | `payment_cancel` | UK `uk_payment_cancel_payment_idempotency_key` | `(payment_id, idempotency_key)` | 클라이언트 멱등 키 중복 방지 (ADR-0012) |
 
