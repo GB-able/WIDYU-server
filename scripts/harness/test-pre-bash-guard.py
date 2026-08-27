@@ -79,6 +79,35 @@ CASES = [
     # 반대로 heredoc 이 끝난 뒤 줄바꿈으로 이어진 진짜 명령은 잡아야 한다.
     (2, "heredoc 종료 후 실제 위험 명령",
      "cat > /tmp/x.md <<'EOF'\n안전한 본문\nEOF\nrm -rf /tmp/x.md"),
+
+    # ── 우회·오탐 회귀 (PR #535 리뷰) ────────────────────────────────────
+    # 따옴표 안의 <<EOF 는 heredoc 연산자가 아니다. 연산자로 오인하면
+    # 그 뒤의 진짜 명령이 본문으로 취급돼 통째로 숨는다.
+    (2, "따옴표 안 <<EOF 로 위험 명령 은닉",
+     "printf '%s\\n' '<<EOF'\nrm -rf ./build\nEOF"),
+    # 플래그를 나눠 써도 같은 삭제다.
+    (2, "rm 플래그 분리 (-r -f)", "rm -r -f ./build"),
+    (2, "rm 롱옵션", "rm --recursive --force ./build"),
+    # reader 와 secret 이 각각 다른 명령에 있으면 시크릿을 읽는 게 아니다.
+    (0, "reader 와 secret 이 다른 명령", "cat README.md && echo .env"),
+    # settings.json 이 Read(./.env.*) 를 막으므로 Bash 도 같은 범위여야 한다.
+    (2, ".env.local 읽기", "cat .env.local"),
+    (2, ".env.production 읽기", "base64 .env.production"),
+
+    # ── 토큰 분석으로 넘어오면서 확인한 우회 시도 ────────────────────────
+    (2, "rm 플래그 역순 (-f -r)", "rm -f -r ./build"),
+    (2, "rm 섞인 플래그 (-rvf)", "rm -rvf ./build"),
+    (2, "환경변수 대입 뒤 rm", "FOO=bar rm -rf x"),
+    (2, "절대경로 rm", "/bin/rm -rf x"),
+    (2, "공백 여러 개", "git   push   --force"),
+    # 서브커맨드 위치를 고정하면 옵션이 앞에 올 때 밀린다.
+    (2, "compose 옵션 뒤 down -v", "docker compose -f a.yml down -v"),
+    (2, "상대경로 우회한 .env", "cat ./config/../.env"),
+
+    (0, "따옴표 안 문자열은 실행이 아님", 'echo "cat .env"'),
+    (0, "force-with-lease 는 허용", "git push --force-with-lease"),
+    (0, "-r 만 (force 없음)", "rm -r ./build"),
+    (0, ".envrc 는 시크릿 아님", "cat .envrc"),
 ]
 
 
