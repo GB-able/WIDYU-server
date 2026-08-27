@@ -108,6 +108,21 @@ CASES = [
     (0, "force-with-lease 는 허용", "git push --force-with-lease"),
     (0, "-r 만 (force 없음)", "rm -r ./build"),
     (0, ".envrc 는 시크릿 아님", "cat .envrc"),
+
+    # ── 여러 줄에 걸친 인용 문자열 (줄 단위 파싱이 깨지던 자리) ──────────
+    # 셸 따옴표는 줄을 넘는다. 줄 단위로 lex 하면 여는 줄과 닫는 줄 양쪽에서
+    # "No closing quotation" 이 나고, 폴백 정규식이 본문 속 예시를 명령으로
+    # 오인해 차단했다. 실제로 PR 답글을 쓰다가 막혔다.
+    (0, "REGRESSION 여러 줄 인용 문자열 안의 위험 명령 예시",
+     "gh api -X POST repos/o/r/pulls/1/comments -f body='옵션을 토큰으로 봅니다.\n\n"
+     "플래그 역순 `rm -f -r`, 섞인 플래그 `rm -rvf` 도 막힙니다.\n\n"
+     "`git reset --hard` 와 `docker compose down -v` 도 마찬가지입니다.'"),
+    (0, "REGRESSION 함수 정의 + 여러 줄 인자",
+     "reply() {\n  gh api -X POST \"$1\" -f body=\"$2\"\n}\n"
+     "reply 123 '아래를 막습니다.\nrm -rf ./build\n'"),
+    # 반대로 따옴표 밖에 진짜로 있으면 잡아야 한다.
+    (2, "여러 줄 인용 문자열 뒤의 진짜 명령",
+     "gh api -f body='설명입니다.\n여러 줄입니다.'\nrm -rf ./build"),
 ]
 
 

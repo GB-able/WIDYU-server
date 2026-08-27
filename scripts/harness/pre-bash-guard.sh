@@ -12,21 +12,32 @@
 #
 # Silent Success: 통과는 exit 0 무출력, 차단은 stderr + exit 2.
 #
-# 판정을 정규식이 아니라 shlex 토큰으로 하는 이유 (PR #535 리뷰에서 드러난 것들):
-#   - 따옴표 안의 <<EOF 를 heredoc 연산자로 오인하면 그 뒤 진짜 명령이 본문으로
-#     취급돼 통째로 숨는다.
-#   - rm -rf 만 보면 rm -r -f, rm --recursive --force 를 놓친다.
-#   - reader 와 시크릿 경로를 각각 따로 찾으면 "cat README.md && echo .env" 처럼
-#     시크릿을 읽지 않는 조합까지 막는다.
-# 토큰으로 끊어 명령 단위(argv)를 만들면 셋 다 구조적으로 사라진다.
+# 판정 구조 (PR #535 리뷰를 거치며 도달한 형태):
+#   1) 따옴표 상태를 추적하며 한 번 훑어 heredoc 본문을 지우고 명령 단위로 끊는다.
+#      정규식으로도, 줄 단위 파싱으로도 안 된다. 셸 따옴표는 줄을 넘기 때문이다.
+#      줄 단위로 lex 하던 버전은 여러 줄에 걸친 인용 문자열에서 파싱이 깨졌고,
+#      폴백 정규식이 그 안의 예시 문자열을 명령으로 오인해 차단했다.
+#   2) 끊어낸 각 단위를 shlex 로 토큰화해 argv 를 만든다.
+#   3) argv 의 명령 이름과 옵션 집합을 보고 판정한다. 문자열 매칭이 아니므로
+#      rm -r -f, rm --recursive --force, 플래그 역순이 모두 걸린다.
+#
+# 오탐보다 미탐을 택한다. 이 훅은 모든 Bash 호출을 거치므로 오탐이 곧 작업 중단이다.
+# 판정할 수 없는 조각은 막지 않고 넘긴다. 막으려는 대상은 적대적 우회가 아니라
+# 평범한 사고이고, 보안 경계는 ADR-0018 대로 .gitignore 와 키 교체가 담당한다.
+#
+# 판정부를 인용 heredoc(<<'PYEOF')으로 넘긴다. 셸이 내용을 건드리지 않으므로
+# 파이썬 안에서 따옴표를 자유롭게 쓸 수 있다. python3 -c 로 넣던 때는 이스케이프가
+# 꼬여 실제로 문법 오류를 냈다.
 
 set -uo pipefail
 
-VERDICT="$(cat | python3 -c '
-import json, re, shlex, sys
+input="$(cat)"
+
+VERDICT="$(python3 - "$input" <<'PYEOF'
+import json, shlex, sys
 
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(sys.argv[1])
 except Exception:
     sys.exit(9)          # fail-closed
 
@@ -34,86 +45,124 @@ cmd = data.get("tool_input", {}).get("command", "")
 if not cmd:
     sys.exit(0)
 
-OPERATORS = {";", "&&", "||", "|", "&", "\n"}
 READERS = {"cat", "head", "tail", "less", "more", "nl",
            "base64", "xxd", "od", "strings", "awk", "sed"}
+SQUOTE, DQUOTE = "'", '"'
 
 
-def lex(text):
-    """따옴표를 존중해 토큰으로 끊는다. 연산자는 별도 토큰이 된다.
+def scan(text):
+    """따옴표 상태를 추적하며 한 번 훑어 명령 단위 문자열 목록을 만든다.
 
-    punctuation_chars 덕분에 맨 <<EOF 는 [\"<<\", \"EOF\"] 로,
-    따옴표에 싸인 \x27<<EOF\x27 는 [\"<<EOF\"] 한 토큰으로 나뉜다.
-    이 차이가 진짜 heredoc 연산자를 가려낸다.
+    - 따옴표 안의 구분자와 << 는 구분자가 아니다.
+    - heredoc 본문은 실행되는 명령이 아니라 데이터이므로 버린다.
+      (커밋 메시지에 위험 명령을 설명으로 적었다고 막으면 안 된다)
     """
-    lx = shlex.shlex(text, posix=True, punctuation_chars=True)
-    lx.whitespace_split = True
-    return list(lx)
+    out, cur = [], []
+    pending = []          # 이 줄에서 열린 heredoc 구분자들
+    i, n = 0, len(text)
 
+    def flush():
+        s = "".join(cur).strip()
+        if s:
+            out.append(s)
+        del cur[:]
 
-def strip_heredocs(text):
-    """heredoc 본문을 지운다. 본문은 실행되는 명령이 아니라 데이터다.
+    while i < n:
+        c = text[i]
 
-    커밋 메시지나 이슈 본문에 위험 명령을 설명으로 적었다고 차단하면 안 된다.
-    동시에 본문을 지워야 줄바꿈으로 이어진 진짜 명령을 제대로 볼 수 있다.
-    """
-    lines = text.split("\n")
-    kept, i = [], 0
-    while i < len(lines):
-        kept.append(lines[i])
-        try:
-            toks = lex(lines[i])
-        except ValueError:
-            toks = []
-        delim = None
-        for j, t in enumerate(toks):
-            if t in ("<<", "<<-") and j + 1 < len(toks):
-                delim = toks[j + 1]
-                break
-        if delim is not None:
-            i += 1
-            while i < len(lines) and lines[i].strip() != delim:
-                i += 1   # 본문 폐기
-        i += 1
-    return "\n".join(kept)
+        if c == "\\" and i + 1 < n:
+            cur.append(text[i:i + 2]); i += 2; continue
 
+        if c == SQUOTE:                    # 작은따옴표 안은 전부 리터럴
+            j = text.find(SQUOTE, i + 1)
+            if j == -1:
+                cur.append(text[i:]); break
+            cur.append(text[i:j + 1]); i = j + 1; continue
 
-def segments(text):
-    """연산자·줄바꿈으로 끊어 명령 단위 argv 목록을 만든다."""
-    out = []
-    for line in text.split("\n"):
-        if not line.strip():
+        if c == DQUOTE:                    # 큰따옴표는 역슬래시 이스케이프만 존중
+            j = i + 1
+            while j < n:
+                if text[j] == "\\":
+                    j += 2; continue
+                if text[j] == DQUOTE:
+                    break
+                j += 1
+            j = min(j, n - 1)
+            cur.append(text[i:j + 1]); i = j + 1; continue
+
+        # heredoc 시작. 구분자를 기억해 두고 줄이 끝나면 본문을 건너뛴다.
+        if text.startswith("<<", i) and not text.startswith("<<<", i):
+            j = i + 2
+            if j < n and text[j] == "-":
+                j += 1
+            while j < n and text[j] in " \t":
+                j += 1
+            q = ""
+            if j < n and text[j] in (SQUOTE, DQUOTE):
+                q = text[j]; j += 1
+            k = j
+            while k < n and (text[k].isalnum() or text[k] == "_"):
+                k += 1
+            delim = text[j:k]
+            if q and k < n and text[k] == q:
+                k += 1
+            if delim:
+                pending.append(delim)
+                i = k
+                continue
+
+        if text.startswith("&&", i) or text.startswith("||", i):
+            flush(); i += 2; continue
+
+        if c in ";|&":
+            flush(); i += 1; continue
+
+        if c == "\n":
+            flush(); i += 1
+            while pending:                 # 열린 heredoc 본문을 통째로 건너뛴다
+                delim = pending.pop(0)
+                while i < n:
+                    e = text.find("\n", i)
+                    line = text[i:] if e == -1 else text[i:e]
+                    i = n if e == -1 else e + 1
+                    if line.strip() == delim:
+                        break
             continue
-        try:
-            toks = lex(line)
-        except ValueError:
-            raise
-        cur = []
-        for t in toks:
-            if t in OPERATORS:
-                if cur:
-                    out.append(cur)
-                cur = []
-            else:
-                cur.append(t)
-        if cur:
-            out.append(cur)
+
+        cur.append(c); i += 1
+
+    flush()
     return out
 
 
-def split_argv(argv):
-    """앞쪽 환경변수 대입을 걷어내고 (명령, 인자들) 로 나눈다."""
-    i = 0
-    while i < len(argv) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", argv[i]):
-        i += 1
-    argv = argv[i:]
-    if not argv:
-        return None, []
-    return argv[0].rsplit("/", 1)[-1], argv[1:]
+def argv_of(segment):
+    """명령 단위 문자열에서 argv 를 뽑는다. 파싱 못 하면 None."""
+    try:
+        lx = shlex.shlex(segment, posix=True, punctuation_chars=True)
+        lx.whitespace_split = True
+        toks = list(lx)
+    except ValueError:
+        return None
+
+    argv, skip = [], False
+    for t in toks:
+        if skip:
+            skip = False; continue
+        if t and t[0] in "<>" or (t[:-1].isdigit() and t.endswith(">")):
+            skip = True; continue          # 리다이렉션 연산자와 그 대상
+        argv.append(t)
+
+    i = 0                                  # 앞쪽 환경변수 대입은 명령이 아니다
+    while i < len(argv):
+        head = argv[i].split("=", 1)[0]
+        if "=" in argv[i] and head and (head[0].isalpha() or head[0] == "_"):
+            i += 1
+        else:
+            break
+    return argv[i:]
 
 
 def shorts(args):
-    """-rf, -r 같은 짧은 옵션의 문자 집합."""
     s = set()
     for a in args:
         if a.startswith("-") and not a.startswith("--") and len(a) > 1:
@@ -126,7 +175,6 @@ def longs(args):
 
 
 def operands(args):
-    """옵션이 아닌 인자. 리다이렉션 대상은 여기 포함되지 않는다(연산자로 분리됨)."""
     return [a for a in args if not a.startswith("-")]
 
 
@@ -142,21 +190,18 @@ def is_secret(path):
 
 
 def verdict(argv):
-    name, args = split_argv(argv)
-    if name is None:
+    if not argv:
         return None
-
+    name = argv[0].rsplit("/", 1)[-1]
+    args = argv[1:]
     sub = args[0] if args else ""
 
-    # git rm 은 rm 과 같은 규칙으로 본다
     if name == "git" and sub == "rm":
         name, args = "rm", args[1:]
 
     if name == "rm":
         sh, lo = shorts(args), longs(args)
-        recursive = bool(sh & set("rR")) or "recursive" in lo
-        force = "f" in sh or "force" in lo
-        if recursive and force:
+        if (sh & set("rR") or "recursive" in lo) and ("f" in sh or "force" in lo):
             return "rm -rf 는 막혀 있습니다. 지울 대상이 확실하면 사용자에게 요청하세요."
         for op in operands(args):
             if "scripts/mysql/" in op or op.endswith(".sql"):
@@ -175,15 +220,13 @@ def verdict(argv):
         if shorts(rest) & set("fd") or longs(rest) & {"force", "d"}:
             return "git clean 은 추적되지 않는 파일을 지웁니다. 막혀 있습니다."
 
-    # down 의 위치를 고정하면 안 된다. docker compose -f a.yml down -v 처럼
-    # 옵션이 앞에 오면 서브커맨드가 뒤로 밀린다.
+    # 서브커맨드 위치를 고정하면 옵션이 앞에 올 때 밀린다 (docker compose -f a.yml down -v)
     compose_down = (
         (name == "docker" and sub == "compose" and "down" in operands(args))
         or (name == "docker-compose" and "down" in operands(args))
     )
-    if compose_down:
-        if "v" in shorts(args) or "volumes" in longs(args):
-            return "compose 볼륨 삭제는 DB 데이터까지 지웁니다. 막혀 있습니다."
+    if compose_down and ("v" in shorts(args) or "volumes" in longs(args)):
+        return "compose 볼륨 삭제는 DB 데이터까지 지웁니다. 막혀 있습니다."
 
     # Read() deny 는 Read 도구에만 걸린다. Bash 경유 읽기를 여기서 막는다.
     # 시크릿 경로가 "이 reader 의 인자"일 때만 막아야 오탐이 없다.
@@ -195,28 +238,18 @@ def verdict(argv):
     return None
 
 
-COARSE = [
-    (r"rm\s+-[a-zA-Z]*[rR][a-zA-Z]*f|rm\s+-[a-zA-Z]*f[a-zA-Z]*[rR]", "rm -rf 는 막혀 있습니다."),
-    (r"git\s+push\b[^\n]*--force", "force push 는 막혀 있습니다."),
-    (r"git\s+reset\s+--hard", "git reset --hard 는 되돌릴 수 없습니다. 막혀 있습니다."),
-]
-
-try:
-    for argv in segments(strip_heredocs(cmd)):
-        msg = verdict(argv)
-        if msg:
-            print(msg)
-            sys.exit(2)
-except ValueError:
-    # 따옴표가 안 맞는 등 토큰화 실패. 셸에서도 유효하지 않은 명령일 가능성이 높다.
-    # 조용히 통과시키지는 않고, 거친 정규식으로 최소한의 그물은 친다.
-    for pat, msg in COARSE:
-        if re.search(pat, cmd):
-            print(msg)
-            sys.exit(2)
+for seg in scan(cmd):
+    argv = argv_of(seg)
+    if argv is None:
+        continue          # 판정 불가한 조각은 막지 않는다
+    msg = verdict(argv)
+    if msg:
+        print(msg)
+        sys.exit(2)
 
 sys.exit(0)
-' 2>/dev/null)"
+PYEOF
+)"
 rc=$?
 
 if [[ $rc -eq 9 || $rc -gt 2 ]]; then
