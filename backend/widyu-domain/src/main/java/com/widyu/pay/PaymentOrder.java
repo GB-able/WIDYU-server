@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -23,7 +24,13 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "payment_order")
+@Table(
+        name = "payment_order",
+        indexes = @Index(
+                name = "idx_payment_order_approval_recovery",
+                columnList = "status, approval_next_retry_at"
+        )
+)
 public class PaymentOrder extends BaseTimeEntity {
 
     @Id
