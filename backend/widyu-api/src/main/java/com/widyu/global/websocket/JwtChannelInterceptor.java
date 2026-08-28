@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JwtChannelInterceptor implements ChannelInterceptor {
 
-    private static final Pattern LOCATION_TOPIC = Pattern.compile("^/topic/location/(\\d+)$");
+    private static final Pattern LOCATION_TOPIC = Pattern.compile("^/topic/location/senior/(\\d+)$");
     private static final Pattern HEART_RATE_TOPIC = Pattern.compile("^/topic/heart-rate/(\\d+)$");
 
     private final JwtTokenProvider jwtTokenProvider;

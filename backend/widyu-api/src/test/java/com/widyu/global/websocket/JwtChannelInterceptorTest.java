@@ -52,7 +52,7 @@ class JwtChannelInterceptorTest {
     @DisplayName("가족으로 연결된 보호자가 위치 topic 구독 시 메시지를 통과시킨다")
     void 가족_보호자가_위치_topic_구독_시_메시지를_통과시킨다() {
         // given
-        Message<?> message = buildSubscribeMessage("/topic/location/42", 100L);
+        Message<?> message = buildSubscribeMessage("/topic/location/senior/42", 100L);
 
         // when
         Message<?> result = jwtChannelInterceptor.preSend(message, null);
@@ -65,7 +65,7 @@ class JwtChannelInterceptorTest {
     @DisplayName("가족으로 연결되지 않은 보호자가 위치 topic 구독 시 null을 반환한다")
     void 비가족_보호자가_위치_topic_구독_시_null을_반환한다() {
         // given
-        Message<?> message = buildSubscribeMessage("/topic/location/42", 100L);
+        Message<?> message = buildSubscribeMessage("/topic/location/senior/42", 100L);
         willThrow(new BusinessException(ErrorCode.FORBIDDEN, "가족으로 연결된 시니어만 접근할 수 있습니다."))
                 .given(familyAccessService).verifyFamilyAccess(anyLong(), anyLong());
 
@@ -95,7 +95,7 @@ class JwtChannelInterceptorTest {
     @DisplayName("인증 정보 없이 위치 topic 구독 시 null을 반환한다")
     void 인증_정보_없이_위치_topic_구독_시_null을_반환한다() {
         // given
-        Message<?> message = buildSubscribeMessageWithNoAuth("/topic/location/42");
+        Message<?> message = buildSubscribeMessageWithNoAuth("/topic/location/senior/42");
 
         // when
         Message<?> result = jwtChannelInterceptor.preSend(message, null);
@@ -108,7 +108,7 @@ class JwtChannelInterceptorTest {
     @DisplayName("세션 속성으로 인증된 보호자가 위치 topic 구독 시 메시지를 통과시킨다")
     void 세션_속성_인증_보호자가_위치_topic_구독_시_메시지를_통과시킨다() {
         // given
-        Message<?> message = buildSubscribeMessageWithSessionAttrs("/topic/location/42", 100L);
+        Message<?> message = buildSubscribeMessageWithSessionAttrs("/topic/location/senior/42", 100L);
 
         // when
         Message<?> result = jwtChannelInterceptor.preSend(message, null);
