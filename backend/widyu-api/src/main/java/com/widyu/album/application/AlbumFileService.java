@@ -200,8 +200,10 @@ public class AlbumFileService {
             return new UploadResult(mediaUrls, thumbnailUrls, durations);
 
         } catch (Exception e) {
-            cleanupUploadedFiles(mediaUrls);
-            cleanupUploadedFiles(thumbnailUrls);
+            // 사진은 mediaUrls·thumbnailUrls에 같은 URL이 들어가므로 중복 삭제 방지
+            java.util.Set<String> uploadedUrls = new java.util.LinkedHashSet<>(mediaUrls);
+            uploadedUrls.addAll(thumbnailUrls);
+            cleanupUploadedFiles(new ArrayList<>(uploadedUrls));
             if (e instanceof BusinessException be) {
                 throw be;
             }
