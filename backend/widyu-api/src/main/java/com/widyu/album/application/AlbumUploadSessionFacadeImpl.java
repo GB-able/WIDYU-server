@@ -261,7 +261,7 @@ public class AlbumUploadSessionFacadeImpl implements AlbumUploadSessionFacade {
             s3DirectUploadService.deleteObject(file.getObjectKey());
 
             mediaUrls.add(photoUrl);
-            thumbnailUrls.add(null);
+            thumbnailUrls.add(photoUrl); // 사진은 원본이 곧 썸네일 (null 저장 시 @ElementCollection 드롭됨)
             durations.add(null);
         }
         return new AlbumMediaLists(mediaUrls, thumbnailUrls, durations);
