@@ -136,10 +136,13 @@ public record SeniorHomeCardsResponse(
             String thumbnailUrl
     ) {
         public static AlbumInfo from(Album album) {
-            if (album.getThumbnailUrls().isEmpty()) {
-                return new AlbumInfo(album.getId(), null);
+            if (!album.getThumbnailUrls().isEmpty()) {
+                return new AlbumInfo(album.getId(), album.getThumbnailUrls().getFirst());
             }
-            return new AlbumInfo(album.getId(), album.getThumbnailUrls().getFirst());
+            if (!album.getMediaUrls().isEmpty()) {
+                return new AlbumInfo(album.getId(), album.getMediaUrls().getFirst()); // 썸네일 없는 사진 게시글 폴백
+            }
+            return new AlbumInfo(album.getId(), null);
         }
     }
 

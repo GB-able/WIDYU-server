@@ -178,7 +178,7 @@ public class AlbumFileService {
                 if (ct.startsWith("image/")) {
                     String url = uploadAlbumPhoto(file, memberId);
                     mediaUrls.add(url);
-                    thumbnailUrls.add(null);
+                    thumbnailUrls.add(url); // 사진은 원본이 곧 썸네일 (null 저장 시 @ElementCollection 드롭됨)
                     durations.add(null);
                     log.debug("이미지 업로드 성공: url={}", url);
                     continue;
@@ -236,7 +236,7 @@ public class AlbumFileService {
                     String url = uploadAlbumPhoto(file, memberId);
                     uploadedPhotoUrls.add(url);
                     mediaUrls.add(url);
-                    thumbnailUrls.add(null);
+                    thumbnailUrls.add(url); // 사진은 원본이 곧 썸네일 (null 저장 시 @ElementCollection 드롭됨)
                     durations.add(null);
                 } else if (contentType.startsWith("video/")) {
                     File tempFile = toTempFile(file);
