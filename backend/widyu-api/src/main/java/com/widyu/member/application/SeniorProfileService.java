@@ -9,6 +9,7 @@ import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import java.util.LinkedHashSet;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.retry.RetryOnPointConflict;
@@ -27,6 +28,7 @@ public class SeniorProfileService {
 
     private final MemberUtil memberUtil;
     private final AlbumUnlockRepository albumUnlockRepository;
+    private final FamilyAccessService familyAccessService;
     private final SeniorProfileRepository seniorProfileRepository;
     private final PointHistoryRepository pointHistoryRepository;
 
@@ -57,13 +59,16 @@ public class SeniorProfileService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "시니어 회원만 접근할 수 있습니다.");
         }
 
-        // 해금한 앨범 ID 목록 조회
-        List<Long> unlockedAlbumIds = albumUnlockRepository.findUnlockedAlbumIdsByMember(currentMember);
+        LinkedHashSet<Long> unlockedAlbumIds = new LinkedHashSet<>(
+                albumUnlockRepository.findUnlockedAlbumIdsByMember(currentMember));
+        List<Long> familyMemberIds = familyAccessService.getFamilyMemberIds(currentMember);
+        unlockedAlbumIds.addAll(albumUnlockRepository
+                .findActiveAlbumIdsByMemberIdsAndMemberType(familyMemberIds, MemberType.SENIOR));
 
         log.info("해금된 앨범 ID 조회: memberId={}, count={}",
                 currentMember.getId(), unlockedAlbumIds.size());
 
-        return UnlockedAlbumIdsResponse.from(unlockedAlbumIds);
+        return UnlockedAlbumIdsResponse.from(List.copyOf(unlockedAlbumIds));
     }
 
     @RetryOnPointConflict

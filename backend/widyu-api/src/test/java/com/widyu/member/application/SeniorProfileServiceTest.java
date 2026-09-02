@@ -1,5 +1,6 @@
 package com.widyu.member.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -7,10 +8,12 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
 import com.widyu.album.repository.AlbumUnlockRepository;
+import com.widyu.album.dto.response.UnlockedAlbumIdsResponse;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Family;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
@@ -18,6 +21,7 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.PointHistoryRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,7 @@ class SeniorProfileServiceTest {
 
     @Mock private MemberUtil memberUtil;
     @Mock private AlbumUnlockRepository albumUnlockRepository;
+    @Mock private FamilyAccessService familyAccessService;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private PointHistoryRepository pointHistoryRepository;
 
@@ -50,6 +55,26 @@ class SeniorProfileServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("시니어 회원만 접근할 수 있습니다.");
+    }
+
+    @Test
+    @DisplayName("해금된 앨범 목록을 조회하면 같은 가족 시니어의 앨범도 포함한다")
+    void 해금된_앨범_목록에_같은_가족_시니어_앨범을_포함한다() {
+        // given
+        Member currentMember = member(1L, MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        given(albumUnlockRepository.findUnlockedAlbumIdsByMember(currentMember))
+                .willReturn(List.of(10L));
+        given(familyAccessService.getFamilyMemberIds(currentMember)).willReturn(List.of(1L, 2L, 3L));
+        given(albumUnlockRepository.findActiveAlbumIdsByMemberIdsAndMemberType(
+                List.of(1L, 2L, 3L), MemberType.SENIOR))
+                .willReturn(List.of(20L, 10L));
+
+        // when
+        UnlockedAlbumIdsResponse response = seniorProfileService.getUnlockedAlbums();
+
+        // then
+        assertThat(response.albumIds()).containsExactly(10L, 20L);
     }
 
     @Test

@@ -273,4 +273,35 @@ class MedicineScheduleServiceTest {
         assertThat(rates.get(14)).isEqualTo(1.0);  // 7/15: 유효 1개 중 1개 인증 → 1.0
         assertThat(rates.get(15)).isEqualTo(0.0);  // 7/16: 유효 1개, 인증 0 → 0.0
     }
+
+    @Test
+    @DisplayName("유효하지 않은 스케줄의 인증은 해당 날짜 달성률에 반영하지 않는다")
+    void 유효하지_않은_스케줄의_인증은_달성률에서_제외한다() {
+        // given
+        Long memberId = 1L;
+        Member targetMember = mock(Member.class);
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
+        given(targetMember.getId()).willReturn(memberId);
+
+        MedicineSchedule oldSchedule = scheduleEffectiveFrom(
+                1L, targetMember, LocalTime.of(8, 0), LocalDate.of(2026, 7, 1));
+        ReflectionTestUtils.setField(oldSchedule, "effectiveTo", LocalDate.of(2026, 7, 14));
+        MedicineSchedule currentSchedule = scheduleEffectiveFrom(
+                2L, targetMember, LocalTime.of(8, 0), LocalDate.of(2026, 7, 15));
+
+        MedicationProof proof = mock(MedicationProof.class);
+        given(proof.getMedicineSchedule()).willReturn(oldSchedule);
+        given(proof.getVerifiedAt()).willReturn(LocalDateTime.of(2026, 7, 15, 9, 0));
+
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
+                .willReturn(List.of(oldSchedule, currentSchedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(anyLong(), any(), any()))
+                .willReturn(List.of(proof));
+
+        // when
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(2026, 7, memberId);
+
+        // then
+        assertThat(response.monthlyGoalRates().get(14)).isEqualTo(0.0);
+    }
 }

@@ -24,7 +24,7 @@ public interface SeniorDocs {
 
     @Operation(
             summary = "해금된 앨범 ID 목록 조회",
-            description = "시니어 회원이 포인트를 사용하여 해금한 앨범의 ID 목록을 조회합니다. 최근 해금한 순서대로 정렬됩니다."
+            description = "시니어 회원이 해금한 앨범과 같은 가족의 시니어가 작성한 활성 앨범의 ID 목록을 조회합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "해금된 앨범 ID 조회 성공"),

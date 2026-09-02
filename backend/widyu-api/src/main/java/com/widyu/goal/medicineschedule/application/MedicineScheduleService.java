@@ -338,9 +338,15 @@ public class MedicineScheduleService {
                 continue;
             }
 
-            int achievedCount = scheduleIdsByDate
+            Set<Long> effectiveScheduleIds = schedules.stream()
+                    .filter(schedule -> schedule.isEffectiveOn(date))
+                    .map(MedicineSchedule::getId)
+                    .collect(Collectors.toSet());
+            int achievedCount = (int) scheduleIdsByDate
                     .getOrDefault(date, Set.of())
-                    .size();
+                    .stream()
+                    .filter(effectiveScheduleIds::contains)
+                    .count();
 
             double rate = (double) achievedCount / totalForDay;
             rates.add(rate);
