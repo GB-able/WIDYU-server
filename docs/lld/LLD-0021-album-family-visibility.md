@@ -24,6 +24,7 @@
 - `GET /api/v1/albums/calendar`의 날짜 목록을 현재 사용자와 같은 가족의 ACTIVE 앨범 기준으로 조회한다.
 - `GET /api/v1/albums/{albumId}`와 앨범 해금 요청에서 가족 외 앨범을 차단한다.
 - 가족 외 앨범의 좋아요·좋아요 취소·댓글 작성 요청을 차단한다.
+- `GET /api/v1/members/seniors/unlocked-albums`에 명시적으로 해금한 앨범과 같은 가족의 시니어가 작성한 활성 앨범을 포함한다.
 - 기존 커서·날짜 필터를 유지하고, 같은 가족에서는 보호자가 작성한 앨범만 시니어의 해금 대상으로 판정한다.
 
 ### Out of scope
@@ -42,6 +43,7 @@ GET  /api/v1/albums/media
 GET  /api/v1/albums/calendar
 GET  /api/v1/albums/{albumId}
 POST /api/v1/albums/{albumId}/unlock
+GET  /api/v1/members/seniors/unlocked-albums
 ```
 
 `GET /api/v1/albums/feed`와 `GET /api/v1/albums/{albumId}` 응답에 `boolean isUnlocked`를 추가한다.
@@ -51,6 +53,8 @@ POST /api/v1/albums/{albumId}/unlock
 - 시니어가 보호자 작성 앨범을 조회하면 해금 기록이 있을 때 `true`, 없을 때 `false`
 
 가족 외 앨범의 상세 또는 해금 요청은 기존 `FORBIDDEN` 오류로 거부한다.
+
+해금 앨범 ID 목록은 명시적으로 해금한 앨범과 같은 가족의 시니어가 작성한 `ACTIVE` 앨범을 반환한다.
 
 ## 4. 데이터 모델
 
@@ -65,6 +69,7 @@ DB 스키마 변경이 없다.
 3. 앨범·미디어 피드와 캘린더 날짜 조회에 구성원 ID 조건을 적용한다.
 4. 앨범 상세, 해금, 좋아요, 댓글 작성은 대상 작성자가 구성원 ID에 없으면 `FORBIDDEN`으로 종료한다.
 5. 같은 가족이면 기존 상세 조회·해금 처리 규칙을 수행한다.
+6. 시니어의 해금 앨범 ID 목록은 명시적 해금 기록과 같은 가족의 시니어 작성 활성 앨범 ID를 합쳐 반환한다.
 
 ## 6. 예외 / 에러 처리
 
@@ -80,6 +85,7 @@ DB 스키마 변경이 없다.
 - [x] 가족 외 앨범 상세 조회, 해금, 좋아요, 댓글 작성 요청은 `FORBIDDEN`으로 거부된다.
 - [x] 같은 가족에서는 보호자가 작성한 앨범만 시니어의 해금 대상으로 판정한다.
 - [x] 피드와 상세 응답의 `isUnlocked`는 보호자 조회 및 시니어 작성 앨범이면 `true`이고, 시니어가 보호자 작성 앨범을 조회하면 해금 기록 유무와 일치한다.
+- [x] 시니어의 해금 앨범 ID 목록에 같은 가족의 시니어 작성 활성 앨범이 포함된다.
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다.
 
 ## 8. 영향 범위 / 마이그레이션
