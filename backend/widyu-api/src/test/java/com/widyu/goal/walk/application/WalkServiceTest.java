@@ -95,6 +95,26 @@ class WalkServiceTest {
         assertThat(first.achieved()).isTrue();
         assertThat(second.achieved()).isTrue();
         assertThat(walk.getActualSteps()).isEqualTo(8000);
-        assertThat(seniorProfile.getPoints()).isEqualTo(pointsBefore + walk.getPointRewarded());
+        assertThat(seniorProfile.getPoints()).isEqualTo(pointsBefore + 25L);
+    }
+
+    @Test
+    @DisplayName("시니어 프로필이 없어도 걸음 수는 갱신되고 포인트는 지급되지 않는다")
+    void 프로필이_없으면_걸음수만_갱신하고_포인트는_지급하지_않는다() {
+        // given
+        Member member = org.mockito.Mockito.mock(Member.class);
+        given(member.getSeniorProfile()).willReturn(null);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+
+        Walk walk = Walk.createWithGoal(member, LocalDate.now(), 5000);
+        given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.of(walk));
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000));
+
+        // then
+        assertThat(response.achieved()).isTrue();
+        assertThat(walk.getActualSteps()).isEqualTo(6000);
+        assertThat(walk.isRewarded()).isFalse();
     }
 }
