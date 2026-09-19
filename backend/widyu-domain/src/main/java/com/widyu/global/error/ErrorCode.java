@@ -123,6 +123,22 @@ public enum ErrorCode {
     // 포인트 관련
     POINT_CONCURRENT_UPDATE(HttpStatus.CONFLICT, "POINT_4090", "포인트 처리가 동시에 요청되었습니다. 잠시 후 다시 시도해주세요."),
 
+    // 원시 센서 배치 관련
+    SENSOR_BATCH_TOO_LARGE(HttpStatus.BAD_REQUEST, "SENSOR_4000", "센서 배치 크기가 허용 범위를 초과했습니다."),
+    SENSOR_SAMPLE_INVALID(HttpStatus.BAD_REQUEST, "SENSOR_4001", "센서 축 구조가 올바르지 않습니다."),
+    SENSOR_PAYLOAD_INVALID(HttpStatus.BAD_REQUEST, "SENSOR_4002", "센서 배치 본문을 읽을 수 없습니다."),
+    SENSOR_BATCH_INVALID(HttpStatus.BAD_REQUEST, "SENSOR_4003", "센서 배치 필드가 올바르지 않습니다."),
+    SENSOR_CLOCK_MAPPING_CONFLICT(HttpStatus.CONFLICT, "SENSOR_4090", "시계 환산 기준점 묶음이 등록된 값과 다릅니다."),
+
+    // 측정회차 관련
+    RUN_NOT_FOUND(HttpStatus.NOT_FOUND, "RUN_4041", "측정회차를 찾을 수 없습니다."),
+    RUN_ALREADY_OPEN(HttpStatus.CONFLICT, "RUN_4090", "이미 열린 측정회차가 있습니다."),
+    RUN_DEVICE_ALREADY_ASSIGNED(HttpStatus.CONFLICT, "RUN_4091", "이미 다른 열린 회차에 배정된 기기입니다."),
+    RUN_MARKER_CONFLICT(HttpStatus.CONFLICT, "RUN_4092", "같은 마커 ID로 다른 내용이 등록되어 있습니다."),
+    RUN_NOT_OPEN(HttpStatus.BAD_REQUEST, "RUN_4000", "열린 측정회차가 아닙니다."),
+    RUN_RETENTION_INVALID(HttpStatus.BAD_REQUEST, "RUN_4001", "보존 정보가 올바르지 않습니다."),
+    RUN_MARKER_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "RUN_4002", "마커 시각이 회차 구간을 벗어났습니다."),
+
     // 파일 업로드 관련
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FILE_5000", "파일 업로드에 실패했습니다."),
     FILE_IS_EMPTY(HttpStatus.BAD_REQUEST, "FILE_4000", "파일이 비어있습니다."),

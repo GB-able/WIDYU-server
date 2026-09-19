@@ -194,6 +194,119 @@ erDiagram
         String location
     }
 
+    SensorBatch {
+        Long id PK
+        String batchId UK "앱이 붙인 불변 멱등 키 (ULID)"
+        Long member_id FK
+        String stream "imu_watch / imu_phone"
+        String source "watch / phone"
+        String deviceId
+        String sessionId
+        Long seq
+        String studyId "받은 값 그대로, null 허용"
+        String participationId "받은 값 그대로, null 허용"
+        String runId "받은 값 그대로, null 허용"
+        String bootId "시계 환산 원본 ①"
+        String clockMappingId "② (FK는 B3 후속)"
+        Long anchorElapsedNs "③ 문자열→long 무손실"
+        Long anchorEpochMs "④"
+        Double uncertaintyMs "⑤"
+        Integer accN "없으면 null"
+        Integer gyroN "없으면 null (0 치환 금지)"
+        Long accT0ElapsedNs
+        Long gyroT0ElapsedNs
+        Double accFsHzRequested
+        Double gyroFsHzRequested
+        Long measuredAtStartMs "서버 환산"
+        Long measuredAtEndMs "서버 환산"
+        Long phoneReceivedAtMs
+        Long serverReceivedAtMs
+        Long acceptedAtMs
+        Long persistedAtMs
+        Long modelAvailableAtServerMs "소급 금지"
+        String collectionMode "product / research"
+        String gyroMode "continuous / trigger"
+        Boolean onBody
+        String wearState
+        String missingReason
+        Integer watchBatteryPct
+        String qualityStatus "이번 PR은 OK 고정"
+        String triggerKind
+        Double triggerSmvG
+        Long triggerEventElapsedNs
+        Long triggerTsMs
+        Boolean gyroBackfill
+        String backfillFor "배열이면 쉼표 결합"
+        Boolean isResend
+        String originalBatchId
+        Long originalSeq
+        String originalRunId
+        String originalSessionId
+        Long resentAtMs
+        String s3Key
+        Integer byteSize
+        String payloadSha256 "원문 바이트 해시"
+    }
+
+    CollectionRun {
+        Long id PK
+        String runId UK "서버 발급 run-<UUID hex>"
+        Long member_id FK "대상 참가자"
+        String studyId
+        String participationId
+        String protocolRef "사람이 읽는 회차 번호"
+        String consentVersion "서면 연구 동의 판"
+        String collectionMode "product / research"
+        Long startedAtMs
+        Long endedAtMs
+        CollectionRunStatus status "OPEN / CLOSED"
+        String dataPolicy "RETAIN 등 (값 집합 미정)"
+        LocalDate identifiedUntil
+        LocalDate pseudonymizedAt
+        LocalDate researchUntil
+        String qualityNotes
+        String missingReason
+        String acceptanceReceiptId "K3, 아직 미사용"
+    }
+
+    RunDeviceAssignment {
+        Long id PK
+        String assignmentId UK "asg-<UUID hex>"
+        Long run_id FK
+        String deviceId
+        String role "watch / phone / external_ecg / operator_marker"
+        String wearSite "값 집합 S1 미정"
+        Long assignedAtMs
+        Long unassignedAtMs "null이면 배정 중"
+    }
+
+    RunMarker {
+        Long id PK
+        String markerId UK "앱 발급, 멱등"
+        Long run_id FK
+        String kind "값 목록은 연구 프로토콜"
+        String label "정답 라벨"
+        Long sourceElapsedNs
+        Long tsMs
+        String source "OPERATOR_APP / PARTICIPANT / AUTO"
+        String sourceDeviceId
+        String clockMappingId "누른 기기의 시계 매핑"
+    }
+
+    ClockMapping {
+        Long id PK
+        String clockMappingId UK "앱이 발급한 묶음 식별자"
+        String deviceId "매핑은 기기 단위 (member 없음)"
+        String bootId
+        Long anchorElapsedNs
+        Long anchorEpochMs
+        Double uncertaintyMs
+        Long observedMinElapsedNs "이 매핑을 쓴 배치의 축 시각 최소"
+        Long observedMaxElapsedNs "최대"
+        Long firstSeenAtMs
+        Long lastSeenAtMs
+    }
+
     PaymentOrder {
         Long id PK
         Long member_id FK
@@ -324,6 +437,11 @@ erDiagram
     Member ||--o{ MedicationProof : "복약 인증"
     Member ||--o{ Walk : "걸음 기록"
     Member ||--o{ HeartRateEmergency : "심박 이상"
+    Member ||--o{ SensorBatch : "원시 센서 배치 (S3 인덱스)"
+    SensorBatch }o--|| ClockMapping : "clock_mapping_id 참조 (FK 없음)"
+    Member ||--o{ CollectionRun : "측정회차 (대상 참가자)"
+    CollectionRun ||--o{ RunDeviceAssignment : "기기 배정"
+    CollectionRun ||--o{ RunMarker : "마커 (정답 라벨)"
     Member ||--o{ PaymentOrder : "결제 주문"
     Member ||--o{ Payment : "결제"
     Member ||--o{ MemberFcmToken : "FCM 토큰"
@@ -382,6 +500,9 @@ erDiagram
 | `PaymentCancelStatus` | `PENDING`, `COMPLETED`, `ABORTED` |
 | `PointHistoryType` | `EARN`, `USE` |
 | `HeartRateStatus` | `NORMAL`, `CAUTION`, `EMERGENCY`, `ANOMALY`, `UNKNOWN` |
+| `SensorStreamType` | `WATCH_ACCEL`, `WATCH_GYRO`, `PHONE_ACCEL`, `PHONE_GYRO`, `PHONE_LOCATION` |
+| `SensorBatchKind` | `LIVE`, `RETRANSMIT`, `GYRO_ENRICH` |
+| `GyroMode` | `CONTINUOUS`, `TRIGGER` |
 
 ## 주요 인덱스
 
@@ -399,6 +520,18 @@ erDiagram
 | `payment_cancel` | `idx_payment_cancel_recovery` | `(status, next_retry_at)` | 취소 복구 대상 범위 조회 |
 | `payment_cancel` | UK `uk_payment_cancel_pg_idempotency_key` | `(pg_idempotency_key)` | PG 요청 재실행 식별 |
 | `payment_cancel` | UK `uk_payment_cancel_payment_idempotency_key` | `(payment_id, idempotency_key)` | 클라이언트 멱등 키 중복 방지 (ADR-0012) |
+| `sensor_batch` | UK `uk_sensor_batch_batch_id` | `(batch_id)` | 앱이 붙인 불변 멱등 키. S3 키 구성과 동일 (ADR-0030 v2) |
+| `sensor_batch` | `idx_sensor_batch_member_stream_time` | `(member_id, stream, measured_at_start_ms)` | 스트림별 시각 범위 조회 |
+| `sensor_batch` | `idx_sensor_batch_seq` | `(device_id, session_id, seq)` | 순번 누락 검사 |
+| `sensor_batch` | `idx_sensor_batch_run` | `(run_id)` | 회차별 조회 (B8 후속) |
+| `clock_mapping` | UK `uk_clock_mapping_id` | `(clock_mapping_id)` | 한 식별자의 다섯 값은 불변. 다르면 409 (LLD-0044) |
+| `clock_mapping` | `idx_clock_mapping_device` | `(device_id)` | 기기별 매핑 조회 |
+| `collection_run` | UK `uk_collection_run_run_id` | `(run_id)` | 서버 발급 회차 식별자 |
+| `collection_run` | `idx_collection_run_member_status` | `(member_id, status)` | 회원의 열린 회차 조회 (B12) |
+| `run_device_assignment` | UK `uk_run_device_assignment_id` | `(assignment_id)` | 배정 식별자 |
+| `run_device_assignment` | `idx_run_device_assignment_device` | `(device_id, unassigned_at_ms)` | 기기 중복 배정 검사·회차 귀속 |
+| `run_marker` | UK `uk_run_marker_id` | `(marker_id)` | 마커 멱등 |
+| `run_marker` | `idx_run_marker_run_time` | `(run_id, ts_ms)` | 회차별 마커 시각순 조회 |
 
 ## 도메인별 조회 기준
 
@@ -418,6 +551,10 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-09-20 | `collection_run`·`run_device_assignment`·`run_marker` | 신규 테이블 3개 (LLD-0045). 측정회차·기기 배정·마커 | `scripts/mysql/create_collection_run.sql` |
+| 2026-09-19 | `clock_mapping` | 신규 테이블 (LLD-0044). 시계 환산 기준점 묶음. `sensor_batch`에 FK는 두지 않음 | `scripts/mysql/create_clock_mapping.sql` |
+| 2026-09-19 | `sensor_batch` | v2 형식으로 통째 교체 (LLD-0041 v2). `batch_id` 멱등 키, 시계 5값 원본 보존, 시각 4단계. 미배포 테이블이라 DROP 후 재생성 | `scripts/mysql/create_sensor_batch.sql` |
+| 2026-09-18 | `sensor_batch` | 신규 테이블 (LLD-0041 v1, 폐기). 시각은 epoch ms BIGINT | `scripts/mysql/create_sensor_batch.sql` |
 | 2026-07-16 | `senior_profile` | `family_id` NOT NULL → NULL 허용 (마지막 방장 탈퇴 시 Family 삭제 후 null 처리) | `ALTER TABLE senior_profile MODIFY COLUMN family_id BIGINT NULL;` |
 
 ## 코드 동기화 메모
