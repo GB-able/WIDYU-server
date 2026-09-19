@@ -53,6 +53,29 @@
 - 수신한 단건 심박은 AI 판정 후 즉시 최신값에 반영한다.
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 
+### `sensor` — 원시 IMU 배치 (연구 수집, v2 형식)
+- 워치·폰의 가속도·자이로 배치를 **재표본화 없이** 저장. 배치 1건 = S3 객체 1개(`sensor/{memberId}/{deviceId}/{stream}/{batch_id}.json`) + `sensor_batch` 인덱스 행 1개 → ADR-0030 v2, LLD-0041 v2
+- **원문 바이트 보존이 최우선**: 컨트롤러가 `@RequestBody byte[]`로 받아 S3에 그대로 올린다. 재직렬화·정렬·압축 금지. `payload_sha256`·`byte_size`도 원문 기준. 꺼냈을 때 앱이 보낸 본문과 바이트 단위로 같아야 한다(지시서 B2)
+- **멱등 키는 앱이 붙인 불변 `batch_id`(ULID)**. UK도 S3 키도 이것. 같은 `batch_id`면 PUT 없이 `DUPLICATE`. 내용이 달라지는 재전송은 새 `batch_id` + `resend` 계보 6필드
+- **불변식**: 나노초 시각(`anchor_elapsed_ns`·`t0_elapsed_ns`)은 **JSON 문자열**로 받는다(number면 `SENSOR_PAYLOAD_INVALID`). `dt_ns`는 길이 n−1·`0 < dt ≤ 4294967295`, 값 배열은 n행 3열. 시계 다섯 값은 원본 그대로 두고 `measured_at_start/end_ms`만 서버가 환산
+- 가속도·자이로는 **한 배치에 오되 시간축이 독립**. `gyro: null`은 null로 저장(0 배열 금지 — AI가 정지로 읽는다). 생략인지 결측인지는 `collection_mode`로 가린다
+- 시각을 단계별로 남긴다: `server_received` → `accepted` → `persisted` = `model_available_at_server`. 하나로 합치지 않고 소급하지 않는다(정책 1.1.5)
+- S3 PUT은 수신 스레드에서 동기(`apiCallTimeout` 5s), 인덱스 INSERT는 그 뒤. 서비스에 `@Transactional` 없음. 무결성 예외는 `existsByBatchId` 재조회로 확인될 때만 `DUPLICATE`
+- **원시 센서값을 어떤 로그 레벨에도 남기지 않는다** (정책 1.6.7). memberId·stream·seq·accN·gyroN·result만
+- 시계 매핑은 `clock_mapping` 테이블(기기 단위 UK `clock_mapping_id`). 같은 id에 다른 다섯 값·다른 기기면 409(`SENSOR_4090`). 등록은 S3 PUT 앞, 자기 트랜잭션 → LLD-0044
+- **수집 설정 하달**: `GET /api/v1/sensor/config`가 설정 전체와 호출자 기준 `collectionMode`를 준다. 모드는 **열린 회차 유무**로 정하고(있으면 research) 회차 열기·닫기가 곧 전환 수단이라 변경 API가 없다. 배치가 실어 보낸 `collection_mode`·`gyro_mode`·`fs_hz_requested`가 지시값과 다르면 `config_mismatch=true`로 표시만 하고 **거부하지 않는다** → LLD-0046
+- 본문 상한은 `sensor.max-payload-bytes`(기본 32768, `application-sensor.yml`)
+- REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send` → ACK `/user/queue/sensor/result`
+
+### `run` — 측정회차·기기 배정·마커 (연구 운영)
+- 실증은 기기를 여러 참가자가 돌려 쓴다. 회차가 「누가·어떤 기기를·어디에 차고·언제부터 언제까지」를 묶어 자료 귀속의 다리를 놓는다 → LLD-0045, 지시서 B8
+- 운영자는 **관리자 계정**으로 `/api/v1/admin/collection-runs/**`를 호출한다(`ROLE_ADMIN`, 기존 `/api/v1/admin/**` 인가 규칙)
+- **불변식**: 회원당 열린 회차 1개(409), 기기는 한 번에 한 열린 회차에만 배정(409), 닫을 때 미해제 배정을 종료 시각으로 함께 해제, `data_policy=RETAIN`이면 보존 날짜 셋 필수·`identified ≤ pseudonymized ≤ research`
+- **마커는 정답 라벨**이다. 판정 결과 기록(B 1.4)과 같은 자리에 섞지 않는다(정책 1.8.1). `marker_id`로 멱등이며 같은 id에 다른 내용이면 409. 누른 기기의 `clock`도 `ClockMappingService.register`로 같은 규칙으로 등록해 센서와 같은 시간축에 놓는다
+- **배치 귀속**: `run_id`가 오면 그대로, 없으면 `resend.original_run_id`(늦게 온 자료를 나중 참가자에게 붙이지 않기 위해), 그것도 없으면 `resolveRun(member, device, measured_at_start)`으로 열린 회차를 찾는다. 없으면 null(운영 외 자료)
+- `run_id`·`assignment_id`는 서버 발급(`run-`/`asg-` + UUID hex). 사람이 읽는 회차 번호는 `protocol_ref`
+- 인시던트(본인확인·SOS·사후 판정)는 이 도메인이 아니라 별도 LLD다
+
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
