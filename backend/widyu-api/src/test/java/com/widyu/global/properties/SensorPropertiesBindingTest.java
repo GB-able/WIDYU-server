@@ -37,8 +37,23 @@ class SensorPropertiesBindingTest {
         assertThat(export.clock()).isNotNull();
         assertThat(export.clock().sourceDomain()).isEqualTo("DEVICE_MONOTONIC");
         assertThat(properties.fallAi().enabled()).isFalse();
-        assertThat(properties.incident().selfCheckSec()).isEqualTo(45L);
+        assertThat(properties.incident().selfCheckSec()).isEqualTo(60L);
         assertThat(properties.incident().timeoutPollMs()).isEqualTo(5000L);
+        assertThat(properties.incident().selfCheckFirst()).isFalse();
+        assertThat(properties.incident().situationWindowMin()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("기본 센서 설정을 바인딩하면 후속 카드 기능을 끈다")
+    void 기본_설정을_바인딩하면_후속_카드를_끈다() throws IOException {
+        // given
+        Binder binder = binderOf("application-sensor.yml");
+
+        // when
+        SensorProperties properties = binder.bind("sensor", SensorProperties.class).get();
+
+        // then
+        assertThat(properties.followup().enabled()).isFalse();
     }
 
     private Binder binderOf(String classpathLocation) throws IOException {
