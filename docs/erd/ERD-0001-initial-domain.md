@@ -4,7 +4,7 @@
 | --- | --- |
 | 상태 | Accepted |
 | 날짜 | 2026-07-05 |
-| 코드 동기화 | 2026-09-16 (study 도메인 추가) |
+| 코드 동기화 | 2026-10-02 (LLD-0070 incident 확장) |
 | 관련 | ADR-0001 |
 
 ## 목적
@@ -37,6 +37,7 @@ erDiagram
         MemberType type
         Status status
         Long medicationAlarmRevision
+        Long notificationPolicyRevision "푸시 설정 revision"
     }
 
     LocalAccount {
@@ -60,6 +61,7 @@ erDiagram
     Family {
         Long id PK
         String familyCode
+        Long familyOrderRevision
     }
 
     FamilyMembership {
@@ -70,6 +72,7 @@ erDiagram
         Boolean isRepresentative
         Boolean isLeader
         LocalDateTime connectedAt
+        Integer sortOrder
     }
 
     SeniorProfile {
@@ -376,13 +379,22 @@ erDiagram
         String incidentRef UK "외부 식별자. 내보내기의 incident_id"
         Long memberId
         String runId
-        String decisionId UK "이 사건을 연 판정. 판정 1 = 사건 1"
+        String decisionId UK "NULL 허용: 단건 심박은 판정 없음"
         String kind "HR_ANOMALY / FALL_SUSPECTED"
         String level "판정 severity 복사"
         Long openedAtMs
-        Long respondByMs "openedAtMs + 45초 (설정값)"
+        Long respondByMs "openedAtMs + 60초 (설정값)"
         String response "OK / HELP"
         Long respondedAtMs
+        Long deviceRespondedAtMs "단말 클릭 시각"
+        Long initialAlertSentAtMs "INITIAL_ALERT enqueue 시각·멱등 게이트"
+        String lastDecisionId "마지막 연결 판정"
+        Integer detectionCount "기본 1"
+        Long situationEndedAtMs
+        String guardianResponseType "MESSAGE_SENT / CALL_INITIATED"
+        Long guardianResponseAtMs
+        Long guardianResponseBy
+        Long policyRevision
         String responseVia "WATCH / PHONE"
         String state "OPEN / CHECKING / OK_CLOSED / ESCALATED / RESOLVED"
         String outcome "TRUE_EMERGENCY / FALSE_ALARM / UNKNOWN. 실증 학습 라벨"
@@ -471,8 +483,20 @@ erDiagram
 
     FcmNotification {
         Long id PK
-        Long member_fcm_token_id FK
+        Long member_fcm_token_id FK "nullable; legacy token association"
         Long recipient_member_id FK "nullable legacy only; fixed for new notifications"
+        String eventId "nullable VARCHAR(40); recipient+event UK"
+        String type "nullable VARCHAR(48) NotificationType"
+        String deepLink "nullable"
+        String entityId "nullable"
+        Long seniorId "nullable"
+        String actorDisplayName "nullable"
+        String seniorDisplayName "nullable; ALBUM_UNLOCKED"
+        Integer remainingLockedCount "nullable; ALBUM_UNLOCKED"
+        LocalDateTime expiresAt "nullable; center retention"
+        String retentionPolicyVersion "nullable"
+        Boolean pushEligible "nullable; policy snapshot"
+        LocalDateTime readAt "nullable"
         String title
         String body
         String image
@@ -483,6 +507,7 @@ erDiagram
 
     FcmOutbox {
         Long id PK
+        Long notification_id FK "nullable; center row"
         Long recipient_member_id FK
         Long member_fcm_token_id FK
         Long related_member_id "nullable relationship subject"
@@ -493,6 +518,8 @@ erDiagram
         String scheme
         String dataType
         Long dataRevision
+        String notificationType "nullable VARCHAR(48), LLD-0060"
+        String dataPayload "nullable TEXT JSON object, LLD-0060"
         FcmCategory fcmCategory
         Boolean emergency
         String state
@@ -526,6 +553,8 @@ erDiagram
     MemberNotificationSetting {
         Long id PK
         Long member_id FK
+        PushSettingGroup category "SAFETY/SAFE_ZONE/MEDICATION_CHECK/GENERAL, VARCHAR(32); NONE 저장 금지"
+        Boolean enabled
     }
 
     AddressBookmark {
@@ -654,6 +683,7 @@ erDiagram
     MemberFcmToken ||--o{ FcmNotification : "알림 수신"
     Member |o--o{ FcmNotification : "고정 수신자 (기존 이력 nullable)"
     Member ||--o{ FcmOutbox : "고정 발송 수신자"
+    FcmNotification |o--o{ FcmOutbox : "센터 행별 기기 전송"
     MemberFcmToken ||--o{ FcmOutbox : "발송 대상 기기"
 ```
 
@@ -703,6 +733,7 @@ erDiagram
 
 | 테이블 | 인덱스명 | 컬럼 | 비고 |
 | --- | --- | --- | --- |
+| `fcm_notification` | UK `uk_fcm_notification_recipient_event` | `(recipient_member_id, event_id)` | NULL legacy 제외, 수신자×이벤트 단일 행 (LLD-0062) |
 | `album` | `idx_album_status_created_id` | `(status, created_at DESC, album_id DESC)` | 피드 조회 커버링 인덱스 |
 | `medicine` | FULLTEXT | `item_name` | N-gram, 한글 검색 |
 | `local_account` | UK | `(email)` | 이메일 중복 방지 |
@@ -738,7 +769,8 @@ erDiagram
 | `decision_record` | `idx_decision_record_member_time` | `(member_id, decision_at_ms)` | 회원별 판정 이력 조회 |
 | `decision_record` | `idx_decision_record_trigger_batch` | `(trigger_batch_id)` | 충격 배치 근거 추적 |
 | `incident` | UK `uk_incident_incident_ref` | `(incident_ref)` | 외부 식별자 |
-| `incident` | UK `uk_incident_decision_id` | `(decision_id)` | 판정 1 = 사건 1. 재시도가 사건을 늘리지 못하게 막는다 |
+| `incident` | UK `uk_incident_decision_id` | `(decision_id)` | 배치 판정 1 = 사건 1. 단건의 NULL은 여러 행 허용 |
+| `incident` | `idx_incident_alert_pending` | `(initial_alert_sent_at_ms, respond_by_ms)` | 보호자 최초 알림 후보 조회·멱등 게이트 (LLD-0070) |
 | `incident` | `idx_incident_member_time` | `(member_id, opened_at_ms)` | 가족 조회·본인 대기 목록 |
 | `incident` | `idx_incident_run_time` | `(run_id, opened_at_ms)` | 회차 내보내기 |
 | `incident` | `idx_incident_state_deadline` | `(state, respond_by_ms)` | 무응답 스케줄러가 매 폴링마다 타는 경로 |
@@ -781,6 +813,12 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-10-02 | `incident` | `decision_id` NULL 허용, 본인확인·보호자 최초 알림·후속 안전 상태 컬럼 및 후보 인덱스 추가 (LLD-0070) | `scripts/mysql/alter_incident_self_check_first.sql` |
+| 2026-10-02 | `member_notification_setting`·`member` | 설정 4분류로 매핑(기존 일반 다섯 항목이 모두 꺼진 회원만 `GENERAL=false`), `category VARCHAR(32)`, 회원별 `notification_policy_revision` 추가 (LLD-0065) | `scripts/mysql/migrate_notification_setting_group.sql` |
+| 2026-10-01 | `fcm_notification`·`fcm_outbox` | 센터 수신자×이벤트 행의 메타데이터·UK, 토큰 FK NULL 허용, outbox `notification_id` 참조 (LLD-0062) | `scripts/mysql/alter_fcm_notification_center.sql` |
+| 2026-10-01 | `family_membership`·`family` | `sort_order INT NOT NULL`(가족별 `connected_at, id` 순서 백필)·`family_order_revision BIGINT NOT NULL DEFAULT 0` 추가 (LLD-0064) | `scripts/mysql/alter_family_membership_sort_order.sql` |
+| 2026-10-02 | `fcm_notification` | 잠금 해제 알림의 시니어 이름·남은 잠금 수 nullable 컬럼 (LLD-0066) | `scripts/mysql/alter_fcm_notification_album_unlock.sql` |
+| 2026-10-01 | `fcm_outbox` | `notification_type VARCHAR(48)`·`data_payload TEXT` 추가 (LLD-0060). type별 FCM 표현과 재시도 data 복원, 기존 행은 NULL 폴백 | `scripts/mysql/alter_fcm_outbox_notification_type.sql` |
 | 2026-09-21 | `consent_record` | 신규 테이블 (LLD-0055). 인앱 동의의 항목·판·시각·철회. 추가 전용 | `scripts/mysql/create_consent_record.sql` |
 | 2026-09-21 | `location_access_log` | 신규 테이블 (LLD-0056). 위치 열람 주체·대상·경로·통보 시각 | `scripts/mysql/create_location_access_log.sql` |
 | 2026-09-21 | `fcm_notification`·`member_notification_setting` | `fcm_category`에 `LOCATION_NOTICE` 추가 (LLD-0056). 운영 컬럼이 네이티브 ENUM일 때만 실행 | `scripts/mysql/alter_fcm_category_location_notice.sql` |
