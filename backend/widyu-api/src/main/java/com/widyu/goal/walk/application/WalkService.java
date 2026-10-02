@@ -4,7 +4,10 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.goal.event.GuardianGoalChangedEvent;
+import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.application.SeniorProfileService;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.walk.Walk;
@@ -23,8 +26,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
 
 @Slf4j
 @Service
@@ -36,6 +41,7 @@ public class WalkService {
     private final MemberRepository memberRepository;
     private final MemberUtil memberUtil;
     private final SeniorProfileService seniorProfileService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public WalkMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {
         Member targetMember = getMember(memberId);
@@ -120,6 +126,7 @@ public class WalkService {
             targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
             log.info("걷기 목표 설정 (처음): memberId={}, defaultWalkGoal={}, 오늘부터 적용",
                     targetMember.getId(), request.steps());
+            publishGuardianChange(targetMember, request.steps());
             return;
         }
 
@@ -133,6 +140,17 @@ public class WalkService {
         targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
         log.info("걷기 목표 수정: memberId={}, 기존={}, 신규={}, 내일부터 적용",
                 targetMember.getId(), previousDefaultGoal, request.steps());
+        publishGuardianChange(targetMember, request.steps());
+    }
+
+    private void publishGuardianChange(Member target, Integer steps) {
+        Member actor = memberUtil.getCurrentMember();
+        if (actor.getType() != MemberType.GUARDIAN || target.getType() != MemberType.SENIOR
+                || actor.getId().equals(target.getId())) {
+            return;
+        }
+        eventPublisher.publishEvent(GuardianGoalChangedEvent.walkGoal(
+                target.getId(), steps, actor.getName()));
     }
 
     @RetryOnPointConflict
@@ -163,9 +181,11 @@ public class WalkService {
         // 목표 달성 시 포인트 지급 (하루 1회만, 목표 초과 후 재연동해도 중복 지급하지 않음)
         boolean achieved = walk.isGoalAchieved();
         if (achieved && !walk.isRewarded() && currentMember.getSeniorProfile() != null) {
-            seniorProfileService.addPointsToMember(currentMember.getId(), (long) walk.getPointRewarded(),
+            seniorProfileService.addGoalRewardPoints(currentMember.getId(), (long) walk.getPointRewarded(),
                     "걷기 목표 달성", "WALK_REWARD:" + walk.getId());
             walk.markRewarded();
+            eventPublisher.publishEvent(GoalAchievedEvent.forWalk(
+                    currentMember.getId(), walk.getId(), walk.getPointRewarded()));
             log.info("걸음 목표 달성 - 포인트 자동 지급: memberId={}, points={}",
                     currentMember.getId(), walk.getPointRewarded());
         }
