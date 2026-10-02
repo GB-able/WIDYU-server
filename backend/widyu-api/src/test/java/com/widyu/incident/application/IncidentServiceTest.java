@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
@@ -29,6 +31,12 @@ import com.widyu.incident.dto.request.IncidentResolveRequest;
 import com.widyu.incident.dto.response.IncidentResponse;
 import com.widyu.incident.repository.IncidentRepository;
 import com.widyu.member.application.FamilyAccessService;
+import com.widyu.member.repository.MemberRepository;
+import com.widyu.member.Member;
+import com.widyu.location.realtime.dto.StayInfo;
+import java.time.LocalDateTime;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -51,15 +59,38 @@ class IncidentServiceTest {
     private static final String INCIDENT_REF = "inc-9c21";
     private static final String RUN_ID = "run-0f3a";
     private static final long OPENED_AT_MS = 1_760_000_000_000L;
-    private static final long SELF_CHECK_MS = 45_000L;
+    private static final long SELF_CHECK_MS = 60_000L;
 
     @Mock private IncidentRepository incidentRepository;
     @Mock private FcmService fcmService;
     @Mock private FamilyAccessService familyAccessService;
+    @Mock private MemberRepository memberRepository;
+    @Mock private IncidentEscalation incidentEscalation;
+    @Mock private RedisTemplate<String, Object> redisTemplate;
+    @Mock private ValueOperations<String, Object> valueOperations;
 
     @Test
-    @DisplayName("위급 판정으로 사건을 열면 45초 마감과 본인확인 푸시가 함께 만들어진다")
-    void 위급_판정으로_사건을_열면_45초_마감과_본인확인_푸시가_함께_만들어진다() {
+    @DisplayName("이탈 이벤트 처리 시 최신 위치가 안심구역 안이면 사건과 S02와 S05를 만들지 않는다")
+    void 이탈_이벤트_처리_시_최신_위치가_안이면_사건과_알림을_만들지_않는다() {
+        // given
+        given(memberRepository.findByIdForUpdate(SENIOR_ID)).willReturn(Optional.of(org.mockito.Mockito.mock(Member.class)));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:" + SENIOR_ID)).willReturn(
+                new StayInfo(37.0, 127.0, LocalDateTime.now(), "HOME", "집"));
+
+        // when
+        Incident opened = service().openForAlert(SENIOR_ID, IncidentKind.SAFE_ZONE_EXIT);
+
+        // then
+        assertThat(opened).isNull();
+        then(incidentRepository).shouldHaveNoInteractions();
+        then(fcmService).shouldHaveNoInteractions();
+        then(incidentEscalation).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("위급 판정으로 사건을 열면 60초 마감과 본인확인 푸시가 함께 만들어진다")
+    void 위급_판정으로_사건을_열면_60초_마감과_본인확인_푸시가_함께_만들어진다() {
         // given
         given(incidentRepository.findByDecisionId(DECISION_ID)).willReturn(Optional.empty());
         givenRepositoryReturnsSavedIncident();
@@ -74,7 +105,7 @@ class IncidentServiceTest {
         assertThat(opened.getKind()).isEqualTo(IncidentKind.HR_ANOMALY);
         assertThat(opened.getLevel()).isEqualTo("EMERGENCY");
         assertThat(opened.getIncidentRef()).startsWith("inc-");
-        // 45초는 계약값이다(형식서 §3.7 SELF_CHECK_SEC). 검사기 L2가 ±1초로 잰다.
+        // 제품 본인확인 마감은 서버 사건 생성부터 60초다.
         assertThat(opened.getRespondByMs() - opened.getOpenedAtMs()).isEqualTo(SELF_CHECK_MS);
         assertThat(opened.getState()).isEqualTo(IncidentState.CHECKING);
 
@@ -102,6 +133,23 @@ class IncidentServiceTest {
     }
 
     @Test
+    @DisplayName("낙상 판정으로 사건을 열면 기존 일반 본인확인 문구를 유지한다")
+    void 낙상_판정으로_사건을_열면_일반_본인확인_문구를_유지한다() {
+        // given
+        given(incidentRepository.findByDecisionId(DECISION_ID)).willReturn(Optional.empty());
+        givenRepositoryReturnsSavedIncident();
+
+        // when
+        service().openForAlert(alertDecision(), IncidentKind.FALL_SUSPECTED);
+
+        // then
+        ArgumentCaptor<FcmSendDto> message = ArgumentCaptor.forClass(FcmSendDto.class);
+        then(fcmService).should().sendMessageToUser(eq(SENIOR_ID), message.capture());
+        assertThat(message.getValue().title()).isEqualTo("괜찮으세요?");
+        assertThat(message.getValue().notificationType()).isNull();
+    }
+
+    @Test
     @DisplayName("본인이 OK로 답하면 마감 안 종료 상태로 응답 저장을 요청하고 저장된 값을 돌려준다")
     void 본인이_OK로_답하면_마감_안_종료_상태로_응답_저장을_요청한다() {
         // given
@@ -116,7 +164,7 @@ class IncidentServiceTest {
         // then
         // 마감을 넘겼는지는 행을 보는 UPDATE가 정한다. 서비스는 마감 안에 답했을 때의 상태만 넘긴다.
         then(incidentRepository).should().respond(eq(INCIDENT_REF), eq(SENIOR_ID),
-                eq(IncidentResponseValue.OK), eq(ResponseVia.WATCH), anyLong(), eq(IncidentState.OK_CLOSED));
+                eq(IncidentResponseValue.OK), eq(ResponseVia.WATCH), anyLong(), isNull(), eq(IncidentState.OK_CLOSED));
         assertThat(response.incidentId()).isEqualTo(INCIDENT_REF);
     }
 
@@ -133,7 +181,7 @@ class IncidentServiceTest {
 
         // then
         then(incidentRepository).should().respond(eq(INCIDENT_REF), eq(SENIOR_ID),
-                eq(IncidentResponseValue.HELP), eq(ResponseVia.PHONE), anyLong(), eq(IncidentState.ESCALATED));
+                eq(IncidentResponseValue.HELP), eq(ResponseVia.PHONE), anyLong(), isNull(), eq(IncidentState.ESCALATED));
     }
 
     @Test
@@ -146,13 +194,13 @@ class IncidentServiceTest {
 
         // when
         service().respond(SENIOR_ID, INCIDENT_REF,
-                new IncidentRespondRequest(IncidentResponseValue.OK, ResponseVia.WATCH));
+                new IncidentRespondRequest(IncidentResponseValue.OK, ResponseVia.WATCH, 123L));
 
         // then
         // 마감 판정의 기준이 되는 시각이라 단말이 보낸 값을 쓰지 않는다.
         ArgumentCaptor<Long> respondedAtMs = ArgumentCaptor.forClass(Long.class);
         then(incidentRepository).should().respond(any(), any(), any(), any(),
-                respondedAtMs.capture(), any());
+                respondedAtMs.capture(), eq(123L), any());
         assertThat(respondedAtMs.getValue()).isBetween(before, System.currentTimeMillis());
     }
 
@@ -183,7 +231,7 @@ class IncidentServiceTest {
         assertThatThrownBy(() -> service.respond(GUARDIAN_ID, INCIDENT_REF, request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INCIDENT_NOT_FOUND);
-        then(incidentRepository).should(never()).respond(any(), any(), any(), any(), anyLong(), any());
+        then(incidentRepository).should(never()).respond(any(), any(), any(), any(), anyLong(), any(), any());
     }
 
     @Test
@@ -306,7 +354,8 @@ class IncidentServiceTest {
     private IncidentService service() {
         return new IncidentService(incidentRepository, fcmService, familyAccessService,
                 new SensorProperties(32_768, null, null, null, null,
-                        new SensorProperties.Incident(45, 5000L)));
+                        new SensorProperties.Incident(60, 5000L, false, 5)), memberRepository,
+                incidentEscalation, redisTemplate);
     }
 
     private void givenResolveUpdates(int updated) {
@@ -325,7 +374,8 @@ class IncidentServiceTest {
     }
 
     private void givenRespondUpdates(int updated) {
-        given(incidentRepository.respond(any(), any(), any(), any(), anyLong(), any())).willReturn(updated);
+        given(incidentRepository.respond(any(), any(), any(), any(), anyLong(), nullable(Long.class), any()))
+                .willReturn(updated);
     }
 
     /** 저장 서비스는 받은 행을 그대로 돌려준다. 식별자는 서비스가 붙이므로 그대로 흘려보낸다. */
