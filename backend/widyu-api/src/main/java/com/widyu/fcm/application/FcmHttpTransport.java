@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.widyu.fcm.dto.FcmMessageDto;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.DeliveryMode;
+import com.widyu.fcm.NotificationType;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ResourceLoader;
@@ -79,7 +81,8 @@ public class FcmHttpTransport implements FcmTransport {
 
     @Override
     public Result send(FcmDelivery delivery, BooleanSupplier beforeSend) {
-        return send(delivery.token(), delivery.message(), beforeSend, delivery.id(), delivery.expiresAt());
+        return send(delivery.token(), delivery.message(), beforeSend,
+                delivery.notificationId(), delivery.expiresAt());
     }
 
     private Result send(String token, FcmSendDto dto, BooleanSupplier beforeSend, Long notificationId, Instant expiresAt) {
@@ -116,6 +119,10 @@ public class FcmHttpTransport implements FcmTransport {
         FcmMessageDto.Message.MessageBuilder message = FcmMessageDto.Message.builder().token(token)
                 .notification(FcmMessageDto.Notification.builder().title(dto.title())
                         .body(dto.content()).image(dto.image()).build());
+        NotificationType type = dto.notificationType();
+        if (type != null && type.deliveryMode() == DeliveryMode.DATA_ONLY) {
+            message.notification(null);
+        }
         if (expiresAt != null) {
             Instant now = clock.instant();
             if (!expiresAt.isAfter(now)) {
@@ -124,13 +131,28 @@ public class FcmHttpTransport implements FcmTransport {
             // FCM은 최대 28일까지 받고 Android TTL을 초 단위로 내림한다.
             long ttl = Math.min(Duration.between(now, expiresAt).getSeconds(), Duration.ofDays(28).getSeconds());
             HashMap<String, String> data = new HashMap<>(dto.data());
-            data.put("notificationId", notificationId.toString());
-            message.data(data)
-                    .android(new FcmMessageDto.Android(ttl + "s"))
-                    .apns(new FcmMessageDto.Apns(Map.of("apns-expiration", Long.toString(expiresAt.getEpochSecond()))));
+            if (notificationId != null) {
+                data.put("notificationId", notificationId.toString());
+            } else {
+                data.remove("notificationId");
+            }
+            addTypeData(data, type);
+            message.data(data);
+            if (type == null) {
+                message.android(new FcmMessageDto.Android(ttl + "s"))
+                        .apns(new FcmMessageDto.Apns(Map.of("apns-expiration", Long.toString(expiresAt.getEpochSecond()))));
+            } else {
+                message.android(android(ttl + "s", type))
+                        .apns(apns(expiresAt, type));
+            }
         }
-        if (expiresAt == null && !dto.data().isEmpty()) {
-            message.data(dto.data());
+        if (expiresAt == null && (type != null || !dto.data().isEmpty())) {
+            HashMap<String, String> data = new HashMap<>(dto.data());
+            addTypeData(data, type);
+            message.data(data);
+        }
+        if (expiresAt == null && type != null) {
+            message.android(android(null, type)).apns(apns(null, type));
         }
         FcmMessageDto body = FcmMessageDto.builder().validateOnly(false).message(message.build()).build();
         HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofNanos(remaining))
@@ -158,6 +180,47 @@ public class FcmHttpTransport implements FcmTransport {
             return Result.retry(retryAfter(response.headers().firstValue("Retry-After").orElse("")));
         }
         return Result.rejected(permanentToken(response.body()));
+    }
+
+    private void addTypeData(Map<String, String> data, NotificationType type) {
+        if (type == null) {
+            return;
+        }
+        data.put("notificationType", type.name());
+        data.put("type", type.dataTypeValue());
+        data.put("priority", type.priority().wireValue());
+        data.put("foregroundPresentation", type.foregroundPresentation());
+        data.putIfAbsent("deepLink", "");
+    }
+
+    private FcmMessageDto.Android android(String ttl, NotificationType type) {
+        if (type.deliveryMode() == DeliveryMode.DATA_ONLY) {
+            return new FcmMessageDto.Android(ttl);
+        }
+        if (type.priority().isSafety()) {
+            return new FcmMessageDto.Android(ttl, "high", new FcmMessageDto.AndroidNotification("widyu_safety"));
+        }
+        if (type.priority().isTimeSensitive()) {
+            return new FcmMessageDto.Android(ttl, "high", new FcmMessageDto.AndroidNotification("widyu_general"));
+        }
+        return new FcmMessageDto.Android(ttl, "normal", new FcmMessageDto.AndroidNotification("widyu_general"));
+    }
+
+    private FcmMessageDto.Apns apns(Instant expiresAt, NotificationType type) {
+        HashMap<String, String> headers = new HashMap<>();
+        if (expiresAt != null) {
+            headers.put("apns-expiration", Long.toString(expiresAt.getEpochSecond()));
+        }
+        if (type.deliveryMode() == DeliveryMode.DATA_ONLY) {
+            headers.put("apns-priority", "5");
+            headers.put("apns-push-type", "background");
+            return new FcmMessageDto.Apns(headers,
+                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(null, 1)));
+        }
+        headers.put("apns-priority", "10");
+        headers.put("apns-push-type", "alert");
+        return new FcmMessageDto.Apns(headers,
+                new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(type.priority().interruptionLevel())));
     }
 
     private boolean permanentToken(String body) {
