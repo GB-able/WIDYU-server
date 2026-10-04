@@ -10,6 +10,7 @@ import com.widyu.fcm.event.goal.walk.listener.WalkNotificationListener;
 import com.widyu.fcm.repository.*;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.global.util.SecurityUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.healthschedule.HealthSchedule;
@@ -63,6 +64,7 @@ class FcmSchedulerOutboxIntegrationTest {
     @MockBean FcmTransport transport;
     @MockBean JPAQueryFactory queryFactory;
     @MockBean MemberUtil memberUtil;
+    @MockBean SecurityUtil securityUtil;
 
     @AfterEach
     void cleanup() {
@@ -98,6 +100,23 @@ class FcmSchedulerOutboxIntegrationTest {
         healthScheduler.sendHealthScheduleReminder();
         // then
         assertCommittedAndDispatch(FcmCategory.HEALTH_SCHEDULE);
+    }
+
+    @Test
+    @DisplayName("보호자 소유 건강일정이 임박하면 H01 센터 행과 outbox를 만들지 않는다")
+    void 보호자_소유_건강일정이_임박하면_H01_센터와_outbox를_만들지_않는다() {
+        // given
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                schedules.save(HealthSchedule.create(guardianWithToken(), "병원 방문", "주소", 37.0, 127.0,
+                        LocalDateTime.now().plusHours(1).plusMinutes(5))));
+
+        // when
+        healthScheduler.sendHealthScheduleReminder();
+
+        // then
+        assertThat(notifications.count()).isZero();
+        assertThat(outbox.count()).isZero();
+        then(fcm).should(org.mockito.Mockito.never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
     }
 
     @Test
@@ -166,7 +185,11 @@ class FcmSchedulerOutboxIntegrationTest {
             dispatcher.shutdown();
         }
         assertThat(outbox.findById(id).orElseThrow().getState()).isEqualTo(FcmOutbox.State.SENT);
-        assertThat(notifications.count()).isEqualTo(1);
+        if (category == FcmCategory.WALK) {
+            assertThat(notifications.count()).isZero();
+        } else {
+            assertThat(notifications.count()).isEqualTo(1);
+        }
     }
 
     private void assertRolledBackWithoutDispatch() {
@@ -187,8 +210,11 @@ class FcmSchedulerOutboxIntegrationTest {
     }
 
     private void createWalk() {
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                walks.save(Walk.createWithGoal(memberWithToken(), LocalDate.now(), 10000)));
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            Walk walk = Walk.createWithGoal(memberWithToken(), LocalDate.now(), 10000);
+            walk.updateActualSteps(1);
+            walks.save(walk);
+        });
     }
 
     private void createSchedule() {
@@ -200,6 +226,12 @@ class FcmSchedulerOutboxIntegrationTest {
     private Member memberWithToken() {
         Member member = members.save(Member.createMember(MemberType.SENIOR, "수신자", "01012345678"));
         tokens.save(MemberFcmToken.builder().member(member).token("loopback-only").active(true).build());
+        return member;
+    }
+
+    private Member guardianWithToken() {
+        Member member = members.save(Member.createMember(MemberType.GUARDIAN, "보호자", "01012345678"));
+        tokens.save(MemberFcmToken.builder().member(member).token("guardian-loopback").active(true).build());
         return member;
     }
 }
