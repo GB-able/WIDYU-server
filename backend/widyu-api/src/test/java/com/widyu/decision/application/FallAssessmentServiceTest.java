@@ -147,7 +147,7 @@ class FallAssessmentServiceTest {
         service(true).assessAfterImpact(trigger);
 
         // then
-        then(incidentService).should(never()).openForAlert(any(), any());
+        then(incidentService).should(never()).openForAlert(any(DecisionRecord.class), any());
     }
 
     @Test
@@ -183,7 +183,8 @@ class FallAssessmentServiceTest {
         return new SensorProperties(
                 32768, null, export, new SensorProperties.FallAi(enabled, "/api/fall", 2, "server", "v1"),
                 new SensorProperties.HeartAi("widyu-ai-hr", "ver7"),
-                new SensorProperties.Incident(45, 5000L));
+                new SensorProperties.Incident(60, 5000L, false, 5),
+                new SensorProperties.Followup(false, false));
     }
 
     private SensorBatch trigger() {
