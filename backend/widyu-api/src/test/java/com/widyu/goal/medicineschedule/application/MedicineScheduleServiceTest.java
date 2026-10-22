@@ -40,6 +40,7 @@ import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -336,7 +337,8 @@ class MedicineScheduleServiceTest {
         given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
         givenProvedToday(existing, true);
         givenSavedScheduleId(101L);
-        MedicationProof proof = MedicationProof.create(existing, targetMember, List.of());
+        MedicationProof proof = MedicationProof.create(
+                existing, targetMember, List.of(), today().atTime(OPEN_ALARM), today());
 
         // when
         MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
