@@ -203,6 +203,7 @@ public class MedicineScheduleService {
                     "약 알람은 최대 " + MAX_ALARMS_PER_MEMBER + "개까지 등록할 수 있습니다.");
         }
         LocalDateTime now = LocalDateTime.now(clock);
+        validateNoNextDayProof(targetMember, now.toLocalDate(), "등록");
 
         // 오늘 인증 가능 시간이 이미 끝난 시각이면 오늘은 건너뛰고 내일부터 울린다.
         LocalDate effectiveFromDate = now.toLocalDate();
@@ -264,7 +265,7 @@ public class MedicineScheduleService {
         }
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
-        validateNoNextDayProof(schedule, today, "수정");
+        validateNoNextDayProof(targetMember, today, "수정");
 
         // 오늘 끝난 알람(인증 완료 또는 인증 가능 시간 종료)은 오늘 기록을 그대로 두고 내일부터 바꾼다.
         // 아직 시작 전인 버전은 원래 시작일을 유지한다.
@@ -356,7 +357,7 @@ public class MedicineScheduleService {
         // 오늘 끝난 알람은 오늘 기록(완료·미인증)을 남기고 내일부터, 아직 안 끝난 알람은 오늘부터 중단한다.
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
-        validateNoNextDayProof(schedule, today, "삭제");
+        validateNoNextDayProof(targetMember, today, "삭제");
         LocalDate stopDate = today;
         if (schedule.isEffectiveOn(today) && isFinishedToday(schedule, now)) {
             stopDate = today.plusDays(1);
@@ -371,13 +372,15 @@ public class MedicineScheduleService {
 
     /**
      * 자정을 넘는 인증 창(LLD-0101)에서는 23:30 이후에 다음 날 00:30 이전 알람을 미리 인증할 수 있다.
-     * 그 뒤 자정 전에 수정·삭제하면 다음 날 인증이 다음 날 유효하지 않은 버전에 남거나(마감),
-     * 바뀐 복약에 그대로 남는다(시작 전 버전 그대로 수정). 인증·적립이 어긋나지 않게 자정이 지난 뒤에만 허용한다.
+     * 등록·수정·삭제는 모두 내일부터 적용되므로, 그 뒤 자정 전에 바꾸면 이미 적립한 내일 몫(완주 보너스 포함)의
+     * 기준인 내일 일정 구성이 바뀐다. 인증한 버전이 내일 유효하지 않게 되거나 보너스가 중복·누락된다.
+     * 회원에게 내일 복용분 인증이 있으면 자정이 지난 뒤에만 허용한다. 호출부가 회원 행을 잠근 뒤 부르므로
+     * 같은 회원의 인증 저장과 순서가 정해진다.
      */
-    private void validateNoNextDayProof(MedicineSchedule schedule, LocalDate today, String action) {
-        if (medicationProofRepository.existsByMedicineScheduleAndVerifiedDateAfter(schedule, today)) {
+    private void validateNoNextDayProof(Member member, LocalDate today, String action) {
+        if (medicationProofRepository.existsByMemberAndVerifiedDateAfter(member, today)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "다음 날 복용분을 이미 인증한 스케줄은 자정이 지난 뒤에 " + action + "할 수 있습니다.");
+                    "다음 날 복용분을 이미 인증해 자정이 지난 뒤에 스케줄을 " + action + "할 수 있습니다.");
         }
     }
 
