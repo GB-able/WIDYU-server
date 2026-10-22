@@ -13,7 +13,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
@@ -30,8 +29,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(
         name = "medication_proof",
-        indexes = @Index(name = "idx_medication_proof_member_verified",
-                columnList = "member_id, verified_at"),
+        // 회원별 날짜 조회(일자별·월별 현황, 홈)는 복용 기준일(verified_date)로 거른다.
+        indexes = @Index(name = "idx_medication_proof_member_verified_date",
+                columnList = "member_id, verified_date"),
         // 같은 날 동일 스케줄 중복 인증 차단 (애플리케이션 검사만으로는 동시 요청을 막지 못한다)
         uniqueConstraints = @UniqueConstraint(name = "uk_medication_proof_schedule_date",
                 columnNames = {"medicine_schedule_id", "verified_date"})
@@ -59,13 +59,14 @@ public class MedicationProof extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDateTime verifiedAt;
 
-    // verifiedAt의 일자 부분. datetime으로는 일자 단위 unique 제약을 걸 수 없어 따로 둔다.
+    // 복용 기준일: 인증한 알람의 날짜(LLD-0101). 알람 ±30분 창이 자정을 넘으면 verifiedAt의 날짜와 하루 다르다.
+    // 일자 단위 중복 차단 unique 제약과 날짜별 집계가 이 값을 쓴다.
     @Column(name = "verified_date", nullable = false)
     private LocalDate verifiedDate;
 
     @Builder(access = AccessLevel.PRIVATE)
     private MedicationProof(MedicineSchedule medicineSchedule, Member member,
-                            List<String> proofImageUrls, LocalDateTime verifiedAt) {
+                            List<String> proofImageUrls, LocalDateTime verifiedAt, LocalDate verifiedDate) {
         this.medicineSchedule = medicineSchedule;
         this.member = member;
         if (proofImageUrls != null) {
@@ -73,25 +74,18 @@ public class MedicationProof extends BaseTimeEntity {
         } else {
             this.proofImageUrls = new ArrayList<>();
         }
-        if (verifiedAt != null) {
-            this.verifiedAt = verifiedAt;
-        } else {
-            this.verifiedAt = LocalDateTime.now();
-        }
+        this.verifiedAt = verifiedAt;
+        this.verifiedDate = verifiedDate;
     }
 
-    @PrePersist
-    private void applyVerifiedDate() {
-        this.verifiedDate = this.verifiedAt.toLocalDate();
-    }
-
-    public static MedicationProof create(MedicineSchedule medicineSchedule, Member member,
-                                         List<String> proofImageUrls) {
+    public static MedicationProof create(MedicineSchedule medicineSchedule, Member member, List<String> proofImageUrls,
+                                         LocalDateTime verifiedAt, LocalDate verifiedDate) {
         return MedicationProof.builder()
                 .medicineSchedule(medicineSchedule)
                 .member(member)
                 .proofImageUrls(proofImageUrls)
-                .verifiedAt(LocalDateTime.now())
+                .verifiedAt(verifiedAt)
+                .verifiedDate(verifiedDate)
                 .build();
     }
 

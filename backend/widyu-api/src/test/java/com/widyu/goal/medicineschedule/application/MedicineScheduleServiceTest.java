@@ -180,7 +180,8 @@ class MedicineScheduleServiceTest {
                     ReflectionTestUtils.setField(newSchedule, "id", 101L);
                     return newSchedule;
                 });
-        MedicationProof proof = MedicationProof.create(existing, targetMember, List.of());
+        MedicationProof proof = MedicationProof.create(
+                existing, targetMember, List.of(), LocalDateTime.now(), LocalDate.now());
 
         // when
         MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
@@ -392,6 +393,69 @@ class MedicineScheduleServiceTest {
     }
 
     @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 수정은 예외가 발생하고 버전을 바꾸지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_수정은_예외가_발생한다() {
+        // given: 23:50에 다음 날 00:10 알람을 미리 인증해 둔 상태(LLD-0101)
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(0, 10), today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.updateSchedule(scheduleId, updateRequest("09:00"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        assertThat(existing.isCurrent()).isTrue();
+        then(medicineScheduleRepository).should(never()).save(any());
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 삭제는 예외가 발생하고 마감하지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_삭제는_예외가_발생한다() {
+        // given
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(0, 10), today().minusDays(5));
+        given(medicineScheduleRepository.findById(scheduleId)).willReturn(Optional.of(existing));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.deleteSchedule(scheduleId, memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        assertThat(existing.isCurrent()).isTrue();
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 등록은 예외가 발생하고 저장하지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_등록은_예외가_발생한다() {
+        // given: 다음 날 일정이 하나뿐일 때 미리 인증해 완주 보너스를 받은 상태. 일정을 더하면 보너스가 다시 나간다.
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today())).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.createSchedule(createRequest("08:00"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        then(medicineScheduleRepository).should(never()).save(any());
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
     @DisplayName("이미 종료된 과거 버전을 수정하면 예외가 발생한다")
     void 종료된_과거_버전_수정_시_예외가_발생한다() {
         // given
@@ -447,7 +511,7 @@ class MedicineScheduleServiceTest {
 
         MedicationProof proof = mock(MedicationProof.class);
         given(proof.getMedicineSchedule()).willReturn(schedule);
-        given(proof.getVerifiedAt()).willReturn(LocalDateTime.of(2026, 7, 15, 9, 0));
+        given(proof.getVerifiedDate()).willReturn(LocalDate.of(2026, 7, 15));
 
         given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
                 .willReturn(List.of(schedule));
@@ -482,7 +546,7 @@ class MedicineScheduleServiceTest {
 
         MedicationProof proof = mock(MedicationProof.class);
         given(proof.getMedicineSchedule()).willReturn(oldSchedule);
-        given(proof.getVerifiedAt()).willReturn(LocalDateTime.of(2026, 7, 15, 9, 0));
+        given(proof.getVerifiedDate()).willReturn(LocalDate.of(2026, 7, 15));
 
         given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
                 .willReturn(List.of(oldSchedule, currentSchedule));

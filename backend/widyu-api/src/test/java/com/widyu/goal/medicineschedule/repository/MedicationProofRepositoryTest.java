@@ -48,8 +48,12 @@ class MedicationProofRepositoryTest {
     }
 
     private MedicationProof persistProof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt) {
-        MedicationProof proof = MedicationProof.create(schedule, member, List.of());
-        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
+        return persistProof(schedule, member, verifiedAt, verifiedAt.toLocalDate());
+    }
+
+    private MedicationProof persistProof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt,
+                                         LocalDate doseDate) {
+        MedicationProof proof = MedicationProof.create(schedule, member, List.of(), verifiedAt, doseDate);
         entityManager.persistAndFlush(proof);
         return proof;
     }
@@ -69,13 +73,40 @@ class MedicationProofRepositoryTest {
 
         // when
         List<MedicationProof> proofs = medicationProofRepository.findByMemberIdAndDateRange(
-                member.getId(),
-                LocalDateTime.of(2026, 8, 1, 0, 0),
-                LocalDateTime.of(2026, 8, 14, 23, 59, 59)
-        );
+                member.getId(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 14));
 
         // then
         assertThat(proofs).extracting(MedicationProof::getId).containsExactly(inRange.getId());
+    }
+
+    @Test
+    @DisplayName("날짜 조회는 인증 시각이 아니라 복용 기준일로 그날의 인증을 고른다")
+    void 날짜_조회는_인증_시각이_아니라_복용_기준일로_그날의_인증을_고른다() {
+        // given: 8월 11일 00:05에 했지만 복용 기준일이 8월 10일인 인증(자정을 넘는 알람 창)
+        Member member = persistSenior("01099990000");
+        MedicineSchedule schedule = persistSchedule(member, LocalDate.of(2026, 8, 1));
+        MedicationProof proof = persistProof(
+                schedule, member, LocalDateTime.of(2026, 8, 11, 0, 5), LocalDate.of(2026, 8, 10));
+        LocalDate doseDate = LocalDate.of(2026, 8, 10);
+        LocalDate verifiedAtDate = LocalDate.of(2026, 8, 11);
+
+        // when & then
+        assertThat(medicationProofRepository.findByMemberIdAndDateRange(member.getId(), doseDate, doseDate))
+                .extracting(MedicationProof::getId).containsExactly(proof.getId());
+        assertThat(medicationProofRepository.findByMemberIdAndDateRange(member.getId(), verifiedAtDate, verifiedAtDate))
+                .isEmpty();
+        assertThat(medicationProofRepository.findVerifiedScheduleIds(List.of(schedule.getId()), doseDate))
+                .containsExactly(schedule.getId());
+        assertThat(medicationProofRepository.findVerifiedScheduleIds(List.of(schedule.getId()), verifiedAtDate))
+                .isEmpty();
+        assertThat(medicationProofRepository.findVerifiedScheduleIdsByMemberAndDate(member.getId(), doseDate))
+                .containsExactly(schedule.getId());
+        assertThat(medicationProofRepository.existsByMedicineScheduleAndVerifiedDate(schedule, doseDate)).isTrue();
+        assertThat(medicationProofRepository.existsByMedicineScheduleAndVerifiedDate(schedule, verifiedAtDate)).isFalse();
+        assertThat(medicationProofRepository.countByMemberAndVerifiedDate(member, doseDate)).isEqualTo(1L);
+        assertThat(medicationProofRepository.countByMemberAndVerifiedDate(member, verifiedAtDate)).isZero();
+        assertThat(medicationProofRepository.existsByMemberAndVerifiedDateAfter(member, doseDate.minusDays(1))).isTrue();
+        assertThat(medicationProofRepository.existsByMemberAndVerifiedDateAfter(member, doseDate)).isFalse();
     }
 
     @Test
@@ -86,8 +117,8 @@ class MedicationProofRepositoryTest {
         MedicineSchedule schedule = persistSchedule(member, LocalDate.of(2026, 8, 1));
         persistProof(schedule, member, LocalDateTime.of(2026, 8, 10, 8, 5));
 
-        MedicationProof duplicate = MedicationProof.create(schedule, member, List.of());
-        ReflectionTestUtils.setField(duplicate, "verifiedAt", LocalDateTime.of(2026, 8, 10, 8, 25));
+        MedicationProof duplicate = MedicationProof.create(
+                schedule, member, List.of(), LocalDateTime.of(2026, 8, 10, 8, 25), LocalDate.of(2026, 8, 10));
 
         // when & then: 알람 허용창 안이라 시각은 다르지만 같은 날짜다.
         // 서비스와 동일하게 리포지토리로 저장해 Spring 예외 변환까지 확인한다.

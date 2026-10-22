@@ -82,10 +82,7 @@ public class MedicineScheduleService {
     }
 
     private Map<Long, MedicationProof> findProofsByScheduleId(Member member, LocalDate date) {
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-
-        return medicationProofRepository.findByMemberIdAndDateRange(member.getId(), startOfDay, endOfDay)
+        return medicationProofRepository.findByMemberIdAndDateRange(member.getId(), date, date)
                 .stream()
                 .collect(Collectors.toMap(
                         proof -> proof.getMedicineSchedule().getId(),
@@ -152,7 +149,9 @@ public class MedicineScheduleService {
     @Transactional
     public MedicineScheduleIdResponse createSchedule(CreateMedicineScheduleRequest request, Long memberId) {
         Member targetMember = getMemberForAlarmChange(memberId);
-        LocalDate effectiveFromDate = LocalDate.now().plusDays(1);
+        LocalDate today = LocalDate.now();
+        LocalDate effectiveFromDate = today.plusDays(1);
+        validateNoNextDayProof(targetMember, today, "등록");
 
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
         MedicineSchedule schedule = MedicineSchedule.create(targetMember, alarmTime, effectiveFromDate);
@@ -204,6 +203,7 @@ public class MedicineScheduleService {
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
         LocalDate today = LocalDate.now();
         LocalDate effectiveFromDate = today.plusDays(1);
+        validateNoNextDayProof(targetMember, today, "수정");
 
         if (schedule.startedOn(effectiveFromDate)) {
             // 아직 시작하지 않은 내일 버전은 오늘 알람에 영향을 주지 않으므로 그대로 수정한다.
@@ -270,11 +270,26 @@ public class MedicineScheduleService {
 
         // 오늘 알람은 유지하고 내일부터 중단한다. 내일 시작 버전은 빈 유효기간이 된다.
         LocalDate today = LocalDate.now();
+        validateNoNextDayProof(targetMember, today, "삭제");
         schedule.closeAsOf(today);
         long revision = sendAlarmChanged(targetMember, NotificationType.MEDICATION_SCHEDULE_DELETED,
                 scheduleId, today.plusDays(1));
         log.info("약 복용 스케줄 삭제(내일부터 중단): scheduleId={}, memberId={}", scheduleId, targetMember.getId());
         return MedicineScheduleChangeResponse.of(revision, today.plusDays(1));
+    }
+
+    /**
+     * 자정을 넘는 인증 창(LLD-0101)에서는 23:30 이후에 다음 날 00:30 이전 알람을 미리 인증할 수 있다.
+     * 등록·수정·삭제는 모두 내일부터 적용되므로, 그 뒤 자정 전에 바꾸면 이미 적립한 내일 몫(완주 보너스 포함)의
+     * 기준인 내일 일정 구성이 바뀐다. 인증한 버전이 내일 유효하지 않게 되거나 보너스가 중복·누락된다.
+     * 회원에게 내일 복용분 인증이 있으면 자정이 지난 뒤에만 허용한다. 호출부가 회원 행을 잠근 뒤 부르므로
+     * 같은 회원의 인증 저장과 순서가 정해진다.
+     */
+    private void validateNoNextDayProof(Member member, LocalDate today, String action) {
+        if (medicationProofRepository.existsByMemberAndVerifiedDateAfter(member, today)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "다음 날 복용분을 이미 인증해 자정이 지난 뒤에 스케줄을 " + action + "할 수 있습니다.");
+        }
     }
 
     private LocalTime parseAlarmTime(String alarmTimeStr) {
@@ -376,15 +391,13 @@ public class MedicineScheduleService {
         }
 
         // 한 달치 MedicationProof를 한 번에 조회
-        LocalDateTime start = monthStart.atStartOfDay();
-        LocalDateTime end = monthEnd.atTime(LocalTime.MAX);
         List<MedicationProof> proofs = medicationProofRepository
-                .findByMemberIdAndDateRange(member.getId(), start, end);
+                .findByMemberIdAndDateRange(member.getId(), monthStart, monthEnd);
 
         // 날짜별로 "어떤 스케줄들이 인증됐는지" 집계
         Map<LocalDate, Set<Long>> scheduleIdsByDate = proofs.stream()
                 .collect(Collectors.groupingBy(
-                        proof -> proof.getVerifiedAt().toLocalDate(),
+                        MedicationProof::getVerifiedDate,
                         Collectors.mapping(p -> p.getMedicineSchedule().getId(), Collectors.toSet())
                 ));
 
