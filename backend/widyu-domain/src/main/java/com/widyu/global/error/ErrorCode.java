@@ -80,6 +80,7 @@ public enum ErrorCode {
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4041", "회원을 찾을 수 없습니다."),
     SENIOR_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4042", "시니어 프로필을 찾을 수 없습니다."),
     TEMPORARY_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_4041", "임시 회원을 찾을 수 없습니다."),
+    PHONE_NUMBER_SHARED_BY_MEMBERS(HttpStatus.CONFLICT, "MEMBER_4090", "같은 전화번호로 가입된 회원이 여러 명이라 본인을 확인할 수 없습니다. 고객센터로 문의해 주세요."),
 
     // 건강 일정 관련
     HEALTH_SCHEDULE_INVALID_PROGRESS_TRANSITION(HttpStatus.BAD_REQUEST, "HEALTH_SCHEDULE_4000", "완료는 방문 인증으로만 처리됩니다."),

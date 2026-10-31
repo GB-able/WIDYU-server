@@ -122,8 +122,7 @@ public class LocalLoginService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        Member member = memberRepository.findByPhoneNumberAndName(temporaryMember.getPhoneNumber(), temporaryMember.getName())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = findOnlyMemberByPhoneNumberAndName(temporaryMember.getPhoneNumber(), temporaryMember.getName());
         if (member.getLocalAccount() == null) {
             throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND);
         }
@@ -138,8 +137,7 @@ public class LocalLoginService {
         String phoneNumber = temporaryMember.getPhoneNumber();
         String name = temporaryMember.getName();
 
-        Member member = memberRepository.findByPhoneNumberAndName(phoneNumber, name)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = findOnlyMemberByPhoneNumberAndName(phoneNumber, name);
 
         String encodedPw = passwordEncoder.encode(request.password());
         member.getLocalAccount().changePassword(encodedPw);
@@ -152,8 +150,7 @@ public class LocalLoginService {
     @Transactional(readOnly = true)
     public UserProfile getUserProfileByTemporaryToken(HttpServletRequest httpServletRequest) {
         TemporaryMember temporaryMember = temporaryMemberUtil.getTemporaryMemberFromRequest(httpServletRequest);
-        Member member = memberRepository.findByPhoneNumberAndName(temporaryMember.getPhoneNumber(), temporaryMember.getName())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member = findOnlyMemberByPhoneNumberAndName(temporaryMember.getPhoneNumber(), temporaryMember.getName());
 
         String email = member.getSocialAccounts().stream()
                 .map(SocialAccount::getEmail)
@@ -167,5 +164,17 @@ public class LocalLoginService {
 
 
         return UserProfile.of(member.getName(), member.getPhoneNumber(), email, providers);
+    }
+
+    // 같은 이름과 번호의 회원이 여럿이면 누구의 계정인지 알 수 없어 임의로 고르지 않는다 (LLD-0116)
+    private Member findOnlyMemberByPhoneNumberAndName(String phoneNumber, String name) {
+        List<Member> members = memberRepository.findTop2ByPhoneNumberAndName(phoneNumber, name);
+        if (members.isEmpty()) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND);
+        }
+        if (members.size() > 1) {
+            throw new BusinessException(ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        }
+        return members.get(0);
     }
 }

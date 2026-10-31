@@ -48,6 +48,11 @@ public interface MemberRepository extends JpaRepository<Member, Long>, MemberRep
     Page<Member> findByNameContainingOrderByIdDesc(String name, Pageable pageable);
     Page<Member> findAllByOrderByIdDesc(Pageable pageable);
     List<Member> findTop3ByPhoneNumberContainingOrderByIdDesc(String phoneNumber);
+    boolean existsByPhoneNumberAndIdNot(String phoneNumber, Long id);
+
+    // 전화번호 유일 제약이 걸리기 전 기존 중복을 단건 조회 예외(500) 없이 알아채려고 두 건까지 읽는다 (LLD-0116)
+    List<Member> findTop2ByPhoneNumber(String phoneNumber);
+    List<Member> findTop2ByPhoneNumberAndName(String phoneNumber, String name);
     boolean existsByIdAndStatus(Long id, Status status);
 
     @Query("SELECT m.id FROM Member m WHERE m.id IN :ids AND m.status = com.widyu.global.entity.Status.ACTIVE")
