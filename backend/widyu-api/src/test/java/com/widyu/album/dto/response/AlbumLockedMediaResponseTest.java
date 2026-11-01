@@ -38,7 +38,7 @@ class AlbumLockedMediaResponseTest {
     }
 
     @Test
-    @DisplayName("잠금 전 앨범 피드 응답은 원본 URL 없이 대표 썸네일 하나와 잠금 여부를 담는다")
+    @DisplayName("잠금 전 앨범 피드 응답은 원본 URL과 썸네일 목록 없이 대표 썸네일과 잠금 여부를 담는다")
     void 잠금_전_앨범_피드는_원본_URL_없이_대표_썸네일_하나만_담는다() {
         // given
         Album album = videoAndPhotoAlbum();
@@ -48,7 +48,8 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(response.mediaUrls()).isEmpty();
-        assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB);
+        assertThat(response.thumbnailUrls()).isEmpty();
+        assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isFalse();
         assertThat(response.mediaCount()).isEqualTo(2);
     }
@@ -65,11 +66,12 @@ class AlbumLockedMediaResponseTest {
         // then
         assertThat(response.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
         assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB, PHOTO_URL);
+        assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isTrue();
     }
 
     @Test
-    @DisplayName("잠금 전 앨범 상세 응답은 원본 URL 없이 대표 썸네일 하나와 잠금 여부를 담는다")
+    @DisplayName("잠금 전 앨범 상세 응답은 원본 URL 없이 대표 썸네일과 잠금 여부를 담는다")
     void 잠금_전_앨범_상세는_원본_URL_없이_대표_썸네일_하나만_담는다() {
         // given
         Album album = videoAndPhotoAlbum();
@@ -79,7 +81,7 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(response.mediaUrls()).isEmpty();
-        assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB);
+        assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isFalse();
     }
 
@@ -94,7 +96,7 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(response.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
-        assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB, PHOTO_URL);
+        assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isTrue();
     }
 
@@ -133,7 +135,7 @@ class AlbumLockedMediaResponseTest {
     }
 
     @Test
-    @DisplayName("잠금 전 캘린더 앨범 응답은 원본 URL 없이 대표 썸네일 하나와 잠금 여부를 담는다")
+    @DisplayName("잠금 전 캘린더 앨범 응답은 원본 URL 없이 대표 썸네일과 잠금 여부를 담는다")
     void 잠금_전_캘린더_앨범은_원본_URL_없이_대표_썸네일_하나만_담는다() {
         // given
         Album album = videoAndPhotoAlbum();
@@ -144,10 +146,10 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(locked.mediaUrls()).isEmpty();
-        assertThat(locked.thumbnailUrls()).containsExactly(VIDEO_THUMB);
+        assertThat(locked.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(locked.isUnlocked()).isFalse();
         assertThat(unlocked.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
-        assertThat(unlocked.thumbnailUrls()).containsExactly(VIDEO_THUMB, PHOTO_URL);
+        assertThat(unlocked.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(unlocked.isUnlocked()).isTrue();
     }
 

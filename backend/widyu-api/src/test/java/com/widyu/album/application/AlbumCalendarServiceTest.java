@@ -107,7 +107,7 @@ class AlbumCalendarServiceTest {
         FamilyAlbumResponse unlocked = response.albums().get(1);
         assertThat(locked.isUnlocked()).isFalse();
         assertThat(locked.mediaUrls()).isEmpty();
-        assertThat(locked.thumbnailUrls()).containsExactly("https://cdn/a_thumbnail.jpg");
+        assertThat(locked.thumbnailUrl()).isEqualTo("https://cdn/a_thumbnail.jpg");
         assertThat(unlocked.isUnlocked()).isTrue();
         assertThat(unlocked.mediaUrls()).containsExactly("https://cdn/b.mp4");
     }

@@ -295,7 +295,7 @@ class AlbumServiceTest {
         assertThat(response.isUnlocked()).isFalse();
         assertThat(response.price()).isEqualTo(Album.UNLOCK_PRICE);
         assertThat(response.mediaUrls()).isEmpty();
-        assertThat(response.thumbnailUrls()).containsExactly("https://cdn/v_thumbnail.jpg");
+        assertThat(response.thumbnailUrl()).isEqualTo("https://cdn/v_thumbnail.jpg");
         verify(albumViewService, never()).recordView(any(), any());
     }
 

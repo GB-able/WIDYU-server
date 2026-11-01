@@ -159,7 +159,8 @@ public interface AlbumDocs {
                     
                     **잠금 앨범:**
                     - 시니어가 보호자 앨범을 아직 해금하지 않았으면 `isUnlocked: false`입니다.
-                    - 이때 원본 `mediaUrls`는 빈 배열이고 `thumbnailUrls`에는 대표 썸네일(첫 썸네일) 하나만 담깁니다. 해금하면 원본 URL과 썸네일 전체가 담깁니다.
+                    - 이때 원본 `mediaUrls`와 썸네일 목록 `thumbnailUrls`는 빈 배열이고, 대표 썸네일(첫 썸네일) `thumbnailUrl`만 담깁니다. 해금하면 원본 URL과 썸네일 목록이 함께 담깁니다.
+                    - `thumbnailUrl`은 잠금 여부와 관계없이 담기며, 썸네일이 없으면 null입니다.
                     - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     """
     )
@@ -183,7 +184,8 @@ public interface AlbumDocs {
                                                     "authorProfileImage": null,
                                                     "content": "가족 여행 사진입니다!",
                                                     "mediaUrls": [],
-                                                    "thumbnailUrls": ["https://s3.bucket.com/albums/photos/1/photo1.jpg"],
+                                                    "thumbnailUrls": [],
+                                                    "thumbnailUrl": "https://s3.bucket.com/albums/photos/1/photo1.jpg",
                                                     "primaryMediaType": "PHOTO",
                                                     "mediaCount": 1,
                                                     "photoCount": 1,
@@ -653,7 +655,8 @@ public interface AlbumDocs {
                     - 보호자: 모든 앨범 조회 가능
                     - 부모(시니어): 본인 앨범 또는 해금한 앨범 조회 가능 (해금 비용: 50포인트)
                     - 해금하지 않은 앨범도 200으로 응답하고 `isUnlocked: false`와 해금 가격 `price`를 담습니다. 앱은 `isUnlocked`로 해금 화면을 띄웁니다.
-                    - 해금하지 않은 앨범의 원본 `mediaUrls`는 빈 배열이고 `thumbnailUrls`에는 대표 썸네일(첫 썸네일) 하나만 담깁니다. 해금하면 원본 URL과 썸네일 전체가 담깁니다.
+                    - 해금하지 않은 앨범의 원본 `mediaUrls`는 빈 배열입니다. 해금하면 원본 URL이 담깁니다.
+                    - `thumbnailUrl`은 대표 썸네일(첫 썸네일) 하나이며 잠금 여부와 관계없이 담깁니다. 썸네일이 없으면 null입니다.
                     - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     - 해금하지 않은 상태의 조회는 조회 기록(조회수·조회자)에 남지 않습니다.
                     - 가족 외 앨범은 403 `AUTH_4030`입니다.
@@ -683,9 +686,7 @@ public interface AlbumDocs {
                                                 "mediaUrls": [
                                                   "https://s3.aws.com/album/1.jpg"
                                                 ],
-                                                "thumbnailUrls": [
-                                                  "https://s3.aws.com/album/1.jpg"
-                                                ],
+                                                "thumbnailUrl": "https://s3.aws.com/album/1.jpg",
                                                 "likeCount": 12,
                                                 "commentCount": 3,
                                                 "viewCount": 45,

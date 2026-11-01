@@ -59,15 +59,17 @@ GET  /api/v1/members/seniors/unlocked-albums
 
 | 응답 | 잠금 전 원본 URL | 잠금 전 썸네일 |
 | --- | --- | --- |
-| `GET /api/v1/albums/feed` (`AlbumFeedResponse`) | `mediaUrls: []` | `thumbnailUrls`에 첫 썸네일 하나 |
-| `GET /api/v1/albums/{albumId}` (`AlbumDetailResponse`) | `mediaUrls: []` | `thumbnailUrls`에 첫 썸네일 하나 (필드 추가) |
-| `GET /api/v1/albums/calendar/family` (`FamilyAlbumResponse`) | `mediaUrls: []` | `thumbnailUrls`에 첫 썸네일 하나 (필드 추가) |
+| `GET /api/v1/albums/feed` (`AlbumFeedResponse`) | `mediaUrls: []` | `thumbnailUrls: []`, 대표 썸네일 `thumbnailUrl` (필드 추가) |
+| `GET /api/v1/albums/{albumId}` (`AlbumDetailResponse`) | `mediaUrls: []` | 대표 썸네일 `thumbnailUrl` (필드 추가) |
+| `GET /api/v1/albums/calendar/family` (`FamilyAlbumResponse`) | `mediaUrls: []` | 대표 썸네일 `thumbnailUrl` (필드 추가) |
 | `GET /api/v1/albums/media` (`AlbumMediaResponse`) | 원본 필드 없음 | 앨범의 첫 미디어 항목 하나만, 썸네일은 저장된 `thumbnailUrls[0]`, 없으면 `null` |
 | `GET /api/v1/home/senior/cards` 앨범 카드 | 원본으로 대체하지 않음 | 첫 썸네일, 없으면 `null` |
 
 - 잠금 전 상세 조회는 예외 없이 200으로 응답한다. 조회 기록(`AlbumView`, 조회수, 조회 알림)은 해금 뒤에만 남긴다.
 - 원본을 빼도 `mediaCount`, `photoCount`, `videoCount`, `primaryMediaType`, `videoDuration`, 댓글, 좋아요, 조회자 목록은 그대로 담는다. 원본 열람이 아니고 잠금 화면 표시에 쓴다.
-- 해금 뒤 응답은 #813 이전과 같다.
+- `thumbnailUrl`은 첫 썸네일이며 잠금 여부와 관계없이 담는다. 썸네일이 없으면 `null`이다.
+- 피드의 `thumbnailUrls`는 #813 이전부터 있던 필드라 해금 뒤에는 그대로 썸네일 전체를 담는다.
+- 해금 뒤 응답은 #813 이전과 같다(추가 필드 제외).
 
 가족 외 앨범의 상세 또는 해금 요청은 기존 `FORBIDDEN` 오류로 거부한다.
 
@@ -114,7 +116,7 @@ DB 스키마 변경이 없다.
 기존 피드 응답의 앨범 수와 캘린더 날짜 목록이 현재 사용자의 가족 범위로 제한된다.
 피드와 상세 응답에 `isUnlocked` 필드가 추가되며 DB 마이그레이션은 없다.
 
-#813: 잠금 전 앨범의 `mediaUrls`가 빈 배열로 바뀐다. 앱이 잠금 화면 미리보기에 `mediaUrls`를 쓰고 있었다면 `thumbnailUrls`(첫 썸네일 하나)로 바꿔야 한다. 잠금 전 미디어 피드는 앨범당 항목이 하나다. 상세, 캘린더, 미디어 피드, 시니어 홈 카드에 `isUnlocked`가, 상세와 캘린더에 `thumbnailUrls`가 추가된다.
+#813: 잠금 전 앨범의 `mediaUrls`가 빈 배열로 바뀐다. 앱이 잠금 화면 미리보기에 `mediaUrls`를 쓰고 있었다면 대표 썸네일 `thumbnailUrl`로 바꿔야 한다. 잠금 전 피드의 `thumbnailUrls`도 빈 배열이고, 잠금 전 미디어 피드는 앨범당 항목이 하나다. 상세, 캘린더, 미디어 피드, 시니어 홈 카드에 `isUnlocked`가, 피드와 상세와 캘린더에 `thumbnailUrl`이 추가된다.
 
 ## 9. 미결정 사항 (Open Questions)
 
