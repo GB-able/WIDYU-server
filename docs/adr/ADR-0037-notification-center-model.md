@@ -54,3 +54,4 @@
 - 복약 동기화 신호 형식은 회신 대기다. 가정: M08/M05/M09마다 `DATA_ONLY` `MEDICATION_SCHEDULE_SYNC`(revision)를 항상 함께 보내고, 구 앱 호환으로 data `type=MEDICATION_SCHEDULE_CHANGED`를 유지한다.
 - `group_key`·`target_unavailable_at`은 쓰는 쪽(동시 목표 달성 묶음, 대상 삭제 훅)이 생길 때 더한다.
 - `FcmCategory`의 쓰이지 않게 되는 값 정리는 앱 전환 뒤 별도 작업이다.
+- 2026-11-01 [LLD-0117](../lld/LLD-0117-notification-list-tabs.md): 센터 필터에 「기타」(`ETC`)를 더하고 탭 순서를 전체·안 읽음·메시지·목표·앨범·위치·기타로 정했다. 기존 `/api/v1/fcm` 목록·카테고리도 같은 탭 분류와 만료 조건을 쓴다(결정 1의 필터 목록, 결정 7의 v1 유지 범위를 이만큼 넓힌다).

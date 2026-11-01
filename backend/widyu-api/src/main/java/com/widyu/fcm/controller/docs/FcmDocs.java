@@ -20,7 +20,7 @@ public interface FcmDocs {
 
     @Operation(
             summary = "알림 목록 조회",
-            description = "현재 로그인한 유저의 알림 목록을 카테고리별 및 커서 기반으로 조회합니다. `category=UNREAD`이면 카테고리와 관계없이 안 읽은 알림만 반환합니다."
+            description = "현재 로그인한 유저의 알림 목록을 탭별, 커서 기반으로 조회합니다. `category`는 카테고리 조회 응답의 `label`(ALL, UNREAD, MESSAGE, GOAL, ALBUM, LOCATION, ETC)입니다. `UNREAD`이면 탭과 관계없이 안 읽은 알림만 반환합니다. 만료된 알림은 빠집니다. 모르는 값이나 시니어의 `LOCATION`은 400(FCM_4002)입니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -94,7 +94,7 @@ public interface FcmDocs {
 
     @Operation(
             summary = "알림 카테고리 조회",
-            description = "알림 카테고리별 안 읽은 알림 개수를 조회합니다. `전체` 바로 뒤에 전체 안 읽은 수를 담은 `UNREAD`(안 읽음) 항목이 옵니다."
+            description = "알림 목록 탭과 탭별 안 읽은 알림 개수를 앱에 보여줄 순서대로 조회합니다. 전체, 안 읽음, 메시지, 목표, 앨범, 위치, 기타 순이며 위치는 보호자에게만 옵니다. `ALL`과 `UNREAD`의 count는 둘 다 전체 안 읽은 수입니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -118,9 +118,29 @@ public interface FcmDocs {
                                           "count": 5
                                         },
                                         {
+                                          "label": "MESSAGE",
+                                          "name": "메시지",
+                                          "count": 1
+                                        },
+                                        {
+                                          "label": "GOAL",
+                                          "name": "목표",
+                                          "count": 0
+                                        },
+                                        {
                                           "label": "ALBUM",
                                           "name": "앨범",
                                           "count": 3
+                                        },
+                                        {
+                                          "label": "LOCATION",
+                                          "name": "위치",
+                                          "count": 1
+                                        },
+                                        {
+                                          "label": "ETC",
+                                          "name": "기타",
+                                          "count": 0
                                         }
                                       ]
                                     }

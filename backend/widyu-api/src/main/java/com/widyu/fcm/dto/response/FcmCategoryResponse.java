@@ -1,6 +1,6 @@
 package com.widyu.fcm.dto.response;
 
-import com.widyu.fcm.FcmCategory;
+import com.widyu.notification.NotificationCenterFilter;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -11,28 +11,11 @@ public class FcmCategoryResponse {
     private String name;
     private long count;
 
-    public static FcmCategoryResponse of(FcmCategory category, long count) {
+    public static FcmCategoryResponse of(NotificationCenterFilter tab, long count) {
         return FcmCategoryResponse.builder()
-                .label(category.name())
-                .name(getCategoryName(category))
+                .label(tab.name())
+                .name(tab.label())
                 .count(count)
                 .build();
-    }
-
-    private static String getCategoryName(FcmCategory category) {
-        return switch (category) {
-            case ALL -> "전체";
-            case UNREAD -> "안 읽음";
-            case ALBUM -> "앨범";
-            case TARGET -> "목표";
-            case HEALTH_SCHEDULE -> "방문 일정";
-            case WALK -> "만보계";
-            case MEDICINE_SCHEDULE -> "복약 알림";
-            case HEART_MESSAGE -> "가족 메시지";
-            case SAFE_ZONE -> "안전구역";
-            case INCIDENT_SELF_CHECK -> "본인확인";
-            case LOCATION_NOTICE -> "위치 조회 알림";
-            case ETC -> "기타";
-        };
     }
 }
