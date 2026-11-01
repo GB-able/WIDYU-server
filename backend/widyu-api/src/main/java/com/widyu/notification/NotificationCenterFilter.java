@@ -8,18 +8,22 @@ import com.widyu.member.MemberType;
 import java.util.Arrays;
 import java.util.List;
 
+/** 알림 목록 탭. 선언 순서가 앱에 내려가는 탭 순서다(LLD-0117). */
 public enum NotificationCenterFilter {
-    ALL(List.of()),
-    UNREAD(List.of()),
-    LOCATION(List.of(FcmCategory.SAFE_ZONE, FcmCategory.LOCATION_NOTICE)),
-    ALBUM(List.of(FcmCategory.ALBUM)),
-    GOAL(List.of(FcmCategory.TARGET, FcmCategory.HEALTH_SCHEDULE,
+    ALL("전체", List.of()),
+    UNREAD("안 읽음", List.of()),
+    MESSAGE("메시지", List.of(FcmCategory.HEART_MESSAGE)),
+    GOAL("목표", List.of(FcmCategory.TARGET, FcmCategory.HEALTH_SCHEDULE,
             FcmCategory.WALK, FcmCategory.MEDICINE_SCHEDULE)),
-    MESSAGE(List.of(FcmCategory.HEART_MESSAGE, FcmCategory.ETC));
+    ALBUM("앨범", List.of(FcmCategory.ALBUM)),
+    LOCATION("위치", List.of(FcmCategory.SAFE_ZONE)),
+    ETC("기타", List.of(FcmCategory.ETC, FcmCategory.INCIDENT_SELF_CHECK, FcmCategory.LOCATION_NOTICE));
 
+    private final String label;
     private final List<FcmCategory> legacyCategories;
 
-    NotificationCenterFilter(List<FcmCategory> legacyCategories) {
+    NotificationCenterFilter(String label, List<FcmCategory> legacyCategories) {
+        this.label = label;
         this.legacyCategories = legacyCategories;
     }
 
@@ -38,18 +42,22 @@ public enum NotificationCenterFilter {
         }
     }
 
+    /** 회원에게 보이는 탭. 위치는 보호자에게만 보인다. */
+    public static List<NotificationCenterFilter> tabs(MemberType memberType) {
+        return Arrays.stream(values())
+                .filter(filter -> filter != LOCATION || memberType == MemberType.GUARDIAN)
+                .toList();
+    }
+
     public static List<NotificationCenterFilter> countedFilters(MemberType memberType) {
-        if (memberType == MemberType.GUARDIAN) {
-            return List.of(UNREAD, LOCATION, ALBUM, GOAL, MESSAGE);
-        }
-        return List.of(UNREAD, ALBUM, GOAL, MESSAGE);
+        return tabs(memberType).stream().filter(filter -> filter != ALL).toList();
     }
 
     public static String categoryOfLegacy(FcmCategory category) {
         if (category == null) {
             return null;
         }
-        for (NotificationCenterFilter filter : List.of(LOCATION, ALBUM, GOAL, MESSAGE)) {
+        for (NotificationCenterFilter filter : values()) {
             if (filter.legacyCategories.contains(category)) {
                 return filter.name();
             }
@@ -59,6 +67,10 @@ public enum NotificationCenterFilter {
 
     public boolean isCategory() {
         return this != ALL && this != UNREAD;
+    }
+
+    public String label() {
+        return label;
     }
 
     public List<FcmCategory> legacyCategories() {

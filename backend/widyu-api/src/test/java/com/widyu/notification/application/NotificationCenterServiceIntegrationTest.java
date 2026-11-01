@@ -93,8 +93,8 @@ class NotificationCenterServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("미매핑 레거시 알림을 조회하면 카테고리를 null로 반환한다")
-    void 미매핑_레거시_알림을_조회하면_카테고리를_null로_반환한다() {
+    @DisplayName("다른 탭에 속하지 않는 레거시 알림을 조회하면 카테고리를 ETC로 반환한다")
+    void 다른_탭에_속하지_않는_레거시_알림을_조회하면_카테고리를_ETC로_반환한다() {
         // given
         Member senior = member(MemberType.SENIOR);
         given(memberUtil.getCurrentMember()).willReturn(senior);
@@ -106,7 +106,7 @@ class NotificationCenterServiceIntegrationTest {
         // then
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().getFirst().notificationId()).isEqualTo(unmapped.getId());
-        assertThat(response.items().getFirst().category()).isNull();
+        assertThat(response.items().getFirst().category()).isEqualTo("ETC");
         assertThat(response.items().getFirst().priority()).isEqualTo("interaction");
     }
 
@@ -143,8 +143,8 @@ class NotificationCenterServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("포인트 알림을 조회하면 전체와 안 읽음에만 포함한다")
-    void 포인트_알림을_조회하면_전체와_안읽음에만_포함한다() {
+    @DisplayName("포인트 알림을 조회하면 목표가 아니라 기타에 포함한다")
+    void 포인트_알림을_조회하면_목표가_아니라_기타에_포함한다() {
         // given
         Member senior = member(MemberType.SENIOR);
         given(memberUtil.getCurrentMember()).willReturn(senior);
@@ -156,6 +156,7 @@ class NotificationCenterServiceIntegrationTest {
         NotificationCenterResponse all = service.list("ALL", null);
         NotificationCenterResponse unread = service.list("UNREAD", null);
         NotificationCenterResponse goals = service.list("GOAL", null);
+        NotificationCenterResponse etc = service.list("ETC", null);
 
         // then
         assertThat(all.items()).extracting(NotificationEnvelope::notificationId)
@@ -164,9 +165,11 @@ class NotificationCenterServiceIntegrationTest {
         assertThat(goals.items()).extracting(NotificationEnvelope::notificationId)
                 .containsExactly(goal.getId());
         assertThat(goals.unreadCounts()).containsEntry("GOAL", 1).containsEntry("UNREAD", 3);
-        assertThat(all.items().get(1).category()).isNull();
-        assertThat(NotificationType.POINT_EARNED.centerFilter()).isNull();
-        assertThat(NotificationType.POINT_USED.centerFilter()).isNull();
+        assertThat(etc.items()).extracting(NotificationEnvelope::notificationId)
+                .containsExactly(used.getId(), earned.getId());
+        assertThat(all.items().get(1).category()).isEqualTo("ETC");
+        assertThat(NotificationType.POINT_EARNED.centerFilter()).isEqualTo("ETC");
+        assertThat(NotificationType.POINT_USED.centerFilter()).isEqualTo("ETC");
     }
 
     @Test

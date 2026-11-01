@@ -31,6 +31,7 @@
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
 - `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE, INCIDENT_SELF_CHECK
+- 알림 목록 탭은 저장 카테고리가 아니라 `NotificationCenterFilter`(전체, 안 읽음, 메시지, 목표, 앨범, 위치(보호자만), 기타)다. v1 `/api/v1/fcm`과 v2 `/api/v1/notifications`가 같은 분류를 쓴다. 새 `NotificationType`은 `centerFilter`를 정해야 탭에 보인다. → LLD-0117
 - 비활성 유저 스케줄 알림(3/5/7일). → LLD-0002·0014
 
 ### `pay` — 결제·포인트
