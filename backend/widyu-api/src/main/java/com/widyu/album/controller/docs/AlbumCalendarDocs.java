@@ -73,8 +73,8 @@ public interface AlbumCalendarDocs {
                     특정 날짜(date)에 가족(본인, 보호자, 자녀)의 앨범 피드를 커서 기반으로 조회합니다.
                     - 기본 페이지 크기는 5개이며, 추가 데이터가 있으면 `hasNext = true` 와 `nextCursor` 가 반환됩니다.
                     - `cursor` 파라미터는 마지막 앨범 ID를 의미합니다.
-                    - 시니어가 보호자 앨범을 아직 해금하지 않았으면 `isUnlocked: false`이고, 원본 `mediaUrls`는 빈 배열이며 `thumbnailUrls`만 담깁니다.
-                    - 사진은 썸네일이 원본과 같은 URL이라 잠금 전에도 사진이 보일 수 있습니다.
+                    - 시니어가 보호자 앨범을 아직 해금하지 않았으면 `isUnlocked: false`이고, 원본 `mediaUrls`는 빈 배열이며 `thumbnailUrls`에는 대표 썸네일(첫 썸네일) 하나만 담깁니다.
+                    - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     """
     )
     @ApiResponse(
