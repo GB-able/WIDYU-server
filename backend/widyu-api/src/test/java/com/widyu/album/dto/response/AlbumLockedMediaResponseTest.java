@@ -38,7 +38,7 @@ class AlbumLockedMediaResponseTest {
     }
 
     @Test
-    @DisplayName("잠금 전 앨범 피드 응답은 원본 URL과 썸네일 목록 없이 대표 썸네일과 잠금 여부를 담는다")
+    @DisplayName("잠금 전 앨범 피드 응답은 원본 URL 없이 대표 썸네일과 잠금 여부를 담는다")
     void 잠금_전_앨범_피드는_원본_URL_없이_대표_썸네일_하나만_담는다() {
         // given
         Album album = videoAndPhotoAlbum();
@@ -48,14 +48,13 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(response.mediaUrls()).isEmpty();
-        assertThat(response.thumbnailUrls()).isEmpty();
         assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isFalse();
         assertThat(response.mediaCount()).isEqualTo(2);
     }
 
     @Test
-    @DisplayName("해금한 앨범 피드 응답은 기존처럼 원본 URL과 썸네일을 모두 담는다")
+    @DisplayName("해금한 앨범 피드 응답은 원본 URL과 대표 썸네일을 담는다")
     void 해금한_앨범_피드는_원본_URL을_담는다() {
         // given
         Album album = videoAndPhotoAlbum();
@@ -65,7 +64,6 @@ class AlbumLockedMediaResponseTest {
 
         // then
         assertThat(response.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
-        assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB, PHOTO_URL);
         assertThat(response.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(response.isUnlocked()).isTrue();
     }
@@ -151,6 +149,23 @@ class AlbumLockedMediaResponseTest {
         assertThat(unlocked.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
         assertThat(unlocked.thumbnailUrl()).isEqualTo(VIDEO_THUMB);
         assertThat(unlocked.isUnlocked()).isTrue();
+    }
+
+    @Test
+    @DisplayName("첫 썸네일이 아직 없는 앨범을 조회하면 대표 썸네일을 null로 담는다")
+    void 첫_썸네일이_아직_없는_앨범을_조회하면_대표_썸네일을_null로_담는다() {
+        // given
+        Album album = Album.createAlbumWithMetadata(mock(Member.class), "내용",
+                new ArrayList<>(List.of(VIDEO_URL)), new ArrayList<>(Arrays.asList((String) null)),
+                new ArrayList<>(List.of(12)));
+
+        // when
+        AlbumFeedResponse feed = AlbumFeedResponse.from(album, false, false, List.of());
+        FamilyAlbumResponse calendar = FamilyAlbumResponse.from(album, List.of(), false);
+
+        // then
+        assertThat(feed.thumbnailUrl()).isNull();
+        assertThat(calendar.thumbnailUrl()).isNull();
     }
 
     @Test

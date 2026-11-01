@@ -37,7 +37,7 @@ public record FamilyAlbumResponse(
                 album.getId(),
                 album.getContent(),
                 urls,
-                album.getThumbnailUrls().stream().findFirst().orElse(null),
+                album.getRepresentativeThumbnailUrl(),
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),

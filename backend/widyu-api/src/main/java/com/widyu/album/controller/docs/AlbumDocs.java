@@ -156,10 +156,10 @@ public interface AlbumDocs {
                     - date 파라미터로 특정 날짜의 앨범만 조회 가능
                     - 형식: yyyy-MM-dd (예: 2024-12-21)
                     - 캘린더 탭에서 활용
-                    
+
                     **잠금 앨범:**
                     - 시니어가 보호자 앨범을 아직 해금하지 않았으면 `isUnlocked: false`입니다.
-                    - 이때 원본 `mediaUrls`와 썸네일 목록 `thumbnailUrls`는 빈 배열이고, 대표 썸네일(첫 썸네일) `thumbnailUrl`만 담깁니다. 해금하면 원본 URL과 썸네일 목록이 함께 담깁니다.
+                    - 이때 원본 `mediaUrls`는 빈 배열이고 대표 썸네일(첫 썸네일) `thumbnailUrl`만 담깁니다. 해금하면 원본 URL이 함께 담깁니다.
                     - `thumbnailUrl`은 잠금 여부와 관계없이 담기며, 썸네일이 없으면 null입니다.
                     - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     """
@@ -184,7 +184,6 @@ public interface AlbumDocs {
                                                     "authorProfileImage": null,
                                                     "content": "가족 여행 사진입니다!",
                                                     "mediaUrls": [],
-                                                    "thumbnailUrls": [],
                                                     "thumbnailUrl": "https://s3.bucket.com/albums/photos/1/photo1.jpg",
                                                     "primaryMediaType": "PHOTO",
                                                     "mediaCount": 1,

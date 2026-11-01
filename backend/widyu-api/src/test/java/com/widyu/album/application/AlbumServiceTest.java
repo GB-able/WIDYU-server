@@ -277,7 +277,7 @@ class AlbumServiceTest {
         Album album = mock(Album.class);
         given(album.getId()).willReturn(10L);
         given(album.getMember()).willReturn(albumOwner);
-        given(album.getThumbnailUrls()).willReturn(List.of("https://cdn/v_thumbnail.jpg"));
+        given(album.getRepresentativeThumbnailUrl()).willReturn("https://cdn/v_thumbnail.jpg");
         given(album.getLikeCount()).willReturn(0);
         given(album.getCommentCount()).willReturn(0);
         given(album.getViewCount()).willReturn(0);

@@ -104,7 +104,7 @@ public record AlbumDetailResponse(
                 album.getId(),
                 album.getContent(),
                 mediaUrls,
-                album.getThumbnailUrls().stream().findFirst().orElse(null),
+                album.getRepresentativeThumbnailUrl(),
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),

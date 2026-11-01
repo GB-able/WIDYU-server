@@ -59,7 +59,7 @@ GET  /api/v1/members/seniors/unlocked-albums
 
 | 응답 | 잠금 전 원본 URL | 잠금 전 썸네일 |
 | --- | --- | --- |
-| `GET /api/v1/albums/feed` (`AlbumFeedResponse`) | `mediaUrls: []` | `thumbnailUrls: []`, 대표 썸네일 `thumbnailUrl` (필드 추가) |
+| `GET /api/v1/albums/feed` (`AlbumFeedResponse`) | `mediaUrls: []` | 대표 썸네일 `thumbnailUrl` (`thumbnailUrls` 목록을 대체) |
 | `GET /api/v1/albums/{albumId}` (`AlbumDetailResponse`) | `mediaUrls: []` | 대표 썸네일 `thumbnailUrl` (필드 추가) |
 | `GET /api/v1/albums/calendar/family` (`FamilyAlbumResponse`) | `mediaUrls: []` | 대표 썸네일 `thumbnailUrl` (필드 추가) |
 | `GET /api/v1/albums/media` (`AlbumMediaResponse`) | 원본 필드 없음 | 앨범의 첫 미디어 항목 하나만, 썸네일은 저장된 `thumbnailUrls[0]`, 없으면 `null` |
@@ -68,8 +68,8 @@ GET  /api/v1/members/seniors/unlocked-albums
 - 잠금 전 상세 조회는 예외 없이 200으로 응답한다. 조회 기록(`AlbumView`, 조회수, 조회 알림)은 해금 뒤에만 남긴다.
 - 원본을 빼도 `mediaCount`, `photoCount`, `videoCount`, `primaryMediaType`, `videoDuration`, 댓글, 좋아요, 조회자 목록은 그대로 담는다. 원본 열람이 아니고 잠금 화면 표시에 쓴다.
 - `thumbnailUrl`은 첫 썸네일이며 잠금 여부와 관계없이 담는다. 썸네일이 없으면 `null`이다.
-- 피드의 `thumbnailUrls`는 #813 이전부터 있던 필드라 해금 뒤에는 그대로 썸네일 전체를 담는다.
-- 해금 뒤 응답은 #813 이전과 같다(추가 필드 제외).
+- 피드의 썸네일 목록 `thumbnailUrls`는 없애고 `thumbnailUrl` 하나로 바꾼다. 썸네일은 목록 미리보기에만 쓰므로 해금 뒤에도 하나면 된다.
+- 해금 뒤 응답은 피드의 `thumbnailUrls`가 `thumbnailUrl`로 바뀐 것과 추가 필드를 빼면 #813 이전과 같다.
 
 가족 외 앨범의 상세 또는 해금 요청은 기존 `FORBIDDEN` 오류로 거부한다.
 
@@ -108,7 +108,7 @@ DB 스키마 변경이 없다.
 - [x] 시니어의 해금 앨범 ID 목록에 같은 가족의 시니어 작성 `ACTIVE`·`PROCESSING` 앨범이 포함되고 `DELETED` 앨범은 제외된다 (#908).
 - [x] 잠금 전 앨범의 피드, 미디어 피드, 캘린더, 상세, 시니어 홈 응답에 원본 미디어 URL이 없고 대표 썸네일 하나와 `isUnlocked: false`가 담긴다 (#813).
 - [x] 잠금 전 상세 조회는 예외가 아니라 200이며 조회 기록을 남기지 않는다 (#813).
-- [x] 해금한 앨범과 잠금 대상이 아닌 앨범의 응답은 #813 이전과 같다.
+- [x] 해금한 앨범과 잠금 대상이 아닌 앨범의 응답은 피드 썸네일 필드(`thumbnailUrl`)를 빼면 #813 이전과 같다.
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다.
 
 ## 8. 영향 범위 / 마이그레이션
@@ -116,7 +116,7 @@ DB 스키마 변경이 없다.
 기존 피드 응답의 앨범 수와 캘린더 날짜 목록이 현재 사용자의 가족 범위로 제한된다.
 피드와 상세 응답에 `isUnlocked` 필드가 추가되며 DB 마이그레이션은 없다.
 
-#813: 잠금 전 앨범의 `mediaUrls`가 빈 배열로 바뀐다. 앱이 잠금 화면 미리보기에 `mediaUrls`를 쓰고 있었다면 대표 썸네일 `thumbnailUrl`로 바꿔야 한다. 잠금 전 피드의 `thumbnailUrls`도 빈 배열이고, 잠금 전 미디어 피드는 앨범당 항목이 하나다. 상세, 캘린더, 미디어 피드, 시니어 홈 카드에 `isUnlocked`가, 피드와 상세와 캘린더에 `thumbnailUrl`이 추가된다.
+#813: 잠금 전 앨범의 `mediaUrls`가 빈 배열로 바뀐다. 앱이 잠금 화면 미리보기에 `mediaUrls`를 쓰고 있었다면 대표 썸네일 `thumbnailUrl`로 바꿔야 한다. 피드의 `thumbnailUrls`는 없어지고 `thumbnailUrl`로 바뀐다(해금 여부 무관, 앱 수정 필요). 잠금 전 미디어 피드는 앨범당 항목이 하나다. 상세, 캘린더, 미디어 피드, 시니어 홈 카드에 `isUnlocked`가, 상세와 캘린더에 `thumbnailUrl`이 추가된다.
 
 ## 9. 미결정 사항 (Open Questions)
 
