@@ -11,6 +11,7 @@ public record AlbumDetailResponse(
         Long postId,
         String content,
         List<String> mediaUrls,
+        List<String> thumbnailUrls,
         Integer likeCount,
         Integer commentCount,
         Integer viewCount,
@@ -94,10 +95,18 @@ public record AlbumDetailResponse(
 
     public static AlbumDetailResponse from(Album album, Long currentUserId, List<Member> viewers,
                                            List<AlbumComment> comments, boolean isUnlocked) {
+        // 잠금 전에는 원본 URL을 싣지 않고 대표 썸네일 하나만 준다(#813). 사진은 썸네일이 곧 원본이다
+        List<String> mediaUrls = List.of();
+        List<String> thumbnailUrls = album.getThumbnailUrls().stream().limit(1).toList();
+        if (isUnlocked) {
+            mediaUrls = album.getMediaUrls();
+            thumbnailUrls = album.getThumbnailUrls();
+        }
         return new AlbumDetailResponse(
                 album.getId(),
                 album.getContent(),
-                album.getMediaUrls(),
+                mediaUrls,
+                thumbnailUrls,
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),
