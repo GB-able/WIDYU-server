@@ -1,6 +1,7 @@
 package com.widyu.album.dto;
 
 import com.widyu.album.Album;
+import com.widyu.album.MediaType;
 import com.widyu.member.Member;
 
 import java.time.LocalDateTime;
@@ -11,6 +12,7 @@ public record FamilyAlbumResponse(
         String content,
         List<String> mediaUrls,
         List<String> thumbnailUrls,
+        List<MediaType> mediaTypes,
         Integer likeCount,
         Integer commentCount,
         Integer viewCount,
@@ -29,8 +31,10 @@ public record FamilyAlbumResponse(
             urls = List.copyOf(album.getMediaUrls());
         }
         List<String> thumbnailUrls = album.getThumbnailUrls().stream().limit(1).toList();
+        List<MediaType> mediaTypes = album.getMediaTypes().stream().limit(1).toList();
         if (isUnlocked) {
             thumbnailUrls = album.getThumbnailUrls();
+            mediaTypes = album.getMediaTypes();
         }
 
         List<ViewerInfo> viewerInfos = viewers.stream()
@@ -42,6 +46,7 @@ public record FamilyAlbumResponse(
                 album.getContent(),
                 urls,
                 thumbnailUrls,
+                mediaTypes,
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),

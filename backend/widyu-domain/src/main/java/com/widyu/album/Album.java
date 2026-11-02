@@ -164,6 +164,18 @@ public class Album extends BaseTimeEntity {
         return mediaUrls.size();
     }
 
+    /** mediaUrls 순서대로 각 미디어의 타입. 영상 확장자가 아니면 PHOTO다 */
+    public List<MediaType> getMediaTypes() {
+        return mediaUrls.stream().map(this::mediaTypeOf).toList();
+    }
+
+    private MediaType mediaTypeOf(String url) {
+        if (isVideoUrl(url)) {
+            return MediaType.VIDEO;
+        }
+        return MediaType.PHOTO;
+    }
+
     public MediaType getPrimaryMediaType() {
         if (mediaUrls.isEmpty()) {
             return null;
