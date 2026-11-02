@@ -385,7 +385,7 @@ class WalkServiceTest {
 
         Walk walk = Walk.createWithGoal(member, LocalDate.now(), 5000);
         ReflectionTestUtils.setField(walk, "id", 7L);
-        given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.of(walk));
+        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.of(walk));
 
         // when
         UpdateStepsResponse first = walkService.updateSteps(new UpdateStepsRequest(6000, LocalDate.now()));
@@ -405,6 +405,35 @@ class WalkServiceTest {
     }
 
     @Test
+    @DisplayName("저장값보다 작은 걸음 수를 연동하면 줄지 않고 포인트는 한 번만 지급한다")
+    void 저장값보다_작은_걸음수를_연동하면_줄지_않고_포인트는_한_번만_지급한다() {
+        // given
+        Long memberId = 1L;
+        Member member = org.mockito.Mockito.mock(Member.class);
+        Family family = org.mockito.Mockito.mock(Family.class);
+        SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
+                member, family, "주소", "INV1234", LocalDate.of(1950, 1, 1));
+        given(member.getId()).willReturn(memberId);
+        given(member.getSeniorProfile()).willReturn(seniorProfile);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+
+        Walk walk = Walk.createWithGoal(member, LocalDate.now(), 5000);
+        ReflectionTestUtils.setField(walk, "id", 7L);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.of(walk));
+
+        // when
+        walkService.updateSteps(new UpdateStepsRequest(9000, LocalDate.now()));
+        UpdateStepsResponse lowered = walkService.updateSteps(new UpdateStepsRequest(3000, LocalDate.now()));
+        walkService.updateSteps(new UpdateStepsRequest(9000, LocalDate.now()));
+
+        // then
+        assertThat(lowered.achieved()).isTrue();
+        assertThat(walk.getActualSteps()).isEqualTo(9000);
+        then(seniorProfileService).should(times(1))
+                .addGoalRewardPoints(eq(memberId), eq(25L), eq("걷기 목표 달성"), startsWith("WALK_REWARD:"));
+    }
+
+    @Test
     @DisplayName("시니어 프로필이 없어도 걸음 수는 갱신되고 포인트는 지급되지 않는다")
     void 프로필이_없으면_걸음수만_갱신하고_포인트는_지급하지_않는다() {
         // given
@@ -413,7 +442,7 @@ class WalkServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
 
         Walk walk = Walk.createWithGoal(member, LocalDate.now(), 5000);
-        given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.of(walk));
+        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.of(walk));
 
         // when
         UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, LocalDate.now()));
@@ -434,7 +463,7 @@ class WalkServiceTest {
         LocalDate syncDate = LocalDate.now().minusDays(6);
         Walk walk = Walk.createWithGoal(member, syncDate, 5000);
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(walkRepository.findByMemberAndWalkDate(member, syncDate)).willReturn(Optional.of(walk));
+        given(walkRepository.findByMemberAndWalkDateForUpdate(member, syncDate)).willReturn(Optional.of(walk));
 
         // when
         UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, syncDate));

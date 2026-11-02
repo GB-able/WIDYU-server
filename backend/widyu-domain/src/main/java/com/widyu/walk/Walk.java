@@ -78,11 +78,14 @@ public class Walk extends BaseTimeEntity {
         this.goalSteps = newGoalSteps;
     }
 
+    /** 그날 걸음 수는 줄지 않는다. 저장값보다 작은 값(늦게 도착한 옛 동기화 등)은 무시한다(#950). */
     public void updateActualSteps(Integer steps) {
         if (steps == null || steps < 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "걸음 수는 0 이상이어야 합니다.");
         }
-        this.actualSteps = steps;
+        if (steps > this.actualSteps) {
+            this.actualSteps = steps;
+        }
     }
 
     public boolean isGoalAchieved() {
