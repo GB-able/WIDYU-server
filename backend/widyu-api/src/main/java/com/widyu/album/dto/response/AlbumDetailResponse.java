@@ -2,6 +2,7 @@ package com.widyu.album.dto.response;
 
 import com.widyu.album.Album;
 import com.widyu.album.AlbumComment;
+import com.widyu.album.MediaType;
 import com.widyu.member.Member;
 
 import java.time.LocalDateTime;
@@ -12,6 +13,7 @@ public record AlbumDetailResponse(
         String content,
         List<String> mediaUrls,
         List<String> thumbnailUrls,
+        List<MediaType> mediaTypes,
         Integer likeCount,
         Integer commentCount,
         Integer viewCount,
@@ -98,15 +100,18 @@ public record AlbumDetailResponse(
         // 잠금 전에는 원본 URL을 싣지 않고 대표 썸네일 하나만 준다(#813). 사진은 썸네일이 곧 원본이다
         List<String> mediaUrls = List.of();
         List<String> thumbnailUrls = album.getThumbnailUrls().stream().limit(1).toList();
+        List<MediaType> mediaTypes = album.getMediaTypes().stream().limit(1).toList();
         if (isUnlocked) {
             mediaUrls = album.getMediaUrls();
             thumbnailUrls = album.getThumbnailUrls();
+            mediaTypes = album.getMediaTypes();
         }
         return new AlbumDetailResponse(
                 album.getId(),
                 album.getContent(),
                 mediaUrls,
                 thumbnailUrls,
+                mediaTypes,
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),

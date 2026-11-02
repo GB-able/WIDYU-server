@@ -164,6 +164,18 @@ public class Album extends BaseTimeEntity {
         return mediaUrls.size();
     }
 
+    /** mediaUrls 순서대로 각 미디어의 타입. 영상 확장자가 아니면 PHOTO다 */
+    public List<MediaType> getMediaTypes() {
+        return mediaUrls.stream().map(this::mediaTypeOf).toList();
+    }
+
+    private MediaType mediaTypeOf(String url) {
+        if (isVideoUrl(url)) {
+            return MediaType.VIDEO;
+        }
+        return MediaType.PHOTO;
+    }
+
     public MediaType getPrimaryMediaType() {
         if (mediaUrls.isEmpty()) {
             return null;
@@ -206,6 +218,8 @@ public class Album extends BaseTimeEntity {
 
     private boolean isVideoUrl(String url) {
         if (url == null) return false;
+        // 영상은 모두 albums/videos/ 아래에 저장한다. 원래 파일 이름에 확장자가 없으면 URL이 .unknown으로 끝나므로 경로를 먼저 본다
+        if (url.contains("/albums/videos/")) return true;
         String extension = getFileExtension(url).toLowerCase();
         return extension.matches("mp4|mov|avi|mkv|webm|flv|wmv");
     }

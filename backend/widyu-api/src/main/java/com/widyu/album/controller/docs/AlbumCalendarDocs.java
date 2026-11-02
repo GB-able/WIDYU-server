@@ -74,6 +74,7 @@ public interface AlbumCalendarDocs {
                     - 기본 페이지 크기는 5개이며, 추가 데이터가 있으면 `hasNext = true` 와 `nextCursor` 가 반환됩니다.
                     - `cursor` 파라미터는 마지막 앨범 ID를 의미합니다.
                     - 시니어가 보호자 앨범을 아직 해금하지 않았으면 `isUnlocked: false`이고, 원본 `mediaUrls`는 빈 배열이며 `thumbnailUrls`에는 대표 썸네일(첫 썸네일) 하나만 담깁니다.
+                    - `mediaTypes`는 `mediaUrls`와 순서가 같은 미디어별 타입(`PHOTO`/`VIDEO`)입니다. 잠금 전에는 대표 썸네일과 같은 첫 미디어의 타입 하나만 담깁니다.
                     - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     """
     )
@@ -95,6 +96,7 @@ public interface AlbumCalendarDocs {
                                             "content": "오늘 소풍 다녀왔어요!",
                                             "mediaUrls": ["https://s3.aws.com/album/1.jpg"],
                                             "thumbnailUrls": ["https://s3.aws.com/album/1.jpg"],
+                                            "mediaTypes": ["PHOTO"],
                                             "likeCount": 12,
                                             "commentCount": 3,
                                             "viewCount": 45,
