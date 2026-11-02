@@ -164,14 +164,6 @@ public class Album extends BaseTimeEntity {
         return mediaUrls.size();
     }
 
-    /** 대표 썸네일(첫 썸네일). 썸네일이 없거나 아직 만들어지지 않았으면 null */
-    public String getRepresentativeThumbnailUrl() {
-        if (thumbnailUrls.isEmpty()) {
-            return null;
-        }
-        return thumbnailUrls.getFirst();
-    }
-
     public MediaType getPrimaryMediaType() {
         if (mediaUrls.isEmpty()) {
             return null;

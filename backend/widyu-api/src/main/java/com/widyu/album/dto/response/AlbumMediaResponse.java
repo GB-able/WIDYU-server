@@ -25,12 +25,7 @@ public record AlbumMediaResponse(
         List<String> thumbnailUrls = album.getThumbnailUrls();
         List<Integer> durations = album.getDurations();
         
-        // 잠금 전 앨범은 대표(첫) 미디어 하나만 싣는다(#813). 사진은 썸네일이 곧 원본이다
-        int itemCount = mediaUrls.size();
-        if (!isUnlocked) {
-            itemCount = Math.min(1, itemCount);
-        }
-        for (int i = 0; i < itemCount; i++) {
+        for (int i = 0; i < mediaUrls.size(); i++) {
             String mediaUrl = mediaUrls.get(i);
             String thumbnailUrl = null;
             if (i < thumbnailUrls.size()) {

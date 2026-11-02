@@ -10,7 +10,7 @@ public record FamilyAlbumResponse(
         Long albumId,
         String content,
         List<String> mediaUrls,
-        String thumbnailUrl,
+        List<String> thumbnailUrls,
         Integer likeCount,
         Integer commentCount,
         Integer viewCount,
@@ -23,7 +23,7 @@ public record FamilyAlbumResponse(
     public static FamilyAlbumResponse from(Album album, List<Member> viewers, boolean isUnlocked) {
         Member member = album.getMember();
 
-        // 잠금 전에는 원본 URL을 싣지 않는다. 썸네일은 대표 하나만 준다(#813). 사진은 썸네일이 곧 원본이다
+        // 잠금 전에는 원본 URL을 싣지 않고 썸네일만 준다(#813)
         List<String> urls = List.of();
         if (isUnlocked && album.getMediaUrls() != null) {
             urls = List.copyOf(album.getMediaUrls());
@@ -37,7 +37,7 @@ public record FamilyAlbumResponse(
                 album.getId(),
                 album.getContent(),
                 urls,
-                album.getRepresentativeThumbnailUrl(),
+                album.getThumbnailUrls(),
                 album.getLikeCount(),
                 album.getCommentCount(),
                 album.getViewCount(),

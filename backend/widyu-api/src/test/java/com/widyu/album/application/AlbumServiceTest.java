@@ -277,7 +277,7 @@ class AlbumServiceTest {
         Album album = mock(Album.class);
         given(album.getId()).willReturn(10L);
         given(album.getMember()).willReturn(albumOwner);
-        given(album.getRepresentativeThumbnailUrl()).willReturn("https://cdn/v_thumbnail.jpg");
+        given(album.getThumbnailUrls()).willReturn(List.of("https://cdn/v_thumbnail.jpg"));
         given(album.getLikeCount()).willReturn(0);
         given(album.getCommentCount()).willReturn(0);
         given(album.getViewCount()).willReturn(0);
@@ -295,7 +295,7 @@ class AlbumServiceTest {
         assertThat(response.isUnlocked()).isFalse();
         assertThat(response.price()).isEqualTo(Album.UNLOCK_PRICE);
         assertThat(response.mediaUrls()).isEmpty();
-        assertThat(response.thumbnailUrl()).isEqualTo("https://cdn/v_thumbnail.jpg");
+        assertThat(response.thumbnailUrls()).containsExactly("https://cdn/v_thumbnail.jpg");
         verify(albumViewService, never()).recordView(any(), any());
     }
 

@@ -13,7 +13,7 @@ public record AlbumFeedResponse(
         String authorProfileImage,
         String content,
         List<String> mediaUrls,
-        String thumbnailUrl,
+        List<String> thumbnailUrls,
         MediaType primaryMediaType,
         Integer mediaCount,
         Integer photoCount,
@@ -44,7 +44,7 @@ public record AlbumFeedResponse(
                 .map(d -> String.format("%d:%02d", d / 60, d % 60))
                 .orElse(null);
 
-        // 잠금 전에는 원본 URL을 싣지 않는다. 썸네일은 대표 하나만 준다(#813). 사진은 썸네일이 곧 원본이다
+        // 잠금 전에는 원본 URL을 싣지 않고 썸네일만 준다(#813)
         List<String> mediaUrls = List.of();
         if (Boolean.TRUE.equals(isUnlocked)) {
             mediaUrls = album.getMediaUrls();
@@ -56,7 +56,7 @@ public record AlbumFeedResponse(
                 album.getMember().getProfileImage(),
                 album.getContent(),
                 mediaUrls,
-                album.getRepresentativeThumbnailUrl(),
+                album.getThumbnailUrls(),
                 album.getPrimaryMediaType(),
                 album.getMediaCount(),
                 album.getPhotoCount(),
