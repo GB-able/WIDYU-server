@@ -67,4 +67,23 @@ class AlbumMediaTypesResponseTest {
         assertThat(detail.mediaTypes()).containsExactly(MediaType.PHOTO);
         assertThat(calendar.mediaTypes()).containsExactly(MediaType.PHOTO);
     }
+
+    @Test
+    @DisplayName("확장자 없이 올린 영상을 조회하면 저장 경로로 VIDEO로 판별한다")
+    void 확장자_없이_올린_영상을_조회하면_저장_경로로_VIDEO로_판별한다() {
+        // given
+        String unknownExtVideo = "https://cdn.widyu.shop/albums/videos/1/20261102_120000_abcd1234.unknown";
+        Member author = Member.createMember(MemberType.GUARDIAN, "보호자", "01000000000");
+        Album album = Album.createAlbumWithMetadata(author, "내용",
+                new ArrayList<>(List.of(unknownExtVideo)), new ArrayList<>(List.of(VIDEO_THUMB)),
+                new ArrayList<>(List.of(12)));
+
+        // when
+        AlbumFeedResponse feed = AlbumFeedResponse.from(album, false, true, List.of());
+
+        // then
+        assertThat(feed.mediaTypes()).containsExactly(MediaType.VIDEO);
+        assertThat(feed.primaryMediaType()).isEqualTo(MediaType.VIDEO);
+        assertThat(feed.videoCount()).isEqualTo(1);
+    }
 }

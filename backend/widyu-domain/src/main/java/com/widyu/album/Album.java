@@ -218,6 +218,8 @@ public class Album extends BaseTimeEntity {
 
     private boolean isVideoUrl(String url) {
         if (url == null) return false;
+        // 영상은 모두 albums/videos/ 아래에 저장한다. 원래 파일 이름에 확장자가 없으면 URL이 .unknown으로 끝나므로 경로를 먼저 본다
+        if (url.contains("/albums/videos/")) return true;
         String extension = getFileExtension(url).toLowerCase();
         return extension.matches("mp4|mov|avi|mkv|webm|flv|wmv");
     }
