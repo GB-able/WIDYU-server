@@ -48,7 +48,7 @@
 
 - 둘 다 보내거나 둘 다 생략해야 한다(`@AssertTrue isCoordinatePaired`). 하나만 보내면 400 "위도와 경도는 함께 보내거나 둘 다 생략해야 합니다."
 - 범위 검증 메시지는 기존 좌표 요청(`AddressBookmarkCreateRequest`, `ParentLocationCreateRequest`)과 같다.
-- 일괄 가입은 `@Valid List<…>`라 Spring 6.1 메서드 검증이 요소마다 돌고, `HandlerMethodValidationException`을 `GlobalExceptionHandler`가 400으로 응답한다.
+- 일괄 가입은 `@Valid List<…>`라 Spring 6.1 메서드 검증이 요소마다 돌고, `HandlerMethodValidationException`을 `GlobalExceptionHandler`가 400으로 응답한다. `SeniorSignUpBulkValidationTest`(MockMvc)로 확인한다.
 
 ## 4. 데이터 모델
 
