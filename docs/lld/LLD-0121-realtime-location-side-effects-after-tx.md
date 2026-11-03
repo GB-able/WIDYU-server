@@ -194,7 +194,7 @@ Redis 장애 중에는 체류 GET 단계에서 오류가 나므로, 실시간 �
 ### 측정 결과 (2026-11-03, 로컬)
 
 - 환경: MacBook, 일회용 MySQL 9.0.1(포트 3416), Redis 7.2.4(포트 6392), Hikari 풀 10, 대기 3000ms, Redis 명령 제한 3초(기본값). 운영과 개발 서버에서는 측정하지 않았다.
-- 방법: `LocationRedisWriteStallConnectionMySqlTest`. 회원 8명이 같은 자리 위치를 한 번씩 보내 체류를 만든 뒤, Redis에 `CLIENT PAUSE 2000 WRITE`를 걸고 같은 자리 위치 8건을 동시에 보낸다. 멈춘 뒤 300~1,700ms 동안 20ms 간격으로 `HikariPoolMXBean.getActiveConnections()`를 재서 최댓값을 남긴다. 샘플링을 시작할 때와 끝날 때 요청 8건이 모두 끝나지 않았는지(멈춘 쓰기를 기다리는 중인지) 함께 단언해, 0개가 "요청이 이미 끝나서" 나온 값이 아님을 확인한다(PR 리뷰 반영, 재측정 3회 모두 대기 중, 최대 0개). 변경 전은 develop `fe3f814c`에 테스트 파일만 넣어 같은 명령으로 실행했다.
+- 방법: `LocationRedisWriteStallConnectionMySqlTest`. 회원 8명이 같은 자리 위치를 한 번씩 보내 체류를 만든 뒤, Redis에 `CLIENT PAUSE 2000 WRITE`를 걸고 같은 자리 위치 8건을 동시에 보낸다. 멈춘 뒤 300~1,700ms 동안 20ms 간격으로 `HikariPoolMXBean.getActiveConnections()`를 재서 최댓값을 남긴다. 샘플링을 시작할 때 요청 8건이 모두 서비스에 들어갔고(진입 래치) 하나도 끝나지 않았는지, 끝날 때도 끝나지 않았는지 함께 단언해, 0개가 "요청이 아직 시작되지 않았거나 이미 끝나서" 나온 값이 아님을 확인한다(PR 리뷰 2회 반영, 재측정 3회 모두 대기 중, 최대 0개). 변경 전은 develop `fe3f814c`에 테스트 파일만 넣어 같은 명령으로 실행했다.
 
 | | 1회 | 2회 | 3회 |
 | --- | ---: | ---: | ---: |

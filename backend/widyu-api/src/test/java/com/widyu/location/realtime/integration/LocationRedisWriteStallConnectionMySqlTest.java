@@ -130,9 +130,11 @@ class LocationRedisWriteStallConnectionMySqlTest {
         ExecutorService executor = Executors.newFixedThreadPool(REQUESTS);
         List<Future<String>> futures = new ArrayList<>();
         CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch entered = new CountDownLatch(REQUESTS);
         for (Long memberId : memberIds) {
             futures.add(executor.submit(() -> {
                 start.await();
+                entered.countDown();
                 try {
                     realtimeLocationService.updateAndBroadcast(payload(memberId), memberId);
                     return null;
@@ -144,12 +146,13 @@ class LocationRedisWriteStallConnectionMySqlTest {
         start.countDown();
         int maxActive = 0;
         int samples = 0;
-        // 커넥션 0개가 "요청이 이미 끝나서"가 아니라 "멈춘 쓰기를 기다리는 중"에 잰 값인지 확인한다.
+        // 커넥션 0개가 "요청이 아직 시작되지 않았거나 이미 끝나서"가 아니라 "모든 요청이 서비스에 들어가
+        // 멈춘 쓰기를 기다리는 중"에 잰 값인지 확인한다.
         boolean pendingWhenSamplingStarted = false;
         while (elapsedMs(pausedAt) < SAMPLE_UNTIL_MS) {
             if (elapsedMs(pausedAt) >= SAMPLE_FROM_MS) {
                 if (samples == 0) {
-                    pendingWhenSamplingStarted = noneDone(futures);
+                    pendingWhenSamplingStarted = entered.getCount() == 0 && noneDone(futures);
                 }
                 maxActive = Math.max(maxActive, pool.getActiveConnections());
                 samples++;
