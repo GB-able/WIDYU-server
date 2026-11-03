@@ -119,7 +119,7 @@ public class RealtimeLocationService {
         return response;
     }
 
-    /** 실시간 반영 대상이면 자기 트랜잭션에서 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. */
+    /** 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. */
     private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId) {
         verifySelf(request.memberId(), authenticatedMemberId);
         if (!isRealtimeCandidate(request)) {
@@ -127,8 +127,7 @@ public class RealtimeLocationService {
             return LocationUpdateResponse.received(
                     request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
         }
-        return new TransactionTemplate(transactionManager)
-                .execute(status -> updateAndBroadcast(request, authenticatedMemberId));
+        return updateAndBroadcast(request, authenticatedMemberId);
     }
 
     /**
@@ -200,48 +199,36 @@ public class RealtimeLocationService {
         }
     }
 
-    @Transactional
+    /**
+     * 위치 한 건을 실시간에 반영한다. 안전구역 판정과 알림 예약은 DB 트랜잭션에서 확정하고, 최신 위치·이동 경로·방송·
+     * 위치 이벤트는 그 트랜잭션이 끝나 커넥션을 돌려준 뒤에 처리한다(LLD-0121).
+     *
+     * <p>트랜잭션 안에서 Redis 쓰기를 기다리면 Redis가 느릴 때 그동안 커넥션을 쥐어, 위치가 몰리면 같은 풀을 쓰는
+     * 알림 발송·스케줄러까지 막힌다. 또 롤백된 위치가 방송·위치 이벤트로 먼저 새어 나간다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
                                                       Long authenticatedMemberId) {
+        LocationUpdateResponse response = new TransactionTemplate(transactionManager)
+                .execute(status -> decideInTransaction(request, authenticatedMemberId));
+        publishAfterTransaction(request, response);
+        return response;
+    }
 
+    /** DB 트랜잭션 안에서 할 일: 프로필 조회, 체류·안전구역 판정(이탈 시 알림 예약), 응답 생성. */
+    private LocationUpdateResponse decideInTransaction(LocationUpdateRequest request, Long authenticatedMemberId) {
         Long memberId = request.memberId();
-
-        // 1. 권한 검증: 시니어 본인인지 확인
         verifySelf(memberId, authenticatedMemberId);
 
-        // 2. 시니어 프로필 조회 (memberId로)
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
-
         Member seniorMember = seniorProfile.getMember();
 
-        // 3. Redis에 최신 위치 저장 (memberId 기준)
-        SeniorLocation location = SeniorLocation.of(
-                memberId,
-                request.resolvedLatitude(),
-                request.resolvedLongitude(),
-                notAfterNow(request.tsMs())
-        );
-        seniorLocationRepository.save(location);
-        eventPublisher.publishEvent(new SeniorLocationUpdatedEvent(memberId, request.resolvedLatitude(), request.resolvedLongitude()));
-
-        // 4. Redis List에 이동 경로 저장 (15분 TTL, memberId 기준)
-        String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
-        LocationPoint point = LocationPoint.of(request.resolvedLatitude(), request.resolvedLongitude());
-
-        Long listSize = redisTemplate.opsForList().leftPush(trailKey, point);
-        redisTemplate.opsForList().trim(trailKey, 0, TRAIL_MAX_POINTS - 1);
-        redisTemplate.expire(trailKey, TRAIL_TTL_SECONDS, TimeUnit.SECONDS);
-
-        log.info("이동 경로 저장: memberId={}, pointCount={}", memberId, listSize);
-
-        // 5. 체류 시간 및 위치 타입 계산 (memberId 기준)
         String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         StayInfo stayInfo = calculateStayInfo(
                 stayKey, request.resolvedLatitude(), request.resolvedLongitude(), seniorMember);
 
-        // 6. Response 객체 생성
-        LocationUpdateResponse response = LocationUpdateResponse.of(
+        return LocationUpdateResponse.of(
                 memberId,
                 seniorMember.getName(),
                 seniorMember.getProfileImage(),
@@ -251,15 +238,51 @@ public class RealtimeLocationService {
                 stayInfo.locationType(),
                 stayInfo.locationName()
         );
+    }
 
-        // 7. 시니어별 방으로 브로드캐스트 (memberId 기준)
+    /**
+     * 트랜잭션이 끝난 뒤 할 일. 최신 위치 저장이 실패하면 오류로 알린다. 저장되지 않았으니 같은 측정 시각의 재전송이
+     * 실시간 후보로 다시 평가돼 복구된다. 그 뒤 단계는 최신 위치가 이미 저장돼 같은 시각의 재전송이 걸러지므로,
+     * 오류를 돌려줘도 복구되지 않는다. 그래서 실패를 남기고 나머지를 계속한다.
+     */
+    private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response) {
+        Long memberId = request.memberId();
+        Double latitude = request.resolvedLatitude();
+        Double longitude = request.resolvedLongitude();
+        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, notAfterNow(request.tsMs())));
+        appendTrailQuietly(memberId, latitude, longitude);
+        broadcastQuietly(memberId, response);
+        publishLocationUpdatedQuietly(memberId, latitude, longitude);
+    }
+
+    private void appendTrailQuietly(Long memberId, Double latitude, Double longitude) {
+        String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
+        try {
+            Long listSize = redisTemplate.opsForList().leftPush(trailKey, LocationPoint.of(latitude, longitude));
+            redisTemplate.opsForList().trim(trailKey, 0, TRAIL_MAX_POINTS - 1);
+            redisTemplate.expire(trailKey, TRAIL_TTL_SECONDS, TimeUnit.SECONDS);
+            log.info("이동 경로 저장: memberId={}, pointCount={}", memberId, listSize);
+        } catch (RuntimeException e) {
+            log.warn("이동 경로 저장 실패: memberId={}, cause={}", memberId, e.getClass().getSimpleName());
+        }
+    }
+
+    private void broadcastQuietly(Long memberId, LocationUpdateResponse response) {
         String destination = String.format("/topic/location/senior/%d", memberId);
-        messagingTemplate.convertAndSend(destination, response);
+        try {
+            messagingTemplate.convertAndSend(destination, response);
+            log.info("시니어 방으로 위치 브로드캐스트 완료 - memberId: {}, destination: {}", memberId, destination);
+        } catch (RuntimeException e) {
+            log.warn("위치 브로드캐스트 실패: memberId={}, cause={}", memberId, e.getClass().getSimpleName());
+        }
+    }
 
-        log.info("시니어 방으로 위치 브로드캐스트 완료 - memberId: {}, destination: {}",
-                 memberId, destination);
-
-        return response;
+    private void publishLocationUpdatedQuietly(Long memberId, Double latitude, Double longitude) {
+        try {
+            eventPublisher.publishEvent(new SeniorLocationUpdatedEvent(memberId, latitude, longitude));
+        } catch (RuntimeException e) {
+            log.warn("위치 갱신 이벤트 발행 실패: memberId={}, cause={}", memberId, e.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -374,10 +397,24 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 체류 정보를 읽는 유일한 경로다(LLD-0097). 값이 깨졌을 때만 지운다. 연결·시간 초과에 지우면 정상 체류 정보를
-     * 잃어 다음 이탈을 놓친다. Jackson 예외 메시지에는 원문 좌표가 섞일 수 있어 예외 이름만 남긴다(LLD-0029).
+     * 조회 API용 체류 정보. Redis 연결·시간 초과는 체류 없음으로 넘긴다(화면이 비는 편이 오류보다 낫다).
+     * 안전구역 판정에는 쓰지 않는다. 판정에서 오류를 없음으로 바꾸면 이전 "안" 상태를 잃고 알림 없이 "밖"을 저장한다.
      */
     private StayInfo getStayInfo(Long memberId) {
+        try {
+            return readStay(memberId);
+        } catch (DataAccessException e) {
+            log.warn("체류 정보 조회 실패 - memberId: {}, cause: {}", memberId, e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * 체류 정보를 읽는 유일한 경로다(LLD-0097). 값이 깨졌을 때만 지운다. 연결·시간 초과에 지우면 정상 체류 정보를
+     * 잃어 다음 이탈을 놓친다. 연결·시간 초과는 호출한 쪽에 그대로 던진다(LLD-0121). Jackson 예외 메시지에는 원문
+     * 좌표가 섞일 수 있어 예외 이름만 남긴다(LLD-0029).
+     */
+    private StayInfo readStay(Long memberId) {
         String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
         try {
             Object raw = redisTemplate.opsForValue().get(stayKey);
@@ -393,8 +430,6 @@ public class RealtimeLocationService {
         } catch (SerializationException | IllegalArgumentException e) {
             log.warn("체류 정보를 읽을 수 없어 삭제 - stayKey: {}, cause: {}", stayKey, e.getClass().getSimpleName());
             redisTemplate.delete(stayKey);
-        } catch (DataAccessException e) {
-            log.warn("체류 정보 조회 실패 - stayKey: {}, cause: {}", stayKey, e.getClass().getSimpleName());
         }
         return null;
     }
@@ -460,7 +495,8 @@ public class RealtimeLocationService {
      * - 안전구역 이탈 시 보호자에게 알림 전송
      */
     private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
-        StayInfo previousStay = getStayInfo(member.getId());
+        // Redis 오류를 체류 없음으로 바꾸지 않는다. 판정을 멈추고 트랜잭션을 되돌려 다음 위치에서 다시 판정한다.
+        StayInfo previousStay = readStay(member.getId());
         String previousLocationType = null;
 
         if (previousStay != null) {
