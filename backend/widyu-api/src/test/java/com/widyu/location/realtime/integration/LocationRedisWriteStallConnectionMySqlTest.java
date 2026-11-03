@@ -144,13 +144,19 @@ class LocationRedisWriteStallConnectionMySqlTest {
         start.countDown();
         int maxActive = 0;
         int samples = 0;
+        // 커넥션 0개가 "요청이 이미 끝나서"가 아니라 "멈춘 쓰기를 기다리는 중"에 잰 값인지 확인한다.
+        boolean pendingWhenSamplingStarted = false;
         while (elapsedMs(pausedAt) < SAMPLE_UNTIL_MS) {
             if (elapsedMs(pausedAt) >= SAMPLE_FROM_MS) {
+                if (samples == 0) {
+                    pendingWhenSamplingStarted = noneDone(futures);
+                }
                 maxActive = Math.max(maxActive, pool.getActiveConnections());
                 samples++;
             }
             Thread.sleep(20);
         }
+        boolean pendingWhenSamplingEnded = noneDone(futures);
         List<String> failures = new ArrayList<>();
         for (Future<String> future : futures) {
             String failure = future.get(30, TimeUnit.SECONDS);
@@ -161,11 +167,24 @@ class LocationRedisWriteStallConnectionMySqlTest {
         long elapsedMs = elapsedMs(pausedAt);
         executor.shutdown();
         System.out.printf("[LOCATION-REDIS-STALL] requests=%d pauseMs=%d samples=%d maxActiveDuringPause=%d "
-                + "failures=%s elapsedMs=%d%n", REQUESTS, PAUSE_MS, samples, maxActive, failures, elapsedMs);
+                        + "pendingAtSampleStart=%s pendingAtSampleEnd=%s failures=%s elapsedMs=%d%n",
+                REQUESTS, PAUSE_MS, samples, maxActive, pendingWhenSamplingStarted, pendingWhenSamplingEnded,
+                failures, elapsedMs);
 
         // then
+        assertThat(pendingWhenSamplingStarted).isTrue();
+        assertThat(pendingWhenSamplingEnded).isTrue();
         assertThat(failures).isEmpty();
         assertThat(maxActive).isLessThanOrEqualTo(1);
+    }
+
+    private static boolean noneDone(List<Future<String>> futures) {
+        for (Future<String> future : futures) {
+            if (future.isDone()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void pauseRedisWrites() {

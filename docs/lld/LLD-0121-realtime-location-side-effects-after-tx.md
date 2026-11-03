@@ -90,22 +90,24 @@ updateAndBroadcast(byte[])                       NOT_SUPPORTED (변경 없음)
  ├─ parse, validate
  ├─ applyRealtime()
  │   ├─ verifySelf, isRealtimeCandidate          (변경 없음)
- │   ├─ TransactionTemplate.execute {            ← 커넥션 획득
- │   │    SeniorProfile 조회, Member 지연 로딩
- │   │    calculateStayInfo                      (변경 없음, 단 체류 GET 오류는 전파)
- │   │    응답 DTO와 반영할 좌표, 측정 시각을 결과 객체로 반환
- │   │  }                                        ← 커밋, 커넥션 반납
- │   └─ publishAfterCommit(결과)                 ← 트랜잭션 밖, 커넥션 없음
- │        a. 최신 위치 저장                       실패 → 예외 전파
- │        b. 이동 경로 leftPush, trim, expire     실패 → WARN, 계속
- │        c. 보호자 방송 convertAndSend           실패 → WARN, 계속
- │        d. SeniorLocationUpdatedEvent 발행      실패 → WARN, 계속
+ │   └─ updateAndBroadcast(request)              NOT_SUPPORTED (테스트가 직접 부르는 진입점)
+ │        ├─ TransactionTemplate.execute {       ← 커넥션 획득
+ │        │    decideInTransaction:
+ │        │    SeniorProfile 조회, Member 지연 로딩
+ │        │    calculateStayInfo                 (변경 없음, 단 체류 GET 오류는 전파)
+ │        │    응답 DTO 생성
+ │        │  }                                   ← 커밋, 커넥션 반납
+ │        └─ publishAfterTransaction(요청, 응답)  ← 트랜잭션 밖, 커넥션 없음
+ │             a. 최신 위치 저장                  실패 → 예외 전파
+ │             b. 이동 경로 leftPush, trim, expire 실패 → WARN, 계속
+ │             c. 보호자 방송 convertAndSend      실패 → WARN, 계속
+ │             d. SeniorLocationUpdatedEvent 발행 실패 → WARN, 계속
  └─ storeQuietly()                               (변경 없음)
 ```
 
 - 트랜잭션 안에 남는 Redis 명령: 체류 GET은 항상 실행된다. 직전 체류 지점에서 30m 넘게 움직였을 때는 안전구역 전이 표식, 경계를 넘었을 때는 Outbox, 커밋 후 콜백에서는 체류 저장이 추가된다. 같은 자리에서 오는 평소 위치는 트랜잭션 안 Redis 명령이 체류 GET 1개만 남는다.
 - 실행 순서: 최신 위치(a)를 이동 경로(b)와 방송(c)보다 먼저 저장한다. 보호자가 방송을 받고 조회 API를 다시 부를 때 이미 최신 위치가 저장돼 있어야 하기 때문이다.
-- `publishAfterCommit`은 트랜잭션 동기화 콜백이 아니라 `execute()` 반환 뒤의 일반 코드다. 커밋 후 콜백은 커넥션 정리 전에 실행되므로 점유 시간을 줄이지 못한다.
+- `publishAfterTransaction`은 트랜잭션 동기화 콜백이 아니라 `execute()` 반환 뒤의 일반 코드다. 커밋 후 콜백은 커넥션 정리 전에 실행되므로 점유 시간을 줄이지 못한다.
 
 ### 5.3 트랜잭션 밖 단계의 실패 정책 (토론 결정)
 
@@ -190,7 +192,7 @@ Redis 장애 중에는 체류 GET 단계에서 오류가 나므로, 실시간 �
 ### 측정 결과 (2026-11-03, 로컬)
 
 - 환경: MacBook, 일회용 MySQL 9.0.1(포트 3416), Redis 7.2.4(포트 6392), Hikari 풀 10, 대기 3000ms, Redis 명령 제한 3초(기본값). 운영과 개발 서버에서는 측정하지 않았다.
-- 방법: `LocationRedisWriteStallConnectionMySqlTest`. 회원 8명이 같은 자리 위치를 한 번씩 보내 체류를 만든 뒤, Redis에 `CLIENT PAUSE 2000 WRITE`를 걸고 같은 자리 위치 8건을 동시에 보낸다. 멈춘 뒤 300~1,700ms 동안 20ms 간격으로 `HikariPoolMXBean.getActiveConnections()`를 재서 최댓값을 남긴다. 변경 전은 develop `fe3f814c`에 테스트 파일만 넣어 같은 명령으로 실행했다.
+- 방법: `LocationRedisWriteStallConnectionMySqlTest`. 회원 8명이 같은 자리 위치를 한 번씩 보내 체류를 만든 뒤, Redis에 `CLIENT PAUSE 2000 WRITE`를 걸고 같은 자리 위치 8건을 동시에 보낸다. 멈춘 뒤 300~1,700ms 동안 20ms 간격으로 `HikariPoolMXBean.getActiveConnections()`를 재서 최댓값을 남긴다. 샘플링을 시작할 때와 끝날 때 요청 8건이 모두 끝나지 않았는지(멈춘 쓰기를 기다리는 중인지) 함께 단언해, 0개가 "요청이 이미 끝나서" 나온 값이 아님을 확인한다(PR 리뷰 반영, 재측정 3회 모두 대기 중, 최대 0개). 변경 전은 develop `fe3f814c`에 테스트 파일만 넣어 같은 명령으로 실행했다.
 
 | | 1회 | 2회 | 3회 |
 | --- | ---: | ---: | ---: |

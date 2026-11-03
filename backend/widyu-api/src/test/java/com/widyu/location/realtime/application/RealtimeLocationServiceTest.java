@@ -907,6 +907,27 @@ class RealtimeLocationServiceTest {
         then(eventPublisher).should().publishEvent(any(SeniorLocationUpdatedEvent.class));
     }
 
+    @Test
+    @DisplayName("커밋한 뒤 위치 이벤트 발행이 실패해도 위치 응답을 돌려준다")
+    void 커밋_후_위치_이벤트_발행이_실패해도_위치_응답을_돌려준다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        willThrow(new IllegalStateException("event listener failed"))
+                .given(eventPublisher).publishEvent(any(SeniorLocationUpdatedEvent.class));
+
+        // when
+        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(1L);
+        then(messagingTemplate).should().convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
+    }
+
     /** 운영 RedisConfig의 값 직렬화기로 저장·읽기를 한 번 거친 값. 실제 Redis가 돌려주는 모양과 같다. */
     @SuppressWarnings("unchecked")
     private Object throughRedisSerializer(Object value) {
