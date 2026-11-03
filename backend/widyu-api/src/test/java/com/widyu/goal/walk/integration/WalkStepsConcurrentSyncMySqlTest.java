@@ -48,7 +48,7 @@ import software.amazon.awssdk.services.s3.S3Client;
  *
  * <p>겹침은 타이밍이 아니라 잠금으로 만든다. 먼저 들어온 동기화 역할의 연결이 걸음 기록 행을 {@code FOR UPDATE}로
  * 잡은 채 기다리면, 검사 대상 동기화(3,000보)는 그 잠금을 기다린다. 그 대기를
- * {@code performance_schema.data_lock_waits}로 확인한 뒤 상대가 9,000보를 쓰고 커밋한다. 잠금 없이 읽던 이전
+ * {@code performance_schema.data_lock_waits}에서 "앞 연결이 잡은 {@code walk} 행 때문에 생긴 대기"로 좁혀 확인한 뒤 상대가 9,000보를 쓰고 커밋한다. 잠금 없이 읽던 이전
  * 방식은 0보를 읽고 3,000보로 덮어써 9,000보가 사라졌다.
  *
  * <p>실행: {@code WALK_MYSQL_URL=jdbc:mysql://127.0.0.1:3306/walk_race_<name> DB_USERNAME=root DB_PASSWORD=
@@ -138,6 +138,7 @@ class WalkStepsConcurrentSyncMySqlTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try (Connection earlier = dataSource.getConnection()) {
             earlier.setAutoCommit(false);
+            long earlierConnectionId = connectionId(earlier);
             try (PreparedStatement statement = earlier.prepareStatement(
                     "SELECT actual_steps FROM walk WHERE id = ? FOR UPDATE")) {
                 statement.setLong(1, walkId);
@@ -152,7 +153,7 @@ class WalkStepsConcurrentSyncMySqlTest {
                     return t;
                 }
             });
-            awaitLockWait(result);
+            awaitLockWaitOn(result, earlierConnectionId);
             try (PreparedStatement statement = earlier.prepareStatement(
                     "UPDATE walk SET actual_steps = ? WHERE id = ?")) {
                 statement.setInt(1, earlierSteps);
@@ -166,21 +167,37 @@ class WalkStepsConcurrentSyncMySqlTest {
         }
     }
 
-    /** 검사 대상 동기화가 상대의 행 잠금을 기다리기 시작할 때까지 기다린다. 그 전에 끝나면 결과를 담아 실패시킨다. */
-    private void awaitLockWait(Future<Throwable> later) throws Exception {
+    /**
+     * 검사 대상 동기화가 앞 연결의 walk 행 잠금을 기다리기 시작할 때까지 기다린다. 그 전에 끝나면 결과를 담아 실패시킨다.
+     * 같은 MySQL 서버의 다른 세션 대기를 잘못 세지 않도록, 막고 있는 스레드가 앞 연결이고 기다리는 잠금이 이 DB의
+     * walk 테이블인 대기만 센다.
+     */
+    private void awaitLockWaitOn(Future<Throwable> later, long blockingConnectionId) throws Exception {
         long deadline = System.currentTimeMillis() + 10_000;
         while (System.currentTimeMillis() < deadline) {
             if (later.isDone()) {
                 throw new IllegalStateException("검사 대상 동기화가 잠금 대기 전에 끝났습니다.", later.get());
             }
             Integer waiting = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM performance_schema.data_lock_waits", Integer.class);
+                    "SELECT COUNT(*) FROM performance_schema.data_lock_waits w"
+                            + " JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID"
+                            + " JOIN performance_schema.threads t ON t.THREAD_ID = w.BLOCKING_THREAD_ID"
+                            + " WHERE t.PROCESSLIST_ID = ? AND l.OBJECT_SCHEMA = DATABASE() AND l.OBJECT_NAME = 'walk'",
+                    Integer.class, blockingConnectionId);
             if (waiting != null && waiting > 0) {
                 return;
             }
             Thread.sleep(20);
         }
         throw new IllegalStateException("검사 대상 동기화가 행 잠금 대기에 들어가지 않았습니다.");
+    }
+
+    private static long connectionId(Connection connection) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT CONNECTION_ID()");
+             java.sql.ResultSet resultSet = statement.executeQuery()) {
+            resultSet.next();
+            return resultSet.getLong(1);
+        }
     }
 
     private Long saveSenior() {
