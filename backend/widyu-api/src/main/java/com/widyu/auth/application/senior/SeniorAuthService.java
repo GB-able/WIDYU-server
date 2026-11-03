@@ -79,9 +79,10 @@ public class SeniorAuthService {
 
     private void saveHomeParentLocations(List<SeniorSignUpRequest> requests, List<Member> members) {
         for (int i = 0; i < requests.size(); i++) {
-            String address = requests.get(i).address();
+            SeniorSignUpRequest request = requests.get(i);
+            String address = request.address();
             Member member = members.get(i);
-            GeocodingResponse geo = geocodingService.geocode(address);
+            GeocodingResponse geo = resolveCoordinates(address, request.latitude(), request.longitude());
             parentLocationRepository.save(ParentLocation.builder()
                     .member(member)
                     .locationType(LocationType.HOME)
@@ -203,4 +204,13 @@ public class SeniorAuthService {
     private TokenPairResponse generateTokenPairForMember(Member member) {
         return jwtTokenProvider.generateTokenPair(member.getId(), member.getRole(), "senior");
     }
+
+    /** 앱이 보낸 좌표가 있으면 그대로 쓰고, 없으면 주소로 좌표를 구한다(#951). 요청 검증이 둘 다 있거나 둘 다 없음을 보장한다. */
+    private GeocodingResponse resolveCoordinates(String address, Double latitude, Double longitude) {
+        if (latitude != null) {
+            return GeocodingResponse.of(latitude, longitude);
+        }
+        return geocodingService.geocode(address);
+    }
+
 }

@@ -22,7 +22,8 @@ public interface SeniorAuthDocs {
             description = "보호자가 시니어를 일괄 등록합니다. 각 시니어는 이름, 생년월일, 전화번호, 주소, 초대코드를 저장하고 초대코드로 로그인할 수 있습니다.\n\n" +
                     "- 주소는 도로명주소 검색 API(`GET /api/v1/goals/address-search`)로 조회한 값을 사용하세요.\n" +
                     "- 초대코드는 7자리 숫자로 구성되며, 시니어 로그인 시 사용됩니다.\n" +
-                    "- 지오코딩 실패(유효하지 않은 주소) 시 400 오류가 반환됩니다.",
+                    "- 위도(`latitude`)와 경도(`longitude`)는 선택입니다. 함께 보내면 서버의 주소 좌표 변환 대신 이 값으로 집(HOME) 안심구역을 만듭니다. 하나만 보내거나 범위를 벗어나면 400입니다.\n" +
+                    "- 좌표를 보내지 않았는데 지오코딩에 실패(유효하지 않은 주소)하면 400 오류가 반환됩니다.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     content = @Content(
                             examples = @ExampleObject(value = """
@@ -32,7 +33,9 @@ public interface SeniorAuthDocs {
                                         "birthDate": "1955-03-15",
                                         "phoneNumber": "01012345678",
                                         "address": "서울특별시 마포구 성암로 301",
-                                        "inviteCode": "1234567"
+                                        "inviteCode": "1234567",
+                                        "latitude": 37.5796,
+                                        "longitude": 126.8924
                                       }
                                     ]
                                     """)

@@ -115,11 +115,12 @@ public class GuardianMyPageService {
                 request.inviteCode(), request.birthDate()
         );
         seniorProfileRepository.save(profile);
-        saveHomeParentLocation(seniorMember, request.address());
+        saveHomeParentLocation(seniorMember, request);
     }
 
-    private void saveHomeParentLocation(Member seniorMember, String address) {
-        GeocodingResponse geo = geocodingService.geocode(address);
+    private void saveHomeParentLocation(Member seniorMember, SeniorSignUpRequest request) {
+        String address = request.address();
+        GeocodingResponse geo = resolveCoordinates(address, request.latitude(), request.longitude());
         parentLocationRepository.save(ParentLocation.builder()
                 .member(seniorMember)
                 .locationType(LocationType.HOME)
@@ -211,7 +212,7 @@ public class GuardianMyPageService {
         assertIsLeader(seniorProfile, guardian.getId());
         Member seniorMember = seniorProfile.getMember();
         seniorProfile.updateAddress(request.address());
-        GeocodingResponse geo = geocodingService.geocode(request.address());
+        GeocodingResponse geo = resolveCoordinates(request.address(), request.latitude(), request.longitude());
         parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME)
                 .ifPresentOrElse(
                         location -> location.update(
@@ -412,4 +413,13 @@ public class GuardianMyPageService {
 
         return seniorProfile;
     }
+
+    /** 앱이 보낸 좌표가 있으면 그대로 쓰고, 없으면 주소로 좌표를 구한다(#951). 요청 검증이 둘 다 있거나 둘 다 없음을 보장한다. */
+    private GeocodingResponse resolveCoordinates(String address, Double latitude, Double longitude) {
+        if (latitude != null) {
+            return GeocodingResponse.of(latitude, longitude);
+        }
+        return geocodingService.geocode(address);
+    }
+
 }

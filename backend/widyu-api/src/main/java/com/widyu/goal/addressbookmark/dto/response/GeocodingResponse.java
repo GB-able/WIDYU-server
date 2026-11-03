@@ -6,6 +6,10 @@ public record GeocodingResponse(
         Double latitude,
         Double longitude
 ) {
+    public static GeocodingResponse of(Double latitude, Double longitude) {
+        return new GeocodingResponse(latitude, longitude);
+    }
+
     public static GeocodingResponse from(KakaoGeocodingResponse.Document document) {
         return new GeocodingResponse(
                 Double.parseDouble(document.latitude()),

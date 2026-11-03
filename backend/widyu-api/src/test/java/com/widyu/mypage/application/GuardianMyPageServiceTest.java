@@ -43,6 +43,7 @@ import com.widyu.mypage.dto.request.UpdatePhoneRequest;
 import com.widyu.mypage.dto.request.UpdateSeniorAddressRequest;
 import com.widyu.parentlocation.LocationType;
 import com.widyu.parentlocation.ParentLocation;
+import org.mockito.ArgumentCaptor;
 import com.widyu.mypage.dto.response.ConnectedSeniorResponse;
 import com.widyu.mypage.dto.response.FamilyCodeResponse;
 import com.widyu.mypage.dto.response.FamilyMemberListResponse;
@@ -225,7 +226,7 @@ class GuardianMyPageServiceTest {
         Family family = mock(Family.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "1234567"
+                "서울시 강남구", "1234567", null, null
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -254,7 +255,7 @@ class GuardianMyPageServiceTest {
         Member existingMember = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "1234567"
+                "서울시 강남구", "1234567", null, null
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -275,7 +276,7 @@ class GuardianMyPageServiceTest {
         Member guardian = mock(Member.class);
         SeniorSignUpRequest request = new SeniorSignUpRequest(
                 "오일남", LocalDate.of(1950, 1, 1), "01011112222",
-                "서울시 강남구", "1234567"
+                "서울시 강남구", "1234567", null, null
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -637,11 +638,67 @@ class GuardianMyPageServiceTest {
                 .willReturn(Optional.of(homeLocation));
 
         // when
-        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", null, null));
 
         // then
         verify(seniorProfile).updateAddress("서울시 강서구");
         verify(homeLocation).update(LocationType.HOME, "서울시 강서구", 37.55, 126.85, homeLocation.getName());
+    }
+
+    @Test
+    @DisplayName("좌표와 함께 시니어 주소를 수정하면 주소 좌표 변환 없이 보낸 좌표로 HOME 안심구역을 갱신한다")
+    void 좌표와_함께_시니어_주소를_수정하면_보낸_좌표를_쓴다() {
+        // given
+        Member guardian = mock(Member.class);
+        Member seniorMember = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        ParentLocation homeLocation = mock(ParentLocation.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.of(homeLocation));
+
+        // when
+        guardianMyPageService.updateSeniorAddress(10L,
+                new UpdateSeniorAddressRequest("서울시 강서구", 37.5611, 126.8379));
+
+        // then
+        verify(homeLocation).update(LocationType.HOME, "서울시 강서구", 37.5611, 126.8379, homeLocation.getName());
+        verify(geocodingService, never()).geocode(any());
+    }
+
+    @Test
+    @DisplayName("좌표와 함께 부모님을 추가하면 주소 좌표 변환 없이 보낸 좌표로 HOME 안심구역을 만든다")
+    void 좌표와_함께_부모님을_추가하면_보낸_좌표를_쓴다() {
+        // given
+        Member guardian = mock(Member.class);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        Family family = mock(Family.class);
+        SeniorSignUpRequest request = new SeniorSignUpRequest(
+                "오일남", LocalDate.of(1950, 1, 1), "01011112222",
+                "서울시 강남구", "1234567", 37.4979, 127.0276
+        );
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(membership.getFamily()).willReturn(family);
+        given(memberRepository.existsByPhoneNumber("01011112222")).willReturn(false);
+        ArgumentCaptor<ParentLocation> location = ArgumentCaptor.forClass(ParentLocation.class);
+
+        // when
+        guardianMyPageService.addSenior(request);
+
+        // then
+        verify(parentLocationRepository).save(location.capture());
+        assertThat(location.getValue().getLatitude()).isEqualTo(37.4979);
+        assertThat(location.getValue().getLongitude()).isEqualTo(127.0276);
+        verify(geocodingService, never()).geocode(any());
     }
 
     @Test
@@ -664,7 +721,7 @@ class GuardianMyPageServiceTest {
                 .willReturn(Optional.empty());
 
         // when
-        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구"));
+        guardianMyPageService.updateSeniorAddress(10L, new UpdateSeniorAddressRequest("서울시 강서구", null, null));
 
         // then
         verify(parentLocationRepository).save(any(ParentLocation.class));
