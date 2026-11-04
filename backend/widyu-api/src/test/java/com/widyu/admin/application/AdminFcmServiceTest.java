@@ -109,7 +109,58 @@ class AdminFcmServiceTest {
         // then
         FcmSendDto sent = sentMessage(28L);
         assertThat(sent.notificationType()).isEqualTo(NotificationType.HEART_RATE_EMERGENCY);
-        assertThat(sent.title()).isNotBlank();
+        assertThat(sent.title()).isEqualTo("보호자에게 알렸어요.");
+        assertThat(sent.content()).isEqualTo("연락을 기다리는 동안 안전한 곳에서 잠시 기다려주세요.");
+    }
+
+    @Test
+    @DisplayName("제목·본문을 빈 문자열로 주면 문구표의 정해진 문구로 보낸다")
+    void 제목_본문을_빈_문자열로_주면_정해진_문구로_보낸다() {
+        // given
+        givenMemberWithToken(28L);
+        given(fcmService.sendTestMessageToUser(eq(28L), any())).willReturn(1);
+        AdminFcmTestRequest request = new AdminFcmTestRequest(
+                28L, "", " ", null, NotificationType.MEDICATION_SCHEDULE_CHANGED, null, null);
+
+        // when
+        adminFcmService.sendTestNotification(request);
+
+        // then
+        assertThat(sentMessage(28L).title()).isEqualTo("관리자 님이 약 알람을 변경했어요.");
+    }
+
+    @Test
+    @DisplayName("건강 일정 알림의 기본 문구는 서버가 보내는 OS 문구라 일정명을 드러내지 않는다")
+    void 건강_일정_알림의_기본_문구는_서버가_보내는_OS_문구다() {
+        // given
+        givenMemberWithToken(28L);
+        given(fcmService.sendTestMessageToUser(eq(28L), any())).willReturn(1);
+        AdminFcmTestRequest request = new AdminFcmTestRequest(
+                28L, null, null, null, NotificationType.HEALTH_SCHEDULE_UPCOMING, null, null);
+
+        // when
+        adminFcmService.sendTestNotification(request);
+
+        // then
+        FcmSendDto sent = sentMessage(28L);
+        assertThat(sent.title()).isEqualTo("건강 일정이 곧 있어요.");
+        assertThat(sent.content()).isEqualTo("앱에서 일정 시간과 내용을 확인해주세요.");
+    }
+
+    @Test
+    @DisplayName("OS·앱 내 문구가 나뉜 알림은 OS 문구를 기본으로 보낸다")
+    void OS와_앱_내_문구가_나뉜_알림은_OS_문구를_기본으로_보낸다() {
+        // given
+        givenMemberWithToken(28L);
+        given(fcmService.sendTestMessageToUser(eq(28L), any())).willReturn(1);
+        AdminFcmTestRequest request = new AdminFcmTestRequest(
+                28L, null, null, null, NotificationType.HEART_MESSAGE_RECEIVED, null, null);
+
+        // when
+        adminFcmService.sendTestNotification(request);
+
+        // then
+        assertThat(sentMessage(28L).content()).isEqualTo("앱에서 메시지를 확인해주세요.");
     }
 
     @Test

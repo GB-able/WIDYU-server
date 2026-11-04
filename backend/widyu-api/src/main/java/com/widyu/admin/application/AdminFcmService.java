@@ -70,8 +70,8 @@ public class AdminFcmService {
         }
 
         NotificationType type = request.notificationType();
-        String title = request.title();
-        String content = request.content();
+        String title = blankToNull(request.title());
+        String content = blankToNull(request.content());
         FcmCategory category = request.category();
         if (type != null) {
             category = type.fcmCategory();
@@ -129,6 +129,14 @@ public class AdminFcmService {
             values.putIfAbsent(name, TEST_VALUE);
         }
         return values;
+    }
+
+    // 관리자 화면이 빈 입력을 ""로 보내도 문구표 기본 문구를 쓰게 한다.
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 
     private String describe(NotificationType type, String title) {
