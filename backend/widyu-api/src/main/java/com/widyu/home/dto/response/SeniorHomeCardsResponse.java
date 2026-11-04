@@ -79,7 +79,7 @@ public record SeniorHomeCardsResponse(
     }
 
     public record MedicineInfo(
-            @Schema(description = "다음 복용 스케줄 ID", example = "1")
+            @Schema(description = "지금 표시할 복용 스케줄 ID. 인증 마감(알람 후 30분) 전인 가장 이른 일정이며, 모두 마감됐으면 오늘 마지막 일정이다. 복용 인증에 그대로 사용한다", example = "1")
             Long medicineScheduleId,
 
             @Schema(description = "오늘 복용 완료 횟수", example = "1")
