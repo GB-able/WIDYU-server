@@ -12,6 +12,7 @@ import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
+import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -62,6 +63,28 @@ class SeniorHomeServiceMedicineTest {
 
         // then
         assertThat(response.medicine().medicineScheduleId()).isEqualTo(expectedScheduleId);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("홈 카드를 조회할 때 인증창이 겹친 앞 일정을 인증했으면 다음 일정을 반환한다")
+    void 인증한_일정은_건너뛰고_다음_일정을_반환한다() {
+        // given
+        Member senior = senior();
+        MedicineSchedule verified = alarmSchedule(senior, 69L, LocalTime.of(17, 13));
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, TODAY))
+                .willReturn(List.of(
+                        verified,
+                        alarmSchedule(senior, 70L, LocalTime.of(17, 15)),
+                        alarmSchedule(senior, 71L, LocalTime.of(17, 20))));
+        given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
+                .willReturn(List.of(MedicationProof.create(verified, senior, List.of("proof.jpg"))));
+
+        // when
+        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
+
+        // then
+        assertThat(response.medicine().medicineScheduleId()).isEqualTo(70L);
     }
 
     private Member senior() {
