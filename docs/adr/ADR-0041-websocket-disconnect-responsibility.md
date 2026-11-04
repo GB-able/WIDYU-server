@@ -78,6 +78,7 @@
    - 마지막 위치 `GET /api/v1/location/realtime/senior/{seniorId}`, 이동 경로 `GET /api/v1/location/realtime/senior/{seniorId}/trail`
    - 심박 상태 `GET /api/v1/heart-rate/status?memberId={seniorId}`, 최근 위급 여부 `GET /api/v1/heart-rate/emergency/recent?memberId={seniorId}` (`memberId`를 빼면 호출자 자신을 조회한다)
    - **재조회 응답과 새 방송이 엇갈릴 때:** 위치 응답의 `updatedAt`은 측정 시각이 아니라 응답을 만든 시각(`LocationUpdateResponse.of`의 `now()`)이라 비교 기준이 될 수 없다. 그래서 **위치 방송·조회 응답에 측정 시각 필드(v2의 `ts_ms` 기준)를 추가하고**(서버 변경, 결정 2·3과 같은 후속 이슈), 앱은 측정 시각이 더 늦은 값만 남긴다. 심박은 이미 `measuredAt`이 측정 시각이므로 지금도 더 늦은 값을 남긴다.
+   - **측정 시각이 없는 위치**도 있다. 구형 위치(`ts_ms` 없음)의 방송과, Redis 최신 위치가 만료돼 체류 정보(`StayInfo`) 좌표로 대신 답한 REST 응답이다(`RealtimeLocationService` 마지막 위치 조회의 대체 분기). 서버는 이때 측정 시각 필드를 null로 둔다. 앱은 측정 시각이 있는 값을 항상 시각 없는 값보다 우선하고, 둘 다 시각이 없으면 아래 과도기 규칙(나중에 도착한 방송이 덮어씀)을 따른다. 시각 없는 값은 화면이 비어 있거나 현재 값도 시각이 없을 때만 표시한다.
    - 위치 측정 시각 필드가 배포되기 전까지는 엇갈림을 정확히 가릴 수 없다. 앱은 REST 응답을 먼저 적용하고, 그 뒤 도착하는 방송은 항상 덮어쓴다. 이 과도기에는 방송이 REST보다 먼저 만들어졌는데 늦게 도착하면 화면이 한 단계 옛 위치로 돌아갈 수 있다. 다음 방송(이동 중 약 5초, 정지 중 약 60초 간격)이 오면 회복된다.
    - 위급 알림은 WebSocket이 아니라 FCM Outbox로 **전송**된다(`HeartRateEmergencyNotificationService`, `IncidentEscalation`). 따라서 WebSocket 끊김은 위급 알림 전송 경로에 영향이 없다. 보호자 기기의 FCM 수신 자체는 이 ADR 범위 밖이다.
 
