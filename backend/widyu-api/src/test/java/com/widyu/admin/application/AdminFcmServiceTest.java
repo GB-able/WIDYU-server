@@ -113,17 +113,32 @@ class AdminFcmServiceTest {
     }
 
     @Test
-    @DisplayName("문구에 필요한 값이 빠지면 빠진 값을 알려 주는 예외가 발생한다")
-    void 문구에_필요한_값이_빠지면_예외가_발생한다() {
+    @DisplayName("문구 변수를 주지 않으면 모두 관리자로 채워 보낸다")
+    void 문구_변수를_주지_않으면_모두_관리자로_채워_보낸다() {
         // given
         givenMemberWithToken(28L);
+        given(fcmService.sendTestMessageToUser(eq(28L), any())).willReturn(1);
         AdminFcmTestRequest request = new AdminFcmTestRequest(
                 28L, null, null, null, NotificationType.WALK_GOAL_UNMET, null, null);
 
+        // when
+        adminFcmService.sendTestNotification(request);
+
+        // then
+        assertThat(sentMessage(28L).title()).isEqualTo("오늘 관리자걸음 걸으셨어요.");
+    }
+
+    @Test
+    @DisplayName("종류와 맞지 않는 문구 코드를 주면 예외가 발생한다")
+    void 종류와_맞지_않는_문구_코드를_주면_예외가_발생한다() {
+        // given
+        givenMemberWithToken(28L);
+        AdminFcmTestRequest request = new AdminFcmTestRequest(
+                28L, null, null, null, NotificationType.WALK_GOAL_UNMET, "M05", null);
+
         // when · then
         assertThatThrownBy(() -> adminFcmService.sendTestNotification(request))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("실제 걸음 수");
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test

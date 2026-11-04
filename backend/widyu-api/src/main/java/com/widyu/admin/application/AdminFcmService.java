@@ -17,7 +17,9 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AdminFcmService {
+
+    private static final String TEST_VALUE = "관리자";
 
     private final FcmService fcmService;
     private final MemberRepository memberRepository;
@@ -109,10 +113,22 @@ public class AdminFcmService {
             if (code == null || code.isBlank()) {
                 code = NotificationCopy.defaultCode(type);
             }
-            return NotificationCopy.of(type, code, request.values());
+            return NotificationCopy.of(type, code, fillMissingValues(code, request.values()));
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, e.getMessage());
         }
+    }
+
+    // 테스트 발송이라 요청에 없는 문구 변수는 모두 "관리자"로 채운다.
+    private Map<String, String> fillMissingValues(String code, Map<String, String> requested) {
+        Map<String, String> values = new HashMap<>();
+        if (requested != null) {
+            values.putAll(requested);
+        }
+        for (String name : NotificationCopy.variables(code)) {
+            values.putIfAbsent(name, TEST_VALUE);
+        }
+        return values;
     }
 
     private String describe(NotificationType type, String title) {
