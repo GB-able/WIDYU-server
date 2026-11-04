@@ -109,7 +109,8 @@ public class SeniorHomeService {
                 .map(s -> SeniorHomeCardsResponse.ScheduleStatus.from(s, proofsByScheduleId.containsKey(s.getId())))
                 .toList();
 
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, now.toLocalTime());
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(
+                schedules, now.toLocalTime(), proofsByScheduleId.keySet());
 
         return SeniorHomeCardsResponse.MedicineInfo.from(
                 nextSchedule,

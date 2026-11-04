@@ -211,7 +211,7 @@ public class GoalHomeService {
                         BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
-        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now());
+        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now(), proofsByScheduleId.keySet());
 
         // 조회 쿼리가 알람 시각 오름차순이므로 순서를 그대로 쓴다.
         List<SeniorGoalHomeResponse.ScheduleStatus> scheduleStatuses = schedules.stream()
@@ -230,8 +230,11 @@ public class GoalHomeService {
 
     // 알람 시간 오름차순 목록에서 인증 마감 전인 첫 일정을 노출하고, 모두 마감됐으면 마지막 일정을 유지한다.
     // 시니어 홈 카드도 이 함수를 쓴다. 앱은 고른 일정 ID로 인증하므로 두 화면의 기준이 같아야 한다 (#962).
-    public static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now) {
+    // 오늘 이미 인증한 일정은 건너뛴다. 인증창이 겹칠 때 인증한 일정에 머물러 다음 일정을 막지 않게 한다 (#964).
+    public static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now,
+                                                    Set<Long> verifiedScheduleIds) {
         return schedules.stream()
+                .filter(s -> !verifiedScheduleIds.contains(s.getId()))
                 // 시간 차이로 비교해 자정을 넘는 마감 시각이 LocalTime에서 순환하지 않도록 한다.
                 .filter(s -> Duration.between(s.getAlarmTime(), now)
                         .compareTo(Duration.ofMinutes(MedicationStatus.ALLOWED_WINDOW_MINUTES)) <= 0)
