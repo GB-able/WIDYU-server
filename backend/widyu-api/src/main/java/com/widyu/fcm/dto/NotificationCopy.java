@@ -81,6 +81,18 @@ public record NotificationCopy(String title, String body) {
         return new NotificationCopy(render(template.title(), safeValues), render(template.body(), safeValues));
     }
 
+    /** 타입에 쓸 수 있는 문구 코드 중 사전순 첫 코드. 관리자 테스트 발송의 기본 문구로 쓴다. */
+    public static String defaultCode(NotificationType type) {
+        if (type == null || type.copyCode() == null) {
+            throw new IllegalArgumentException("문구가 없는 알림 타입입니다.");
+        }
+        return CATALOG.keySet().stream()
+                .filter(code -> allowed(type, code))
+                .sorted()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("문구가 없는 알림 타입입니다."));
+    }
+
     private static boolean allowed(NotificationType type, String code) {
         if (type == NotificationType.SAFETY_SELF_CHECK) {
             return code.equals("S01");

@@ -4,10 +4,13 @@ import com.widyu.admin.AdminAction;
 import com.widyu.admin.dto.request.AdminFcmTestRequest;
 import com.widyu.admin.dto.response.AdminMemberDetailResponse;
 import com.widyu.admin.dto.response.AdminPageResponse;
+import com.widyu.fcm.DeliveryMode;
 import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.member.MemberRole;
 import com.widyu.global.error.BusinessException;
@@ -62,14 +65,26 @@ public class AdminFcmService {
             return member.getName() + "님의 등록된 FCM 토큰이 없습니다.";
         }
 
+        NotificationType type = request.notificationType();
+        String title = request.title();
+        String content = request.content();
         FcmCategory category = request.category();
+        if (type != null) {
+            category = type.fcmCategory();
+            if (type.deliveryMode() != DeliveryMode.DATA_ONLY && title == null && content == null) {
+                NotificationCopy copy = resolveCopy(type, request);
+                title = copy.title();
+                content = copy.body();
+            }
+        }
         if (category == null) {
             category = FcmCategory.ETC;
         }
         FcmSendDto fcmSendDto = FcmSendDto.builder()
-                .title(request.title())
-                .content(request.content())
+                .title(title)
+                .content(content)
                 .fcmCategory(category)
+                .notificationType(type)
                 .scheme("")
                 .image(null)
                 .build();
@@ -83,8 +98,27 @@ public class AdminFcmService {
         }
         adminAuditLogService.log(
                 AdminAction.FCM_TEST_SEND, "MEMBER", request.memberId(),
-                "'" + request.title() + "' → " + sent + "/" + tokens.size() + "개 성공"
+                describe(type, title) + " → " + sent + "/" + tokens.size() + "개 성공"
         );
         return resultMsg;
+    }
+
+    private NotificationCopy resolveCopy(NotificationType type, AdminFcmTestRequest request) {
+        try {
+            String code = request.copyCode();
+            if (code == null || code.isBlank()) {
+                code = NotificationCopy.defaultCode(type);
+            }
+            return NotificationCopy.of(type, code, request.values());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    private String describe(NotificationType type, String title) {
+        if (type == null) {
+            return "'" + title + "'";
+        }
+        return type.name() + " '" + title + "'";
     }
 }
