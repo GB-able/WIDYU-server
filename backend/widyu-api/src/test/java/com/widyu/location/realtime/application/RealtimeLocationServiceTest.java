@@ -795,6 +795,139 @@ class RealtimeLocationServiceTest {
         then(locationAccessLogService).should().record(1L, 2L, LocationAccessPath.REST_FAMILY);
     }
 
+    @Test
+    @DisplayName("실시간 트랜잭션 안에서 체류 정보를 읽다 Redis 오류가 나면 예외를 던지고 최신 위치·이동 경로·방송·위치 이벤트를 남기지 않는다")
+    void 체류_정보_Redis_오류면_예외를_던지고_부수효과를_남기지_않는다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willThrow(new QueryTimeoutException("Redis command timed out"));
+
+        // when & then
+        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+                .isInstanceOf(QueryTimeoutException.class);
+        then(transactionManager).should(never()).commit(any());
+        then(safeZoneAlertService).should(never()).handleSafeZoneTransition(anyLong(), any(), any());
+        then(seniorLocationRepository).should(never()).save(any());
+        then(redisTemplate).should(never()).opsForList();
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+        then(eventPublisher).should(never()).publishEvent(any(SeniorLocationUpdatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("같은 자리 위치는 트랜잭션 안에서 체류 정보만 읽고, 커밋한 뒤에 최신 위치·이동 경로·방송·위치 이벤트를 처리한다")
+    void 같은_자리_위치는_커밋한_뒤에_최신_위치와_방송을_처리한다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1"))
+                .willReturn(throughRedisSerializer(StayInfo.of(37.5, 127.0, null, null)));
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+
+        // when
+        realtimeLocationService.updateAndBroadcast(request, 1L);
+
+        // then
+        InOrder order = inOrder(valueOperations, transactionManager, seniorLocationRepository, listOperations,
+                messagingTemplate, eventPublisher);
+        order.verify(valueOperations).get("location:stay:1");
+        order.verify(transactionManager).commit(any());
+        order.verify(seniorLocationRepository).save(any(SeniorLocation.class));
+        order.verify(listOperations).leftPush(eq("location:trail:1"), any(LocationPoint.class));
+        order.verify(messagingTemplate).convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
+        order.verify(eventPublisher).publishEvent(any(SeniorLocationUpdatedEvent.class));
+        then(parentLocationRepository).should(never()).findAllByMember(any());
+        then(valueOperations).should(never()).set(any(), any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("커밋한 뒤 최신 위치 저장이 실패하면 예외를 던지고 이동 경로·방송·위치 이벤트는 처리하지 않는다")
+    void 커밋_후_최신_위치_저장이_실패하면_예외를_던진다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
+        willThrow(new QueryTimeoutException("Redis command timed out"))
+                .given(seniorLocationRepository).save(any(SeniorLocation.class));
+
+        // when & then
+        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+                .isInstanceOf(QueryTimeoutException.class);
+        then(transactionManager).should().commit(any());
+        then(redisTemplate).should(never()).opsForList();
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+        then(eventPublisher).should(never()).publishEvent(any(SeniorLocationUpdatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("커밋한 뒤 이동 경로 저장이 실패해도 방송과 위치 이벤트를 처리하고 위치 응답을 돌려준다")
+    void 커밋_후_이동_경로_저장이_실패해도_방송과_이벤트를_처리한다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class)))
+                .willThrow(new QueryTimeoutException("Redis command timed out"));
+
+        // when
+        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(1L);
+        then(seniorLocationRepository).should().save(any(SeniorLocation.class));
+        then(messagingTemplate).should().convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
+        then(eventPublisher).should().publishEvent(any(SeniorLocationUpdatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("커밋한 뒤 방송이 실패해도 위치 이벤트를 처리하고 위치 응답을 돌려준다")
+    void 커밋_후_방송이_실패해도_위치_이벤트를_처리한다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        willThrow(new IllegalStateException("outbound channel closed"))
+                .given(messagingTemplate).convertAndSend(eq("/topic/location/senior/1"), any(Object.class));
+
+        // when
+        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(1L);
+        then(eventPublisher).should().publishEvent(any(SeniorLocationUpdatedEvent.class));
+    }
+
+    @Test
+    @DisplayName("커밋한 뒤 위치 이벤트 발행이 실패해도 위치 응답을 돌려준다")
+    void 커밋_후_위치_이벤트_발행이_실패해도_위치_응답을_돌려준다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        willThrow(new IllegalStateException("event listener failed"))
+                .given(eventPublisher).publishEvent(any(SeniorLocationUpdatedEvent.class));
+
+        // when
+        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(1L);
+        then(messagingTemplate).should().convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
+    }
+
     /** 운영 RedisConfig의 값 직렬화기로 저장·읽기를 한 번 거친 값. 실제 Redis가 돌려주는 모양과 같다. */
     @SuppressWarnings("unchecked")
     private Object throughRedisSerializer(Object value) {
