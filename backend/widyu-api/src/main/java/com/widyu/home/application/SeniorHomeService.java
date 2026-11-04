@@ -7,6 +7,7 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.home.application.GoalHomeService;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -21,7 +22,6 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.walk.Walk;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +65,7 @@ public class SeniorHomeService {
 
         return SeniorHomeCardsResponse.of(
                 getHeartRateInfo(member),
-                getMedicineInfo(member, today),
+                getMedicineInfo(member, now),
                 getScoredAlbums(member, today),
                 getHealthScheduleInfo(healthSchedules, now),
                 TodayHealthScheduleItem.listFrom(healthSchedules, now),
@@ -79,7 +79,8 @@ public class SeniorHomeService {
                 .orElse(SeniorHomeCardsResponse.HeartRateInfo.unknown());
     }
 
-    private SeniorHomeCardsResponse.MedicineInfo getMedicineInfo(Member member, LocalDate today) {
+    private SeniorHomeCardsResponse.MedicineInfo getMedicineInfo(Member member, LocalDateTime now) {
+        LocalDate today = now.toLocalDate();
         List<MedicineSchedule> schedules = medicineScheduleRepository
                 .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
 
@@ -108,7 +109,7 @@ public class SeniorHomeService {
                 .map(s -> SeniorHomeCardsResponse.ScheduleStatus.from(s, proofsByScheduleId.containsKey(s.getId())))
                 .toList();
 
-        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now());
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, now.toLocalTime());
 
         return SeniorHomeCardsResponse.MedicineInfo.from(
                 nextSchedule,
@@ -117,14 +118,6 @@ public class SeniorHomeService {
                 scheduleStatuses,
                 proofsByScheduleId.get(nextSchedule.getId())
         );
-    }
-
-    // 알람 시간 오름차순 정렬된 목록 기준. 오늘 남은 알람이 없으면 마지막 알람을 그대로 노출한다.
-    static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now) {
-        return schedules.stream()
-                .filter(s -> s.getAlarmTime().isAfter(now))
-                .min(Comparator.comparing(MedicineSchedule::getAlarmTime))
-                .orElse(schedules.getLast());
     }
 
     private List<SeniorHomeCardsResponse.AlbumInfo> getScoredAlbums(Member senior, LocalDate today) {
