@@ -130,14 +130,14 @@ class SensorBatchWebSocketControllerTest {
     @DisplayName("식별자가 없는 원문이 검증에 실패하면 stream과 거절 이유 코드를 남기고 예외를 그대로 전파한다")
     void 식별자가_없는_원문은_stream과_이유_코드를_남기고_예외를_전파한다(CapturedOutput output) {
         // given
-        byte[] payload = "{\"v\":2,\"stream\":\"imu_dropped\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] payload = "{\"v\":2,\"stream\":\"imu_unknown\"}".getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.SENSOR_BATCH_INVALID))
                 .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
 
         // when & then
         assertThatThrownBy(() -> controller().process(42L, payload, RECEIVED_AT_MS))
                 .isInstanceOf(BusinessException.class);
-        assertThat(output).contains("센서 배치 거절(식별자 없음): memberId=42, stream=imu_dropped, code=SENSOR_4003");
+        assertThat(output).contains("센서 배치 거절(식별자 없음): memberId=42, stream=imu_unknown, code=SENSOR_4003");
     }
 
     @Test
