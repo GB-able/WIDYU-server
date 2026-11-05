@@ -135,7 +135,7 @@
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 - **v2 원본 저장**: `/app/location/update`를 `Message<byte[]>`로 받아 파싱한다. `v==2`·`device_id`·`ts_ms`가 오면 잰 시각·정확도·속도·`reason`(move/keepalive/incident)과 원문을 `location_fix`에 남긴다. 멱등 키는 `(device_id, session_id, seq)`, 회차 귀속은 B8 재사용 → LLD-0048
-- **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 하고(`LOCATION_4000`), 저장 실패는 WARN만 남기고 ACK를 막지 않는다. **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
+- **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 한다(`LOCATION_4000`). **v2 위치의 ACK(`LocationAckResponse`)는 「앱이 큐에서 지워도 된다」는 뜻이다**: 요청의 `deviceId`·`sessionId`·`seq`와 `result`(`STORED`·`DUPLICATE`·`REJECTED`)를 싣고, 업무 예외는 `REJECTED`, 원본 저장 실패(업무 예외 아님)는 ACK 없이 오류로 보내 앱이 재전송하게 한다. 이 경로에서 일시적 실패를 `BusinessException`으로 던지지 않는다 → LLD-0123 **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
 
 ### `location.access` — 보호자 위치 열람 기록·통보
 - 보호자가 시니어 위치를 읽으면 **읽기 경로마다 `location_access_log` 한 줄**을 남기고 시니어에게 통보한다(위치정보법 제16조②·제19조③④) → ADR-0036 결정 3·4, LLD-0056

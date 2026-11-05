@@ -20,6 +20,7 @@ import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
+import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.member.Family;
@@ -144,7 +145,7 @@ class RealtimeLocationSafeZoneRedisTest {
             Throwable firstAttempt = catchThrowable(() -> service.updateAndBroadcast(away, SENIOR_ID));
 
             // when
-            LocationUpdateResponse retried = service.updateAndBroadcast(away, SENIOR_ID);
+            LocationAckResponse retried = service.updateAndBroadcast(away, SENIOR_ID);
 
             // then
             // 첫 시도는 이탈 알림 예약(운영에서는 outbox)과 체류 저장까지 커밋된 뒤 최신 위치 저장에서 실패했다.
@@ -152,7 +153,7 @@ class RealtimeLocationSafeZoneRedisTest {
             // 이탈을 다시 판정하지 않는다.
             assertThat(firstAttempt).isInstanceOf(QueryTimeoutException.class);
             assertThat(safeZoneEvents).containsExactly(new SafeZoneExitEvent(SENIOR_ID));
-            assertThat(retried.locationType()).isNull();
+            assertThat(retried.location().locationType()).isNull();
             assertThat(service.getOutingStatus(SENIOR_ID)).isTrue();
             // 밖 좌표 저장은 첫 시도(실패)와 재전송(성공) 두 번 시도됐다.
             then(seniorLocationRepository).should(times(2))

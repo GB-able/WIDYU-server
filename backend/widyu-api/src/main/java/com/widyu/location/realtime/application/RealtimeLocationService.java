@@ -10,6 +10,8 @@ import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.raw.application.LocationFixService;
+import com.widyu.location.realtime.dto.LocationAckResponse;
+import com.widyu.location.realtime.dto.LocationAckResult;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
@@ -101,22 +103,42 @@ public class RealtimeLocationService {
      * <p>실시간 경로와 원본 저장은 각자 트랜잭션에서 차례로 끝낸다. 실시간 트랜잭션이 커넥션을 쥔 채
      * 원본 저장(REQUIRES_NEW)이 커넥션을 하나 더 요청하면, 재연결 직후 위치가 몰릴 때 풀 전체가
      * 두 번째 커넥션을 기다리며 막힌다(LLD-0114). 그래서 이 메서드는 트랜잭션을 열지 않는다.
+     *
+     * <p>v2 위치의 ACK는 "앱이 큐에서 지워도 된다"는 뜻이다(LLD-0123). 원본을 저장했거나 이미 있으면 그 결과를,
+     * 요청 자체가 잘못됐으면 {@code REJECTED}를 돌려준다. 원본 저장이 실패하면 예외를 그대로 던져 ACK를 보내지 않는다.
+     * 앱은 ACK가 오지 않으면 같은 위치를 다시 보내고, 실시간 경로는 같은 측정 시각을 걸러 원본만 다시 저장한다.
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public LocationUpdateResponse updateAndBroadcast(byte[] payload, Long authenticatedMemberId) {
+    public LocationAckResponse updateAndBroadcast(byte[] payload, Long authenticatedMemberId) {
         long serverReceivedAtMs = System.currentTimeMillis();
         LocationUpdateRequest request = parse(payload);
-        validate(request);
-        long acceptedAtMs = System.currentTimeMillis();
 
         if (!request.isRawFix()) {
-            return applyRealtime(request, authenticatedMemberId);
+            validate(request);
+            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId));
         }
 
-        locationFixService.validate(request);
-        LocationUpdateResponse response = applyRealtime(request, authenticatedMemberId);
-        storeQuietly(request, payload, authenticatedMemberId, serverReceivedAtMs, acceptedAtMs);
-        return response;
+        LocationUpdateResponse response;
+        boolean stored;
+        try {
+            validate(request);
+            long acceptedAtMs = System.currentTimeMillis();
+            locationFixService.validate(request);
+            response = applyRealtime(request, authenticatedMemberId);
+            stored = locationFixService.store(
+                    authenticatedMemberId, request, payload, serverReceivedAtMs, acceptedAtMs);
+        } catch (BusinessException e) {
+            // 이 경로의 업무 예외는 요청 자체의 문제(좌표·필드 검증, 본인 아님, 시니어 아님, 남의 회차)라 다시 보내도 같다.
+            // DB·Redis 장애는 업무 예외가 아니라 여기서 잡히지 않고 ACK 없이 오류로 간다.
+            log.warn("위치 거절: memberId={}, seq={}, code={}",
+                    authenticatedMemberId, request.seq(), e.getErrorCode().getCode());
+            return LocationAckResponse.rejected(request);
+        }
+
+        if (stored) {
+            return LocationAckResponse.of(response, request, LocationAckResult.STORED);
+        }
+        return LocationAckResponse.of(response, request, LocationAckResult.DUPLICATE);
     }
 
     /** 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. */
@@ -186,16 +208,6 @@ public class RealtimeLocationService {
         // 좌표는 lat/lon과 latitude/longitude 중 실제로 쓸 값이 정해진 뒤에 본다.
         if (request.resolvedLatitude() == null || request.resolvedLongitude() == null) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
-        }
-    }
-
-    /** 원본 저장 실패가 ACK를 막지 않는다. 실시간 경로는 이미 끝났고 위치는 60초 뒤 또 온다. */
-    private void storeQuietly(LocationUpdateRequest request, byte[] payload, Long memberId,
-                              long serverReceivedAtMs, long acceptedAtMs) {
-        try {
-            locationFixService.store(memberId, request, payload, serverReceivedAtMs, acceptedAtMs);
-        } catch (Exception e) {
-            log.warn("위치 원본 저장 실패: memberId={}, seq={}", memberId, request.seq());
         }
     }
 

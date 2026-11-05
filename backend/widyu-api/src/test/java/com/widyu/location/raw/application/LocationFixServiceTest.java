@@ -66,9 +66,10 @@ class LocationFixServiceTest {
         long before = System.currentTimeMillis();
 
         // when
-        locationFixService.store(MEMBER_ID, request, payload, 1_000L, 2_000L);
+        boolean stored = locationFixService.store(MEMBER_ID, request, payload, 1_000L, 2_000L);
 
         // then
+        assertThat(stored).isTrue();
         LocationFix saved = savedFix();
         assertThat(saved.getMemberId()).isEqualTo(MEMBER_ID);
         assertThat(saved.getDeviceId()).isEqualTo(DEVICE_ID);
@@ -151,7 +152,7 @@ class LocationFixServiceTest {
     }
 
     @Test
-    @DisplayName("같은 기기·세션·seq를 다시 보내면 저장하지 않는다")
+    @DisplayName("같은 기기·세션·seq를 다시 보내면 저장하지 않고 중복으로 알린다")
     void 같은_기기와_세션과_seq를_다시_보내면_저장하지_않는다() {
         // given
         LocationUpdateRequest request = rawFix("move", 37.5551, 8.5, false);
@@ -159,9 +160,10 @@ class LocationFixServiceTest {
                 .willReturn(true);
 
         // when
-        locationFixService.store(MEMBER_ID, request, "{}".getBytes(UTF_8), 1_000L, 2_000L);
+        boolean stored = locationFixService.store(MEMBER_ID, request, "{}".getBytes(UTF_8), 1_000L, 2_000L);
 
         // then
+        assertThat(stored).isFalse();
         then(locationFixRepository).should(never()).save(any(LocationFix.class));
     }
 
