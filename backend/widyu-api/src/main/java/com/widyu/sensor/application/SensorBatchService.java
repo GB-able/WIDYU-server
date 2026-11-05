@@ -793,6 +793,7 @@ public class SensorBatchService {
                 .persistedAtMs(persistedAtMs)
                 .modelAvailableAtServerMs(persistedAtMs)
                 .onBody(request.onBody())
+                .wearState(request.wearState())
                 .watchBatteryPct(request.watchBatteryPct())
                 .qualityStatus(QUALITY_STATUS_OK)
                 .gyroBackfill(false)

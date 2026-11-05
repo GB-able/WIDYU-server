@@ -58,8 +58,9 @@ ADR-0031 맥락과 같다. 심박을 샘플 배열 + 정확도로 받아 원문�
 | `bpm == 0` | | | `accuracy == UNRELIABLE`일 때만(E7) |
 | `on_body` | bool | O | |
 | `watch_battery_pct` | int | X | `0..100` |
+| `wear_state` | string \| null | X | `WORN_VALID` \| `WORN_INVALID` \| `PLANNED_NOT_WORN` \| `ACTUAL_NOT_WORN` \| `UNKNOWN`(IMU 배치와 같은 다섯 값, LLD-0041). 다섯 값 밖이면 `SENSOR_BATCH_INVALID`. 인덱스 `wear_state`에 저장하고 없으면 null(#970) |
 | `location`, `context` | | **금지** | 있으면 `SENSOR_BATCH_INVALID`(E6, 계약에서 삭제된 필드) |
-| `source`, `acc`, `gyro`, `trigger`, `gyro_backfill`, `backfill_for`, `collection_mode`, `gyro_mode`, `wear_state`, `missing_reason` | | X | 오면 원문에만 남고 인덱스에는 쓰지 않는다 |
+| `source`, `acc`, `gyro`, `trigger`, `gyro_backfill`, `backfill_for`, `collection_mode`, `gyro_mode`, `missing_reason` | | X | 오면 원문에만 남고 인덱스에는 쓰지 않는다 |
 
 응답 `{batchId, seq, result}`는 LLD-0041과 같다. 샘플 단위 AI 실패는 응답에 영향이 없다.
 
@@ -72,7 +73,7 @@ ADR-0031 맥락과 같다. 심박을 샘플 배열 + 정확도로 받아 원문�
 | `collection_mode`, `gyro_mode` | NOT NULL → **NULL 허용**. `hr`은 null. IMU 필수는 서비스 검증이 보장 |
 | `stream` | 값 `hr` 허용 |
 | `measured_at_start_ms`, `measured_at_end_ms` | `hr`은 `samples[].ts_ms`의 min·max(시계 환산 없음) |
-| `acc_*`, `gyro_*`, `trigger_*`, `on_body`, `watch_battery_pct` | `hr`은 축·충격 null, `on_body`·`watch_battery_pct`는 저장 |
+| `acc_*`, `gyro_*`, `trigger_*`, `on_body`, `wear_state`, `watch_battery_pct` | `hr`은 축·충격 null, `on_body`·`wear_state`·`watch_battery_pct`는 저장(`wear_state`는 없으면 null, #970) |
 | `gyro_backfill`, `is_resend`, `config_mismatch` | `hr`은 `false`(설정 대조는 IMU만) |
 | `source` | NOT NULL 유지. `hr`은 `watch` 고정(심박은 워치에서만 온다) |
 
@@ -129,6 +130,7 @@ AI 실패는 오류가 아니다. `UNKNOWN` 저장 + 단락.
 - [x] 인덱스 행의 `server_received_at_ms − measured_at_end_ms`가 지연이다(값 확인).
 - [x] 마지막 샘플로 `HeartRateResult`가 갱신된다.
 - [x] 기존 단건 경로·`HeartRateService`·그래프 테스트가 그대로 통과한다. IMU 배치 테스트 29건도 그대로.
+- [x] `wear_state`가 실린 배치는 인덱스 행에 같은 값이 남고, 없으면 null이다. 다섯 값 밖이면 `SENSOR_BATCH_INVALID`이고 S3·샘플 저장이 일어나지 않는다(#970).
 - [x] `./gradlew compileJava`(Q클래스 재생성), `bash scripts/harness/run-module-tests.sh` 통과.
 
 ## 8. 영향 범위 / 마이그레이션
