@@ -72,6 +72,11 @@ public record HeartRateBatchRequest(
         @NotNull(message = "착용 여부는 필수입니다.")
         Boolean onBody,
 
+        @JsonProperty("wear_state")
+        @Pattern(regexp = "WORN_VALID|WORN_INVALID|PLANNED_NOT_WORN|ACTUAL_NOT_WORN|UNKNOWN",
+                message = "착용 상태 값이 올바르지 않습니다.")
+        String wearState,
+
         @JsonProperty("watch_battery_pct")
         @Min(value = 0, message = "배터리 잔량은 0 이상이어야 합니다.")
         @Max(value = 100, message = "배터리 잔량은 100 이하여야 합니다.")

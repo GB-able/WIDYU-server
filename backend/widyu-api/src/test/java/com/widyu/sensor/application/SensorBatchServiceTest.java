@@ -826,6 +826,8 @@ class SensorBatchServiceTest {
         assertThat(saved.getMeasuredAtStartMs()).isEqualTo(1_760_000_000_123L);
         assertThat(saved.getMeasuredAtEndMs()).isEqualTo(1_760_000_002_118L);
         assertThat(saved.getOnBody()).isTrue();
+        // 착용 상태를 싣지 않은 배치는 인덱스도 비워 둔다.
+        assertThat(saved.getWearState()).isNull();
         assertThat(saved.getWatchBatteryPct()).isEqualTo(63);
         // 축·충격·설정 대조는 IMU만의 개념이다.
         assertThat(saved.getAccN()).isNull();
@@ -835,6 +837,41 @@ class SensorBatchServiceTest {
         assertThat(saved.getConfigMismatch()).isFalse();
         // 지연은 서버 수신 시각에서 마지막 잰 시각을 뺀 값이다(정책 1.1.8).
         assertThat(saved.getServerReceivedAtMs()).isGreaterThan(saved.getMeasuredAtEndMs());
+    }
+
+    @Test
+    @DisplayName("심박 배치에 착용 상태가 실려 오면 인덱스 행에 같은 값을 저장한다")
+    void 심박_배치에_착용_상태가_실려_오면_인덱스_행에_같은_값을_저장한다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
+        given(heartRateBatchService.storeAndAssess(any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong()))
+                .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
+        String withWearState = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES)
+                .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"WORN_INVALID\"");
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, withWearState.getBytes(UTF_8));
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        assertThat(savedBatch().getWearState()).isEqualTo("WORN_INVALID");
+    }
+
+    @Test
+    @DisplayName("심박 배치의 착용 상태가 다섯 값 밖이면 필드 오류로 거부한다")
+    void 심박_배치의_착용_상태가_다섯_값_밖이면_필드_오류로_거부한다() {
+        // given
+        givenMemberExists();
+        String invalidWearState = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES)
+                .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"MAYBE_WORN\"");
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, invalidWearState.getBytes(UTF_8)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
     }
 
     @Test
