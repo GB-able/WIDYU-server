@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.global.websocket.WebSocketExceptionHandler;
 import com.widyu.global.websocket.WebSocketWorkDispatcher;
@@ -53,6 +54,7 @@ class SensorBatchWebSocketControllerTest {
     private static final long SEQ = 88213L;
     private static final long QUEUE_WAIT_MS = 50L;
     private static final long RECEIVED_AT_MS = 1_760_000_000_000L;
+    private static final int MAX_PAYLOAD_BYTES = 32_768;
 
     /** 컨트롤러는 식별자 두 개만 얕게 읽으므로 부록 A 본문에서 그 부분만 옮겼다. */
     private static final String BATCH_JSON = """
@@ -250,6 +252,47 @@ class SensorBatchWebSocketControllerTest {
         assertThat(receivedAt.getValue()).isBetween(beforeReceive, dispatchedAt);
     }
 
+    @Test
+    @DisplayName("본문 상한을 넘는 배치를 받으면 센서 실행기에 넘기지 않고 발신 세션에 REJECTED ACK를 보낸다")
+    void 본문_상한을_넘는_배치를_받으면_실행기에_넘기지_않고_REJECTED_ACK를_보낸다(CapturedOutput output) {
+        // given
+        byte[] payload = oversized(BATCH_JSON);
+        PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
+        List<Runnable> queued = new ArrayList<>();
+        ArgumentCaptor<SensorBatchResultResponse> ack = ArgumentCaptor.captor();
+        ArgumentCaptor<Map<String, Object>> headers = ArgumentCaptor.captor();
+
+        // when
+        controller(queued::add).ingestBatch(message(payload), headerAccessor(principal));
+
+        // then
+        assertThat(queued).isEmpty();
+        then(messagingTemplate).should().convertAndSendToUser(
+                eq("42"), eq("/queue/sensor/result"), ack.capture(), headers.capture());
+        assertThat(ack.getValue().batchId()).isEqualTo(BATCH_ID);
+        assertThat(ack.getValue().seq()).isEqualTo(SEQ);
+        assertThat(ack.getValue().result()).isEqualTo(SensorBatchResult.REJECTED);
+        assertThat(headers.getValue()).containsEntry(SimpMessageHeaderAccessor.SESSION_ID_HEADER, "sensor-session-1");
+        assertThat(output).contains("센서 배치 거절: memberId=42, batchId=" + BATCH_ID + ", seq=" + SEQ
+                + ", stream=imu_watch, code=" + ErrorCode.SENSOR_BATCH_TOO_LARGE.getCode());
+    }
+
+    @Test
+    @DisplayName("본문 상한을 넘는 배치에 식별자가 없으면 센서 실행기에 넘기지 않고 예외가 발생한다")
+    void 본문_상한을_넘는_배치에_식별자가_없으면_실행기에_넘기지_않고_예외가_발생한다() {
+        // given
+        byte[] payload = oversized("{\"v\":2,\"stream\":\"imu_watch\"}");
+        PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
+        List<Runnable> queued = new ArrayList<>();
+
+        // when / then
+        assertThatThrownBy(() -> controller(queued::add).ingestBatch(message(payload), headerAccessor(principal)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.SENSOR_BATCH_TOO_LARGE);
+        assertThat(queued).isEmpty();
+    }
+
     private SensorBatchWebSocketController controller() {
         return controller(new SyncTaskExecutor());
     }
@@ -258,7 +301,15 @@ class SensorBatchWebSocketControllerTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         WebSocketWorkDispatcher dispatcher =
                 new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), registry);
-        return new SensorBatchWebSocketController(sensorBatchService, new ObjectMapper(), dispatcher, executor);
+        SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null);
+        return new SensorBatchWebSocketController(sensorBatchService, new ObjectMapper(), dispatcher, executor, properties);
+    }
+
+    /** 본문 상한을 1바이트 넘는 배치. 식별자 뒤를 JSON 공백으로 채운다. */
+    private static byte[] oversized(String json) {
+        String padded = json.substring(0, json.length() - 1)
+                + " ".repeat(MAX_PAYLOAD_BYTES + 1 - json.length()) + "}";
+        return padded.getBytes(StandardCharsets.UTF_8);
     }
 
     private Message<byte[]> message(byte[] payload) {
