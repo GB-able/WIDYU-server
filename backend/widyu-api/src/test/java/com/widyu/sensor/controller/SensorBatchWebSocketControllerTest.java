@@ -267,6 +267,7 @@ class SensorBatchWebSocketControllerTest {
 
         // then
         assertThat(queued).isEmpty();
+        verifyNoInteractions(sensorBatchService);
         then(messagingTemplate).should().convertAndSendToUser(
                 eq("42"), eq("/queue/sensor/result"), ack.capture(), headers.capture());
         assertThat(ack.getValue().batchId()).isEqualTo(BATCH_ID);
@@ -291,6 +292,7 @@ class SensorBatchWebSocketControllerTest {
                 .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
                 .isEqualTo(ErrorCode.SENSOR_BATCH_TOO_LARGE);
         assertThat(queued).isEmpty();
+        verifyNoInteractions(sensorBatchService);
     }
 
     private SensorBatchWebSocketController controller() {

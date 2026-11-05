@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,10 +29,18 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
+import org.springframework.messaging.simp.user.UserDestinationMessageHandler;
+import org.springframework.messaging.support.ExecutorChannelInterceptor;
+import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -88,6 +97,7 @@ class WebSocketMessageSizeIntegrationTest {
 
     @Autowired private SensorProperties sensorProperties;
     @Autowired @Qualifier("websocketSensorExecutor") private ThreadPoolTaskExecutor websocketSensorExecutor;
+    @Autowired @Qualifier("clientInboundChannel") private ExecutorSubscribableChannel clientInboundChannel;
 
     @LocalServerPort private int port;
 
@@ -175,10 +185,32 @@ class WebSocketMessageSizeIntegrationTest {
                         })
                 .get(5, TimeUnit.SECONDS);
         Client client = new Client(stompClient, session);
-        client.subscribe(SENSOR_ACK, client.acks);
-        client.subscribe(ERRORS, client.errors);
-        // 구독이 브로커에 등록되기 전에 보낸 요청의 ACK는 버려진다.
-        TimeUnit.MILLISECONDS.sleep(300);
+
+        // 구독이 브로커에 등록되기 전에 보낸 요청의 ACK는 버려진다. 수신 채널은 여러 스레드라 고정 대기 대신
+        // 사용자 구독 처리가 끝난 것을 확인한다(WebSocketSessionAckIntegrationTest와 같은 방식).
+        AtomicInteger handledSubscriptions = new AtomicInteger();
+        ExecutorChannelInterceptor subscriptionProbe = new ExecutorChannelInterceptor() {
+            @Override
+            public void afterMessageHandled(Message<?> message, MessageChannel channel, MessageHandler handler,
+                                            Exception ex) {
+                if (handler instanceof UserDestinationMessageHandler
+                        && SimpMessageType.SUBSCRIBE.equals(SimpMessageHeaderAccessor.getMessageType(message.getHeaders()))) {
+                    handledSubscriptions.incrementAndGet();
+                }
+            }
+        };
+        clientInboundChannel.addInterceptor(subscriptionProbe);
+        try {
+            client.subscribe(SENSOR_ACK, client.acks);
+            client.subscribe(ERRORS, client.errors);
+            long deadline = System.currentTimeMillis() + ARRIVAL_TIMEOUT_MS;
+            while (handledSubscriptions.get() < 2 && System.currentTimeMillis() < deadline) {
+                TimeUnit.MILLISECONDS.sleep(10);
+            }
+        } finally {
+            clientInboundChannel.removeInterceptor(subscriptionProbe);
+        }
+        assertThat(handledSubscriptions.get()).isEqualTo(2);
         return client;
     }
 
