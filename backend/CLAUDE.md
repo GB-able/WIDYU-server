@@ -76,6 +76,7 @@
 - 본문 상한은 `sensor.max-payload-bytes`(기본 32768, `application-sensor.yml`)
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`
+ - `stream: "imu_dropped"`(워치 IMU 큐가 넘쳐 버린 `seq` 구간)는 같은 endpoint로 와서 `sensor_batch`·S3가 아니라 `sensor_dropped_range`에 원문과 함께 저장한다. 멱등 키 `(member_id, session_id, from_seq)`, `batch_id`가 없어 응답 `batchId`·`seq`는 null → LLD-0124
 
 ### `decision` — 판정 기록 (연구 수집)
 

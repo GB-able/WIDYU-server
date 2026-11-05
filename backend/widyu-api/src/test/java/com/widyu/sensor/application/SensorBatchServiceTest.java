@@ -62,6 +62,28 @@ class SensorBatchServiceTest {
     @Mock private com.widyu.run.application.CollectionRunService collectionRunService;
     @Mock private MemberRepository memberRepository;
     @Mock private S3Service s3Service;
+    @Mock private SensorDroppedRangeService sensorDroppedRangeService;
+
+    @Test
+    @DisplayName("stream이 imu_dropped이면 버린 구간 저장으로 넘기고 그 결과를 돌려주며 배치는 저장하지 않는다")
+    void stream이_imu_dropped이면_버린_구간_저장으로_넘긴다() {
+        // given
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        byte[] payload = """
+            {"stream":"imu_dropped","session_id":"s-01","from_seq":10,"to_seq":15,"reason":"queue_overflow","ts_ms":1760000000200}"""
+                .getBytes(UTF_8);
+        given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+        given(sensorDroppedRangeService.record(eq(MEMBER_ID), eq(payload), any(), anyLong()))
+                .willReturn(SensorBatchResultResponse.of(null, null, SensorBatchResult.STORED));
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        then(sensorBatchRepository).should(never()).save(any());
+        then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
+    }
 
     @Test
     @DisplayName("부록 A 배치를 저장하면 원문 바이트와 해시·환산 시각이 그대로 담긴 행을 남긴다")
@@ -990,7 +1012,8 @@ class SensorBatchServiceTest {
                 s3Service,
                 VALIDATOR,
                 SensorConfigFixture.properties(),
-                new ObjectMapper());
+                new ObjectMapper(),
+                sensorDroppedRangeService);
     }
 
     private String researchBatchWithRunId(String runId) {
