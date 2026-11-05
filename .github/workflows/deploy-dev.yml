@@ -80,7 +80,7 @@ jobs:
         run: |
           cd admin
           npm ci
-          npm run build
+          VITE_APP_ENV=dev npm run build
 
       - name: Sync compose files to Oracle server
         env:
