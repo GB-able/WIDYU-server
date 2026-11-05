@@ -17,6 +17,7 @@ import com.widyu.heart.application.HeartRateService;
 import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
 import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.member.MemberRole;
 import com.widyu.sensor.application.SensorBatchService;
@@ -331,8 +332,8 @@ class WebSocketSessionAckIntegrationTest {
         given(realtimeLocationService.updateAndBroadcast(any(byte[].class), anyLong()))
                 .willAnswer(invocation -> {
                     String tag = JSON.readTree(invocation.getArgument(0, byte[].class)).get("tag").asText();
-                    return LocationUpdateResponse.of(invocation.getArgument(1), tag, null,
-                            37.5, 127.0, LocalDateTime.now(), "OTHER", null);
+                    return LocationAckResponse.legacy(LocationUpdateResponse.of(invocation.getArgument(1), tag, null,
+                            37.5, 127.0, LocalDateTime.now(), "OTHER", null));
                 });
         given(sensorBatchService.ingest(anyLong(), any(byte[].class), anyLong()))
                 .willAnswer(invocation -> {

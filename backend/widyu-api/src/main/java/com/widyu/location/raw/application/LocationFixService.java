@@ -62,14 +62,16 @@ public class LocationFixService {
     /**
      * 원문 1건 저장. 실시간 경로는 이미 끝났으므로 저장 실패가 그 경로를 되돌리지 않도록
      * 자기 트랜잭션에서 돈다(LLD-0048 5.3).
+     *
+     * @return 새로 저장했으면 true, 같은 멱등 키가 이미 있으면 false. 저장 실패는 예외로 알린다(ACK를 막는다, LLD-0123).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void store(Long memberId, LocationUpdateRequest request, byte[] payload,
-                      long serverReceivedAtMs, long acceptedAtMs) {
+    public boolean store(Long memberId, LocationUpdateRequest request, byte[] payload,
+                         long serverReceivedAtMs, long acceptedAtMs) {
         if (locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(
                 request.deviceId(), request.sessionId(), request.seq())) {
             log.info("위치 원본 중복 수신: memberId={}, seq={}", memberId, request.seq());
-            return;
+            return false;
         }
 
         RunAttribution attribution = resolveAttribution(request, memberId);
@@ -98,6 +100,7 @@ public class LocationFixService {
                 .payload(new String(payload, UTF_8))
                 .payloadSha256(sha256(payload))
                 .build());
+        return true;
     }
 
     /** 이 fix가 붙을 회차와 연구 식별자. 셋 다 null이면 운영 외 자료다. */

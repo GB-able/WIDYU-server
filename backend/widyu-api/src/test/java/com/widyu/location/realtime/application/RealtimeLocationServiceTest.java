@@ -23,6 +23,8 @@ import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.raw.application.LocationFixService;
+import com.widyu.location.realtime.dto.LocationAckResponse;
+import com.widyu.location.realtime.dto.LocationAckResult;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
@@ -475,14 +477,20 @@ class RealtimeLocationServiceTest {
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
+        given(locationFixService.store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong()))
+                .willReturn(true);
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
 
         // then
-        assertThat(response.memberId()).isEqualTo(1L);
-        assertThat(response.latitude()).isEqualTo(37.5551);
-        assertThat(response.longitude()).isEqualTo(126.9707);
+        assertThat(response.location().memberId()).isEqualTo(1L);
+        assertThat(response.location().latitude()).isEqualTo(37.5551);
+        assertThat(response.location().longitude()).isEqualTo(126.9707);
+        assertThat(response.deviceId()).isEqualTo("ph-9c1");
+        assertThat(response.sessionId()).isEqualTo("s-2026");
+        assertThat(response.seq()).isEqualTo(5120L);
+        assertThat(response.result()).isEqualTo(LocationAckResult.STORED);
         then(seniorLocationRepository).should().save(any(SeniorLocation.class));
         then(listOperations).should().leftPush(eq("location:trail:1"), any(LocationPoint.class));
         then(messagingTemplate).should()
@@ -508,10 +516,13 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
 
         // then
-        assertThat(response.latitude()).isEqualTo(37.5);
+        assertThat(response.location().latitude()).isEqualTo(37.5);
+        assertThat(response.deviceId()).isNull();
+        assertThat(response.seq()).isNull();
+        assertThat(response.result()).isNull();
         then(messagingTemplate).should()
                 .convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
         then(locationFixService).should(never())
@@ -519,8 +530,8 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("원본 저장이 실패해도 위치 응답을 그대로 돌려준다")
-    void 원본_저장이_실패해도_위치_응답을_그대로_돌려준다() {
+    @DisplayName("원본 저장이 실패하면 ACK를 돌려주지 않고 예외를 전달한다")
+    void 원본_저장이_실패하면_ACK_없이_예외를_전달한다() {
         // given
         byte[] payload = rawFixPayload(System.currentTimeMillis()).getBytes(UTF_8);
         Member member = member(1L);
@@ -536,11 +547,9 @@ class RealtimeLocationServiceTest {
                 .given(locationFixService)
                 .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
 
-        // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
-
-        // then
-        assertThat(response.memberId()).isEqualTo(1L);
+        // when & then
+        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+                .isInstanceOf(IllegalStateException.class);
         then(messagingTemplate).should()
                 .convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
     }
@@ -576,11 +585,11 @@ class RealtimeLocationServiceTest {
         byte[] payload = rawFixPayload(sixteenMinutesAgo).getBytes(UTF_8);
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
 
         // then
-        assertThat(response.latitude()).isEqualTo(37.5551);
-        assertThat(response.stayStartTime()).isNull();
+        assertThat(response.location().latitude()).isEqualTo(37.5551);
+        assertThat(response.location().stayStartTime()).isNull();
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
         then(eventPublisher).should(never()).publishEvent(any());
@@ -638,17 +647,93 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("다른 회원의 오래된 위치도 실시간 반영 생략 전에 FORBIDDEN으로 거부하고 원본을 저장하지 않는다")
-    void 다른_회원의_오래된_위치도_FORBIDDEN으로_거부한다() {
+    @DisplayName("다른 회원의 오래된 위치는 실시간 반영 생략 전에 REJECTED로 거절하고 원본을 저장하지 않는다")
+    void 다른_회원의_오래된_위치는_REJECTED로_거절한다() {
         // given
         byte[] payload = rawFixPayload(System.currentTimeMillis() - 16 * 60_000L).getBytes(UTF_8);
 
-        // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 2L))
-                .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 2L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
+        assertThat(response.seq()).isEqualTo(5120L);
         then(locationFixService).should(never())
                 .store(any(), any(LocationUpdateRequest.class), any(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("이미 저장된 v2 위치가 다시 오면 DUPLICATE ACK를 돌려준다")
+    void 이미_저장된_v2_위치가_다시_오면_DUPLICATE_ACK를_돌려준다() {
+        // given
+        long now = System.currentTimeMillis();
+        given(seniorLocationRepository.findById(1L))
+                .willReturn(Optional.of(SeniorLocation.of(1L, 37.6, 127.0, now)));
+        byte[] payload = rawFixPayload(now - 60_000L).getBytes(UTF_8);
+        given(locationFixService.store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong()))
+                .willReturn(false);
+
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.DUPLICATE);
+        assertThat(response.deviceId()).isEqualTo("ph-9c1");
+        assertThat(response.sessionId()).isEqualTo("s-2026");
+        assertThat(response.seq()).isEqualTo(5120L);
+    }
+
+    @Test
+    @DisplayName("v2 위치가 원본 검증에 실패하면 방송과 저장 없이 REJECTED ACK를 돌려준다")
+    void v2_위치가_원본_검증에_실패하면_REJECTED_ACK를_돌려준다() {
+        // given
+        byte[] payload = rawFixPayload(System.currentTimeMillis()).getBytes(UTF_8);
+        willThrow(new BusinessException(ErrorCode.LOCATION_FIX_INVALID))
+                .given(locationFixService).validate(any(LocationUpdateRequest.class));
+
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
+        assertThat(response.location()).isNull();
+        assertThat(response.deviceId()).isEqualTo("ph-9c1");
+        assertThat(response.seq()).isEqualTo(5120L);
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+        then(locationFixService).should(never())
+                .store(any(), any(LocationUpdateRequest.class), any(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("원본 저장이 남의 회차라 거부되면 REJECTED ACK를 돌려준다")
+    void 원본_저장이_남의_회차라_거부되면_REJECTED_ACK를_돌려준다() {
+        // given
+        long now = System.currentTimeMillis();
+        given(seniorLocationRepository.findById(1L))
+                .willReturn(Optional.of(SeniorLocation.of(1L, 37.6, 127.0, now)));
+        byte[] payload = rawFixPayload(now - 60_000L).getBytes(UTF_8);
+        willThrow(new BusinessException(ErrorCode.RUN_NOT_FOUND))
+                .given(locationFixService)
+                .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
+
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
+        assertThat(response.seq()).isEqualTo(5120L);
+    }
+
+    @Test
+    @DisplayName("구형 위치가 검증에 실패하면 ACK 대신 LOCATION_FIX_INVALID 예외가 발생한다")
+    void 구형_위치가_검증에_실패하면_예외가_발생한다() {
+        // given
+        byte[] payload = "{\"memberId\":1,\"latitude\":37.5}".getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.LOCATION_FIX_INVALID);
     }
 
     @Test

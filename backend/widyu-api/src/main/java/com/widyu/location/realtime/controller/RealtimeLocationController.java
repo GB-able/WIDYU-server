@@ -2,7 +2,7 @@ package com.widyu.location.realtime.controller;
 
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.location.realtime.application.RealtimeLocationService;
-import com.widyu.location.realtime.dto.LocationUpdateResponse;
+import com.widyu.location.realtime.dto.LocationAckResponse;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ public class RealtimeLocationController {
      */
     @MessageMapping("/location/update")
     @SendToUser(destinations = "/queue/location/ack", broadcast = false)
-    public LocationUpdateResponse updateLocation(
+    public LocationAckResponse updateLocation(
             Message<byte[]> message,
             SimpMessageHeaderAccessor headerAccessor
     ) {
