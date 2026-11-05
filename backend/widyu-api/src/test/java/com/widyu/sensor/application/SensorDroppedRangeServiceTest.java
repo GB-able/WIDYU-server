@@ -124,6 +124,20 @@ class SensorDroppedRangeServiceTest {
     }
 
     @Test
+    @DisplayName("순번에 실수가 오면 잘라 저장하지 않고 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 순번에_실수가_오면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = dropped(10, 15, "\"queue_overflow\"").replace("\"from_seq\":10", "\"from_seq\":10.9")
+                .getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        then(sensorDroppedRangeRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("결측 사유가 없으면 SENSOR_BATCH_INVALID 예외가 발생한다")
     void 결측_사유가_없으면_예외가_발생한다() throws Exception {
         // given

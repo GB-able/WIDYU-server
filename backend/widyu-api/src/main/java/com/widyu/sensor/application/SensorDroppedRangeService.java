@@ -1,6 +1,7 @@
 package com.widyu.sensor.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
@@ -71,7 +72,10 @@ public class SensorDroppedRangeService {
 
     private SensorDroppedRangeRequest parse(JsonNode root) {
         try {
-            return objectMapper.treeToValue(root, SensorDroppedRangeRequest.class);
+            // 순번과 시각에 실수가 오면 잘라 넣지 않고 거절한다. 10.9가 10으로 저장되면 다른 구간이 된다.
+            return objectMapper.reader()
+                    .without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
+                    .treeToValue(root, SensorDroppedRangeRequest.class);
         } catch (JsonProcessingException | IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
