@@ -248,6 +248,19 @@ jobs:
               exit 1
             fi
             echo "WIDYU_DEPLOY_EVENT=app_restarted"
+
+            # 배포마다 커밋별 앱 이미지가 쌓여 디스크를 채운다(2026-11-06 111개, 26GB로 MySQL 쓰기 중단, #976).
+            # 실행 중 이미지와 롤백 후보 직전 3개만 남긴다. 지운 이미지도 Docker Hub에 있어 롤백 때 다시 받는다.
+            # 정리 실패는 배포 결과를 바꾸지 않는다.
+            echo "🧹 Removing old widyu-api images..."
+            CURRENT_IMAGE="${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+            KEEP_PREVIOUS_IMAGES=3
+            if ! docker images "${{ env.DOCKER_IMAGE_NAME }}" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' \
+              | sort -r | cut -d'|' -f2 | grep -v ':<none>$' | grep -vxF "$CURRENT_IMAGE" \
+              | tail -n +"$((KEEP_PREVIOUS_IMAGES + 1))" | xargs -r docker rmi; then
+              echo "⚠️ Old image cleanup failed; disk usage may keep growing." >&2
+            fi
+            docker image prune -f || echo "⚠️ Dangling image cleanup failed." >&2
           REMOTE_SCRIPT
 
   notify-deploy:
