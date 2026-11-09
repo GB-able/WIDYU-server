@@ -150,6 +150,7 @@ public enum ErrorCode {
 
     // 기기 상태 하트비트 관련
     HEARTBEAT_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4000", "하트비트 형식이 올바르지 않습니다."),
+    DEVICE_EVENT_BATCH_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4001", "기기 이벤트 묶음 형식이 올바르지 않습니다."),
 
     // 측정회차 관련
     RUN_NOT_FOUND(HttpStatus.NOT_FOUND, "RUN_4041", "측정회차를 찾을 수 없습니다."),
