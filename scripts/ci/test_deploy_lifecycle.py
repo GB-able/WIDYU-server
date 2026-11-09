@@ -22,7 +22,12 @@ state = json.loads(path.read_text())
 state["commands"].append([name] + args)
 code = 0
 if name == "docker":
-    if args[0] == "inspect":
+    if args[0] == "images":
+        print(os.environ.get("FAKE_IMAGES", ""))
+    elif args[0] == "rmi":
+        if os.environ.get("FAKE_RMI_FAIL"):
+            code = 1
+    elif args[0] == "inspect":
         if not state["exists"]:
             code = 1
         elif "-f" in args:
@@ -114,9 +119,11 @@ class DeployLifecycleTest(unittest.TestCase):
         self.assertFalse(any("up" in cmd and cmd[-1] == "widyu-api" for cmd in commands))
 
     def test_health_failure_never_announces_restart(self):
-        result, events, _ = self.run_deployment(FAKE_HTTP_FAIL="1")
+        result, events, commands = self.run_deployment(FAKE_HTTP_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events, ["WIDYU_DEPLOY_EVENT=app_stopped"])
+        self.assertEqual(self.removed_images(commands), [])
+        self.assertNotIn(["docker", "image", "prune", "-f"], commands)
 
     def test_rollback_is_reported_but_deployment_still_fails(self):
         result, events, commands = self.run_deployment(FAKE_START_FAIL="new")
@@ -133,6 +140,36 @@ class DeployLifecycleTest(unittest.TestCase):
         result, events, _ = self.run_deployment(FAKE_START_FAIL="new", FAKE_HTTP_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events, ["WIDYU_DEPLOY_EVENT=app_stopped"])
+
+    def removed_images(self, commands):
+        return sorted(image for cmd in commands if cmd[:2] == ["docker", "rmi"] for image in cmd[2:])
+
+    def images(self, *tags):
+        """앞에 둔 태그일수록 최근에 만든 이미지다."""
+        return "\n".join(f"2026-11-{30 - i:02d} 00:00:00 +0000 UTC|synthetic/app:{tag}" for i, tag in enumerate(tags))
+
+    def test_successful_deploy_keeps_current_and_three_previous_images(self):
+        # 되돌림 배포처럼 지금 띄운 이미지가 가장 오래된 축이어도 지우지 않는다.
+        images = self.images("p1", "p2", "p3", "old1", "new", "old2", "<none>")
+        result, events, commands = self.run_deployment(FAKE_IMAGES=images)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["WIDYU_DEPLOY_EVENT=app_stopped", "WIDYU_DEPLOY_EVENT=app_restarted"])
+        self.assertEqual(self.removed_images(commands), ["synthetic/app:old1", "synthetic/app:old2"])
+        self.assertIn(["docker", "image", "prune", "-f"], commands)
+
+    def test_image_cleanup_failure_does_not_fail_the_deploy(self):
+        images = self.images("new", "p1", "p2", "p3", "old1")
+        result, events, _ = self.run_deployment(FAKE_IMAGES=images, FAKE_RMI_FAIL="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, ["WIDYU_DEPLOY_EVENT=app_stopped", "WIDYU_DEPLOY_EVENT=app_restarted"])
+        self.assertIn("Old image cleanup failed", result.stderr)
+
+    def test_failed_deploy_keeps_images_for_rollback(self):
+        images = self.images("new", "p1", "p2", "p3", "old1")
+        result, _, commands = self.run_deployment(FAKE_IMAGES=images, FAKE_START_FAIL="new")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.removed_images(commands), [])
+        self.assertNotIn(["docker", "image", "prune", "-f"], commands)
 
 
 class ForwardEventsTest(unittest.TestCase):
