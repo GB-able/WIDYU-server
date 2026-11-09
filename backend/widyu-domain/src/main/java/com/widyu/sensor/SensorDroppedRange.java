@@ -70,7 +70,7 @@ public class SensorDroppedRange extends BaseTimeEntity {
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
 
-    @Column(name = "payload_sha256", nullable = false, length = 64)
+    @Column(name = "payload_sha256", nullable = false, columnDefinition = "CHAR(64)")
     private String payloadSha256;
 
     @Builder

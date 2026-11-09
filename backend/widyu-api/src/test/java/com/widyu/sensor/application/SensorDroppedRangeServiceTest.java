@@ -17,6 +17,8 @@ import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,7 +61,8 @@ class SensorDroppedRangeServiceTest {
         assertThat(saved.getValue().getTsMs()).isEqualTo(1_760_000_000_200L);
         assertThat(saved.getValue().getServerReceivedAtMs()).isEqualTo(1_000L);
         assertThat(saved.getValue().getPayload()).isEqualTo(new String(payload, UTF_8));
-        assertThat(saved.getValue().getPayloadSha256()).hasSize(64);
+        assertThat(saved.getValue().getPayloadSha256())
+                .isEqualTo(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload)));
     }
 
     @Test
@@ -147,6 +150,53 @@ class SensorDroppedRangeServiceTest {
         assertThatThrownBy(() -> service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+    }
+
+    @Test
+    @DisplayName("문자열 필드에 숫자나 불리언이 오면 바꿔 저장하지 않고 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 문자열_필드에_다른_타입이_오면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = dropped(10, 15, "true").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
+    @Test
+    @DisplayName("세션 ID 형식이 맞지 않으면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 세션_ID_형식이_맞지_않으면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = dropped(10, 15, "\"queue_overflow\"").replace("s-01", "BAD SESSION").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
+    @Test
+    @DisplayName("시작 순번이 음수면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 시작_순번이_음수면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = dropped(-1, 15, "\"queue_overflow\"").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
+    @Test
+    @DisplayName("결측 사유가 64자를 넘으면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 결측_사유가_64자를_넘으면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = dropped(10, 15, "\"" + "r".repeat(65) + "\"").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
+    private void assertInvalid(byte[] payload) throws Exception {
+        assertThatThrownBy(() -> service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        then(sensorDroppedRangeRepository).should(never()).save(any());
     }
 
     private SensorDroppedRangeService service() {

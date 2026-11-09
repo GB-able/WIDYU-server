@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.sensor.SensorDroppedRange;
@@ -16,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -30,12 +32,28 @@ import org.springframework.stereotype.Service;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class SensorDroppedRangeService {
 
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
     private final Validator validator;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper payloadMapper;
+
+    public SensorDroppedRangeService(
+            SensorDroppedRangeRepository sensorDroppedRangeRepository,
+            Validator validator,
+            ObjectMapper objectMapper
+    ) {
+        this.sensorDroppedRangeRepository = sensorDroppedRangeRepository;
+        this.validator = validator;
+        // 타입이 다른 값을 바꿔 넣지 않고 거절한다. 순번 10.9가 10으로, 사유 true가 "true"로 저장되면
+        // 앱이 보낸 구간과 다른 기록이 STORED로 남는다(IMU 배치의 SensorBatchService와 같은 설정).
+        this.payloadMapper = objectMapper.copy()
+                .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT);
+        this.payloadMapper.coercionConfigFor(LogicalType.Textual)
+                .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+                .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail);
+    }
 
     public SensorBatchResultResponse record(Long memberId, byte[] payload, JsonNode root, long serverReceivedAtMs) {
         SensorDroppedRangeRequest request = parse(root);
@@ -72,10 +90,7 @@ public class SensorDroppedRangeService {
 
     private SensorDroppedRangeRequest parse(JsonNode root) {
         try {
-            // 순번과 시각에 실수가 오면 잘라 넣지 않고 거절한다. 10.9가 10으로 저장되면 다른 구간이 된다.
-            return objectMapper.reader()
-                    .without(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
-                    .treeToValue(root, SensorDroppedRangeRequest.class);
+            return payloadMapper.treeToValue(root, SensorDroppedRangeRequest.class);
         } catch (JsonProcessingException | IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
