@@ -3,6 +3,7 @@ package com.widyu.heart.application;
 import com.widyu.fcm.application.degraded.DegradedEmergencyAlertService;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
@@ -58,11 +59,15 @@ public class HeartRateService {
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
     private final MemberRepository memberRepository;
     private final DegradedEmergencyAlertService degradedEmergencyAlertService;
+    private final SensorProperties sensorProperties;
 
     /**
      * 측정값 1건을 수신 즉시 판정·저장한다(LLD-0023). DB 접근이 실패하면 AI 판정만으로 응답하고 위급이면
      * DB 없이 보호자에게 알린다(LLD-0086 5.2). 이 메서드에 @Transactional을 붙이지 않는다. 붙이면 catch 지점이
      * 롤백 전용 트랜잭션 안이 되어 응답 뒤 커밋에서 다시 실패하고, 최신값 쓰기도 커밋 앞으로 돌아간다(LLD-0102).
+     *
+     * <p>단건에는 착용 정보가 없다. 착용 게이트가 켜져 있으면 착용이 확실하지 않은 것으로 보고 판정하지 않으며,
+     * DB 장애 때도 AI 판정만으로 응답하지 않는다(LLD-0126 5.3).
      */
     public HeartRateStatusResponse processHeartRate(Long memberId, HeartRateSingleRequest request) {
         try {
@@ -103,13 +108,21 @@ public class HeartRateService {
     }
 
     private DetectionResult detect(Long memberId, HeartRateSingleRequest request) {
+        if (wearGateEnabled()) {
+            return DetectionResult.notAssessed();
+        }
         return heartRateAnomalyDetector.detect(memberId, request.toMeasurement(), request.normalizedContext());
+    }
+
+    private boolean wearGateEnabled() {
+        return sensorProperties.heartAi() != null && sensorProperties.heartAi().wearGateEnabled();
     }
 
     /** 측정값은 저장하지 못한 채로 둔다. 로그에는 bpm·AI 응답을 넣지 않는다(#639). */
     private HeartRateStatusResponse respondWithoutDatabase(
             Long memberId, HeartRateSingleRequest request, DetectionResult detection, RuntimeException cause) {
-        if (!degradedEmergencyAlertService.enabled()) {
+        // 착용 게이트가 켜져 있으면 판정할 수 없으므로 저하 알림 비활성 때처럼 원래 예외를 낸다.
+        if (!degradedEmergencyAlertService.enabled() || wearGateEnabled()) {
             throw cause;
         }
         DetectionResult judged = detection;

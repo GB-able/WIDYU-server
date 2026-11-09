@@ -37,6 +37,8 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -75,7 +77,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH"),
                         sample(73, FIRST_TS_MS + 1995, "MEDIUM")),
@@ -106,7 +108,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH")),
                 System.currentTimeMillis());
@@ -129,7 +131,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH"),
                         sample(73, FIRST_TS_MS + 1995, "HIGH")),
@@ -157,7 +159,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(0, FIRST_TS_MS, "UNRELIABLE"),
                         sample(0, FIRST_TS_MS + 997, "UNRELIABLE")),
                 System.currentTimeMillis());
@@ -188,7 +190,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
+                member, BATCH_ID, null, true, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
                 System.currentTimeMillis());
 
         // then
@@ -210,7 +212,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(sample(185, FIRST_TS_MS, "HIGH")), serverReceivedAtMs);
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(185, FIRST_TS_MS, "HIGH")), serverReceivedAtMs);
 
         // then
         DecisionRecord saved = decisionPassedToSave();
@@ -247,7 +249,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, null, List.of(sample(185, FIRST_TS_MS, "HIGH")),
+                member, BATCH_ID, null, true, null, List.of(sample(185, FIRST_TS_MS, "HIGH")),
                 System.currentTimeMillis());
 
         // then
@@ -268,7 +270,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(sample(185, FIRST_TS_MS, "HIGH")),
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(185, FIRST_TS_MS, "HIGH")),
                 System.currentTimeMillis());
 
         // then
@@ -300,7 +302,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service(withoutHeartAi).storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(sample(185, FIRST_TS_MS, "HIGH")),
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(185, FIRST_TS_MS, "HIGH")),
                 System.currentTimeMillis());
 
         // then
@@ -328,7 +330,7 @@ class HeartRateBatchServiceTest {
         try {
             // when
             service().storeAndAssess(
-                    member, BATCH_ID, RUN_ID, List.of(sample(185, FIRST_TS_MS, "HIGH")),
+                    member, BATCH_ID, RUN_ID, true, null, List.of(sample(185, FIRST_TS_MS, "HIGH")),
                     System.currentTimeMillis());
 
             // then
@@ -361,7 +363,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH")),
                 System.currentTimeMillis());
@@ -386,7 +388,7 @@ class HeartRateBatchServiceTest {
         // when
         // 순서가 뒤섞여 들어와도 잰 시각 순으로 처리한다.
         service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(72, FIRST_TS_MS + 997, "HIGH"),
                         sample(71, FIRST_TS_MS, "HIGH")),
                 System.currentTimeMillis());
@@ -409,7 +411,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(sample(71, FIRST_TS_MS, "HIGH")),
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(71, FIRST_TS_MS, "HIGH")),
                 System.currentTimeMillis());
 
         // then
@@ -428,7 +430,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "UNRELIABLE")),
                 System.currentTimeMillis());
@@ -457,7 +459,7 @@ class HeartRateBatchServiceTest {
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH")),
                 System.currentTimeMillis());
@@ -486,7 +488,7 @@ class HeartRateBatchServiceTest {
 
         // when
         service().storeAndAssess(
-                member, BATCH_ID, RUN_ID, List.of(
+                member, BATCH_ID, RUN_ID, true, null, List.of(
                         sample(71, FIRST_TS_MS, "HIGH"),
                         sample(72, FIRST_TS_MS + 997, "HIGH")),
                 System.currentTimeMillis());
@@ -510,7 +512,7 @@ class HeartRateBatchServiceTest {
         // when & then
         // 이름이 UK여도 행이 없으면 건너뛸 근거가 없다(LLD-0089 AC6).
         assertThatThrownBy(() -> service().storeAndAssess(
-                member, BATCH_ID, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
+                member, BATCH_ID, null, true, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
                 System.currentTimeMillis()))
                 .isSameAs(integrityError);
     }
@@ -531,7 +533,7 @@ class HeartRateBatchServiceTest {
         // when & then
         // 위급·판정 행의 실패를 중복으로 삼키면 알림이 빠진 채 DUPLICATE가 나간다(#789).
         assertThatThrownBy(() -> service().storeAndAssess(
-                member, BATCH_ID, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
+                member, BATCH_ID, null, true, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
                 System.currentTimeMillis()))
                 .isSameAs(integrityError);
     }
@@ -551,10 +553,217 @@ class HeartRateBatchServiceTest {
 
         // when & then
         assertThatThrownBy(() -> service().storeAndAssess(
-                member, BATCH_ID, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
+                member, BATCH_ID, null, true, null, List.of(sample(0, FIRST_TS_MS, "UNRELIABLE")),
                 System.currentTimeMillis()))
                 .isSameAs(integrityError)
                 .hasSuppressedException(recheckFailure);
+    }
+
+    // ── 착용 게이트(LLD-0126) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("착용 게이트를 켜고 미착용 배치를 받으면 AI 없이 저장하고 착용 불확실 판정 보류 한 줄을 남긴다")
+    void 착용_게이트를_켜고_미착용_배치를_받으면_AI_없이_저장하고_착용_불확실_판정_보류를_남긴다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        givenDecisionSaved();
+
+        // when
+        HeartRateBatchService.BatchOutcome outcome = service(propertiesWithWearGate()).storeAndAssess(
+                member, BATCH_ID, RUN_ID, false, null, List.of(
+                        sample(25, FIRST_TS_MS, "HIGH"),
+                        sample(26, FIRST_TS_MS + 997, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        assertThat(outcome.stored()).isEqualTo(2);
+        assertThat(outcome.aiSkipped()).isEqualTo(2);
+        then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), anyString());
+        then(heartRatePersistenceService).should(times(2)).saveBatchSample(
+                eq(member), anyInt(), any(), eq(HeartRateStatus.UNKNOWN), eq(false),
+                eq("HIGH"), eq(BATCH_ID), isNull());
+
+        DecisionRecord saved = savedDecision();
+        assertThat(saved.getDecisionId()).isEqualTo("dec-ab-" + BATCH_ID);
+        assertThat(saved.getDecisionOutput()).isEqualTo("ABSTAIN_INSUFFICIENT_INPUT");
+        assertThat(saved.getReason()).isEqualTo("WEAR_UNCERTAIN");
+        assertThat(saved.getHrBpm()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNKNOWN", "WORN_INVALID", "PLANNED_NOT_WORN", "ACTUAL_NOT_WORN"})
+    @DisplayName("착용 게이트를 켜면 착용 중이어도 착용 상태가 불확실한 배치는 판정하지 않는다")
+    void 착용_게이트를_켜면_착용_중이어도_착용_상태가_불확실한_배치는_판정하지_않는다(String wearState) {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        givenDecisionSaved();
+
+        // when
+        service(propertiesWithWearGate()).storeAndAssess(
+                member, BATCH_ID, RUN_ID, true, wearState, List.of(sample(25, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        then(heartRateAnomalyDetector).should(never()).detect(anyLong(), any(), anyString());
+        assertThat(savedDecision().getReason()).isEqualTo("WEAR_UNCERTAIN");
+    }
+
+    @Test
+    @DisplayName("착용 게이트를 켜도 착용 상태 없이 착용 중이면 지금처럼 AI로 판정한다")
+    void 착용_게이트를_켜도_착용_상태_없이_착용_중이면_AI로_판정한다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), eq("UNKNOWN")))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false, "NORMAL", REASON));
+
+        // when
+        service(propertiesWithWearGate()).storeAndAssess(
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(71, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        then(heartRateAnomalyDetector).should().detect(eq(MEMBER_ID), any(), eq("UNKNOWN"));
+        then(decisionRecordPersistenceService).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("착용 게이트를 끄면 미착용 배치도 지금처럼 AI로 판정한다")
+    void 착용_게이트를_끄면_미착용_배치도_AI로_판정한다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), eq("UNKNOWN")))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false, "NORMAL", REASON));
+
+        // when
+        service().storeAndAssess(
+                member, BATCH_ID, RUN_ID, false, "ACTUAL_NOT_WORN", List.of(sample(71, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        then(heartRateAnomalyDetector).should().detect(eq(MEMBER_ID), any(), eq("UNKNOWN"));
+        then(decisionRecordPersistenceService).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("회차가 없는 착용 불확실 배치는 판정 행 없이 착용 불확실 카운터만 올린다")
+    void 회차가_없는_착용_불확실_배치는_판정_행_없이_카운터만_올린다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+
+        // when
+        service(propertiesWithWearGate()).storeAndAssess(
+                member, BATCH_ID, null, false, null, List.of(sample(25, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        then(decisionRecordPersistenceService).should(never()).save(any());
+        assertThat(wearUncertainCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("착용 불확실 배치의 샘플이 전부 중복이면 판정 행도 카운터도 남기지 않는다")
+    void 착용_불확실_배치의_샘플이_전부_중복이면_판정_행도_카운터도_남기지_않는다() {
+        // given
+        Member member = member();
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(eq(MEMBER_ID), any())).willReturn(true);
+
+        // when
+        service(propertiesWithWearGate()).storeAndAssess(
+                member, BATCH_ID, RUN_ID, false, null, List.of(sample(25, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        then(decisionRecordPersistenceService).should(never()).save(any());
+        assertThat(wearUncertainCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("같은 배치의 판정 보류가 이미 있으면 실패 로그 없이 중복으로 넘기고 심박 저장은 그대로다")
+    void 같은_배치의_판정_보류가_이미_있으면_실패_로그_없이_중복으로_넘긴다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        willThrow(IntegrityViolationFixture.violating("decision_record.uk_decision_record_decision_id"))
+                .given(decisionRecordPersistenceService).save(any());
+        ListAppender<ILoggingEvent> appender = attachAppender();
+
+        try {
+            // when
+            HeartRateBatchService.BatchOutcome outcome = service(propertiesWithWearGate()).storeAndAssess(
+                    member, BATCH_ID, RUN_ID, false, null, List.of(sample(25, FIRST_TS_MS, "HIGH")),
+                    System.currentTimeMillis());
+
+            // then
+            assertThat(outcome.stored()).isEqualTo(1);
+            assertThat(appender.list).noneMatch(event -> event.getLevel() == Level.WARN);
+            assertThat(appender.list).anyMatch(event -> event.getFormattedMessage().contains("판정 기록 중복"));
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    @Test
+    @DisplayName("판정 보류 저장이 다른 제약 때문에 실패하면 실패 로그를 남기고 심박 저장은 그대로다")
+    void 판정_보류_저장이_다른_제약_때문에_실패하면_실패_로그를_남긴다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        willThrow(IntegrityViolationFixture.violating("decision_record.fk_decision_record_member"))
+                .given(decisionRecordPersistenceService).save(any());
+        ListAppender<ILoggingEvent> appender = attachAppender();
+
+        try {
+            // when
+            HeartRateBatchService.BatchOutcome outcome = service(propertiesWithWearGate()).storeAndAssess(
+                    member, BATCH_ID, RUN_ID, false, null, List.of(sample(25, FIRST_TS_MS, "HIGH")),
+                    System.currentTimeMillis());
+
+            // then
+            assertThat(outcome.stored()).isEqualTo(1);
+            assertThat(appender.list).anyMatch(event -> event.getLevel() == Level.WARN
+                    && event.getFormattedMessage().contains("판정 기록 실패"));
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    private double wearUncertainCount() {
+        io.micrometer.core.instrument.Counter counter = meterRegistry.find("heart.wear_uncertain").counter();
+        if (counter == null) {
+            return 0;
+        }
+        return counter.count();
+    }
+
+    /** 중복 기록은 INFO라 로거 수준을 INFO로 맞추고, 떼어낼 때 원래대로(상속) 돌린다. */
+    private ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(HeartRateBatchService.class);
+        logger.setLevel(Level.INFO);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private void detachAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(HeartRateBatchService.class);
+        logger.detachAppender(appender);
+        logger.setLevel(null);
+    }
+
+    private SensorProperties propertiesWithWearGate() {
+        return new SensorProperties(
+                32_768, null, null,
+                new SensorProperties.FallAi(false, "/api/fall", 2, "widyu-server", "abstain-v1"),
+                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true),
+                new SensorProperties.Incident(60, 5000L, false, 5, 90),
+                new SensorProperties.Followup(false, false),
+                new SensorProperties.Medication(true));
     }
 
     private HeartRateBatchService service() {
@@ -579,7 +788,7 @@ class HeartRateBatchServiceTest {
         return new SensorProperties(
                 32_768, null, null,
                 new SensorProperties.FallAi(false, "/api/fall", 2, "widyu-server", "abstain-v1"),
-                new SensorProperties.HeartAi("widyu-ai-hr", "ver7"),
+                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
                 new SensorProperties.Medication(true));

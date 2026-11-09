@@ -17,6 +17,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.widyu.fcm.application.degraded.DegradedEmergencyAlertService;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
@@ -65,6 +66,7 @@ class HeartRateServiceTest {
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private DegradedEmergencyAlertService degradedEmergencyAlertService;
+    @Mock private SensorProperties sensorProperties;
 
     @InjectMocks
     private HeartRateService heartRateService;
@@ -670,6 +672,70 @@ class HeartRateServiceTest {
 
         // then
         assertThat(response).isEqualTo(HeartRateStatusResponse.of(memberId, HeartRateStatus.NORMAL, 78, measuredAt));
+        then(degradedEmergencyAlertService).should(never()).alertWithoutDatabase(anyLong(), any());
+    }
+
+    // ── 착용 게이트(LLD-0126) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("착용 게이트를 켜면 단건 심박은 AI를 부르지 않고 UNKNOWN으로 저장한다")
+    void 착용_게이트를_켜면_단건_심박은_AI를_부르지_않고_UNKNOWN으로_저장한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 11, 9, 9, 0, 0);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(25, measuredAt, "서울시", "REST");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        given(sensorProperties.heartAi()).willReturn(new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(false);
+        given(heartRatePersistenceService.saveMeasurement(memberId, request, HeartRateStatus.UNKNOWN, false))
+                .willReturn(HeartRateResult.of(memberId, HeartRateStatus.UNKNOWN, 25, measuredAt));
+
+        // when
+        HeartRateStatusResponse response = heartRateService.processHeartRate(memberId, request);
+
+        // then
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.UNKNOWN);
+        then(heartRateAnomalyDetector).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("착용 게이트를 켜면 판정 전 DB 조회가 실패해도 AI와 저하 알림 없이 원래 예외를 던진다")
+    void 착용_게이트를_켜면_판정_전_DB_조회가_실패해도_원래_예외를_던진다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 11, 9, 9, 0, 1);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(187, measuredAt, "서울시", "ACTIVE");
+        CannotCreateTransactionException dbFailure = new CannotCreateTransactionException("no connection");
+        given(sensorProperties.heartAi()).willReturn(new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true));
+        given(memberRepository.findById(memberId)).willThrow(dbFailure);
+        given(degradedEmergencyAlertService.enabled()).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> heartRateService.processHeartRate(memberId, request)).isSameAs(dbFailure);
+        then(heartRateAnomalyDetector).shouldHaveNoInteractions();
+        then(degradedEmergencyAlertService).should(never()).alertWithoutDatabase(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("착용 게이트를 켜면 판정 뒤 저장이 실패해도 AI와 저하 알림 없이 원래 예외를 던진다")
+    void 착용_게이트를_켜면_판정_뒤_저장이_실패해도_원래_예외를_던진다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime measuredAt = LocalDateTime.of(2026, 11, 9, 9, 0, 2);
+        HeartRateSingleRequest request = HeartRateSingleRequest.of(187, measuredAt, "서울시", "ACTIVE");
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        DataAccessResourceFailureException dbFailure = new DataAccessResourceFailureException("db down");
+        given(sensorProperties.heartAi()).willReturn(new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
+        given(heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, measuredAt)).willReturn(false);
+        given(heartRatePersistenceService.saveMeasurement(memberId, request, HeartRateStatus.UNKNOWN, false))
+                .willThrow(dbFailure);
+        given(degradedEmergencyAlertService.enabled()).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> heartRateService.processHeartRate(memberId, request)).isSameAs(dbFailure);
+        then(heartRateAnomalyDetector).shouldHaveNoInteractions();
         then(degradedEmergencyAlertService).should(never()).alertWithoutDatabase(anyLong(), any());
     }
 

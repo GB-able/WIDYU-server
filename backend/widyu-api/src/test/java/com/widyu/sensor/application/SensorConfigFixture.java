@@ -39,7 +39,7 @@ final class SensorConfigFixture {
     }
 
     static SensorProperties.HeartAi heartAi() {
-        return new SensorProperties.HeartAi("widyu-ai-hr", "ver7");
+        return new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false);
     }
 
     static SensorProperties.Incident incident() {

@@ -123,9 +123,9 @@ class HeartRateLatestResultOrderingRedisTest {
                 String olderBatchId = "older-" + r;
                 CountDownLatch release = detector.hold(toMeasuredAt(olderStartMs));
                 Future<?> older = executor.submit(
-                        () -> service.storeAndAssess(member, olderBatchId, null, olderBatch, olderStartMs));
+                        () -> service.storeAndAssess(member, olderBatchId, null, true, null, olderBatch, olderStartMs));
                 detector.awaitEntered(toMeasuredAt(olderStartMs));
-                service.storeAndAssess(member, "newer-" + r, null, newerBatch, newerStartMs);
+                service.storeAndAssess(member, "newer-" + r, null, true, null, newerBatch, newerStartMs);
                 release.countDown();
                 older.get(10, TimeUnit.SECONDS);
                 if (!expected.equals(latestMeasuredAt(redis, member.getId()))) {
@@ -203,7 +203,8 @@ class HeartRateLatestResultOrderingRedisTest {
                 eventRepository,
                 mock(HeartRateEmergencyRepository.class),
                 memberRepository,
-                mock(DegradedEmergencyAlertService.class));
+                mock(DegradedEmergencyAlertService.class),
+                mock(SensorProperties.class));
     }
 
     private static HeartRateBatchService batchService(HeartRateRedisFixture redis, HeldDetector detector) {
