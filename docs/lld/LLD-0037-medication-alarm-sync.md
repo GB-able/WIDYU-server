@@ -27,6 +27,8 @@
 {"revision":42,"timeZone":"Asia/Seoul","schedules":[{"scheduleId":15,"alarmTime":"19:27","doseCount":2}],"completed":["15:2026-09-16"]}
 ```
 
+> (#975, [LLD-0125](LLD-0125-medication-alarm-sync-effective-period.md)) `schedules`는 오늘 이후 하루라도 유효한 버전으로 넓어졌고 각 스케줄에 `effectiveFrom`, `effectiveTo`가 실린다. 아래 문장은 변경 전 기준이다.
+
 `schedules`는 API timeZone 기준 오늘 유효한 ACTIVE 스케줄이며, `doseCount`는 해당 시각의 복용 수량이다. `completed`는 같은 timeZone 기준 오늘 인증된 `scheduleId:YYYY-MM-DD`다.
 
 FCM data payload: `{ "type": "MEDICATION_SCHEDULE_CHANGED", "revision": "42" }`.
