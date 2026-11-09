@@ -18,8 +18,10 @@ import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorDroppedRange;
 import com.widyu.sensor.dto.response.SensorWindowExportFile;
 import com.widyu.sensor.repository.SensorBatchRepository;
+import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -48,12 +50,13 @@ class SensorWindowExportServiceTest {
     @Mock private LocationFixRepository locationFixRepository;
     @Mock private DeviceHeartbeatRepository deviceHeartbeatRepository;
     @Mock private SensorBatchRepository sensorBatchRepository;
+    @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
     @Mock private S3Service s3Service;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private SensorWindowExportService service;
 
     @Test
-    @DisplayName("시간대와 여유로 구간을 만들어 CSV 여섯 개를 zip으로 내려주고 손상 묶음은 요약에 남긴다")
+    @DisplayName("시간대와 여유로 구간을 만들어 CSV 일곱 개를 zip으로 내려주고 손상 묶음은 요약에 남긴다")
     void 시간대_자료를_CSV_zip으로_내보낸다() throws Exception {
         // given
         long startMs = FROM_MS - 600_000;
@@ -73,6 +76,10 @@ class SensorWindowExportServiceTest {
                 {"batch_id":"h1","stream":"hr","samples":[{"bpm":88,"ts_ms":%d,"accuracy":"HIGH"}]}
                 """.formatted(FROM_MS + 60_000).getBytes(UTF_8));
         given(s3Service.downloadBytes("sensor/i1.json")).willReturn("{not json".getBytes(UTF_8));
+        given(sensorDroppedRangeRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(28L, startMs, endMs))
+                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").fromSeq(10L)
+                        .toSeq(15L).reason("queue_overflow").tsMs(FROM_MS + 120_000)
+                        .serverReceivedAtMs(FROM_MS + 125_000).build()));
 
         // when
         SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
@@ -81,7 +88,11 @@ class SensorWindowExportServiceTest {
         Map<String, String> entries = unzip(file.bytes());
         assertThat(file.fileName()).isEqualTo("sensor_member28_20261030T0900-20261030T0938.zip");
         assertThat(entries).containsOnlyKeys("location.csv", "sensor_batches.csv", "device_heartbeat.csv",
-                "hr.csv", "imu.csv", "summary.csv");
+                "dropped_ranges.csv", "hr.csv", "imu.csv", "summary.csv");
+        assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms",
+                "during,2026-10-30 09:12:00.000," + (FROM_MS + 120_000) + ",s-01,10,15,queue_overflow,"
+                        + (FROM_MS + 125_000));
         assertThat(entries.get("location.csv")).contains("before,2026-10-30 09:09:00.000," + (FROM_MS - 60_000)
                 + ",phone-1,s,1,37.5,127.0,8.0,1.2");
         assertThat(entries.get("hr.csv")).contains("during,2026-10-30 09:11:00.000").contains(",h1,88,HIGH");
@@ -89,7 +100,24 @@ class SensorWindowExportServiceTest {
         assertThat(entries.get("summary.csv"))
                 .contains("rows:location.csv,1")
                 .contains("rows:hr.csv,1")
+                .contains("rows:dropped_ranges.csv,1")
                 .contains("skipped_batch,i1 원문 해석 불가");
+    }
+
+    @Test
+    @DisplayName("구간에 버린 묶음 기록이 없으면 헤더만 있는 dropped_ranges.csv가 들어간다")
+    void 버린_묶음_기록이_없으면_헤더만_있는_파일이_들어간다() throws Exception {
+        // given
+        given(memberRepository.existsById(28L)).willReturn(true);
+
+        // when
+        SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
+
+        // then
+        Map<String, String> entries = unzip(file.bytes());
+        assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms");
+        assertThat(entries.get("summary.csv")).contains("rows:dropped_ranges.csv,0");
     }
 
     @Test

@@ -28,7 +28,7 @@
 - 멱등 키 `(member_id, session_id, from_seq)`
 
 ### Out of scope
-- 내보내기 `missing_intervals`와 `quality.json`에 반영(LLD-0050). 지금은 저장만 하고 내보내기는 별도로 한다
+- 내보내기 `missing_intervals`와 `quality.json`에 반영(LLD-0050). 지금은 저장만 하고 내보내기는 별도로 한다. 관리자 기간 내보내기(LLD-0108)에는 #983에서 `dropped_ranges.csv`로 넣었다. 회차 내보내기는 여전히 범위 밖
 - 회차 귀속(`run_id`). 기록에 `device_id`가 없고, 같은 `session_id`의 `sensor_batch` 행에서 찾을 수 있다
 - 사유 값 목록 검증. S2 합의 전이라 64자 이하 문자열이면 받는다
 - 앱의 전송 방식(ACK를 기다리지 않음) 변경
