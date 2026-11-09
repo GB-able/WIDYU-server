@@ -162,6 +162,11 @@ public class MedicineScheduleService {
         LocalDateTime now = LocalDateTime.now(clock);
 
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
+        // 개수 검사와 같이 회원 행 잠금 뒤에 확인하므로 같은 시각 동시 생성도 하나만 남는다.
+        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, alarmTime)) {
+            throw new BusinessException(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+        }
         // 오늘 인증 가능 시간이 이미 끝난 시각이면 오늘은 건너뛰고 내일부터 울린다.
         LocalDate effectiveFromDate = now.toLocalDate();
         if (isProofWindowClosed(alarmTime, now)) {
@@ -214,6 +219,10 @@ public class MedicineScheduleService {
         }
 
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
+        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNullAndIdNot(
+                targetMember, Status.ACTIVE, alarmTime, scheduleId)) {
+            throw new BusinessException(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
 
