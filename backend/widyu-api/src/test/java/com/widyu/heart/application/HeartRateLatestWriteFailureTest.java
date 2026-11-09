@@ -13,6 +13,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.application.degraded.DegradedEmergencyAlertService;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.global.config.JpaAuditingConfig;
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.dto.request.HeartRateSingleRequest;
@@ -71,6 +72,7 @@ class HeartRateLatestWriteFailureTest {
     @MockBean private HeartRateLatestResultWriter latestResultWriter;
     @MockBean private HeartRateResultRepository heartRateResultRepository;
     @MockBean private DegradedEmergencyAlertService degradedEmergencyAlertService;
+    @MockBean private SensorProperties sensorProperties;
     @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test

@@ -16,9 +16,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -34,6 +37,9 @@ import org.springframework.web.client.RestClientException;
  * 판정은 행을 만들지 않고 메트릭으로 건수만 센다. 하루 8만 행을 만들 이유가 없고, 정상 판정은
  * {@code heart_rate_event.status}에 이미 있다.
  *
+ * <p>착용이 확실하지 않은 배치는 저장만 하고 판정하지 않는다(LLD-0126). 스위치
+ * {@code sensor.heart-ai.wear-gate-enabled}가 켜져 있을 때만이다.
+ *
  * <p>심박 수치·판정 상태·판정 사유·AI 응답은 <b>어떤 로그 레벨에도 남기지 않는다</b>(#639).
  * 사유와 심박 값이 사는 곳은 판정 기록 행뿐이다.
  */
@@ -48,6 +54,10 @@ public class HeartRateBatchService {
     private static final String ALERT = "ALERT";
     private static final String NO_ALERT = "NO_ALERT";
     private static final String ABSTAIN = "ABSTAIN_INSUFFICIENT_INPUT";
+    private static final String WEAR_UNCERTAIN = "WEAR_UNCERTAIN";
+    private static final Set<String> UNCERTAIN_WEAR_STATES =
+            Set.of("UNKNOWN", "WORN_INVALID", "PLANNED_NOT_WORN", "ACTUAL_NOT_WORN");
+    private static final String DECISION_ID_UK = "uk_decision_record_decision_id";
     // AI가 0과 300을 400으로 거부한다.
     private static final int AI_MIN_BPM = 1;
     private static final int AI_MAX_BPM = 299;
@@ -63,8 +73,9 @@ public class HeartRateBatchService {
     public record BatchOutcome(int stored, int skipped, int aiSkipped) {}
 
     public BatchOutcome storeAndAssess(
-            Member member, String batchId, String runId,
+            Member member, String batchId, String runId, Boolean onBody, String wearState,
             List<HeartRateBatchRequest.Sample> samples, long serverReceivedAtMs) {
+        boolean wearUncertain = isWearUncertain(onBody, wearState);
         boolean aiAvailable = true;
         boolean aiCalled = false;
         int stored = 0;
@@ -89,7 +100,7 @@ public class HeartRateBatchService {
             boolean emergency = false;
             boolean assessed = false;
             DecisionRecord decision = null;
-            if (aiAvailable && isAiTarget(sample)) {
+            if (!wearUncertain && aiAvailable && isAiTarget(sample)) {
                 aiCalled = true;
                 try {
                     DetectionResult detected = heartRateAnomalyDetector.detect(
@@ -136,7 +147,17 @@ public class HeartRateBatchService {
             heartRatePersistenceService.updateLatestResult(
                     member.getId(), lastStatus, lastHeartRate, lastMeasuredAt);
         }
-        recordAbstain(member, batchId, runId, samples, stored, aiTargetCount, aiCalled, serverReceivedAtMs);
+        if (wearUncertain && stored > 0) {
+            // 회차가 없는 배치는 판정 행이 없으므로 이 카운터가 유일한 관측 수단이다(LLD-0126 5.2).
+            // heart.decision은 output 태그만 쓴다. 같은 이름에 태그 키가 다르면 Prometheus가 한쪽을 버려 이름을 나눈다.
+            meterRegistry.counter("heart.wear_uncertain").increment();
+        }
+        String abstainReason = null;
+        if (wearUncertain) {
+            abstainReason = WEAR_UNCERTAIN;
+        }
+        recordAbstain(member, batchId, runId, samples, stored, aiTargetCount, aiCalled, abstainReason,
+                serverReceivedAtMs);
         return new BatchOutcome(stored, skipped + raceSkipped, aiSkipped);
     }
 
@@ -223,10 +244,13 @@ public class HeartRateBatchService {
      * 장애다(ADR-0033 결정 2). 중복으로 건너뛴 샘플도 세지 않는다 — 이미 판정한 시각이 다시 온
      * 것이라 입력이 부족한 것이 아니다. 그래서 <b>전부 중복인 재전송 배치는 아무 행도 남기지 않는다</b>.
      * 남겼다면 재전송 횟수만큼 없던 「판정 불가」가 쌓여 사후 분석이 오염된다.
+     *
+     * <p>{@code decision_id}는 배치에서 정한다. 같은 배치를 WS와 REST가 동시에 처리하며 샘플 저장이 나뉘면 두 요청
+     * 모두 이 행을 만들려 하는데, 두 번째는 UK 충돌로 끝난다(LLD-0126 5.2).
      */
     private void recordAbstain(
             Member member, String batchId, String runId, List<HeartRateBatchRequest.Sample> samples,
-            int assessableCount, int aiTargetCount, boolean aiCalled, long serverReceivedAtMs) {
+            int assessableCount, int aiTargetCount, boolean aiCalled, String reason, long serverReceivedAtMs) {
         if (runId == null || assessableCount == 0 || aiTargetCount > 0 || aiCalled) {
             return;
         }
@@ -234,7 +258,7 @@ public class HeartRateBatchService {
         long firstTsMs = sorted.get(0).tsMs();
         long lastTsMs = sorted.get(sorted.size() - 1).tsMs();
         save(DecisionRecord.builder()
-                .decisionId(newDecisionId())
+                .decisionId(abstainDecisionId(batchId))
                 .memberId(member.getId())
                 .runId(runId)
                 .streamIdsUsed(streamIds(batchId))
@@ -248,18 +272,28 @@ public class HeartRateBatchService {
                 .windowStartMs(firstTsMs)
                 .windowEndMs(lastTsMs)
                 .triggerBatchId(batchId)
+                .reason(reason)
                 .build(), member.getId(), batchId);
     }
 
     /**
      * 배치 단위 판정 보류만 이 길로 저장한다. 짝이 될 심박 이벤트도 알림도 없어 묶을 트랜잭션이
      * 없으므로 자기 트랜잭션(REQUIRES_NEW)에서 끝낸다. 실패해도 심박 저장을 막지 않는다.
+     * 같은 {@code decision_id}가 이미 있으면 동시 재전송이 먼저 남긴 것이라 실패로 보지 않는다.
      */
     private void save(DecisionRecord record, Long memberId, String batchId) {
         try {
             DecisionRecord saved = decisionRecordPersistenceService.save(record);
             log.info("심박 판정 기록: memberId={}, decisionId={}, output={}, batchId={}",
                     memberId, saved.getDecisionId(), saved.getDecisionOutput(), batchId);
+        } catch (DataIntegrityViolationException e) {
+            if (!violatesDecisionIdUk(e)) {
+                log.warn("심박 판정 기록 실패: memberId={}, batchId={}, errorType={}",
+                        memberId, batchId, e.getClass().getSimpleName());
+                return;
+            }
+            log.info("심박 판정 기록 중복: memberId={}, decisionId={}, batchId={}",
+                    memberId, record.getDecisionId(), batchId);
         } catch (Exception e) {
             log.warn("심박 판정 기록 실패: memberId={}, batchId={}, errorType={}",
                     memberId, batchId, e.getClass().getSimpleName());
@@ -268,6 +302,41 @@ public class HeartRateBatchService {
 
     private String newDecisionId() {
         return "dec-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /** 배치당 한 줄이라 배치에서 정한다. {@code batch_id}는 26자라 33자로 컬럼 40자 안이다. */
+    private String abstainDecisionId(String batchId) {
+        return "dec-ab-" + batchId;
+    }
+
+    /**
+     * 제약 이름은 Hibernate가 DB 메시지에서 뽑은 값이라 DB마다 모양이 달라 포함 여부로 본다
+     * ({@link HeartEventConflict}와 같은 방식).
+     */
+    private boolean violatesDecisionIdUk(Throwable error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof ConstraintViolationException violation
+                    && violation.getConstraintName() != null
+                    && violation.getConstraintName().toLowerCase(Locale.ROOT).contains(DECISION_ID_UK)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 착용이 확실하지 않으면 그 배치는 판정하지 않는다(LLD-0126 5.1). 착용 상태가 없으면(워치 #110 전)
+     * {@code on_body}만 본다.
+     */
+    private boolean isWearUncertain(Boolean onBody, String wearState) {
+        // 설정이 빠졌으면 판정 행 조립처럼 심박 저장을 막지 않고 게이트를 끈 것으로 본다.
+        if (sensorProperties.heartAi() == null || !sensorProperties.heartAi().wearGateEnabled()) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(onBody)) {
+            return true;
+        }
+        return wearState != null && UNCERTAIN_WEAR_STATES.contains(wearState);
     }
 
     /** {@code batch_id}는 수신 검증이 소문자 ULID 26자로 좁혀 두므로 JSON 이스케이프할 문자가 없다. */

@@ -104,7 +104,7 @@ class RunExportAssemblerTest {
 
         // then
         List<JsonNode> decisions = readLines(workDir.resolve("decisions.jsonl"));
-        assertThat(decisions).hasSize(3);
+        assertThat(decisions).hasSize(4);
         assertThat(decisions.get(0).get("decision_id").asText()).isEqualTo("dec-01");
         assertThat(decisions.get(0).get("stream_ids_used")).containsExactly(
                 MAPPER.getNodeFactory().textNode("01j8zimu000000000000000001"));
@@ -135,6 +135,23 @@ class RunExportAssemblerTest {
         // 낙상 행에는 붙이지 않는다. 심박 값이 없는 판정은 근거로 내보낼 것이 없다(LLD-0053 3절).
         assertThat(decisions.get(0).has("evidence")).isFalse();
         assertThat(decisions.get(1).has("evidence")).isFalse();
+    }
+
+    @Test
+    @DisplayName("착용이 불확실해 판단하지 않은 심박 줄은 evidence에 사유만 붙는다")
+    void 착용이_불확실해_판단하지_않은_심박_줄은_evidence에_사유만_붙는다() throws IOException {
+        // given
+        CollectionRun run = givenSyntheticRun();
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        JsonNode evidence = readLines(workDir.resolve("decisions.jsonl")).get(3).get("evidence");
+        assertThat(evidence.get("reason").asText()).isEqualTo("WEAR_UNCERTAIN");
+        assertThat(evidence.has("hr_bpm")).isFalse();
+        assertThat(evidence.has("hr_measured_at_ms")).isFalse();
+        assertThat(evidence.has("hr_accuracy")).isFalse();
     }
 
     @Test
@@ -535,7 +552,26 @@ class RunExportAssemblerTest {
                 .reason("연속 3회 임계 초과")
                 .build();
 
-        return List.of(alert, abstain, heartAlert);
+        // 착용이 불확실해 판단하지 않은 심박 배치(LLD-0126). 심박 값 없이 사유만 있다.
+        DecisionRecord heartWearAbstain = DecisionRecord.builder()
+                .decisionId("dec-ab-01j8zhr0000000000000001011")
+                .memberId(RunExportFixture.MEMBER_ID)
+                .runId(RUN_ID)
+                .streamIdsUsed("[\"01j8zhr0000000000000001011\"]")
+                .decisionAtMs(STARTED_AT_MS + 40_400L)
+                .decisionOutput("ABSTAIN_INSUFFICIENT_INPUT")
+                .deciderId("widyu-server")
+                .deciderVersion("abstain-v1")
+                .inputCutoffMs(STARTED_AT_MS + 40_300L)
+                .featureSupportEndMs(STARTED_AT_MS + 40_000L)
+                .modelAvailableAtServerMaxMs(STARTED_AT_MS + 40_300L)
+                .windowStartMs(STARTED_AT_MS + 39_000L)
+                .windowEndMs(STARTED_AT_MS + 40_000L)
+                .triggerBatchId("01j8zhr0000000000000001011")
+                .reason("WEAR_UNCERTAIN")
+                .build();
+
+        return List.of(alert, abstain, heartAlert, heartWearAbstain);
     }
 
     /** 본인이 답하고 닫힌 사건 하나, 무응답 뒤 보호자가 위급으로 판정한 사건 하나(LLD-0054 7절). */

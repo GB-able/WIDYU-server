@@ -821,7 +821,7 @@ class SensorBatchServiceTest {
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
         given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
-        given(heartRateBatchService.storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong()))
+        given(heartRateBatchService.storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
                 .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
         byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
 
@@ -835,7 +835,7 @@ class SensorBatchServiceTest {
         // 인덱스 행이 먼저 생기면 샘플 저장 실패 시 재전송이 DUPLICATE로 막힌다(ADR-0031 결정 4).
         InOrder inOrder = inOrder(s3Service, heartRateBatchService, sensorBatchRepository);
         inOrder.verify(s3Service).uploadBytes(anyString(), any(), anyString());
-        inOrder.verify(heartRateBatchService).storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong());
+        inOrder.verify(heartRateBatchService).storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong());
         inOrder.verify(sensorBatchRepository).save(any(SensorBatch.class));
 
         SensorBatch saved = savedBatch();
@@ -867,7 +867,7 @@ class SensorBatchServiceTest {
         // given
         givenMemberExists();
         given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
-        given(heartRateBatchService.storeAndAssess(any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong()))
+        given(heartRateBatchService.storeAndAssess(any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
                 .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
         String withWearState = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES)
                 .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"WORN_INVALID\"");
@@ -893,7 +893,7 @@ class SensorBatchServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
-        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -954,7 +954,7 @@ class SensorBatchServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
-        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -1030,7 +1030,7 @@ class SensorBatchServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", expected);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
         then(sensorBatchRepository).should(never()).save(any());
-        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     private void givenMemberExists() {
