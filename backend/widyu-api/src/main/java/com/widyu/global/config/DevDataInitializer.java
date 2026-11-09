@@ -2,6 +2,7 @@ package com.widyu.global.config;
 
 import com.widyu.album.Album;
 import com.widyu.album.repository.AlbumRepository;
+import com.widyu.global.entity.Status;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
@@ -211,13 +212,22 @@ public class DevDataInitializer implements CommandLineRunner {
         morningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1));
         morningCategory.addMedicine(MedicineScheduleDetail.create(medicine2, 2));
         morning.addCategory(morningCategory);
-        medicineScheduleRepository.save(morning);
+        saveUnlessTimeTaken(morning);
 
         MedicineSchedule evening = MedicineSchedule.create(senior, LocalTime.of(20, 0));
         MedicineCategory eveningCategory = MedicineCategory.create("저녁");
         eveningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1));
         evening.addCategory(eveningCategory);
-        medicineScheduleRepository.save(evening);
+        saveUnlessTimeTaken(evening);
+    }
+
+    // 샘플을 다시 채울 때 같은 시각 알람이 이미 있으면 건너뛴다. 같은 시각 알람은 하나만 둔다(#982).
+    private void saveUnlessTimeTaken(MedicineSchedule schedule) {
+        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                schedule.getMember(), Status.ACTIVE, schedule.getAlarmTime())) {
+            return;
+        }
+        medicineScheduleRepository.save(schedule);
     }
 
     private void seedWalks(Member senior) {
