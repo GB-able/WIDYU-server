@@ -79,10 +79,6 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     // 같은 시각의 종료되지 않은 알람이 있는지. 내일부터 시작하는 알람도 포함한다 (시각 중복 판정)
     boolean existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(Member member, Status status, LocalTime alarmTime);
 
-    // 수정 대상 자신을 뺀 같은 시각의 종료되지 않은 알람이 있는지 (시각 중복 판정)
-    boolean existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNullAndIdNot(
-            Member member, Status status, LocalTime alarmTime, Long id);
-
     // 특정 날짜에 유효했던 스케줄 개수 (복약 포인트 완주 보너스 판정의 분모)
     @Query("SELECT COUNT(ms) FROM MedicineSchedule ms " +
            "WHERE ms.member = :member AND ms.status = :status " +

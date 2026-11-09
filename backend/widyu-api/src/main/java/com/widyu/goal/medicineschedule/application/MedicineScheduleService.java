@@ -220,8 +220,10 @@ public class MedicineScheduleService {
         }
 
         LocalTime alarmTime = parseAlarmTime(request.alarmTime());
-        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNullAndIdNot(
-                targetMember, Status.ACTIVE, alarmTime, scheduleId)) {
+        // 시각을 바꿀 때만 본다. 이 규칙 전에 같은 시각 알람이 둘 저장된 회원도 약만 고치거나 정리할 수 있다.
+        if (!alarmTime.equals(schedule.getAlarmTime())
+                && medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                        targetMember, Status.ACTIVE, alarmTime)) {
             throw new BusinessException(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
         }
         LocalDateTime now = LocalDateTime.now(clock);

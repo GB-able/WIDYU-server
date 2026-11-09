@@ -570,8 +570,8 @@ class MedicineScheduleServiceTest {
         MedicineSchedule existing = scheduleEffectiveFrom(scheduleId, targetMember, OPEN_ALARM, today().minusDays(5));
         given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
                 .willReturn(Optional.of(existing));
-        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNullAndIdNot(
-                targetMember, Status.ACTIVE, LocalTime.of(9, 0), scheduleId)).willReturn(true);
+        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, LocalTime.of(9, 0))).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> medicineScheduleService.updateSchedule(scheduleId, updateRequest("09:00"), memberId))
@@ -583,6 +583,33 @@ class MedicineScheduleServiceTest {
         then(medicineScheduleRepository).should(never()).save(any(MedicineSchedule.class));
         then(fcmService).shouldHaveNoInteractions();
         assertThat(targetMember.getMedicationAlarmRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("같은 시각 알람이 이미 둘 있어도 시각을 그대로 두고 약만 수정하면 허용한다")
+    void 같은_시각_알람이_이미_둘_있어도_시각을_그대로_두고_약만_수정하면_허용한다() {
+        // given: 이 규칙 전에 저장된 같은 시각 알람이 하나 더 있다
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(scheduleId, targetMember, OPEN_ALARM, today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        // 시각이 그대로면 중복을 조회하지 않는다. 조회하면 이 true 때문에 409가 나 테스트가 깨진다.
+        lenient().when(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, OPEN_ALARM)).thenReturn(true);
+        given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
+        givenProvedToday(existing, false);
+        givenSavedScheduleId(101L);
+
+        // when
+        MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
+                scheduleId, updateRequest("23:59"), memberId);
+
+        // then
+        assertThat(response.medicineScheduleId()).isEqualTo(101L);
+        assertThat(response.effectiveFromDate()).isEqualTo(today());
     }
 
     @Test
