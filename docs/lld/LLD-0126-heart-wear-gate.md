@@ -135,7 +135,9 @@ bpm, AI 응답, 판정 사유를 로그에 남기지 않는 규칙(#639)은 그�
 - `HeartRateService`에 `SensorProperties`를 주입한다.
 - LLD-0053의 3절(evidence 조건), 5.1(ABSTAIN `decision_id`·`reason`), 5.3(내보내기), 7절을 이 문서로 갱신했다고 LLD-0053에 한 줄 남긴다.
 - `backend/CLAUDE.md` heart 절에 착용 게이트를 한 줄 추가한다.
-- 운영 활성화: 앱 #109(PR #113) 실기기 확인 뒤 `SENSOR_HEART_AI_WEAR_GATE_ENABLED=true`.
+- 운영 활성화: 아래 두 조건을 모두 확인한 뒤 `SENSOR_HEART_AI_WEAR_GATE_ENABLED=true`로 켠다.
+  1. 앱 #109(PR #113)를 실기기에서 확인해, 워치를 다시 차면 서버 `on_body`가 `true`로 돌아온다.
+  2. 단건 경로 트래픽이 없다. 게이트가 켜지면 단건 심박은 `UNKNOWN`으로 저장되고 성공 응답을 받으므로, 구버전 앱이 단건으로 보내면 위급 판정과 보호자 알림이 조용히 사라진다. 단건은 WebSocket `/app/heart-rate/send-single` 하나뿐이고(REST 단건 없음) 처리량은 `heart.websocket.processing{path=single}` 타이머로 본다. 활성화 직전 일정 기간 이 값이 0인지 확인하고, 0이 아니면 그 회원의 앱을 배치 전송 버전으로 올린 뒤 켠다.
 
 ## 9. 미결정 사항 (Open Questions)
 

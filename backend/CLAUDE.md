@@ -61,7 +61,7 @@
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 - **배치 위급 판정은 `decision_record`에 한 줄 남고 그 `decision_id`가 FCM outbox 행을 타고 흘러간다**. 전송이 성공하면 그 판정의 `alert_delivered`·`alert_at_ms`가 채워진다. 단건 경로는 판정 기록을 남기지 않아 `decision_id`가 null이다 → LLD-0053
 - **로그에 bpm 값·AI 응답 본문·판정 사유를 남기지 않는다** (#639, 정책 1.6.7·완료기준 C9-6). 사유와 심박 값이 사는 곳은 판정 기록 행뿐이다
-- **착용 게이트**(`sensor.heart-ai.wear-gate-enabled`, 기본 false): 켜면 `on_body=false`이거나 `wear_state`가 `UNKNOWN`·`WORN_INVALID`·`PLANNED_NOT_WORN`·`ACTUAL_NOT_WORN`인 배치는 저장만 하고 AI를 부르지 않는다. 회차 배치는 `ABSTAIN`(`reason=WEAR_UNCERTAIN`, `decision_id=dec-ab-<batch_id>`), 단건은 착용 정보가 없어 판정하지 않고 DB 장애 때도 저하 알림 없이 예외를 낸다. 앱 #109 실기기 확인 뒤 켠다 → LLD-0126
+- **착용 게이트**(`sensor.heart-ai.wear-gate-enabled`, 기본 false): 켜면 `on_body=false`이거나 `wear_state`가 `UNKNOWN`·`WORN_INVALID`·`PLANNED_NOT_WORN`·`ACTUAL_NOT_WORN`인 배치는 저장만 하고 AI를 부르지 않는다. 회차 배치는 `ABSTAIN`(`reason=WEAR_UNCERTAIN`, `decision_id=dec-ab-<batch_id>`), 단건은 착용 정보가 없어 판정하지 않고 DB 장애 때도 저하 알림 없이 예외를 낸다. 앱 #109 실기기 확인과 단건 트래픽 0(`heart.websocket.processing{path=single}`) 확인 뒤 켠다 → LLD-0126
 
 ### `sensor` — 원시 IMU 배치 (연구 수집, v2 형식)
 - 워치·폰의 가속도·자이로 배치를 **재표본화 없이** 저장. 배치 1건 = S3 객체 1개(`sensor/{memberId}/{deviceId}/{stream}/{batch_id}-{sha256}.json`) + `sensor_batch` 인덱스 행 1개 → ADR-0030 v2, LLD-0041 v2
