@@ -713,6 +713,38 @@ class SensorBatchServiceTest {
     }
 
     @Test
+    @DisplayName("기본 수집 모드가 research면 회차 없는 research 배치는 불일치로 표시되지 않는다")
+    void 기본_수집_모드가_research면_회차_없는_research_배치는_불일치가_아니다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(BATCH_ID)).willReturn(Optional.empty());
+        String researchBatch = batch(ACC, "null")
+                .replace("\"collection_mode\": \"product\"", "\"collection_mode\": \"research\"");
+
+        // when
+        service(SensorConfigFixture.propertiesWithDefaultMode("research"))
+                .ingest(MEMBER_ID, researchBatch.getBytes(UTF_8));
+
+        // then
+        assertThat(savedBatch().getConfigMismatch()).isFalse();
+    }
+
+    @Test
+    @DisplayName("기본 수집 모드가 research면 회차 없는 product 배치는 불일치로 표시된다")
+    void 기본_수집_모드가_research면_회차_없는_product_배치는_불일치다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(BATCH_ID)).willReturn(Optional.empty());
+
+        // when
+        service(SensorConfigFixture.propertiesWithDefaultMode("research"))
+                .ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+
+        // then
+        assertThat(savedBatch().getConfigMismatch()).isTrue();
+    }
+
+    @Test
     @DisplayName("표본율이 지시값과 다르면 불일치로 표시하되 배치는 저장한다")
     void 표본율이_지시값과_다르면_불일치로_표시하되_배치는_저장한다() {
         // given
@@ -1002,6 +1034,10 @@ class SensorBatchServiceTest {
     }
 
     private SensorBatchService service() {
+        return service(SensorConfigFixture.properties());
+    }
+
+    private SensorBatchService service(com.widyu.global.properties.SensorProperties properties) {
         return new SensorBatchService(
                 sensorBatchRepository,
                 clockMappingService,
@@ -1011,7 +1047,7 @@ class SensorBatchServiceTest {
                 memberRepository,
                 s3Service,
                 VALIDATOR,
-                SensorConfigFixture.properties(),
+                properties,
                 new ObjectMapper(),
                 sensorDroppedRangeService);
     }

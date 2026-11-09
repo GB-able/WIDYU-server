@@ -1,8 +1,10 @@
 package com.widyu.sensor.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.run.application.CollectionRunService;
 import com.widyu.sensor.dto.response.SensorConfigResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +45,41 @@ class SensorConfigServiceTest {
 
         // then
         assertThat(response.collectionMode()).isEqualTo("product");
+    }
+
+    @Test
+    @DisplayName("기본 수집 모드를 research로 두면 열린 회차가 없어도 수집 모드가 research다")
+    void 기본_수집_모드를_research로_두면_열린_회차가_없어도_research다() {
+        // given
+        given(collectionRunService.hasOpenRun(MEMBER_ID)).willReturn(false);
+        SensorConfigService service = new SensorConfigService(
+                SensorConfigFixture.propertiesWithDefaultMode("research"), collectionRunService);
+
+        // when
+        SensorConfigResponse response = service.currentConfig(MEMBER_ID);
+
+        // then
+        assertThat(response.collectionMode()).isEqualTo("research");
+    }
+
+    @Test
+    @DisplayName("기본 수집 모드가 비어 있으면 product로 본다")
+    void 기본_수집_모드가_비어_있으면_product로_본다() {
+        // when
+        SensorProperties.Config config = new SensorProperties.Config(
+                "continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60, null);
+
+        // then
+        assertThat(config.defaultCollectionMode()).isEqualTo("product");
+    }
+
+    @Test
+    @DisplayName("기본 수집 모드가 product나 research가 아니면 설정을 만들 때 예외가 발생한다")
+    void 기본_수집_모드가_허용값이_아니면_예외가_발생한다() {
+        // when & then
+        assertThatThrownBy(() -> new SensorProperties.Config(
+                "continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60, "experiment"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
