@@ -1,9 +1,9 @@
 package com.widyu.goal.medicineschedule.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import com.widyu.global.entity.Status;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.medicineschedule.dto.response.MedicationAlarmSyncResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
@@ -36,23 +36,21 @@ class MedicationAlarmSyncServiceTest {
     @InjectMocks private MedicationAlarmSyncService medicationAlarmSyncService;
 
     @Test
-    @DisplayName("오늘 스케줄과 완료 키를 revision 및 Asia/Seoul 기준으로 반환한다")
-    void 오늘_스케줄과_완료_키를_반환한다() {
-        // given
+    @DisplayName("스냅샷을 조회하면 오늘 이후 유효한 스케줄을 유효 기간과 함께 revision 및 Asia/Seoul 기준으로 반환한다")
+    void 스냅샷을_조회하면_오늘_이후_유효한_스케줄을_유효_기간과_함께_반환한다() {
+        // given: 오늘까지만 유효한 08시와 내일 시작하는 20시
         Member member = org.mockito.Mockito.mock(Member.class);
-        MedicineSchedule schedule = MedicineSchedule.create(member, LocalTime.of(19, 27));
-        MedicineCategory category = MedicineCategory.create("저녁약");
-        category.addMedicine(MedicineScheduleDetail.create(org.mockito.Mockito.mock(Medicine.class), 2));
-        schedule.addCategory(category);
-        ReflectionTestUtils.setField(schedule, "id", 15L);
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        MedicineSchedule endsToday = schedule(member, 15L, LocalTime.of(8, 0), 1, today.minusDays(5));
+        endsToday.closeAsOf(today);
+        MedicineSchedule startsTomorrow = schedule(member, 21L, LocalTime.of(20, 0), 2, today.plusDays(1));
 
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getId()).willReturn(1L);
         given(member.getMedicationAlarmRevision()).willReturn(42L);
-        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any()))
-                .willReturn(List.of(schedule));
-        given(medicationProofRepository.findVerifiedScheduleIdsByMemberAndDate(any(), any()))
+        given(medicineScheduleRepository.findEffectiveFromDateByMemberWithDetails(member, Status.ACTIVE, today))
+                .willReturn(List.of(endsToday, startsTomorrow));
+        given(medicationProofRepository.findVerifiedScheduleIdsByMemberAndDate(1L, today))
                 .willReturn(List.of(15L));
 
         // when
@@ -61,7 +59,19 @@ class MedicationAlarmSyncServiceTest {
         // then
         assertThat(response.revision()).isEqualTo(42L);
         assertThat(response.timeZone()).isEqualTo("Asia/Seoul");
-        assertThat(response.schedules()).containsExactly(new MedicationAlarmSyncResponse.Schedule(15L, "19:27", 2));
+        assertThat(response.schedules()).containsExactly(
+                new MedicationAlarmSyncResponse.Schedule(15L, "08:00", 1, today.minusDays(5), today),
+                new MedicationAlarmSyncResponse.Schedule(21L, "20:00", 2, today.plusDays(1), null));
         assertThat(response.completed()).containsExactly("15:" + today);
+    }
+
+    private static MedicineSchedule schedule(Member member, Long id, LocalTime alarmTime, int doseCount,
+                                             LocalDate effectiveFrom) {
+        MedicineSchedule schedule = MedicineSchedule.create(member, alarmTime, effectiveFrom);
+        MedicineCategory category = MedicineCategory.create("약");
+        category.addMedicine(MedicineScheduleDetail.create(org.mockito.Mockito.mock(Medicine.class), doseCount));
+        schedule.addCategory(category);
+        ReflectionTestUtils.setField(schedule, "id", id);
+        return schedule;
     }
 }

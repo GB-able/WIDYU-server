@@ -38,7 +38,12 @@ public interface MedicineScheduleDocs {
     @Operation(
             summary = "복약 알람 스냅샷 조회",
             description = """
-                    앱이 OS 로컬 알람을 동기화하기 위한 본인의 오늘 복약 스케줄과 인증 완료 정보를 조회합니다.
+                    앱이 OS 로컬 알람을 동기화하기 위한 본인의 복약 스케줄과 인증 완료 정보를 조회합니다.
+
+                    `schedules`는 오늘 이후 하루라도 유효한 스케줄 버전입니다. 오늘까지만 유효한 버전(오늘 인증이 끝난 뒤
+                    지우거나 시각을 바꾼 알람)과 내일부터 시작하는 버전이 함께 들어갑니다.
+                    앱은 날짜마다 `effectiveFrom ≤ 날짜 ≤ effectiveTo`인 스케줄만 로컬 알람으로 거세요.
+                    `effectiveTo`가 null이면 끝나는 날이 없습니다. 날짜는 `timeZone` 기준입니다.
 
                     `revision`은 복약 스케줄 또는 오늘 복용 인증이 바뀔 때 증가합니다.
                     FCM data에 `revision`이 있고 앱이 가진 값과 다르거나, 앱이 포그라운드가 될 때 이 API를 호출하세요.
@@ -62,8 +67,12 @@ public interface MedicineScheduleDocs {
                                               "data": {
                                                 "revision": 42,
                                                 "timeZone": "Asia/Seoul",
-                                                "schedules": [{"scheduleId": 15, "alarmTime": "19:27", "doseCount": 2}],
-                                                "completed": ["15:2026-09-16"]
+                                                "schedules": [
+                                                  {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
+                                                  {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2, "effectiveFrom": "2026-10-15", "effectiveTo": null},
+                                                  {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2, "effectiveFrom": "2026-11-10", "effectiveTo": null}
+                                                ],
+                                                "completed": ["15:2026-11-09"]
                                               }
                                             }
                                             """

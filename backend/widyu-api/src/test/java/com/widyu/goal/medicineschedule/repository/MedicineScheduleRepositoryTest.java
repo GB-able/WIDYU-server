@@ -145,6 +145,32 @@ class MedicineScheduleRepositoryTest {
     }
 
     @Test
+    @DisplayName("알람 동기화용으로 조회하면 오늘까지 유효한 버전과 내일 시작하는 버전을 함께 반환한다")
+    void 알람_동기화용으로_조회하면_오늘까지_유효한_버전과_내일_시작하는_버전을_함께_반환한다() {
+        // given: 오늘 인증이 끝난 뒤 08시를 지우고, 12시를 20시로 바꾸고, 07시를 새로 추가한 상태
+        Member member = persistSenior("01077778888");
+        LocalDate today = LocalDate.of(2026, 11, 9);
+        persistSchedule(member, LocalTime.of(6, 0), today.minusDays(5), today.minusDays(1));
+        MedicineSchedule deletedAfterDone = persistSchedule(
+                member, LocalTime.of(8, 0), today.minusDays(5), today);
+        MedicineSchedule oldTime = persistSchedule(member, LocalTime.of(12, 0), today.minusDays(5), today);
+        MedicineSchedule newTime = persistSchedule(member, LocalTime.of(20, 0), today.plusDays(1), null);
+        MedicineSchedule addedForTomorrow = persistSchedule(member, LocalTime.of(7, 0), today.plusDays(1), null);
+        MedicineSchedule unchanged = persistSchedule(member, LocalTime.of(19, 27), today.minusDays(5), null);
+        persistSchedule(member, LocalTime.of(9, 0), today.plusDays(1), today);
+        persistSchedule(persistSenior("01099990000"), LocalTime.of(10, 0), today.minusDays(5), null);
+
+        // when
+        List<MedicineSchedule> schedules = medicineScheduleRepository.findEffectiveFromDateByMemberWithDetails(
+                member, Status.ACTIVE, today);
+
+        // then: 어제 끝난 06시, 시작 전에 취소된 09시, 다른 회원 일정은 빠진다
+        assertThat(schedules).extracting(MedicineSchedule::getId).containsExactly(
+                addedForTomorrow.getId(), deletedAfterDone.getId(), oldTime.getId(),
+                unchanged.getId(), newTime.getId());
+    }
+
+    @Test
     @DisplayName("월 범위와 겹치는 스케줄 버전만 조회한다")
     void 월_범위와_겹치는_스케줄_버전만_조회한다() {
         // given
