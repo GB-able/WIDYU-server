@@ -153,6 +153,13 @@ public class MedicineScheduleService {
     @Transactional
     public MedicineScheduleIdResponse createSchedule(CreateMedicineScheduleRequest request, Long memberId) {
         Member targetMember = getMemberForAlarmChange(memberId);
+        LocalTime alarmTime = parseAlarmTime(request.alarmTime());
+        // 회원 행 잠금 뒤에 확인하므로 같은 시각 동시 생성도 하나만 남는다.
+        // 개수 상한보다 먼저 봐서, 알람이 6개여도 같은 시각이면 더 구체적인 409를 돌려준다.
+        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, alarmTime)) {
+            throw new BusinessException(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+        }
         // 회원 행 잠금 뒤에 세므로 동시에 생성해도 상한을 넘지 않는다.
         if (medicineScheduleRepository.countByMemberAndStatusAndEffectiveToIsNull(targetMember, Status.ACTIVE)
                 >= MAX_ALARMS_PER_MEMBER) {
@@ -161,12 +168,6 @@ public class MedicineScheduleService {
         }
         LocalDateTime now = LocalDateTime.now(clock);
 
-        LocalTime alarmTime = parseAlarmTime(request.alarmTime());
-        // 개수 검사와 같이 회원 행 잠금 뒤에 확인하므로 같은 시각 동시 생성도 하나만 남는다.
-        if (medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
-                targetMember, Status.ACTIVE, alarmTime)) {
-            throw new BusinessException(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
-        }
         // 오늘 인증 가능 시간이 이미 끝난 시각이면 오늘은 건너뛰고 내일부터 울린다.
         LocalDate effectiveFromDate = now.toLocalDate();
         if (isProofWindowClosed(alarmTime, now)) {

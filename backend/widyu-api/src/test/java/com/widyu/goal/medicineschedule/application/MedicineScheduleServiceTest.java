@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.never;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
@@ -525,8 +526,6 @@ class MedicineScheduleServiceTest {
         Long memberId = 1L;
         Member targetMember = seniorWithId(memberId);
         given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
-        given(medicineScheduleRepository.countByMemberAndStatusAndEffectiveToIsNull(targetMember, Status.ACTIVE))
-                .willReturn(1L);
         given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
                 targetMember, Status.ACTIVE, LocalTime.of(23, 59))).willReturn(true);
 
@@ -538,6 +537,26 @@ class MedicineScheduleServiceTest {
         then(medicineScheduleRepository).should(never()).save(any(MedicineSchedule.class));
         then(fcmService).shouldHaveNoInteractions();
         assertThat(targetMember.getMedicationAlarmRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("알람이 6개여도 같은 시각이면 개수 초과 400이 아니라 중복 409로 거부한다")
+    void 알람이_6개여도_같은_시각이면_중복_409로_거부한다() {
+        // given
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        // 중복 검사가 먼저면 개수는 조회되지 않는다. 순서가 뒤집히면 이 6개 때문에 400이 나가 테스트가 깨진다.
+        lenient().when(medicineScheduleRepository.countByMemberAndStatusAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE)).thenReturn(6L);
+        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, LocalTime.of(23, 59))).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.createSchedule(createRequest("23:59"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
     }
 
     @Test
