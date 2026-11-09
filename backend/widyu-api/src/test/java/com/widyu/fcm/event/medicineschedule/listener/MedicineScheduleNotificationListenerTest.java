@@ -200,6 +200,10 @@ class MedicineScheduleNotificationListenerTest {
                 .isEqualTo(NotificationType.MEDICATION_PROOF_MISSING);
         assertThat(guardianCaptor.getValue().title())
                 .isEqualTo("김할머니 님의 약 복용 인증이 아직 확인되지 않았어요.");
+        // 시니어 인증 푸시는 인증 마감(알람 + 30분)에 버린다. 보호자 알림은 마감 뒤라 상한이 없다(LLD-0127).
+        assertThat(seniorMessages).extracting(FcmSendDto::pushExpiresAt)
+                .containsOnly(date.atTime(8, 30));
+        assertThat(guardianCaptor.getValue().pushExpiresAt()).isNull();
     }
 
     @Test
