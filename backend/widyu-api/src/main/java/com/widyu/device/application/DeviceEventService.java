@@ -6,6 +6,9 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import com.widyu.device.DeviceEvent;
 import com.widyu.device.dto.request.DeviceEventRequest;
 import com.widyu.device.dto.response.DeviceEventResponse;
@@ -67,6 +70,14 @@ public class DeviceEventService {
         // 모르는 필드는 거절하지 않는다. 원문이 그대로 남아 손실이 없다(ADR-0030 v2 결정 3).
         this.payloadMapper = objectMapper.copy()
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        // 타입이 틀린 값(kind: 123, occurred_at_ms: "1") 을 바꿔 읽지 않고 그 항목만 거절한다(LLD-0129 3절).
+        this.payloadMapper.coercionConfigFor(LogicalType.Textual)
+                .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+                .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail);
+        this.payloadMapper.coercionConfigFor(LogicalType.Integer)
+                .setCoercion(CoercionInputShape.String, CoercionAction.Fail)
+                .setCoercion(CoercionInputShape.Float, CoercionAction.Fail);
     }
 
     public List<DeviceEventResponse> ingest(Long memberId, byte[] payload) {

@@ -216,6 +216,27 @@ class DeviceEventServiceTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"event_id\":\"evt-1\",\"device_id\":\"gw-3f2a\",\"source\":\"watch\",\"kind\":123,\"occurred_at_ms\":1}",
+            "{\"event_id\":\"evt-1\",\"device_id\":\"gw-3f2a\",\"source\":\"watch\",\"kind\":true,\"occurred_at_ms\":1}",
+            "{\"event_id\":\"evt-1\",\"device_id\":\"gw-3f2a\",\"source\":1.5,\"kind\":\"SCREEN_ON\",\"occurred_at_ms\":1}",
+            "{\"event_id\":\"evt-1\",\"device_id\":\"gw-3f2a\",\"source\":\"watch\",\"kind\":\"SCREEN_ON\",\"occurred_at_ms\":\"1\"}",
+            "{\"event_id\":\"evt-1\",\"device_id\":\"gw-3f2a\",\"source\":\"watch\",\"kind\":\"SCREEN_ON\",\"occurred_at_ms\":1.7}"
+    })
+    @DisplayName("필드 타입이 틀리면 바꿔 읽지 않고 그 항목을 REJECTED로 돌려준다")
+    void 필드_타입이_틀리면_REJECTED를_반환한다(String item) {
+        // given
+        given(memberRepository.existsById(MEMBER_ID)).willReturn(true);
+
+        // when
+        List<DeviceEventResponse> responses = service().ingest(MEMBER_ID, batch(item));
+
+        // then
+        assertThat(responses).containsExactly(DeviceEventResponse.of(null, DeviceEventResult.REJECTED));
+        then(deviceEventRepository).should(never()).save(any(DeviceEvent.class));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"{\"event_id\":\"evt-1\"}", "[]", "[{\"event_id\":\"evt-1\"}", "[{}] []", "not json"})
     @DisplayName("본문이 배열이 아니거나 비었거나 문법이 깨졌으면 DEVICE_EVENT_BATCH_INVALID 예외가 발생한다")
     void 본문이_배열이_아니거나_비었으면_예외가_발생한다(String body) {
