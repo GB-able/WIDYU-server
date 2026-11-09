@@ -4,6 +4,7 @@ import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.NotificationType;
 import lombok.Builder;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,7 +31,12 @@ public record FcmSendDto(
         String centerTitle,
         String centerBody,
         String seniorDisplayName,
-        Integer remainingLockedCount
+        Integer remainingLockedCount,
+        /**
+         * 푸시를 버릴 시각의 상한. 이 시각이 지나면 보내지 않고 FCM 보관도 이 시각까지다. null이면 일반·위급 TTL만 쓴다.
+         * 복약 인증 푸시처럼 시간이 지나면 내용이 틀려지는 알림에 준다(LLD-0127).
+         */
+        LocalDateTime pushExpiresAt
 ) {
     public FcmSendDto {
         if (data == null) {
@@ -45,7 +51,7 @@ public record FcmSendDto(
     public FcmSendDto(String title, String content, FcmCategory category, String scheme, String image,
             boolean emergency, Long relatedMemberId, Map<String, String> data, String decisionId) {
         this(title, content, category, scheme, image, emergency, relatedMemberId, data, decisionId,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public static FcmSendDto from(FcmOutbox row, Map<String, String> restoredData) {
@@ -139,24 +145,24 @@ public record FcmSendDto(
     public FcmSendDto withRelatedMember(Long memberId) {
         return new FcmSendDto(title, content, fcmCategory, scheme, image, emergency, memberId, data, decisionId,
                 notificationType, eventId, deepLink, entityId, seniorId, actorDisplayName, effectiveFromDate, groupKey,
-                centerTitle, centerBody, seniorDisplayName, remainingLockedCount);
+                centerTitle, centerBody, seniorDisplayName, remainingLockedCount, pushExpiresAt);
     }
 
     public FcmSendDto withData(Map<String, String> newData) {
         return new FcmSendDto(title, content, fcmCategory, scheme, image, emergency, relatedMemberId, newData, decisionId,
                 notificationType, eventId, deepLink, entityId, seniorId, actorDisplayName, effectiveFromDate, groupKey,
-                centerTitle, centerBody, seniorDisplayName, remainingLockedCount);
+                centerTitle, centerBody, seniorDisplayName, remainingLockedCount, pushExpiresAt);
     }
 
     public FcmSendDto withCenterCopy(NotificationCopy copy) {
         return new FcmSendDto(title, content, fcmCategory, scheme, image, emergency, relatedMemberId, data, decisionId,
                 notificationType, eventId, deepLink, entityId, seniorId, actorDisplayName, effectiveFromDate, groupKey,
-                copy.title(), copy.body(), seniorDisplayName, remainingLockedCount);
+                copy.title(), copy.body(), seniorDisplayName, remainingLockedCount, pushExpiresAt);
     }
 
     public FcmSendDto withSeniorUnlockDetails(String displayName, Integer count) {
         return new FcmSendDto(title, content, fcmCategory, scheme, image, emergency, relatedMemberId, data, decisionId,
                 notificationType, eventId, deepLink, entityId, seniorId, actorDisplayName, effectiveFromDate, groupKey,
-                centerTitle, centerBody, displayName, count);
+                centerTitle, centerBody, displayName, count, pushExpiresAt);
     }
 }

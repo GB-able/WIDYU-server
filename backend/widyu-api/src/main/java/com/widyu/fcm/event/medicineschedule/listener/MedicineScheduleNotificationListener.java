@@ -8,6 +8,7 @@ import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.global.entity.Status;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.goal.medicineschedule.application.MedicationAlarmPayload;
+import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.member.FamilyMembership;
@@ -78,11 +79,11 @@ public class MedicineScheduleNotificationListener {
             if (verifiedScheduleIds.contains(schedule.getId())) {
                 continue;
             }
-            sendLegacyOnTimeNotification(schedule);
+            sendLegacyOnTimeNotification(schedule, dueAt);
         }
     }
 
-    private void sendLegacyOnTimeNotification(MedicineSchedule schedule) {
+    private void sendLegacyOnTimeNotification(MedicineSchedule schedule, LocalDateTime dueAt) {
         Long seniorId = schedule.getMember().getId();
         FcmSendDto dto = FcmSendDto.builder()
                 .title("약 복용 시간이에요!")
@@ -90,6 +91,7 @@ public class MedicineScheduleNotificationListener {
                 .fcmCategory(FcmCategory.MEDICINE_SCHEDULE)
                 .scheme("").image(schedule.getMember().getProfileImage())
                 .data(MedicationAlarmPayload.of(schedule.getMember().getMedicationAlarmRevision()))
+                .pushExpiresAt(proofDeadline(dueAt))
                 .build();
 
         fcmService.sendMessageToUser(seniorId, dto);
@@ -118,7 +120,7 @@ public class MedicineScheduleNotificationListener {
         // 인증되지 않은 스케줄만 알림 발송
         for (MedicineSchedule schedule : schedules) {
             if (!verifiedScheduleIds.contains(schedule.getId())) {
-                sendMedicineNotification(schedule, date, type);
+                sendMedicineNotification(schedule, dueAt, type);
             }
         }
     }
@@ -148,7 +150,8 @@ public class MedicineScheduleNotificationListener {
         }
     }
 
-    private void sendMedicineNotification(MedicineSchedule schedule, LocalDate date, NotificationType type) {
+    private void sendMedicineNotification(MedicineSchedule schedule, LocalDateTime dueAt, NotificationType type) {
+        LocalDate date = dueAt.toLocalDate();
         Long seniorId = schedule.getMember().getId();
         NotificationCopy copy = NotificationCopy.of(type, type.copyCode(), Map.of());
         FcmSendDto dto = FcmSendDto.builder()
@@ -157,6 +160,7 @@ public class MedicineScheduleNotificationListener {
                 .notificationType(type).entityId(schedule.getId().toString())
                 .eventId(timedEventId(type, schedule.getId(), seniorId, date))
                 .data(MedicationAlarmPayload.of(schedule.getMember().getMedicationAlarmRevision(), type))
+                .pushExpiresAt(proofDeadline(dueAt))
                 .build();
 
         fcmService.sendMessageToUser(seniorId, dto);
@@ -211,6 +215,14 @@ public class MedicineScheduleNotificationListener {
                     seniorMemberId, guardianId,
                     schedule.getId(), schedule.getAlarmTime());
         }
+    }
+
+    /**
+     * 인증 마감(알람 + 30분). 시니어 인증 푸시는 이 시각이 지나면 내용이 틀려지므로 여기서 버린다(LLD-0127).
+     * 폰이 꺼져 있어도 FCM이 이 시각까지만 보관한다.
+     */
+    private LocalDateTime proofDeadline(LocalDateTime dueAt) {
+        return dueAt.plusMinutes(MedicationStatus.ALLOWED_WINDOW_MINUTES);
     }
 
     private String timedEventId(NotificationType type, Long scheduleId, Long recipientId, LocalDate date) {
