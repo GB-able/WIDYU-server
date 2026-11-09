@@ -119,9 +119,11 @@ class DeployLifecycleTest(unittest.TestCase):
         self.assertFalse(any("up" in cmd and cmd[-1] == "widyu-api" for cmd in commands))
 
     def test_health_failure_never_announces_restart(self):
-        result, events, _ = self.run_deployment(FAKE_HTTP_FAIL="1")
+        result, events, commands = self.run_deployment(FAKE_HTTP_FAIL="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events, ["WIDYU_DEPLOY_EVENT=app_stopped"])
+        self.assertEqual(self.removed_images(commands), [])
+        self.assertNotIn(["docker", "image", "prune", "-f"], commands)
 
     def test_rollback_is_reported_but_deployment_still_fails(self):
         result, events, commands = self.run_deployment(FAKE_START_FAIL="new")
@@ -167,6 +169,7 @@ class DeployLifecycleTest(unittest.TestCase):
         result, _, commands = self.run_deployment(FAKE_IMAGES=images, FAKE_START_FAIL="new")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.removed_images(commands), [])
+        self.assertNotIn(["docker", "image", "prune", "-f"], commands)
 
 
 class ForwardEventsTest(unittest.TestCase):
