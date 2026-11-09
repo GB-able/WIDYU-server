@@ -3,6 +3,7 @@ package com.widyu.sensor.application;
 import com.widyu.device.DeviceHeartbeat;
 import com.widyu.location.raw.LocationFix;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorDroppedRange;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import java.time.Instant;
@@ -29,6 +30,8 @@ final class SensorWindowCsv {
             "session_id", "seq", "measured_start_ms", "measured_end_ms", "acc_n", "gyro_n", "sample_count",
             "on_body", "wear_state", "missing_reason", "watch_battery_pct", "quality_status", "collection_mode",
             "gyro_mode", "trigger_kind", "server_received_at_ms");
+    static final String DROPPED_HEADER = line("phase", "ts_kst", "ts_ms", "session_id", "from_seq", "to_seq",
+            "reason", "server_received_at_ms");
     static final String HEARTBEAT_HEADER = line("phase", "ts_kst", "ts_ms", "device_id", "watch_device_id",
             "watch_connected", "watch_on_body", "watch_battery_pct", "phone_battery_pct", "phone_charging",
             "socket_connected", "last_hr_ts_ms", "last_imu_ts_ms", "location_permission", "background_restricted",
@@ -79,6 +82,13 @@ final class SensorWindowCsv {
                 heartbeat.getLastHrTsMs(), heartbeat.getLastImuTsMs(), heartbeat.getLocationPermission(),
                 heartbeat.getBackgroundRestricted(), heartbeat.getPhoneQueueDepth(), heartbeat.getWatchQueueDepth(),
                 heartbeat.getPhoneAppVer(), heartbeat.getWatchAppVer(), heartbeat.getPhoneOs());
+    }
+
+    /** 워치가 버린 묶음 번호 구간(양 끝 포함). phase·시각은 워치가 버린 시각 기준이다(LLD-0124). */
+    static String dropped(SensorDroppedRange range, Window window) {
+        long ts = range.getTsMs();
+        return line(window.phase(ts), kst(ts), ts, range.getSessionId(), range.getFromSeq(), range.getToSeq(),
+                range.getReason(), range.getServerReceivedAtMs());
     }
 
     /** 묶음의 phase·시각은 측정 시작 기준이다. 구간과 겹치는 묶음만 들어오므로 시작이 구간 앞일 수 있다. */

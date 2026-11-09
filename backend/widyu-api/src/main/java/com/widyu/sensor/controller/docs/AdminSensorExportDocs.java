@@ -30,6 +30,7 @@ public interface AdminSensorExportDocs {
                     - `imu.csv`: 가속도(`mg`)·자이로(`mrad_s`) 표본마다 한 줄. 기기 시계를 epoch ms로 환산
                     - `sensor_batches.csv`: 구간과 겹치는 센서 묶음 목록(착용·배터리·품질)
                     - `device_heartbeat.csv`: 기기 상태(워치 연결·착용·배터리, 폰 배터리)
+                    - `dropped_ranges.csv`: 워치 대기열이 넘쳐 버린 묶음 번호 구간과 사유(워치가 버린 시각 기준)
                     - `summary.csv`: 요청 조건, 파일별 행 수, 원문이 손상돼 건너뛴 묶음(`skipped_batch`)
 
                     관리자 접속기록에 관리자·대상 회원이 남습니다.
