@@ -2,6 +2,7 @@ package com.widyu.sensor.controller;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.global.util.SecurityUtil;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.application.SensorBatchService;
 import com.widyu.sensor.controller.docs.SensorBatchDocs;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
@@ -28,7 +29,7 @@ public class SensorBatchController implements SensorBatchDocs {
     @PostMapping(value = "/batches", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponseTemplate<SensorBatchResultResponse> ingestBatch(@RequestBody byte[] payload) {
         SensorBatchResultResponse response =
-                sensorBatchService.ingest(securityUtil.getCurrentMemberId(), payload);
+                sensorBatchService.ingest(securityUtil.getCurrentMemberId(), payload, SensorIngestChannel.REST);
         return ApiResponseTemplate.ok()
                 .code("200")
                 .message("센서 배치를 저장했습니다.")

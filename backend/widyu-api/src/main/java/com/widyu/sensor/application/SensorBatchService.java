@@ -18,11 +18,14 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.application.CollectionRunService;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorBatchRejection;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import com.widyu.sensor.repository.SensorBatchRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.io.IOException;
@@ -78,6 +81,13 @@ public class SensorBatchService {
     private static final int MAX_RUN_ID_LENGTH = 64;
     private static final Pattern BATCH_ID_PATTERN = Pattern.compile("^[a-z0-9]{26}$");
     private static final Pattern SESSION_ID_PATTERN = Pattern.compile("^[a-z0-9._-]{1,64}$");
+    /** 거절 기록에 남길 stream 이름. 목록 밖 값도 남겨 옛 앱이 보낸 이름을 찾는다(LLD-0128 4.3). */
+    private static final Pattern STREAM_NAME_PATTERN = Pattern.compile("^[a-z0-9_]{1,20}$");
+    /** 수신 시도 카운터(LLD-0128 3.2). 태그 키는 channel·stream·result로 고정한다. */
+    public static final String RECEIVED_METRIC = "sensor.batch.received";
+    public static final String UNKNOWN_STREAM = "unknown";
+    private static final String RESULT_REJECTED = "REJECTED";
+    private static final String RESULT_FAILED = "FAILED";
 
     private final SensorBatchRepository sensorBatchRepository;
     private final ClockMappingService clockMappingService;
@@ -90,6 +100,8 @@ public class SensorBatchService {
     private final SensorProperties sensorProperties;
     private final ObjectMapper payloadMapper;
     private final SensorDroppedRangeService sensorDroppedRangeService;
+    private final SensorBatchRejectionRecorder rejectionRecorder;
+    private final MeterRegistry meterRegistry;
 
     public SensorBatchService(
             SensorBatchRepository sensorBatchRepository,
@@ -102,7 +114,9 @@ public class SensorBatchService {
             Validator validator,
             SensorProperties sensorProperties,
             ObjectMapper objectMapper,
-            SensorDroppedRangeService sensorDroppedRangeService
+            SensorDroppedRangeService sensorDroppedRangeService,
+            SensorBatchRejectionRecorder rejectionRecorder,
+            MeterRegistry meterRegistry
     ) {
         this.sensorBatchRepository = sensorBatchRepository;
         this.clockMappingService = clockMappingService;
@@ -114,6 +128,8 @@ public class SensorBatchService {
         this.validator = validator;
         this.sensorProperties = sensorProperties;
         this.sensorDroppedRangeService = sensorDroppedRangeService;
+        this.rejectionRecorder = rejectionRecorder;
+        this.meterRegistry = meterRegistry;
         // 나노초 필드는 64비트 정밀도를 지키려고 JSON 문자열로 받는다. Jackson 기본값은 number를
         // String 필드에 조용히 넣어주므로, 문자열 대상 강제 변환을 꺼서 number면 파싱이 실패하게 한다(검사기 A3).
         this.payloadMapper = objectMapper.copy()
@@ -124,37 +140,143 @@ public class SensorBatchService {
                 .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail);
     }
 
-    public SensorBatchResultResponse ingest(Long memberId, byte[] payload) {
-        return ingest(memberId, payload, System.currentTimeMillis());
+    public SensorBatchResultResponse ingest(Long memberId, byte[] payload, SensorIngestChannel channel) {
+        return ingest(memberId, payload, System.currentTimeMillis(), channel);
     }
 
     /**
      * WebSocket 경로는 수신 스레드에서 잡은 수신 시각을 넘긴다. 실행기 대기 시간이 server_received에
      * 섞이면 수신 시각이 실제보다 늦어진다(정책 1.1.5, LLD-0091).
+     *
+     * <p>수신 시도마다 경로·자료 종류·결과로 한 번 센다. 서비스 안 거절은 거절 기록을 남기고, S3·DB 일시 실패는
+     * 앱이 다시 보내야 하므로 거절로 바꾸지 않는다(LLD-0128 5.1).
      */
-    public SensorBatchResultResponse ingest(Long memberId, byte[] payload, long serverReceivedAtMs) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+    public SensorBatchResultResponse ingest(
+            Long memberId, byte[] payload, long serverReceivedAtMs, SensorIngestChannel channel) {
+        JsonNode root = null;
+        try {
+            Member member = memberRepository.findById(memberId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
-        if (payload.length > sensorProperties.maxPayloadBytes()) {
-            throw new BusinessException(ErrorCode.SENSOR_BATCH_TOO_LARGE);
+            if (payload.length > sensorProperties.maxPayloadBytes()) {
+                throw new BusinessException(ErrorCode.SENSOR_BATCH_TOO_LARGE);
+            }
+
+            // 심박과 IMU가 같은 endpoint로 온다(ADR-0031 결정 1). stream만 먼저 읽어 DTO를 고른다.
+            root = readTree(payload);
+            SensorBatchResultResponse response =
+                    route(member, memberId, payload, root, serverReceivedAtMs, channel);
+            countReceived(meterRegistry, channel, streamTag(root), response.result().name());
+            return response;
+        } catch (BusinessException e) {
+            if (isTransient(e)) {
+                countReceived(meterRegistry, channel, streamTag(root), RESULT_FAILED);
+                throw e;
+            }
+            countReceived(meterRegistry, channel, streamTag(root), RESULT_REJECTED);
+            recordRejection(memberId, root, e, channel, serverReceivedAtMs);
+            throw e;
+        } catch (RuntimeException e) {
+            countReceived(meterRegistry, channel, streamTag(root), RESULT_FAILED);
+            throw e;
         }
+    }
 
-        // 심박과 IMU가 같은 endpoint로 온다(ADR-0031 결정 1). stream만 먼저 읽어 DTO를 고른다.
-        JsonNode root = readTree(payload);
+    /**
+     * 재전송으로 복구되는 일시 실패. WebSocket은 이 경우 {@code REJECTED} ACK 대신 오류 큐로 보내 앱이 다시 보내게 한다.
+     * DB 일시 실패는 {@code BusinessException}이 아니라 여기 오지 않는다.
+     */
+    public static boolean isTransient(BusinessException e) {
+        return ErrorCode.FILE_UPLOAD_FAILED.equals(e.getErrorCode());
+    }
+
+    /** 태그 키를 한곳에서 정한다. 같은 이름에 다른 키 집합을 등록하면 Prometheus 등록기가 한쪽을 버린다. */
+    public static void countReceived(
+            MeterRegistry meterRegistry, SensorIngestChannel channel, String stream, String result) {
+        meterRegistry.counter(RECEIVED_METRIC, "channel", channel.name(), "stream", stream, "result", result)
+                .increment();
+    }
+
+    private SensorBatchResultResponse route(Member member, Long memberId, byte[] payload, JsonNode root,
+                                            long serverReceivedAtMs, SensorIngestChannel channel) {
         String stream = streamOf(root);
         if (STREAM_HR.equals(stream)) {
-            return ingestHeartRate(member, memberId, payload, root, serverReceivedAtMs);
+            return ingestHeartRate(member, memberId, payload, root, serverReceivedAtMs, channel);
         }
         // 워치 IMU 큐가 넘쳐 버린 구간 기록. 배치가 아니라 결측 근거라 따로 저장한다(LLD-0124).
         if (STREAM_IMU_DROPPED.equals(stream)) {
             return sensorDroppedRangeService.record(memberId, payload, root, serverReceivedAtMs);
         }
-        return ingestImu(member, memberId, payload, root, serverReceivedAtMs);
+        return ingestImu(member, memberId, payload, root, serverReceivedAtMs, channel);
     }
 
-    private SensorBatchResultResponse ingestImu(
-            Member member, Long memberId, byte[] payload, JsonNode root, long serverReceivedAtMs) {
+    /** 카운터 태그는 값 종류가 고정돼야 하므로 허용 stream만 그대로 쓰고 나머지는 unknown이다. */
+    private String streamTag(JsonNode root) {
+        if (root == null) {
+            return UNKNOWN_STREAM;
+        }
+        JsonNode stream = root.get("stream");
+        if (stream == null || !stream.isTextual()) {
+            return UNKNOWN_STREAM;
+        }
+        String value = stream.asText();
+        if (STREAM_HR.equals(value) || STREAM_WATCH.equals(value) || STREAM_PHONE.equals(value)
+                || STREAM_IMU_DROPPED.equals(value)) {
+            return value;
+        }
+        return UNKNOWN_STREAM;
+    }
+
+    /**
+     * 거절 기록은 별도 빈의 자기 트랜잭션이다. 기록 실패는 그 호출 바깥인 여기서 잡아 원래 거절 오류를 지킨다
+     * (LLD-0128 5.2). 원문과 센서 값은 남기지 않는다.
+     */
+    private void recordRejection(Long memberId, JsonNode root, BusinessException cause,
+                                 SensorIngestChannel channel, long serverReceivedAtMs) {
+        String errorCode = cause.getErrorCode().getCode();
+        try {
+            rejectionRecorder.record(SensorBatchRejection.builder()
+                    .memberId(memberId)
+                    .deviceId(textMatching(root, "device_id", SESSION_ID_PATTERN))
+                    .stream(textMatching(root, "stream", STREAM_NAME_PATTERN))
+                    .batchId(textMatching(root, "batch_id", BATCH_ID_PATTERN))
+                    .sessionId(textMatching(root, "session_id", SESSION_ID_PATTERN))
+                    .seq(seqOf(root))
+                    .errorCode(errorCode)
+                    .ingestChannel(channel)
+                    .receivedAtMs(serverReceivedAtMs)
+                    .build());
+        } catch (RuntimeException e) {
+            log.warn("센서 배치 거절 기록 실패: memberId={}, code={}, errorType={}",
+                    memberId, errorCode, e.getClass().getSimpleName());
+        }
+    }
+
+    /** 수신 검증과 같은 형식일 때만 값을 돌려준다. 거절된 본문이라 형식을 믿을 수 없다. */
+    private static String textMatching(JsonNode root, String field, Pattern pattern) {
+        if (root == null) {
+            return null;
+        }
+        JsonNode node = root.get(field);
+        if (node == null || !node.isTextual() || !pattern.matcher(node.asText()).matches()) {
+            return null;
+        }
+        return node.asText();
+    }
+
+    private static Long seqOf(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        JsonNode seq = root.get("seq");
+        if (seq == null || !seq.isIntegralNumber() || !seq.canConvertToLong()) {
+            return null;
+        }
+        return seq.asLong();
+    }
+
+    private SensorBatchResultResponse ingestImu(Member member, Long memberId, byte[] payload, JsonNode root,
+                                                long serverReceivedAtMs, SensorIngestChannel channel) {
         SensorBatchRequest request = treeToValue(root, SensorBatchRequest.class);
         ValidatedBatch validatedBatch = validate(request, root);
         long acceptedAtMs = System.currentTimeMillis();
@@ -182,7 +304,8 @@ public class SensorBatchService {
         long persistedAtMs = System.currentTimeMillis();
         try {
             SensorBatch savedBatch = toEntity(member, request, payload, payloadSha256, objectKey,
-                    attribution, configMismatch, serverReceivedAtMs, acceptedAtMs, persistedAtMs, validatedBatch);
+                    attribution, configMismatch, serverReceivedAtMs, acceptedAtMs, persistedAtMs, validatedBatch,
+                    channel);
             sensorBatchRepository.save(savedBatch);
             assessImpact(savedBatch);
         } catch (DataIntegrityViolationException e) {
@@ -567,7 +690,8 @@ public class SensorBatchService {
             long serverReceivedAtMs,
             long acceptedAtMs,
             long persistedAtMs,
-            ValidatedBatch validatedBatch
+            ValidatedBatch validatedBatch,
+            SensorIngestChannel channel
     ) {
         SensorBatchRequest.Clock clock = request.clock();
         long anchorElapsedNs = parseElapsedNs(clock.anchorElapsedNs());
@@ -610,7 +734,8 @@ public class SensorBatchService {
                 .s3Key(objectKey)
                 .byteSize(payload.length)
                 .payloadSha256(payloadSha256)
-                .configMismatch(configMismatch);
+                .configMismatch(configMismatch)
+                .ingestChannel(channel);
 
         // gyro가 null이면 축 컬럼도 null로 둔다. 0으로 채우면 정지 상태로 읽힌다(검사기 D1).
         if (request.acc() != null) {
@@ -650,8 +775,8 @@ public class SensorBatchService {
 
     // ── 심박 배치(LLD-0047) ──────────────────────────────────────────────
 
-    private SensorBatchResultResponse ingestHeartRate(
-            Member member, Long memberId, byte[] payload, JsonNode root, long serverReceivedAtMs) {
+    private SensorBatchResultResponse ingestHeartRate(Member member, Long memberId, byte[] payload, JsonNode root,
+                                                      long serverReceivedAtMs, SensorIngestChannel channel) {
         HeartRateBatchRequest request = treeToValue(root, HeartRateBatchRequest.class);
         validateHeartRate(request);
         long acceptedAtMs = System.currentTimeMillis();
@@ -688,7 +813,7 @@ public class SensorBatchService {
 
         long persistedAtMs = System.currentTimeMillis();
         SensorBatch batch = heartRateEntity(member, request, payload, payloadSha256, objectKey, attribution,
-                measuredAtStartMs, measuredAtEndMs, serverReceivedAtMs, acceptedAtMs, persistedAtMs);
+                measuredAtStartMs, measuredAtEndMs, serverReceivedAtMs, acceptedAtMs, persistedAtMs, channel);
         try {
             sensorBatchRepository.save(batch);
         } catch (DataIntegrityViolationException e) {
@@ -775,7 +900,8 @@ public class SensorBatchService {
             long measuredAtEndMs,
             long serverReceivedAtMs,
             long acceptedAtMs,
-            long persistedAtMs
+            long persistedAtMs,
+            SensorIngestChannel channel
     ) {
         SensorBatchRequest.Clock clock = request.clock();
         SensorBatch.SensorBatchBuilder builder = SensorBatch.builder()
@@ -812,7 +938,8 @@ public class SensorBatchService {
                 .configMismatch(false)
                 .s3Key(objectKey)
                 .byteSize(payload.length)
-                .payloadSha256(payloadSha256);
+                .payloadSha256(payloadSha256)
+                .ingestChannel(channel);
         applyResend(builder, request.resend());
         return builder.build();
     }

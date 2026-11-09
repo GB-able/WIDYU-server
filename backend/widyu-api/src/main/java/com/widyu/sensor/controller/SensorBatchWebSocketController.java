@@ -7,9 +7,11 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.global.websocket.WebSocketWorkDispatcher;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.application.SensorBatchService;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,7 @@ public class SensorBatchWebSocketController {
     private final WebSocketWorkDispatcher workDispatcher;
     private final TaskExecutor websocketSensorExecutor;
     private final SensorProperties sensorProperties;
+    private final MeterRegistry meterRegistry;
 
     @MessageMapping("/sensor/batches/send")
     public void ingestBatch(
@@ -55,6 +58,9 @@ public class SensorBatchWebSocketController {
 
         if (payload.length > sensorProperties.maxPayloadBytes()) {
             // 대기열에 넣기 전에 거절해 센서 대기열 메모리 상한(본문 상한 × 칸 수, LLD-0091)을 지킨다(LLD-0122).
+            // 서비스 밖 거절이라 이번 단계에서는 거절 기록 없이 카운터와 로그로만 남긴다(LLD-0128 5.3).
+            SensorBatchService.countReceived(meterRegistry, SensorIngestChannel.WS,
+                    SensorBatchService.UNKNOWN_STREAM, SensorBatchResult.REJECTED.name());
             workDispatcher.sendToSession(memberId.toString(), sessionId, ACK_DESTINATION,
                     rejected(memberId, payload, new BusinessException(ErrorCode.SENSOR_BATCH_TOO_LARGE)));
             return;
@@ -70,9 +76,9 @@ public class SensorBatchWebSocketController {
      */
     public SensorBatchResultResponse process(Long memberId, byte[] payload, long serverReceivedAtMs) {
         try {
-            return sensorBatchService.ingest(memberId, payload, serverReceivedAtMs);
+            return sensorBatchService.ingest(memberId, payload, serverReceivedAtMs, SensorIngestChannel.WS);
         } catch (BusinessException e) {
-            if (ErrorCode.FILE_UPLOAD_FAILED.equals(e.getErrorCode())) {
+            if (SensorBatchService.isTransient(e)) {
                 // S3 실패는 재전송으로 복구된다. ACK 없이 /user/queue/errors로 보낸다.
                 throw e;
             }
