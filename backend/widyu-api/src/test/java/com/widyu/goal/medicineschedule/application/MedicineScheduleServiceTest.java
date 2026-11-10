@@ -24,6 +24,7 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyRespons
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse.ScheduleItem;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleChangeResponse;
+import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDetailResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineHomeResponse;
 import com.widyu.goal.medicineschedule.dto.request.CreateMedicineScheduleRequest;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
@@ -456,6 +457,39 @@ class MedicineScheduleServiceTest {
                 .isEqualTo(today().toString());
         assertThat(messages.getAllValues().get(1).notificationType())
                 .isEqualTo(NotificationType.MEDICATION_SCHEDULE_SYNC);
+    }
+
+    @Test
+    @DisplayName("2.5정과 1정으로 알람을 생성하면 복용량을 자르지 않고 저장해 상세 조회에 2.5정과 총 3.5정을 반환한다")
+    void 반_알약_복용량으로_알람을_생성하면_그대로_저장한다() {
+        // given
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        Member actor = Member.createMember(MemberType.GUARDIAN, "방장", "01099998888");
+        given(memberUtil.getCurrentMember()).willReturn(actor);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
+        given(medicineRepository.findByItemName("비타민")).willReturn(Optional.of(mock(Medicine.class)));
+        givenSavedScheduleId(1L);
+        CreateMedicineScheduleRequest request = new CreateMedicineScheduleRequest(
+                "23:59",
+                List.of(new CreateMedicineScheduleRequest.CategoryItem(
+                        "아침약",
+                        List.of(new CreateMedicineScheduleRequest.MedicineItem("타이레놀", 2.5, null, null, null),
+                                new CreateMedicineScheduleRequest.MedicineItem("비타민", 1.0, null, null, null)))));
+
+        // when
+        medicineScheduleService.createSchedule(request, memberId);
+
+        // then
+        ArgumentCaptor<MedicineSchedule> scheduleCaptor = ArgumentCaptor.forClass(MedicineSchedule.class);
+        then(medicineScheduleRepository).should().save(scheduleCaptor.capture());
+        MedicineScheduleDetailResponse detail = MedicineScheduleDetailResponse.from(scheduleCaptor.getValue());
+        assertThat(detail.categories().getFirst().medicines())
+                .extracting(MedicineScheduleDetailResponse.MedicineItem::dose)
+                .containsExactly(2.5, 1.0);
+        assertThat(detail.categories().getFirst().countSum()).isEqualTo(3.5);
+        assertThat(detail.totalCount()).isEqualTo(3.5);
     }
 
     @Test

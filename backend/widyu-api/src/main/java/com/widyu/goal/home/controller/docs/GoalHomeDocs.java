@@ -110,13 +110,13 @@ public interface GoalHomeDocs {
                                                   "medicineScheduleId": 1,
                                                   "takenCount": 2,
                                                   "totalCount": 3,
-                                                  "nextDoseCount": 4,
+                                                  "nextDoseCount": 4.0,
                                                   "nextAlarmTime": "17:00",
                                                   "proofImageUrl": "https://www.widyu.shop/img",
                                                   "scheduleStatuses": [
-                                                    { "medicineScheduleId": 3, "doseTime": "08:00", "doseCount": 1, "taken": true, "proofImageUrl": "https://www.widyu.shop/img" },
-                                                    { "medicineScheduleId": 2, "doseTime": "12:30", "doseCount": 1, "taken": true, "proofImageUrl": "https://www.widyu.shop/img2" },
-                                                    { "medicineScheduleId": 1, "doseTime": "17:00", "doseCount": 4, "taken": false, "proofImageUrl": null }
+                                                    { "medicineScheduleId": 3, "doseTime": "08:00", "doseCount": 1.0, "taken": true, "proofImageUrl": "https://www.widyu.shop/img" },
+                                                    { "medicineScheduleId": 2, "doseTime": "12:30", "doseCount": 1.0, "taken": true, "proofImageUrl": "https://www.widyu.shop/img2" },
+                                                    { "medicineScheduleId": 1, "doseTime": "17:00", "doseCount": 4.0, "taken": false, "proofImageUrl": null }
                                                   ]
                                                 },
                                                 "steps": {
@@ -294,8 +294,8 @@ public interface GoalHomeDocs {
                                               "message": "보호자 목표 홈 조회 성공",
                                               "data": {
                                                 "medicine": {
-                                                  "totalCount": 6,
-                                                  "takenCount": 1,
+                                                  "totalCount": 6.0,
+                                                  "takenCount": 1.0,
                                                   "medicineSchedules": [
                                                     {
                                                       "medicineScheduleId": 101,
@@ -305,7 +305,7 @@ public interface GoalHomeDocs {
                                                       "medicines": [
                                                         {
                                                           "name": "위염약",
-                                                          "count": 5
+                                                          "count": 5.0
                                                         }
                                                       ]
                                                     }

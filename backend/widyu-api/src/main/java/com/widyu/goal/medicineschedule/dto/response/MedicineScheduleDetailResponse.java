@@ -18,7 +18,7 @@ public record MedicineScheduleDetailResponse(
 
         return new MedicineScheduleDetailResponse(
                 schedule.getAlarmTime().toString(),
-                schedule.getTotalCount().doubleValue(),
+                schedule.getTotalCount(),
                 categories
         );
     }
@@ -37,7 +37,7 @@ public record MedicineScheduleDetailResponse(
             return new CategoryItem(
                     category.getId(),
                     category.getName(),
-                    category.getCountSum().doubleValue(),
+                    category.getCountSum(),
                     medicines
             );
         }
@@ -54,7 +54,7 @@ public record MedicineScheduleDetailResponse(
             return new MedicineItem(
                     detail.getMedicine().getId(),
                     detail.getMedicine().getName(),
-                    detail.getDose().doubleValue(),
+                    detail.getDose(),
                     detail.getMedicine().getImageUrl(),
                     detail.getMedicine().getDescription()
             );

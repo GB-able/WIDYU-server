@@ -57,9 +57,9 @@ public class MedicineCategory extends BaseTimeEntity {
         detail.setMedicineCategory(this);
     }
 
-    public Integer getCountSum() {
+    public Double getCountSum() {
         return medicines.stream()
-                .mapToInt(MedicineScheduleDetail::getDose)
+                .mapToDouble(MedicineScheduleDetail::getDose)
                 .sum();
     }
 

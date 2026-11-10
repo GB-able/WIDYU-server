@@ -124,9 +124,9 @@ public class MedicineSchedule extends BaseTimeEntity {
         return LocalDate.MIN;
     }
 
-    public Integer getTotalCount() {
+    public Double getTotalCount() {
         return categories.stream()
-                .mapToInt(MedicineCategory::getCountSum)
+                .mapToDouble(MedicineCategory::getCountSum)
                 .sum();
     }
 }

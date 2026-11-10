@@ -521,9 +521,9 @@ class GoalHomeServiceTest {
                         SeniorGoalHomeResponse.ScheduleStatus::taken,
                         SeniorGoalHomeResponse.ScheduleStatus::proofImageUrl)
                 .containsExactly(
-                        tuple(1L, "10:40", 1, true, "https://cdn.widyu.shop/morning.jpg"),
-                        tuple(2L, "10:45", 1, false, null),
-                        tuple(3L, "23:00", 2, false, null));
+                        tuple(1L, "10:40", 1.0, true, "https://cdn.widyu.shop/morning.jpg"),
+                        tuple(2L, "10:45", 1.0, false, null),
+                        tuple(3L, "23:00", 2.0, false, null));
         assertThat(response.medicine().takenCount()).isEqualTo(1);
         assertThat(response.medicine().totalCount()).isEqualTo(3);
     }
@@ -595,6 +595,30 @@ class GoalHomeServiceTest {
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();
         assertThat(response.hospital()).isNull();
+    }
+
+    @Test
+    @DisplayName("반 알약이 섞인 일정을 조회하면 보호자 목표 홈의 약 개수 합계를 0.5 단위까지 반환한다")
+    void 반_알약이_섞인_일정의_약_개수_합계를_잘라내지_않는다() {
+        // given: 2.5정 일정은 인증했고 1정 일정은 아직 인증하지 않았다
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = dosedSchedule(senior, 1L, LocalTime.of(8, 0), 2.5);
+        MedicineSchedule night = dosedSchedule(senior, 2L, LocalTime.of(20, 0), 1.0);
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning, night));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/m.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().totalCount()).isEqualTo(3.5);
+        assertThat(response.medicine().takenCount()).isEqualTo(2.5);
+        assertThat(response.medicine().medicineSchedules().getFirst().medicines().getFirst().count())
+                .isEqualTo(2.5);
     }
 
     @Test
@@ -684,7 +708,7 @@ class GoalHomeServiceTest {
         return schedule;
     }
 
-    private MedicineSchedule dosedSchedule(Member member, Long id, LocalTime alarmTime, int dose) {
+    private MedicineSchedule dosedSchedule(Member member, Long id, LocalTime alarmTime, double dose) {
         MedicineSchedule schedule = alarmSchedule(member, id, alarmTime);
         MedicineCategory category = MedicineCategory.create("식후");
         category.addMedicine(MedicineScheduleDetail.create(mock(Medicine.class), dose));

@@ -60,12 +60,12 @@ class MedicationAlarmSyncServiceTest {
         assertThat(response.revision()).isEqualTo(42L);
         assertThat(response.timeZone()).isEqualTo("Asia/Seoul");
         assertThat(response.schedules()).containsExactly(
-                new MedicationAlarmSyncResponse.Schedule(15L, "08:00", 1, today.minusDays(5), today),
-                new MedicationAlarmSyncResponse.Schedule(21L, "20:00", 2, today.plusDays(1), null));
+                new MedicationAlarmSyncResponse.Schedule(15L, "08:00", 1.0, today.minusDays(5), today),
+                new MedicationAlarmSyncResponse.Schedule(21L, "20:00", 2.0, today.plusDays(1), null));
         assertThat(response.completed()).containsExactly("15:" + today);
     }
 
-    private static MedicineSchedule schedule(Member member, Long id, LocalTime alarmTime, int doseCount,
+    private static MedicineSchedule schedule(Member member, Long id, LocalTime alarmTime, double doseCount,
                                              LocalDate effectiveFrom) {
         MedicineSchedule schedule = MedicineSchedule.create(member, alarmTime, effectiveFrom);
         MedicineCategory category = MedicineCategory.create("약");

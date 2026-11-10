@@ -1,5 +1,6 @@
 package com.widyu.goal.medicineschedule.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -155,6 +156,44 @@ class MedicineScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.scheduleRevision").value(9))
                 .andExpect(jsonPath("$.data.effectiveFromDate").value("2026-10-02"));
+    }
+
+    @Test
+    @DisplayName("복용량이 0.5 단위가 아니면 복약 일정 등록·수정을 400으로 거절한다")
+    void 복용량이_0_5_단위가_아니면_400을_반환한다() throws Exception {
+        // given
+        String body = REQUEST_BODY.replace("\"dose\":1", "\"dose\":0.3");
+        MockMvc mvc = mockMvc();
+
+        // when / then
+        mvc.perform(post(BASE_PATH).param("memberId", "10").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put(BASE_PATH + "/100").param("memberId", "10").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        then(medicineScheduleService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("복용량이 2.5정이면 복약 일정 등록 요청을 서비스에 그대로 넘긴다")
+    void 복용량이_2_5정이면_등록_요청을_그대로_넘긴다() throws Exception {
+        // given
+        Member guardian = org.mockito.Mockito.mock(Member.class);
+        given(guardian.getType()).willReturn(MemberType.GUARDIAN);
+        given(guardian.getId()).willReturn(20L);
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(medicineScheduleService.createSchedule(any(CreateMedicineScheduleRequest.class), eq(10L)))
+                .willReturn(MedicineScheduleIdResponse.of(100L, 7, LocalDate.of(2026, 10, 2)));
+        String body = REQUEST_BODY.replace("\"dose\":1", "\"dose\":2.5");
+
+        // when
+        mockMvc().perform(post(BASE_PATH).param("memberId", "10").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+
+        // then
+        org.mockito.ArgumentCaptor<CreateMedicineScheduleRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(CreateMedicineScheduleRequest.class);
+        then(medicineScheduleService).should().createSchedule(captor.capture(), eq(10L));
+        assertThat(captor.getValue().categories().getFirst().medicines().getFirst().dose()).isEqualTo(2.5);
     }
 
     @Test

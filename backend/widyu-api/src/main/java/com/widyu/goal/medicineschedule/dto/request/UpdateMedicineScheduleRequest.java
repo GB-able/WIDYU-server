@@ -1,5 +1,6 @@
 package com.widyu.goal.medicineschedule.dto.request;
 
+import com.widyu.goal.medicineschedule.validator.HalfStepDose;
 import com.widyu.goal.medicineschedule.validator.TimeFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -34,6 +35,7 @@ public record UpdateMedicineScheduleRequest(
 
             @NotNull(message = "복용량은 필수입니다.")
             @Positive(message = "복용량은 양수여야 합니다.")
+            @HalfStepDose
             Double dose,
 
             String itemImage,
