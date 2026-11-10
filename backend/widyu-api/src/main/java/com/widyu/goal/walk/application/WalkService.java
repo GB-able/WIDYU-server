@@ -6,6 +6,7 @@ import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.event.GuardianGoalChangedEvent;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
+import com.widyu.goal.validator.GoalMonthValidator;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.application.SeniorProfileService;
@@ -46,8 +47,8 @@ public class WalkService {
     private final ApplicationEventPublisher eventPublisher;
 
     public WalkMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {
+        YearMonth requestedMonth = GoalMonthValidator.validate(year, month, true);
         Member targetMember = getMember(memberId);
-        YearMonth requestedMonth = YearMonth.of(year, month);
         YearMonth currentMonth = YearMonth.now();
 
         // Summary 계산

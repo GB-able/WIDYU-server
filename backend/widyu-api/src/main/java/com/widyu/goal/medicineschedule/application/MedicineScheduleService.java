@@ -22,7 +22,9 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.goal.validator.GoalMonthValidator;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.Medicine;
@@ -108,8 +110,10 @@ public class MedicineScheduleService {
     }
 
     public MedicineMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {
+        // 보호자 약 복용 홈은 미래 달을 열람하지 않는다(#1005)
+        boolean allowFuture = memberUtil.getCurrentMember().getType() != MemberType.GUARDIAN;
+        YearMonth requestedMonth = GoalMonthValidator.validate(year, month, allowFuture);
         Member targetMember = getMember(memberId);
-        YearMonth requestedMonth = YearMonth.of(year, month);
         YearMonth previousMonth = requestedMonth.minusMonths(1);
 
         List<Double> monthlyGoalRates = calculateMonthlyGoalRates(targetMember.getId(), requestedMonth);
