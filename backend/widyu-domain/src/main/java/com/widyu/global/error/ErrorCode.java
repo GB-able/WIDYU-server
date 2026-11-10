@@ -119,6 +119,7 @@ public enum ErrorCode {
     ALBUM_ALREADY_UNLOCKED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4001", "이미 해금된 앨범입니다."),
     ALBUM_UNLOCK_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4002", "본인의 앨범은 해금할 수 없습니다."),
     ALBUM_UNLOCK_SENIOR_ONLY(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4030", "시니어 회원만 앨범을 해금할 수 있습니다."),
+    ALBUM_LOCKED(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4031", "잠금을 해제한 뒤 이용할 수 있습니다."),
     ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
     ALBUM_UNLOCK_NOT_REQUIRED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4004", "해금이 필요하지 않은 앨범입니다."),
 

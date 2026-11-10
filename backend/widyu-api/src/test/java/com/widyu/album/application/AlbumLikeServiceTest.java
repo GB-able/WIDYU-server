@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.album.Album;
@@ -171,6 +172,26 @@ class AlbumLikeServiceTest {
         assertThatThrownBy(() -> albumLikeService.likeAlbum(1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("잠금을 해제하지 않은 앨범에 좋아요를 누르면 ALBUM_LOCKED 예외가 발생하고 좋아요가 저장되지 않는다")
+    void 잠금_전_앨범에_좋아요를_누르면_예외가_발생한다() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        Album album = mock(Album.class);
+        given(albumRepository.findByIdAndStatus(1L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
+        willThrow(new BusinessException(ErrorCode.ALBUM_LOCKED)).given(albumPermissionService)
+                .checkUnlocked(album, currentMember);
+
+        // when & then
+        assertThatThrownBy(() -> albumLikeService.likeAlbum(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
+        verify(albumLikeRepository, never()).save(any(AlbumLike.class));
+        verify(album, never()).incrementLikeCount();
     }
 
     private void allowFamilyAccess(Album album, Member member) {

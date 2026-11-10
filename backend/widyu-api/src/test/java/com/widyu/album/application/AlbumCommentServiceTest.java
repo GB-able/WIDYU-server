@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -274,6 +275,46 @@ class AlbumCommentServiceTest {
         assertThatThrownBy(() -> albumCommentService.createComment(10L, new AlbumCommentCreateRequest("댓글", null)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("잠금을 해제하지 않은 앨범에 댓글을 작성하면 ALBUM_LOCKED 예외가 발생하고 댓글이 저장되지 않는다")
+    void 잠금_전_앨범에_댓글을_작성하면_예외가_발생한다() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        Album album = mock(Album.class);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
+        willThrow(new BusinessException(ErrorCode.ALBUM_LOCKED)).given(albumPermissionService)
+                .checkUnlocked(album, currentMember);
+
+        // when & then
+        assertThatThrownBy(() -> albumCommentService.createComment(10L, new AlbumCommentCreateRequest("댓글", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
+        verify(albumCommentRepository, never()).save(any(AlbumComment.class));
+        verify(album, never()).incrementCommentCount();
+    }
+
+    @Test
+    @DisplayName("잠금을 해제하지 않은 앨범에 답글을 작성하면 ALBUM_LOCKED 예외가 발생하고 답글이 저장되지 않는다")
+    void 잠금_전_앨범에_답글을_작성하면_예외가_발생한다() {
+        // given
+        Member currentMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(currentMember);
+        Album album = mock(Album.class);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+        allowFamilyAccess(album, currentMember);
+        willThrow(new BusinessException(ErrorCode.ALBUM_LOCKED)).given(albumPermissionService)
+                .checkUnlocked(album, currentMember);
+
+        // when & then
+        assertThatThrownBy(() -> albumCommentService.createComment(10L, new AlbumCommentCreateRequest("답글", 50L)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
+        verify(albumCommentRepository, never()).save(any(AlbumComment.class));
+        verify(album, never()).incrementCommentCount();
     }
 
     private void allowFamilyAccess(Album album, Member member) {
