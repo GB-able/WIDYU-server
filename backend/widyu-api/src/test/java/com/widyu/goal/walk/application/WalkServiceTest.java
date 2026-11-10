@@ -139,7 +139,7 @@ class WalkServiceTest {
     }
 
     @Test
-    @DisplayName("현재 월을 조회하면 모든 날짜를 0걸음으로 채우고 기본 목표는 오늘부터 적용한다")
+    @DisplayName("기록 없이 현재 월을 조회하면 모든 날짜를 0걸음으로 채우고 기본 목표는 오늘부터 적용해 오늘 하루를 센다")
     void 기록이_없는_과거_날짜는_기본_목표를_소급하지_않는다() {
         // given
         Long memberId = 1L;
@@ -175,7 +175,7 @@ class WalkServiceTest {
                 assertThat(daily.goal()).isEqualTo(5000);
             }
         });
-        assertThat(response.summary().current().total()).isZero();
+        assertThat(response.summary().current().total()).isEqualTo(1);
     }
 
     @Test
@@ -391,6 +391,33 @@ class WalkServiceTest {
             assertThat(daily.actual()).isZero();
             assertThat(daily.goal()).isEqualTo(5000);
         });
+    }
+
+    @Test
+    @DisplayName("목표를 오늘 바꾼 뒤 어제 걸음 수를 처음 연동하면 어제 기록은 바꾸기 전 목표로 만든다")
+    void 목표를_바꾼_뒤_어제_걸음수를_처음_연동하면_바꾸기_전_목표로_기록한다() {
+        // given: 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(7000);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(senior, yesterday))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now(), 5000)));
+        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
+            Walk saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9L);
+            return saved;
+        });
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, yesterday));
+
+        // then
+        assertThat(response.achieved()).isTrue();
+        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
+        then(walkRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
     }
 
     @Test

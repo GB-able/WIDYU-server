@@ -381,8 +381,9 @@ public class GoalHomeService {
     }
 
     /**
-     * 기록 없는 날에도 걷기 목표가 있었다고 볼 첫 날짜. 목표를 처음 설정하는 날에는 그날 기록이 생기므로
-     * 첫 기록 날짜부터이며, 시니어 프로필이 없으면 null이다(WalkService 월별 조회와 같은 기준).
+     * 기록 없는 날에도 걷기 목표가 있었다고 볼 첫 날짜. 목표를 정하는 날에는 그날 기록이 생기므로
+     * 첫 기록 날짜부터이고, 기록이 없으면 오늘(기본 5,000보)부터다. 시니어 프로필이 없으면 null이다
+     * (WalkService 월별 조회와 같은 기준).
      */
     private LocalDate defaultWalkGoalStart(Member member) {
         if (member.getSeniorProfile() == null) {
@@ -390,7 +391,7 @@ public class GoalHomeService {
         }
         return walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
                 .map(Walk::getWalkDate)
-                .orElse(null);
+                .orElse(LocalDate.now());
     }
 
     private GuardianGoalHomeResponse.MedicineInfo getGuardianMedicineInfo(Member member, LocalDate today) {

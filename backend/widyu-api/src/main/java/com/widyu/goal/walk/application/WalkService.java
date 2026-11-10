@@ -149,7 +149,7 @@ public class WalkService {
                         Walk newWalk = Walk.createWithGoal(
                                 currentMember,
                                 syncDate,
-                                currentMember.getSeniorProfile().getDefaultWalkGoal()
+                                goalForNewRecord(currentMember, syncDate, today)
                         );
                         return walkRepository.save(newWalk);
                     }
@@ -175,6 +175,21 @@ public class WalkService {
                 currentMember.getId(), syncDate, request.steps(), achieved);
 
         return UpdateStepsResponse.of(achieved);
+    }
+
+    /**
+     * 기록이 없던 날의 목표. 지난 날은 그날 뒤 첫 기록의 목표다. 목표를 바꾸는 날에는 기존 목표로 그날 기록이
+     * 생기므로(setOrUpdateGoal) 바뀌기 전 날짜는 바뀌기 전 목표를 받는다(월별 조회의 미수신 날짜와 같은 기준).
+     * 뒤에 기록이 없거나 오늘이면 기본 목표다.
+     */
+    private Integer goalForNewRecord(Member member, LocalDate date, LocalDate today) {
+        Integer defaultGoal = member.getSeniorProfile().getDefaultWalkGoal();
+        if (!date.isBefore(today)) {
+            return defaultGoal;
+        }
+        return walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(member, date)
+                .map(Walk::getGoalSteps)
+                .orElse(defaultGoal);
     }
 
     private void validateSyncDate(LocalDate syncDate, LocalDate today) {
@@ -214,26 +229,24 @@ public class WalkService {
     }
 
     /**
-     * 걸음 기록은 없지만 걷기 목표가 있던 날(첫 기록 이후이고 기본 목표가 있음, 오늘까지)의 수.
-     * 목표를 처음 설정하는 날에는 그날 기록이 생기므로 첫 기록 날짜가 목표가 생긴 날이다(일별 데이터와 같은 기준).
+     * 걸음 기록은 없지만 걷기 목표가 있던 날(첫 기록 이후, 오늘까지)의 수.
+     * 목표를 정하는 날에는 그날 기록이 생기므로 첫 기록 날짜가 목표가 생긴 날이다(일별 데이터와 같은 기준).
+     * 기록이 하나도 없으면 오늘의 기본 목표(정한 적 없으면 5,000보)만 있다.
      */
     private long countMissingGoalDays(Member member, LocalDate startDate, LocalDate endDate) {
         if (member.getSeniorProfile() == null) {
             return 0;
         }
+        LocalDate today = LocalDate.now();
         LocalDate firstWalkDate = walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
                 .map(Walk::getWalkDate)
-                .orElse(null);
-        if (firstWalkDate == null) {
-            return 0;
-        }
+                .orElse(today);
 
         LocalDate from = startDate;
         if (firstWalkDate.isAfter(from)) {
             from = firstWalkDate;
         }
         LocalDate to = endDate;
-        LocalDate today = LocalDate.now();
         if (today.isBefore(to)) {
             to = today;
         }
