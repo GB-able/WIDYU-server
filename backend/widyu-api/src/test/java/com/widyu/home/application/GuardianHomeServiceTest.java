@@ -126,7 +126,7 @@ class GuardianHomeServiceTest {
         given(heartRateResultRepository.findByMemberId(SENIOR_ID)).willReturn(Optional.empty());
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
                 any(Member.class), any(Status.class), any(LocalDate.class))).willReturn(List.of());
-        given(albumRecommendationService.recommendAlbums(any(Member.class), any(LocalDate.class)))
+        given(albumRecommendationService.findLatestAlbums(any(Member.class)))
                 .willReturn(List.of());
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(
                 anyLong(), any(LocalDateTime.class))).willReturn(Optional.empty());
