@@ -21,6 +21,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.notification.NotificationCenterFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +52,7 @@ public class FcmService {
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
+    private final FamilyAccessService familyAccessService;
 
     // 카테고리 및 커서 기반 알림 목록 조회
     public FcmNotificationResponses getNotificationsForCurrentUser(String category, Long cursor) {
@@ -195,6 +197,9 @@ public class FcmService {
         Member sender = memberUtil.getCurrentMember();
         Member receiver = memberRepository.findById(sendNotificationRequest.receiverId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        if (!familyAccessService.getFamilyMemberIds(sender).contains(receiver.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "같은 가족에게만 응원 메시지를 보낼 수 있습니다.");
+        }
 
         // 알림 제목: "보내는사람님이 받는사람님에게 응원메시지를 보냈어요."
         String title = sender.getName() + "님이 " + receiver.getName() + "님에게 응원메시지를 보냈어요.";

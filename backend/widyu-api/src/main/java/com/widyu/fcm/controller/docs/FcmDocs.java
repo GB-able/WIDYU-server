@@ -178,7 +178,7 @@ public interface FcmDocs {
 
     @Operation(
             summary = "상대방에게 응원 알림 전송",
-            description = "특정 사용자에게 푸시 알림 발송 요청을 접수합니다. 업무 커밋 후 비동기로 발송하며, 성공 응답은 FCM 전송 완료나 기기 수신을 보장하지 않습니다. 알림 제목은 서버에서 '{보내는사람}님이 {받는사람}님에게 응원메시지를 보냈어요.' 형식으로 자동 생성됩니다. 알림 카테고리는 ETC로 자동 설정되며, 발신자의 프로필 이미지가 자동으로 포함됩니다."
+            description = "같은 가족 구성원에게 푸시 알림 발송 요청을 접수합니다. 다른 가족 회원에게는 보낼 수 없습니다(403). 업무 커밋 후 비동기로 발송하며, 성공 응답은 FCM 전송 완료나 기기 수신을 보장하지 않습니다. 알림 제목은 서버에서 '{보내는사람}님이 {받는사람}님에게 응원메시지를 보냈어요.' 형식으로 자동 생성됩니다. 알림 카테고리는 ETC로 자동 설정되며, 발신자의 프로필 이미지가 자동으로 포함됩니다."
     )
     @RequestBody(
             description = "알림 전송 요청 정보",
@@ -211,5 +211,6 @@ public interface FcmDocs {
                     )
             )
     )
+    @ApiResponse(responseCode = "403", description = "받는 사람이 보내는 사람과 같은 가족이 아님 (AUTH_4030)")
     ApiResponseTemplate<String> sendNotification(SendNotificationRequest sendNotificationRequest);
 }
