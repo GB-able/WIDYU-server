@@ -206,7 +206,7 @@ public class GuardianHomeService {
         }
 
         SeniorProfile seniorProfile = senior.getSeniorProfile();
-        if (seniorProfile != null && seniorProfile.hasDefaultWalkGoal()) {
+        if (seniorProfile != null) {
             return GuardianHomeCardsResponse.WalkInfo.withDefaultGoal(seniorProfile.getDefaultWalkGoal());
         }
 

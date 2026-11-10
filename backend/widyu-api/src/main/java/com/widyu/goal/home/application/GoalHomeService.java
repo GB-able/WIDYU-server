@@ -249,8 +249,8 @@ public class GoalHomeService {
             return SeniorGoalHomeResponse.StepsInfo.of(walk.getActualSteps(), walk.getGoalSteps());
         }
 
-        // 기본 목표가 있으면 반환
-        if (member.getSeniorProfile() != null && member.getSeniorProfile().hasDefaultWalkGoal()) {
+        // 기록이 없으면 기본 목표(정한 적 없으면 5,000보)
+        if (member.getSeniorProfile() != null) {
             return SeniorGoalHomeResponse.StepsInfo.of(0, member.getSeniorProfile().getDefaultWalkGoal());
         }
 
@@ -382,10 +382,10 @@ public class GoalHomeService {
 
     /**
      * 기록 없는 날에도 걷기 목표가 있었다고 볼 첫 날짜. 목표를 처음 설정하는 날에는 그날 기록이 생기므로
-     * 첫 기록 날짜부터이며, 기본 목표가 없으면 null이다(WalkService 월별 조회와 같은 기준).
+     * 첫 기록 날짜부터이며, 시니어 프로필이 없으면 null이다(WalkService 월별 조회와 같은 기준).
      */
     private LocalDate defaultWalkGoalStart(Member member) {
-        if (member.getSeniorProfile() == null || !member.getSeniorProfile().hasDefaultWalkGoal()) {
+        if (member.getSeniorProfile() == null) {
             return null;
         }
         return walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
@@ -463,8 +463,8 @@ public class GoalHomeService {
             return GuardianGoalHomeResponse.StepsInfo.of(walk.getActualSteps(), walk.getGoalSteps());
         }
 
-        // 기본 목표가 있으면 반환
-        if (member.getSeniorProfile() != null && member.getSeniorProfile().hasDefaultWalkGoal()) {
+        // 기록이 없으면 기본 목표(정한 적 없으면 5,000보)
+        if (member.getSeniorProfile() != null) {
             return GuardianGoalHomeResponse.StepsInfo.of(0, member.getSeniorProfile().getDefaultWalkGoal());
         }
 

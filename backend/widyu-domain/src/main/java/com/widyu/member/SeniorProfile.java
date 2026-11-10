@@ -52,6 +52,10 @@ public class SeniorProfile extends BaseTimeEntity {
     @Column(nullable = false)
     private Long version;
 
+    /** Figma 만보계 기본 목표. 목표를 한 번도 정하지 않은 어르신에게 적용한다(#1003). */
+    public static final int DEFAULT_WALK_GOAL = 5000;
+
+    // null이면 목표를 정한 적 없음. 기본값을 저장하지 않고 getDefaultWalkGoal()이 읽을 때 채운다.
     @Column(name = "default_walk_goal")
     private Integer defaultWalkGoal;
 
@@ -100,8 +104,12 @@ public class SeniorProfile extends BaseTimeEntity {
         this.defaultWalkGoal = walkGoal;
     }
 
-    public boolean hasDefaultWalkGoal() {
-        return this.defaultWalkGoal != null;
+    /** 매일 새 걸음 기록에 쓰는 목표. 정한 적 없으면 5,000보다. */
+    public Integer getDefaultWalkGoal() {
+        if (this.defaultWalkGoal == null) {
+            return DEFAULT_WALK_GOAL;
+        }
+        return this.defaultWalkGoal;
     }
 
     public void updateAddress(String address) {

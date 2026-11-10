@@ -37,9 +37,9 @@ public interface WalkDocs {
                     - goal이 null이면 그날 걷기 목표가 없었던 날, goal이 있고 actual이 0이면 목표는 있었지만 걸음 수를 받지 못한 날
                     - 기록이 없는 과거 날짜 중 회원의 첫 기록보다 앞선 날은 목표가 없던 날이므로 goal은 null
                     - 첫 기록 이후 기록이 없는 과거 날짜는 그날 다음에 오는 첫 기록의 목표(없으면 현재 기본 목표)를 반환
-                    - 기록이 없는 오늘·미래 날짜는 기본 목표를 적용하며, 미설정이면 goal은 null
+                    - 기록이 없는 오늘·미래 날짜는 기본 목표를 적용하며, 목표를 정한 적 없으면 5000
                     - summary의 achieved는 목표를 달성한 기록 수, total은 걷기 목표가 있던 날 수(오늘까지)
-                    - 걸음 기록이 없어도 첫 기록 이후이고 기본 목표가 있으면 total에 포함하며 미달성으로 계산
+                    - 걸음 기록이 없어도 첫 기록 이후면 total에 포함하며 미달성으로 계산
 
                     **Summary의 previous 계산:**
                     - 요청받은 year, month에서 -1개월
@@ -86,8 +86,9 @@ public interface WalkDocs {
 
                     **목표 처리:**
                     - 오늘 날짜에 Walk 기록이 있으면 → 실제 기록 반환
-                    - Walk 기록 없지만 기본 목표 설정됨 → 기본 목표 반환 (actual=0, point=0)
-                    - 기본 목표도 없으면 → data는 null 반환
+                    - Walk 기록이 없으면 → 기본 목표 반환 (actual=0, point=0)
+                    - 목표를 정한 적 없으면 기본 목표는 5000
+                    - 시니어 프로필이 없는 회원이면 → data는 null 반환
 
                     **권한:**
                     - memberId가 null → 본인의 걸음 기록 조회
@@ -95,7 +96,7 @@ public interface WalkDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공 (목표 없으면 data null)"),
+            @ApiResponse(responseCode = "200", description = "조회 성공 (시니어 프로필이 없으면 data null)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음 (가족 관계 아님)")
     })
@@ -112,11 +113,11 @@ public interface WalkDocs {
                     **기능:**
                     - 시니어 프로필의 기본 걷기 목표(defaultWalkGoal) 업데이트
                     - 처음 설정하든 수정하든 동일한 API 사용
-                    - 기본 목표는 매일 자동으로 적용됨
-                    - 변경 시 내일부터 새 목표가 적용됨 (오늘은 기존 기록 유지)
+                    - 기본 목표는 매일 자동으로 적용됨 (정한 적 없으면 5000)
+                    - 변경 시 내일부터 새 목표가 적용됨 (오늘은 기존 목표 유지, 처음 정할 때도 오늘은 5000)
 
                     **제약사항:**
-                    - 최대 10000보까지 설정 가능
+                    - 500보 이상 10000보 이하 (범위 밖이면 400)
 
                     **권한:**
                     - memberId가 null → 본인의 걸음 목표 설정/수정
@@ -155,7 +156,8 @@ public interface WalkDocs {
 
                     **제약사항:**
                     - date는 오늘을 포함해 최근 7일 이내여야 함 (예: 9/13 요청 시 9/7~9/13 허용)
-                    - 기본 목표도 없으면 에러 발생 (먼저 목표 설정 필요)
+                    - 목표를 정한 적 없으면 5000보 목표로 기록을 만든다
+                    - 시니어 프로필이 없는 회원이면 에러 발생
 
                     **권한:**
                     - 시니어 본인만 가능 (보호자는 연동 불가)
@@ -166,7 +168,7 @@ public interface WalkDocs {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "연동 성공 (목표 달성 여부 포함)"),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청 (목표 미설정, 허용되지 않은 연동 날짜 등)"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (시니어 프로필 없음, 허용되지 않은 연동 날짜 등)"),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<UpdateStepsResponse> syncSteps(
@@ -183,13 +185,12 @@ public interface WalkDocs {
                     - 목표를 수정한 경우, 수정된 목표(내일부터 적용될 목표)를 조회
 
                     **처리 로직:**
-                    - 처음 목표 설정 → 오늘부터 적용되므로, 이 API는 설정된 목표 반환
-                    - 목표 수정 → 오늘은 기존 목표 유지, 내일부터 새 목표 적용
+                    - 목표 설정·수정 → 오늘은 기존 목표 유지, 내일부터 새 목표 적용
                     - 수정한 목표를 바로 확인할 수 있음
 
                     **반환값:**
                     - steps: 내일부터 적용될 목표 걸음수
-                    - 기본 목표가 설정되지 않았으면 data null 반환
+                    - 목표를 정한 적 없으면 5000
 
                     **권한:**
                     - memberId가 null → 본인의 목표 조회
@@ -197,7 +198,7 @@ public interface WalkDocs {
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공 (목표 미설정 시 data null)"),
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 (시니어 프로필 없음 등)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음 (가족 관계 아님)")

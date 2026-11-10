@@ -39,7 +39,7 @@
 - 결제 트랜잭션 경계·멱등성은 → LLD-0003·0015·0016·0017, ADR-0012
 
 ### `goal` — 건강 목표
-- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`: 500~10,000보, 정한 적 없으면 읽을 때 5,000보, 바꾸면 내일부터 적용 #1003), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). 같은 시각의 종료되지 않은 알람은 하나만 둔다(생성, 시각을 바꾸는 수정 시 409 `MEDICINE_SCHEDULE_4090`, #982). → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
