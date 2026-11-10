@@ -1,7 +1,5 @@
 package com.widyu.location.access.application;
 
-import com.widyu.consent.ConsentKey;
-import com.widyu.consent.application.ConsentService;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
@@ -28,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 보호자의 위치 열람을 남기고 시니어에게 알린다(LLD-0056 5절, ADR-0036 결정 3·4).
  *
+ * <p>열람마다 바로 알린다. 위치정보법은 제3자 제공 시 매회 즉시 통보를 요구하고, 하루 한 번 묶음은
+ * 동의가 있어도 허용되지 않아 「모아서 받기」 동의는 알림 방식 결정에 쓰지 않는다(LLD-0130).
+ *
  * <p>기록은 {@code REQUIRES_NEW}로 쓴다. 위치 조회 트랜잭션이 뒤에서 무슨 일을 하든
  * 「봤다」는 사실은 남아야 하고, 반대로 기록이 깨져도 조회는 성공해야 한다. 후자는
  * 호출부가 {@code try/catch}로 지킨다 — 프록시가 커밋 시점에 던지는 예외는 이 메서드
@@ -52,7 +53,6 @@ public class LocationAccessLogService {
     private static final int DEFAULT_RANGE_DAYS = 30;
 
     private final LocationAccessLogRepository locationAccessLogRepository;
-    private final ConsentService consentService;
     private final MemberRepository memberRepository;
     private final FcmService fcmService;
     private final LocationAccessProperties locationAccessProperties;
@@ -73,17 +73,12 @@ public class LocationAccessLogService {
         memberRepository.findByIdForUpdate(seniorMemberId);
         LocationAccessLog accessLog = locationAccessLogRepository.save(
                 LocationAccessLog.of(viewerMemberId, seniorMemberId, path, now));
-
-        if (consentService.isGranted(seniorMemberId, ConsentKey.LOCATION_NOTICE_BATCHED)) {
-            // 모아서 통보에 동의했으면 다이제스트가 가져간다. notified_at은 비워 둔다.
-            return;
-        }
         notifyImmediately(accessLog, now);
     }
 
     /**
-     * 같은 보호자가 쿨다운 안에 다시 봤으면 FCM을 보내지 않고 {@code notified_at}도 비워 둔다.
-     * 비워 두어야 다음 다이제스트가 「합쳐진 건」까지 세어 알린다(LLD-0056 5.3).
+     * 같은 보호자가 쿨다운 안에 다시 봤으면 FCM을 보내지 않고 {@code notified_at}도 비워 둔다(LLD-0056 5.3).
+     * 기본 쿨다운은 0분이라 매번 보낸다(LLD-0130). 0보다 크게 두면 비워 둔 건은 서버 시작 시 요약으로만 나간다.
      */
     private void notifyImmediately(LocationAccessLog accessLog, LocalDateTime now) {
         LocalDateTime cooldownFrom = now.minusMinutes(locationAccessProperties.immediateCooldownMin());

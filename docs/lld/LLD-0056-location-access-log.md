@@ -72,6 +72,8 @@
 | `HOME_OUTING` | `GuardianHomeService`가 `getOutingStatus`를 부르는 곳 — 시니어마다 1행 |
 
 ### 5.2 통보 방식 결정
+> **2026-11-10 변경(LLD-0130):** 5.2~5.4는 더 이상 기본 동작이 아니다. 동의와 관계없이 열람마다 즉시 통보하고(쿨다운 기본 0분), 정기 요약은 끄고 서버 시작 시 한 번만 남은 미통보 기록을 보낸다.
+
 `consentService.isGranted(seniorId, ConsentKey.LOCATION_NOTICE_BATCHED)`가 true면 「모아서」, 아니면 「즉시」.
 
 ### 5.3 즉시 모드
