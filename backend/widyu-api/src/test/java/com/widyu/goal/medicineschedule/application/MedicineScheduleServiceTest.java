@@ -21,6 +21,7 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.dto.response.MedicineMonthlyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
+import com.widyu.goal.rate.GoalTally;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse.ScheduleItem;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleChangeResponse;
@@ -39,6 +40,7 @@ import com.widyu.member.repository.MemberRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +74,92 @@ class MedicineScheduleServiceTest {
         MedicineSchedule schedule = MedicineSchedule.create(member, alarmTime);
         ReflectionTestUtils.setField(schedule, "id", id);
         return schedule;
+    }
+
+    @Test
+    @DisplayName("이번 달을 보면 비교 왼쪽은 지난달 전체, 오른쪽은 이번 달 1일부터 오늘까지의 복용 횟수다")
+    void 이번_달을_보면_지난달과_이번_달_오늘까지를_비교한다() {
+        // given: 지난달 1일부터 하루 1회, 지난달 20회·이번 달 5회 복용, 오늘은 이번 달 11일
+        YearMonth currentMonth = YearMonth.now(SEOUL);
+        YearMonth previousMonth = currentMonth.minusMonths(1);
+        fixClockAt(currentMonth.atDay(11));
+        Long memberId = 1L;
+        Member targetMember = mock(Member.class);
+        // #1005의 월 범위 검사가 들어오면 현재 회원 유형을 본다. 그 전에는 쓰이지 않는다.
+        lenient().when(memberUtil.getCurrentMember()).thenReturn(seniorWithId(memberId));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
+        given(targetMember.getId()).willReturn(memberId);
+        MedicineSchedule schedule = scheduleEffectiveFrom(1L, targetMember, LocalTime.of(8, 0), previousMonth.atDay(1));
+        List<MedicationProof> proofs = List.of(
+                proofsOn(schedule, targetMember, previousMonth, 20),
+                proofsOn(schedule, targetMember, currentMonth, 5)).stream().flatMap(List::stream).toList();
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
+                .willReturn(List.of(schedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(anyLong(), any(), any())).willReturn(proofs);
+
+        // when
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                currentMonth.getYear(), currentMonth.getMonthValue(), memberId);
+
+        // then: 오른쪽 분모는 이번 달 30여 회가 아니라 1~11일의 11회다
+        assertThat(response.comparison().left()).isEqualTo(MedicineMonthlyResponse.MonthProgress.of(
+                previousMonth, GoalTally.of(20, previousMonth.lengthOfMonth())));
+        assertThat(response.comparison().left().rate())
+                .isEqualTo((int) Math.round(2000.0 / previousMonth.lengthOfMonth()));
+        assertThat(response.comparison().right()).extracting("year", "month", "achieved", "total", "rate")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue(), 5L, 11L, 45);
+        // 기존 필드는 그대로 요청 달·전달의 모두 먹은 날 수다
+        assertThat(response.lastMonthAchieveCount()).isEqualTo(20);
+        assertThat(response.currentMonthAchieveCount()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("지난 달을 보면 비교 왼쪽은 보는 달, 오른쪽은 이번 달이다")
+    void 지난_달을_보면_보는_달과_이번_달을_비교한다() {
+        // given: 두 달 전 1일부터 하루 1회, 두 달 전 10회·이번 달 5회 복용
+        YearMonth currentMonth = YearMonth.now(SEOUL);
+        YearMonth viewedMonth = currentMonth.minusMonths(2);
+        fixClockAt(currentMonth.atDay(11));
+        Long memberId = 1L;
+        Member targetMember = mock(Member.class);
+        // #1005의 월 범위 검사가 들어오면 현재 회원 유형을 본다. 그 전에는 쓰이지 않는다.
+        lenient().when(memberUtil.getCurrentMember()).thenReturn(seniorWithId(memberId));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
+        given(targetMember.getId()).willReturn(memberId);
+        MedicineSchedule schedule = scheduleEffectiveFrom(1L, targetMember, LocalTime.of(8, 0), viewedMonth.atDay(1));
+        List<MedicationProof> proofs = List.of(
+                proofsOn(schedule, targetMember, viewedMonth, 10),
+                proofsOn(schedule, targetMember, currentMonth, 5)).stream().flatMap(List::stream).toList();
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
+                .willReturn(List.of(schedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(anyLong(), any(), any())).willReturn(proofs);
+
+        // when
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                viewedMonth.getYear(), viewedMonth.getMonthValue(), memberId);
+
+        // then
+        assertThat(response.comparison().left()).extracting("year", "month", "achieved", "total")
+                .containsExactly(viewedMonth.getYear(), viewedMonth.getMonthValue(), 10L,
+                        (long) viewedMonth.lengthOfMonth());
+        assertThat(response.comparison().right()).extracting("year", "month", "achieved", "total", "rate")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue(), 5L, 11L, 45);
+    }
+
+    private void fixClockAt(LocalDate date) {
+        ReflectionTestUtils.setField(medicineScheduleService, "clock",
+                Clock.fixed(date.atTime(12, 0).atZone(SEOUL).toInstant(), SEOUL));
+    }
+
+    /** 그 달 1일부터 days일까지 하루 한 번 인증한 기록. */
+    private List<MedicationProof> proofsOn(MedicineSchedule schedule, Member member, YearMonth month, int days) {
+        return month.atDay(1).datesUntil(month.atDay(days + 1))
+                .map(date -> {
+                    MedicationProof proof = MedicationProof.create(schedule, member, List.of("proof.jpg"));
+                    ReflectionTestUtils.setField(proof, "verifiedDate", date);
+                    return proof;
+                })
+                .toList();
     }
 
     @Test

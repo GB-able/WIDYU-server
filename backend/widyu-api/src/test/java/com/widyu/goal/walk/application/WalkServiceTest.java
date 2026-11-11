@@ -497,4 +497,65 @@ class WalkServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
     }
+
+    @Test
+    @DisplayName("이번 달을 보면 지난달 전체와 이번 달 오늘까지 걸음을 비교하고 하루 목표를 넘은 걸음은 세지 않는다")
+    void 월_비교는_지난달과_이번_달이고_목표_초과_걸음은_세지_않는다() {
+        // given: 기본 목표 5000보, 첫 기록은 지난달 1일
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(5000);
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth previousMonth = currentMonth.minusMonths(1);
+        LocalDate today = LocalDate.now();
+        Walk overGoal = Walk.createWithGoal(senior, previousMonth.atDay(1), 5000);
+        overGoal.updateActualSteps(8000);
+        Walk underGoal = Walk.createWithGoal(senior, previousMonth.atDay(2), 5000);
+        underGoal.updateActualSteps(2500);
+        Walk todayWalk = Walk.createWithGoal(senior, today, 5000);
+        todayWalk.updateActualSteps(6000);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior)).willReturn(Optional.of(overGoal));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                senior, currentMonth.atDay(1), currentMonth.atEndOfMonth())).willReturn(List.of(todayWalk));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                senior, previousMonth.atDay(1), previousMonth.atEndOfMonth()))
+                .willReturn(List.of(overGoal, underGoal));
+
+        // when
+        WalkMonthlyResponse response = walkService.getMonthlyStats(
+                currentMonth.getYear(), currentMonth.getMonthValue(), 2L);
+
+        // then: 지난달 8000보는 5000보로 센다(8000 + 2500 = 10500이 아니라 7500), 나머지 날은 미수신 0보
+        WalkMonthlyResponse.MonthProgress left = response.comparison().left();
+        assertThat(left).extracting("year", "month", "achieved", "total", "achievedDays", "totalDays")
+                .containsExactly(previousMonth.getYear(), previousMonth.getMonthValue(), 7500L,
+                        5000L * previousMonth.lengthOfMonth(), 1L, (long) previousMonth.lengthOfMonth());
+        // 이번 달은 미래 날짜를 빼고 1일~오늘만 센다
+        WalkMonthlyResponse.MonthProgress right = response.comparison().right();
+        assertThat(right).extracting("year", "month", "achieved", "total", "achievedDays", "totalDays")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue(), 5000L,
+                        5000L * today.getDayOfMonth(), 1L, (long) today.getDayOfMonth());
+        assertThat(right.rate()).isEqualTo((int) Math.round(100.0 / today.getDayOfMonth()));
+    }
+
+    @Test
+    @DisplayName("지난 달을 보면 비교 왼쪽은 보는 달, 오른쪽은 이번 달이다")
+    void 지난_달을_보면_보는_달과_이번_달을_비교한다() {
+        // given: 두 달 전을 본다. 기록이 없고 목표도 없던 달이다
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior);
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth viewedMonth = currentMonth.minusMonths(2);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
+
+        // when
+        WalkMonthlyResponse response = walkService.getMonthlyStats(
+                viewedMonth.getYear(), viewedMonth.getMonthValue(), 2L);
+
+        // then: 목표가 없으면 분모 0, 달성률 null
+        assertThat(response.comparison().left()).extracting("year", "month", "total", "rate")
+                .containsExactly(viewedMonth.getYear(), viewedMonth.getMonthValue(), 0L, null);
+        assertThat(response.comparison().right()).extracting("year", "month")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue());
+    }
 }

@@ -292,6 +292,109 @@ class GoalHomeServiceTest {
     }
 
     @Test
+    @DisplayName("보호자 지난주 달성률은 7일 합계로 항목별 달성률을 구해 목표가 있는 항목끼리 평균한다")
+    void 지난주_달성률은_항목별_합계의_평균이다() {
+        // given: 지난주 의약품 7회 중 3회, 건강방문 2회 중 1회, 걷기 목표 없음
+        LocalDate today = LocalDate.now();
+        LocalDate thisWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        LocalDate thisWeekEnd = thisWeekStart.plusDays(6);
+        LocalDate lastWeekStart = thisWeekStart.minusWeeks(1);
+        Member member = mock(Member.class);
+        MedicineSchedule schedule = schedule(member, 1L, lastWeekStart, null);
+
+        given(memberRepository.findById(11L)).willReturn(Optional.of(member));
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(
+                member, Status.ACTIVE, lastWeekStart, thisWeekEnd)).willReturn(List.of(schedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(11L, lastWeekStart, thisWeekEnd))
+                .willReturn(List.of(
+                        verifiedOn(schedule, member, lastWeekStart),
+                        verifiedOn(schedule, member, lastWeekStart.plusDays(1)),
+                        verifiedOn(schedule, member, lastWeekStart.plusDays(2))));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                member, lastWeekStart, thisWeekEnd)).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndWeek(
+                11L, lastWeekStart.atStartOfDay(), thisWeekEnd.plusDays(1).atStartOfDay()))
+                .willReturn(List.of(
+                        HealthScheduleFixture.schedule(member, 1L, lastWeekStart.plusDays(1).atTime(10, 0),
+                                ProgressStatus.COMPLETED),
+                        HealthScheduleFixture.schedule(member, 2L, lastWeekStart.plusDays(3).atTime(10, 0),
+                                ProgressStatus.INCOMPLETE)));
+
+        // when
+        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+
+        // then: (1/2 + 3/7) ÷ 2 = 46.4% → 46 (모두 끝낸 날 비율이면 3/7 = 0.43)
+        assertThat(response.lastWeekGoalRate()).isEqualTo(0.46);
+    }
+
+    @Test
+    @DisplayName("보호자 오늘 달성률은 건강방문, 의약품, 걷기 항목별 달성률의 평균이다")
+    void 오늘_달성률은_세_항목의_평균이다() {
+        // given: 오늘 건강방문 1/1, 의약품 1/2, 걷기 미달성
+        LocalDate today = LocalDate.now();
+        LocalDate thisWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        LocalDate thisWeekEnd = thisWeekStart.plusDays(6);
+        LocalDate lastWeekStart = thisWeekStart.minusWeeks(1);
+        Member member = mock(Member.class);
+        MedicineSchedule morning = schedule(member, 1L, lastWeekStart, null);
+        MedicineSchedule evening = schedule(member, 2L, lastWeekStart, null);
+        Walk walk = mock(Walk.class);
+
+        given(memberRepository.findById(11L)).willReturn(Optional.of(member));
+        given(member.getId()).willReturn(11L);
+        given(walk.getWalkDate()).willReturn(today);
+        given(walk.isGoalAchieved()).willReturn(false);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(
+                member, Status.ACTIVE, lastWeekStart, thisWeekEnd)).willReturn(List.of(morning, evening));
+        given(medicationProofRepository.findByMemberIdAndDateRange(11L, lastWeekStart, thisWeekEnd))
+                .willReturn(List.of(verifiedOn(morning, member, today)));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                member, lastWeekStart, thisWeekEnd)).willReturn(List.of(walk));
+        given(healthScheduleRepository.findByMemberIdAndWeek(
+                11L, lastWeekStart.atStartOfDay(), thisWeekEnd.plusDays(1).atStartOfDay()))
+                .willReturn(List.of(HealthScheduleFixture.schedule(
+                        member, 1L, today.atStartOfDay(), ProgressStatus.COMPLETED)));
+
+        // when
+        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+
+        // then: (100 + 50 + 0) ÷ 3 = 50 (예전처럼 약과 걷기를 한데 모으면 1/3)
+        assertThat(response.todayGoalRate()).isEqualTo(0.5);
+    }
+
+    @Test
+    @DisplayName("오늘 약을 모두 먹어도 건강방문을 마치지 않았으면 시니어 주간 상태는 진행 중이다")
+    void 건강방문이_남은_오늘은_진행_중이다() {
+        // given
+        LocalDate today = LocalDate.now();
+        LocalDate startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY));
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+        Member member = mock(Member.class);
+        MedicineSchedule schedule = schedule(member, 1L, today, null);
+
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getId()).willReturn(11L);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(
+                member, Status.ACTIVE, startOfWeek, endOfWeek)).willReturn(List.of(schedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(11L, startOfWeek, endOfWeek))
+                .willReturn(List.of(verifiedOn(schedule, member, today)));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                member, startOfWeek, endOfWeek)).willReturn(List.of());
+        given(healthScheduleRepository.findByMemberIdAndWeek(
+                11L, startOfWeek.atStartOfDay(), endOfWeek.plusDays(1).atStartOfDay()))
+                .willReturn(List.of(HealthScheduleFixture.schedule(
+                        member, 1L, today.atTime(23, 59), ProgressStatus.UPCOMING)));
+
+        // when
+        SeniorWeeklyGoalStatusResponse response = goalHomeService.getSeniorWeeklyGoalStatus();
+
+        // then: 약 1/1, 건강방문 0/1 → 50%
+        int todayIndex = today.getDayOfWeek().getValue() % 7;
+        assertThat(response.thisWeekGoalRates().get(todayIndex)).isEqualTo(DailyGoalStatus.IN_PROGRESS);
+    }
+
+    @Test
     @DisplayName("오늘 남은 알람이 없으면 마지막 알람을 다음 알람으로 반환한다")
     void 오늘_남은_알람이_없으면_마지막_알람을_반환한다() {
         // given
@@ -690,6 +793,12 @@ class GoalHomeServiceTest {
         category.addMedicine(MedicineScheduleDetail.create(mock(Medicine.class), dose));
         schedule.addCategory(category);
         return schedule;
+    }
+
+    private MedicationProof verifiedOn(MedicineSchedule schedule, Member member, LocalDate date) {
+        MedicationProof proof = MedicationProof.create(schedule, member, List.of("proof.jpg"));
+        ReflectionTestUtils.setField(proof, "verifiedDate", date);
+        return proof;
     }
 
     private MedicineSchedule schedule(Member member, Long id, LocalDate effectiveFrom, LocalDate effectiveTo) {
