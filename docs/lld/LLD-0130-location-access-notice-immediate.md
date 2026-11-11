@@ -29,7 +29,7 @@
 
 ### In scope
 - 변경 모듈: widyu-api
-- 묶는 시간(`location-access.immediate-cooldown-min`, 환경변수 `LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN`) 기본값 10 → 0
+- 묶는 시간(`location-access.immediate-cooldown-min`, 환경변수 `LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN`) 설정과 판정 코드 삭제. 판정 경합을 막던 시니어 회원 행 잠금도 함께 삭제(5.1)
 - `LocationAccessLogService.record`가 `LOCATION_NOTICE_BATCHED` 동의를 보지 않고 항상 바로 알림 경로를 탄다
 - 아침 요약 cron(`location-access.digest-cron`, 환경변수 `LOCATION_ACCESS_DIGEST_CRON`) 기본값 `0 0 9 * * *` → `-`(Spring 예약어, 스케줄 등록 안 함)
 - 서버가 뜬 뒤 한 번, 남은 미통보 기록을 요약 발송(6절 이전 기록 처리)
@@ -40,7 +40,7 @@
 - `ConsentKey.LOCATION_NOTICE_BATCHED` 삭제. 앱이 아직 보낼 수 있고 동의 기록은 사실로 남겨야 하므로 값은 그대로 받고 저장한다. 알림 방식 결정에만 쓰지 않는다
 - 가입 화면의 「모아서 받기」 항목 제거(앱)
 - 실시간 지도(STOMP 구독)에서 알림 횟수를 어떻게 셀지. 지금은 구독 한 번이 열람 한 번이다(LLD-0056 5.1). 10절의 조사 결과로 따로 정한다
-- `LocationAccessLogRepository`, 관리자 API 변경
+- 관리자 API 변경. `LocationAccessLogRepository`는 쿨다운 조회 메서드 삭제만 한다
 
 ## 3. 인터페이스 / API
 
@@ -51,11 +51,10 @@ API 변경 없음. 어르신이 받는 푸시 문구도 그대로다.
 
 ## 4. 데이터 모델
 
-테이블 변경 없음. 설정 기본값만 바뀐다.
+테이블 변경 없음. 설정은 `immediate-cooldown-min`을 지우고(설정 클래스 `LocationAccessProperties`도 삭제) cron 기본값만 바꾼다.
 
 ```yaml
 location-access:
-  immediate-cooldown-min: ${LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN:0}
   digest-cron: ${LOCATION_ACCESS_DIGEST_CRON:-}
 ```
 
@@ -66,11 +65,13 @@ location-access:
 ### 5.1 열람 기록과 바로 알림 — `LocationAccessLogService.record`
 
 1. 본인 조회면 끝낸다(변경 없음).
-2. 어르신 회원 행을 잠그고 열람 기록을 저장한다(변경 없음).
+2. 열람 기록을 저장한다.
 3. **동의 확인을 하지 않고** 바로 알림으로 간다. `ConsentService` 의존을 뺀다.
-4. 같은 보호자에게 `now - 묶는 시간` 이후 알린 기록이 있으면 건너뛴다. 기본값 0분이면 기준 시각이 `now`라 이전 알림이 걸리지 않으므로 매번 FCM 한 건을 등록하고 `notified_at = now`를 채운다.
+4. 매번 FCM 한 건을 등록하고 `notified_at = now`를 채운다. 같은 보호자의 이전 알림을 조회하지 않는다.
 
-묶는 시간 설정과 그 판정 코드는 남긴다. 법정 단위 묶음을 설계할 때까지 운영값을 0으로 두는 스위치로만 쓴다.
+**묶는 시간 설정을 지운 이유(2026-11-12 리뷰 반영).** 처음에는 설정과 판정 코드를 남기고 기본값만 0으로 바꿨다. 그러면 운영 환경변수 `LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN`에 예전 값(10 등)이 남아 있을 때 반복 열람이 바로 알려지지 않고 `notified_at`이 빈 채로 남는다. 정기 요약도 꺼져 있어 그 기록은 다음 서버 시작 때까지 알려지지 않는다. 열람마다 즉시 알리는 것이 법 요건이므로 설정값 하나로 이를 어길 수 있는 스위치를 두지 않는다. 검토한 다른 방법은 기동 시 양수면 실패하게 하는 것이었는데, 쓰지 않을 설정을 검증하는 코드가 남고 법정 단위 묶음은 어차피 시간 기준이 아니라(10회, 10일 등) 이 설정을 다시 쓰지 않는다. Spring Boot는 바인딩할 필드가 없는 환경변수를 무시하므로 남은 환경변수는 해가 없다.
+
+**시니어 회원 행 잠금도 지웠다.** 잠금(LLD-0056 5.3)은 「쿨다운 안에 알린 적 없음」을 동시에 읽고 저마다 FCM을 등록하는 경합을 막으려던 것이다. 판정이 없어지면 열람마다 한 건을 보내는 것이 맞는 동작이라 직렬화할 대상이 없다. 기록과 `notified_at`은 한 트랜잭션에서 커밋되므로 시작 시 요약의 선점(`notified_at IS NULL`)과도 겹치지 않는다.
 
 ### 5.2 아침 요약 끄기 — `LocationAccessDigestScheduler.sendDigest`
 
@@ -104,13 +105,13 @@ location-access:
 ### 남는 한계
 
 - 서버가 여러 대이고 배포가 한 대씩 바뀌면, 옛 버전이 아직 도는 동안 생긴 미통보 기록은 새 버전의 시작 요약이 이미 지나간 뒤일 수 있다. 그 기록은 다음 서버 시작 때 나간다. 저장소의 compose 설정은 앱 컨테이너 한 대를 바꾸는 방식이라 해당 구간이 없다.
-- 운영 환경변수가 `LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN`이나 `LOCATION_ACCESS_DIGEST_CRON`을 직접 지정하고 있으면 기본값 변경이 적용되지 않는다. 운영 반영 전에 두 값이 비어 있거나 각각 `0`, `-`인지 확인한다. 묶는 시간이 0보다 크게 남으면 건너뛴 기록은 서버를 다시 시작할 때만 나간다.
+- 운영 환경변수가 `LOCATION_ACCESS_DIGEST_CRON`을 직접 지정하고 있으면 정기 요약이 계속 돈다. 바로 알림이 모든 기록에 `notified_at`을 채우므로 대상이 없어 실제로 나가는 알림은 없지만, 운영 반영 전에 비어 있거나 `-`인지 확인한다. `LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN`은 받을 설정이 없어 남아 있어도 무시된다.
 
 ## 7. 인수조건 (Acceptance Criteria)
 
-- [ ] 같은 보호자가 연달아 봐도, 묶는 시간이 0이면 열람마다 FCM 한 건과 `notified_at`이 남는다.
+- [ ] 같은 보호자가 연달아 봐도 열람마다 FCM 한 건과 `notified_at`이 남는다. 묶는 시간 설정과 판정 코드가 없다.
 - [ ] `LOCATION_NOTICE_BATCHED`에 동의한 어르신도 열람 시점에 FCM을 받는다. 알림 방식 결정에서 동의 기록을 읽지 않는다.
-- [ ] `application.yml` 기본값이 `immediate-cooldown-min: 0`, `digest-cron: -`다.
+- [ ] `application.yml`에 `immediate-cooldown-min` 키가 없고 `digest-cron` 기본값이 `-`다. 기본값 테스트는 호스트 환경변수와 격리된 환경에서 푼다.
 - [ ] `flushOnStartup`은 `initialDelay`만 가진 1회 작업이고, 실행하면 미통보 기록을 어르신별로 요약 발송한다.
 - [ ] 기존 다이제스트 선점과 롤백 테스트(`LocationAccessDigestSenderTest`)가 그대로 통과한다.
 - [ ] `verify.sh`가 통과한다.
@@ -119,7 +120,7 @@ location-access:
 
 - 어르신이 받는 위치 조회 푸시 수가 늘어난다. 보호자가 홈 화면을 열 때마다 어르신 수만큼(`HOME_OUTING`), 지도 화면에서 구독할 때마다 한 건씩 나간다.
 - DB 마이그레이션 없음.
-- 운영 반영 순서: 운영 환경변수 두 개 확인 → 배포 → 시작 1분 뒤 로그 `위치 열람 요약 통보` 또는 `위치 열람 요약 통보 대상 없음` 확인.
+- 운영 반영 순서: 운영 환경변수 `LOCATION_ACCESS_DIGEST_CRON` 확인 → 배포 → 시작 1분 뒤 로그 `위치 열람 요약 통보` 또는 `위치 열람 요약 통보 대상 없음` 확인.
 
 ## 9. 미결정 사항 (Open Questions)
 

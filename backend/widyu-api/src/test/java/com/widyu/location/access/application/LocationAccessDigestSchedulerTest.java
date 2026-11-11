@@ -14,8 +14,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Properties;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
-import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -107,22 +107,21 @@ class LocationAccessDigestSchedulerTest {
     }
 
     @Test
-    @DisplayName("운영값을 따로 주지 않으면 쿨다운은 0분이고 정기 요약은 꺼진다")
-    void 기본값은_쿨다운_0분과_정기_요약_꺼짐이다() {
+    @DisplayName("운영값을 따로 주지 않으면 정기 요약은 꺼지고 반복 조회를 합치는 쿨다운 설정은 없다")
+    void 기본값은_정기_요약_꺼짐이고_쿨다운_설정이_없다() {
         // given
         YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
         yaml.setResources(new ClassPathResource("application.yml"));
         Properties properties = yaml.getObject();
-        StandardEnvironment environment = new StandardEnvironment();
+        // 호스트 환경변수를 읽지 않도록 빈 환경에서 자리표시자를 푼다.
+        MockEnvironment environment = new MockEnvironment();
 
         // when
-        String cooldown = environment.resolvePlaceholders(
-                properties.getProperty("location-access.immediate-cooldown-min"));
         String digestCron = environment.resolvePlaceholders(
                 properties.getProperty("location-access.digest-cron"));
 
         // then
-        assertThat(cooldown).isEqualTo("0");
         assertThat(digestCron).isEqualTo(Scheduled.CRON_DISABLED);
+        assertThat(properties).doesNotContainKey("location-access.immediate-cooldown-min");
     }
 }

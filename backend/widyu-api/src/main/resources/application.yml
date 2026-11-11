@@ -33,8 +33,7 @@ admin:
 
 # 보호자의 위치 열람 통보 운영값(LLD-0056 4절, ADR-0036 결정 4)
 location-access:
-  # 같은 보호자의 반복 조회를 한 건으로 합치는 시간(분). 위치정보법은 열람마다 즉시 통보를 요구하므로 0이다(LLD-0130).
-  immediate-cooldown-min: ${LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN:0}
+  # 같은 보호자의 반복 조회를 합치던 immediate-cooldown-min은 없앴다. 열람마다 즉시 통보한다(LLD-0130).
   # 미통보 기록을 묶어 내보내는 정기 요약. 하루 한 번 묶음은 동의가 있어도 안 되므로 끈다("-" = 등록 안 함, LLD-0130).
   # 남은 미통보 기록은 서버 시작 1분 뒤 한 번 요약으로 나간다.
   digest-cron: ${LOCATION_ACCESS_DIGEST_CRON:-}

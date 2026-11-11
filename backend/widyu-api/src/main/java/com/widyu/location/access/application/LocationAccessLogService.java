@@ -3,7 +3,6 @@ package com.widyu.location.access.application;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
-import com.widyu.global.properties.LocationAccessProperties;
 import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.dto.response.LocationAccessLogResponse;
@@ -34,10 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 호출부가 {@code try/catch}로 지킨다 — 프록시가 커밋 시점에 던지는 예외는 이 메서드
  * 안에서 잡을 수 없기 때문이다.
  *
- * <p>기록 트랜잭션은 시니어 회원 행을 {@code PESSIMISTIC_WRITE}로 먼저 잠근다. 잠그지 않으면
- * 같은 시니어를 여러 보호자가(또는 한 보호자가 여러 요청으로) 동시에 조회할 때 모두
- * 「쿨다운 안에 통보한 적 없음」을 읽고 저마다 FCM을 등록한다. 시니어 단위 직렬화라
- * 열람 빈도(수 초에 1건)에서 부하는 무시할 수 있다.
+ * <p>같은 보호자의 반복 조회를 합치던 쿨다운({@code location-access.immediate-cooldown-min})은 없앴다.
+ * 설정이 남아 있으면 열람이 즉시 통보되지 않아 법 요건을 어기는데, 정기 요약도 꺼져 있어 서버를
+ * 다시 시작할 때까지 알려지지 않는다. 그래서 설정으로 켤 수 없게 코드에서 지웠다(LLD-0130 5.1).
  *
  * <p>로그에는 회원 식별자와 경로만 남긴다. 좌표·이름·전화번호는 남기지 않는다(LLD-0029).
  */
@@ -55,7 +53,6 @@ public class LocationAccessLogService {
     private final LocationAccessLogRepository locationAccessLogRepository;
     private final MemberRepository memberRepository;
     private final FcmService fcmService;
-    private final LocationAccessProperties locationAccessProperties;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(Long viewerMemberId, Long seniorMemberId, LocationAccessPath path) {
@@ -68,27 +65,12 @@ public class LocationAccessLogService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        // 쿨다운 확인부터 notified_at 갱신까지를 시니어 단위로 직렬화한다. 회원 행이 없어도
-        // (탈퇴 등) 기록은 남겨야 하므로 결과를 보지 않는다.
-        memberRepository.findByIdForUpdate(seniorMemberId);
         LocationAccessLog accessLog = locationAccessLogRepository.save(
                 LocationAccessLog.of(viewerMemberId, seniorMemberId, path, now));
         notifyImmediately(accessLog, now);
     }
 
-    /**
-     * 같은 보호자가 쿨다운 안에 다시 봤으면 FCM을 보내지 않고 {@code notified_at}도 비워 둔다(LLD-0056 5.3).
-     * 기본 쿨다운은 0분이라 매번 보낸다(LLD-0130). 0보다 크게 두면 비워 둔 건은 서버 시작 시 요약으로만 나간다.
-     */
     private void notifyImmediately(LocationAccessLog accessLog, LocalDateTime now) {
-        LocalDateTime cooldownFrom = now.minusMinutes(locationAccessProperties.immediateCooldownMin());
-        boolean notifiedWithinCooldown = locationAccessLogRepository
-                .existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                        accessLog.getSeniorMemberId(), accessLog.getViewerMemberId(), cooldownFrom);
-        if (notifiedWithinCooldown) {
-            return;
-        }
-
         fcmService.sendMessageToUser(accessLog.getSeniorMemberId(), FcmSendDto.builder()
                 .title(NOTICE_TITLE)
                 .content(viewerName(accessLog.getViewerMemberId()) + "님이 내 위치를 확인했어요")

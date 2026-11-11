@@ -12,7 +12,6 @@ import static org.mockito.Mockito.times;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
-import com.widyu.global.properties.LocationAccessProperties;
 import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.dto.response.LocationAccessLogResponse;
@@ -29,8 +28,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -45,7 +42,6 @@ class LocationAccessLogServiceTest {
 
     private static final Long VIEWER_ID = 55L;
     private static final Long SENIOR_ID = 7L;
-    private static final int COOLDOWN_MIN = 10;
 
     @Mock private LocationAccessLogRepository locationAccessLogRepository;
     @Mock private com.widyu.member.repository.MemberRepository memberRepository;
@@ -58,8 +54,7 @@ class LocationAccessLogServiceTest {
         locationAccessLogService = new LocationAccessLogService(
                 locationAccessLogRepository,
                 memberRepository,
-                fcmService,
-                new LocationAccessProperties(COOLDOWN_MIN, "0 0 9 * * *"));
+                fcmService);
     }
 
     @Test
@@ -78,8 +73,6 @@ class LocationAccessLogServiceTest {
     void 즉시_모드_첫_조회는_FCM을_보내고_통보_시각을_남긴다() {
         // given
         givenSaveReturnsArgument();
-        given(locationAccessLogRepository.existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                eq(SENIOR_ID), eq(VIEWER_ID), any(LocalDateTime.class))).willReturn(false);
         given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.of(guardian()));
 
         // when
@@ -98,94 +91,18 @@ class LocationAccessLogServiceTest {
     }
 
     @Test
-    @DisplayName("기록할 때 시니어 회원 행을 먼저 잠근 뒤에 쿨다운을 확인한다")
-    void 시니어_행을_잠근_뒤_쿨다운을_확인한다() {
+    @DisplayName("같은 보호자가 연달아 조회하면 조회마다 FCM을 보내고 통보 시각을 남긴다")
+    void 같은_보호자가_연달아_조회해도_매번_통보한다() {
         // given
         givenSaveReturnsArgument();
-        given(locationAccessLogRepository.existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                eq(SENIOR_ID), eq(VIEWER_ID), any(LocalDateTime.class))).willReturn(false);
         given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.of(guardian()));
 
         // when
-        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.REST_LAST);
-
-        // then
-        InOrder inOrder = Mockito.inOrder(memberRepository, locationAccessLogRepository);
-        inOrder.verify(memberRepository).findByIdForUpdate(SENIOR_ID);
-        inOrder.verify(locationAccessLogRepository)
-                .existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                        eq(SENIOR_ID), eq(VIEWER_ID), any(LocalDateTime.class));
-    }
-
-    @Test
-    @DisplayName("본인 조회는 잠금도 걸지 않는다")
-    void 본인_조회는_잠금도_걸지_않는다() {
-        // given & when
-        locationAccessLogService.record(SENIOR_ID, SENIOR_ID, LocationAccessPath.REST_LAST);
-
-        // then
-        then(memberRepository).should(never()).findByIdForUpdate(anyLong());
-    }
-
-    @Test
-    @DisplayName("쿨다운 안에 같은 보호자가 다시 조회하면 FCM을 보내지 않고 통보 시각을 비워 둔다")
-    void 쿨다운_안_재조회는_통보하지_않고_요약_대상으로_남긴다() {
-        // given
-        givenSaveReturnsArgument();
-        given(locationAccessLogRepository.existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                eq(SENIOR_ID), eq(VIEWER_ID), any(LocalDateTime.class))).willReturn(true);
-
-        // when
-        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.REST_LAST);
-
-        // then
-        then(fcmService).should(never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
-        assertThat(savedLog().getNotifiedAt()).isNull();
-    }
-
-    @Test
-    @DisplayName("쿨다운이 지난 뒤 다시 조회하면 쿨다운 시작 시각을 기준으로 판단해 FCM을 다시 보낸다")
-    void 쿨다운이_지난_뒤_재조회하면_다시_통보한다() {
-        // given
-        givenSaveReturnsArgument();
-        ArgumentCaptor<LocalDateTime> cooldownFrom = ArgumentCaptor.forClass(LocalDateTime.class);
-        given(locationAccessLogRepository.existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                eq(SENIOR_ID), eq(VIEWER_ID), cooldownFrom.capture())).willReturn(false);
-        given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.of(guardian()));
-
-        // when
-        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.REST_TRAIL);
-
-        // then
-        then(fcmService).should().sendMessageToUser(eq(SENIOR_ID), any(FcmSendDto.class));
-        assertThat(cooldownFrom.getValue())
-                .isBefore(LocalDateTime.now().minusMinutes(COOLDOWN_MIN - 1L));
-        assertThat(savedLog().getNotifiedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("쿨다운이 0분이면 같은 보호자가 연달아 조회해도 조회마다 FCM을 보내고 통보 시각을 남긴다")
-    void 쿨다운이_0분이면_연달아_조회해도_매번_통보한다() {
-        // given
-        LocationAccessLogService immediateService = new LocationAccessLogService(
-                locationAccessLogRepository,
-                memberRepository,
-                fcmService,
-                new LocationAccessProperties(0, "-"));
-        givenSaveReturnsArgument();
-        LocalDateTime before = LocalDateTime.now();
-        ArgumentCaptor<LocalDateTime> cooldownFrom = ArgumentCaptor.forClass(LocalDateTime.class);
-        given(locationAccessLogRepository.existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-                eq(SENIOR_ID), eq(VIEWER_ID), cooldownFrom.capture())).willReturn(false);
-        given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.of(guardian()));
-
-        // when
-        immediateService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.WS_SUBSCRIBE);
-        immediateService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.WS_SUBSCRIBE);
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.WS_SUBSCRIBE);
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.WS_SUBSCRIBE);
 
         // then
         then(fcmService).should(times(2)).sendMessageToUser(eq(SENIOR_ID), any(FcmSendDto.class));
-        assertThat(cooldownFrom.getAllValues()).allSatisfy(from -> assertThat(from).isAfterOrEqualTo(before));
         ArgumentCaptor<LocationAccessLog> saved = ArgumentCaptor.forClass(LocationAccessLog.class);
         then(locationAccessLogRepository).should(times(2)).save(saved.capture());
         assertThat(saved.getAllValues()).allSatisfy(log -> assertThat(log.getNotifiedAt()).isNotNull());
