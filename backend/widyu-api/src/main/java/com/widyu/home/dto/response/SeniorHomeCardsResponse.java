@@ -4,13 +4,13 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.widyu.album.Album;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.healthschedule.HealthSchedule;
+import com.widyu.heart.HeartRateFreshness;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.walk.Walk;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -39,7 +39,6 @@ public record SeniorHomeCardsResponse(
 ) {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
-    private static final long WEARING_THRESHOLD_SECONDS = 30;
 
     public static SeniorHomeCardsResponse of(HeartRateInfo heartRate, MedicineInfo medicine,
                                              List<AlbumInfo> albums, HealthScheduleInfo healthSchedule,
@@ -70,11 +69,10 @@ public record SeniorHomeCardsResponse(
         }
 
         private static boolean isRecentlyMeasured(HeartRateResult result) {
-            if (result.getStatus() == HeartRateStatus.UNKNOWN || result.getMeasuredAt() == null) {
+            if (result.getStatus() == HeartRateStatus.UNKNOWN) {
                 return false;
             }
-            long seconds = Duration.between(result.getMeasuredAt(), LocalDateTime.now()).getSeconds();
-            return seconds >= 0 && seconds <= WEARING_THRESHOLD_SECONDS;
+            return HeartRateFreshness.isFresh(result.getMeasuredAt(), LocalDateTime.now());
         }
     }
 

@@ -57,6 +57,7 @@
 - **저장이 판정에 앞선다**: 값이 이상해도 저장하고(정책 1.2.1) AI가 실패하면 `UNKNOWN`으로 저장한 뒤 그 배치의 남은 샘플은 AI를 건너뛴다(단락). `bpm`이 1~299 밖이거나 `accuracy=UNRELIABLE`이면 저장만 하고 AI를 부르지 않는다
 - 샘플은 `(member_id, measured_at)` UK로 멱등이라 재전송·단건 중복은 스킵된다. `measured_at`은 Asia/Seoul 환산이고 원 시각은 S3 원문과 인덱스 행에 남는다
 - 수신한 단건 심박은 AI 판정 후 즉시 최신값에 반영한다.
+- **「지금」의 심박은 최근 30초 안에 잰 값뿐이다**(`HeartRateFreshness`). 홈 카드 착용 여부, `/heart-rate/status`, 그래프 `current`가 같은 기준을 쓰고 그보다 오래되면 `UNKNOWN`·값 null이다. 위급 이력·그래프 이벤트·단건 전송 응답은 이 기준을 적용하지 않는다(#1023)
 - `heart_rate_event`는 자동 삭제하지 않는다(#650). 보존 기간은 법률 검토 뒤 ADR로 정한다.
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 - **배치 위급 판정은 `decision_record`에 한 줄 남고 그 `decision_id`가 FCM outbox 행을 타고 흘러간다**. 전송이 성공하면 그 판정의 `alert_delivered`·`alert_at_ms`가 채워진다. 단건 경로는 판정 기록을 남기지 않아 `decision_id`가 null이다 → LLD-0053
