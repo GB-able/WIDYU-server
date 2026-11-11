@@ -195,11 +195,12 @@ public class FcmService {
     @Transactional
     public void sendNotificationToMember(SendNotificationRequest sendNotificationRequest) {
         Member sender = memberUtil.getCurrentMember();
-        Member receiver = memberRepository.findById(sendNotificationRequest.receiverId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-        if (!familyAccessService.getFamilyMemberIds(sender).contains(receiver.getId())) {
+        // 없는 회원도 다른 가족과 같은 403으로 답해 회원 id 존재 여부를 드러내지 않는다
+        if (!familyAccessService.getFamilyMemberIds(sender).contains(sendNotificationRequest.receiverId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "같은 가족에게만 응원 메시지를 보낼 수 있습니다.");
         }
+        Member receiver = memberRepository.findById(sendNotificationRequest.receiverId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 
         // 알림 제목: "보내는사람님이 받는사람님에게 응원메시지를 보냈어요."
         String title = sender.getName() + "님이 " + receiver.getName() + "님에게 응원메시지를 보냈어요.";

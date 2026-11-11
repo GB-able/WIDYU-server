@@ -40,6 +40,8 @@ class FcmServiceTest {
     @Mock private FamilyAccessService familyAccessService;
     @InjectMocks private FcmService service;
 
+    private static final String NOT_FAMILY_MESSAGE = "접근 권한이 없습니다. - 같은 가족에게만 응원 메시지를 보낼 수 있습니다.";
+
     @Test
     @DisplayName("보호자에게 응원 메시지를 보내면 알림센터 경로를 전달한다")
     void 보호자에게_응원_메시지를_보내면_알림센터_경로를_전달한다() {
@@ -86,14 +88,30 @@ class FcmServiceTest {
     void 다른_가족_회원에게_응원_메시지를_보내면_권한_예외가_발생하고_알림을_보내지_않는다() {
         // given
         Member sender = member(1L, MemberType.GUARDIAN);
-        Member receiver = member(3L, MemberType.SENIOR);
         given(memberUtil.getCurrentMember()).willReturn(sender);
-        given(memberRepository.findById(3L)).willReturn(Optional.of(receiver));
         given(familyAccessService.getFamilyMemberIds(sender)).willReturn(List.of(1L, 2L));
 
         // when & then
         assertThatThrownBy(() -> service.sendNotificationToMember(new SendNotificationRequest(3L, "힘내세요")))
                 .isInstanceOf(BusinessException.class)
+                .hasMessage(NOT_FAMILY_MESSAGE)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+        then(outboxService).should(never()).enqueue(any(), any());
+    }
+
+    @Test
+    @DisplayName("없는 회원에게 응원 메시지를 보내면 다른 가족과 같은 권한 예외가 발생한다")
+    void 없는_회원에게_응원_메시지를_보내면_다른_가족과_같은_권한_예외가_발생한다() {
+        // given
+        Member sender = member(1L, MemberType.GUARDIAN);
+        given(memberUtil.getCurrentMember()).willReturn(sender);
+        given(familyAccessService.getFamilyMemberIds(sender)).willReturn(List.of(1L, 2L));
+
+        // when & then
+        assertThatThrownBy(() -> service.sendNotificationToMember(new SendNotificationRequest(999L, "힘내세요")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(NOT_FAMILY_MESSAGE)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.FORBIDDEN);
         then(outboxService).should(never()).enqueue(any(), any());

@@ -211,6 +211,6 @@ public interface FcmDocs {
                     )
             )
     )
-    @ApiResponse(responseCode = "403", description = "받는 사람이 보내는 사람과 같은 가족이 아님 (AUTH_4030)")
+    @ApiResponse(responseCode = "403", description = "받는 사람이 보내는 사람과 같은 가족이 아니거나 없는 회원 (AUTH_4030, 두 경우 같은 응답)")
     ApiResponseTemplate<String> sendNotification(SendNotificationRequest sendNotificationRequest);
 }
