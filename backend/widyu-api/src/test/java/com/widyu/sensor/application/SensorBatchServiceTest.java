@@ -1044,6 +1044,40 @@ class SensorBatchServiceTest {
     }
 
     @Test
+    @DisplayName("WebSocket으로 처음 저장한 IMU 묶음은 경로를 WS로 남긴다")
+    void WebSocket으로_처음_저장한_IMU_묶음은_경로를_WS로_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, 1_760_000_000_500L, SensorIngestChannel.WS);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.WS);
+        assertThat(received("WS", "imu_watch", "STORED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("REST로 처음 저장한 심박 묶음은 경로를 REST로 남긴다")
+    void REST로_처음_저장한_심박_묶음은_경로를_REST로_남긴다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
+        given(heartRateBatchService.storeAndAssess(
+                any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
+                .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
+        byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(received("REST", "hr", "STORED")).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("이미 저장된 묶음이 다른 경로로 다시 오면 행을 새로 쓰지 않고 DUPLICATE로 센다")
     void 이미_저장된_묶음이_다른_경로로_다시_오면_행을_새로_쓰지_않는다() {
         // given
