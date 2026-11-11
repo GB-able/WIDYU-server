@@ -3,13 +3,17 @@ package com.widyu.retention.repository;
 import static com.widyu.retention.repository.RetentionFixture.accessLog;
 import static com.widyu.retention.repository.RetentionFixture.activeParticipation;
 import static com.widyu.retention.repository.RetentionFixture.deletionProcessedParticipation;
+import static com.widyu.retention.repository.RetentionFixture.fcmToken;
 import static com.widyu.retention.repository.RetentionFixture.heartRate;
 import static com.widyu.retention.repository.RetentionFixture.locationFix;
 import static com.widyu.retention.repository.RetentionFixture.notification;
+import static com.widyu.retention.repository.RetentionFixture.outbox;
 import static com.widyu.retention.repository.RetentionFixture.senior;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import com.widyu.fcm.FcmOutbox;
+import com.widyu.fcm.MemberFcmToken;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.member.Member;
 import com.widyu.retention.application.RetentionTarget;
@@ -135,6 +139,29 @@ class RetentionPurgeRepositoryTest {
     }
 
     @Test
+    @DisplayName("발송 대기열에 끝난 행과 발송 중인 행이 섞여 있으면 기간이 지난 끝난 행만 센다")
+    void 발송_대기열에_끝난_행과_발송_중인_행이_섞여_있으면_기간이_지난_끝난_행만_센다() {
+        // given
+        RetentionTarget target = RetentionTarget.FCM_OUTBOX;
+        LocalDateTime cutoff = target.cutoff(NOW);
+        LocalDateTime expired = cutoff.minusDays(1);
+        MemberFcmToken token = entityManager.persist(fcmToken(entityManager.persist(senior("01011110005"))));
+        persistOutbox(token, FcmOutbox.State.SENT, expired);
+        persistOutbox(token, FcmOutbox.State.CANCELLED, expired.plusSeconds(1));
+        persistOutbox(token, FcmOutbox.State.EXHAUSTED, expired.plusSeconds(2));
+        persistOutbox(token, FcmOutbox.State.EXPIRED, expired.plusSeconds(3));
+        persistOutbox(token, FcmOutbox.State.PENDING, expired.plusSeconds(4));
+        persistOutbox(token, FcmOutbox.State.CLAIMED, expired.plusSeconds(5));
+        persistOutbox(token, FcmOutbox.State.SENT, cutoff);
+
+        // when
+        long count = countTargets(target);
+
+        // then
+        assertThat(count).isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("위치 열람 기록은 열람 시각 기준 1년으로 센다")
     void 위치_열람_기록은_열람_시각_기준_1년으로_센다() {
         // given
@@ -155,6 +182,10 @@ class RetentionPurgeRepositoryTest {
         LocalDateTime cutoff = target.cutoff(NOW);
         long bound = retentionPurgeRepository.findBoundary(target, cutoff);
         return retentionPurgeRepository.countTargets(target, bound, cutoff, NOW);
+    }
+
+    private void persistOutbox(MemberFcmToken token, FcmOutbox.State state, LocalDateTime createdAt) {
+        persistWithCreatedAt(outbox(token, state), "fcm_outbox", "id", createdAt);
     }
 
     private void persistHeartRate(Member member, LocalDateTime createdAt) {

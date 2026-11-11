@@ -1,6 +1,9 @@
 package com.widyu.retention.repository;
 
+import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmNotification;
+import com.widyu.fcm.FcmOutbox;
+import com.widyu.fcm.MemberFcmToken;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateStatus;
 import com.widyu.location.access.LocationAccessLog;
@@ -51,6 +54,19 @@ final class RetentionFixture {
 
     static FcmNotification notification(String eventId, LocalDateTime expiresAt) {
         return FcmNotification.builder().eventId(eventId).title("알림").expiresAt(expiresAt).build();
+    }
+
+    static MemberFcmToken fcmToken(Member member) {
+        return MemberFcmToken.builder().member(member).token("token-retention").active(true).build();
+    }
+
+    static FcmOutbox outbox(MemberFcmToken token, FcmOutbox.State state) {
+        LocalDateTime anyTime = LocalDateTime.of(2026, 10, 1, 0, 0);
+        return FcmOutbox.builder()
+                .recipientMember(token.getMember()).memberFcmToken(token).title("알림")
+                .fcmCategory(FcmCategory.HEART_MESSAGE).state(state)
+                .availableAt(anyTime).expiresAt(anyTime)
+                .build();
     }
 
     static LocationAccessLog accessLog(LocalDateTime accessedAt) {
