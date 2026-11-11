@@ -334,7 +334,12 @@ public class SensorBatchService {
 
     private JsonNode readTree(byte[] payload) {
         try {
-            return payloadMapper.readTree(payload);
+            JsonNode root = payloadMapper.readTree(payload);
+            // 비어 있거나 공백뿐인 본문은 예외 없이 빈 값으로 읽힌다. 형식 오류로 거절해 거절 기록에 남긴다.
+            if (root == null || root.isMissingNode()) {
+                throw new BusinessException(ErrorCode.SENSOR_PAYLOAD_INVALID);
+            }
+            return root;
         } catch (IOException e) {
             // 예외 메시지에 샘플 값이 섞일 수 있어 어떤 레벨에도 남기지 않는다(정책 1.6.7).
             throw new BusinessException(ErrorCode.SENSOR_PAYLOAD_INVALID);

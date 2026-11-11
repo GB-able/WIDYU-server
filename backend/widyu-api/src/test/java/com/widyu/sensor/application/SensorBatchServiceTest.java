@@ -1097,6 +1097,21 @@ class SensorBatchServiceTest {
     }
 
     @Test
+    @DisplayName("공백뿐인 본문이 오면 형식 오류로 거절하고 거절 기록을 남긴다")
+    void 공백뿐인_본문이_오면_형식_오류로_거절하고_거절_기록을_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = "   ".getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_PAYLOAD_INVALID);
+        assertThat(recordedRejection().getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(received("REST", "unknown", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("검증에 실패하면 식별자와 오류 코드를 담은 거절 기록을 남기고 원래 예외를 던진다")
     void 검증에_실패하면_식별자와_오류_코드를_담은_거절_기록을_남긴다() {
         // given
