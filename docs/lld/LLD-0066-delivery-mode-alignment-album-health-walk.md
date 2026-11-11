@@ -36,7 +36,7 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 | --- | --- | --- | --- |
 | `ALBUM_UPLOAD_COMPLETE` | 업로더 | `PUSH_ONLY` A01, `foregroundPresentation=NONE` | 업로더 역할별 딥링크: GUARDIAN은 `/post?postId={albumId}`, SENIOR는 `widyu://albums/{albumId}`; `entityId=albumId` |
 | `ALBUM_CREATED` | 반대 역할 가족 | `PUSH_AND_CENTER` A02-S(시니어 수신)/A02-C(보호자 수신) | 수신 앱의 게시물 상세, `entityId=albumId`; 보호자 수신이면 `seniorId` |
-| `ALBUM_COMMENTED` / `ALBUM_REPLIED` | 게시물 작성자, 본인 반응 제외 | `PUSH_AND_CENTER` A03/A04 | 해당 댓글·답글, `entityId=albumId`, `data.commentId=저장된 댓글/답글 ID` |
+| `ALBUM_COMMENTED` / `ALBUM_REPLIED` | A03은 게시물 작성자, A04는 원댓글 작성자와 게시물 작성자(같은 사람이면 한 번, #1022). 본인 반응 제외 | `PUSH_AND_CENTER` A03/A04 | 해당 댓글·답글, `entityId=albumId`, `data.commentId=저장된 댓글/답글 ID` |
 | `ALBUM_LIKED` | 게시물 작성자, 본인 반응 제외 | `CENTER_ONLY` A05, `foregroundPresentation=NONE` | 해당 게시물, `entityId=albumId` |
 | `ALBUM_UNLOCKED` | 게시물을 올린 보호자 한 명 | `PUSH_AND_CENTER` A06-L(남음)/A06-Z(0) | 위듀케어 해당 게시물, `entityId=albumId`, `seniorId`, `seniorDisplayName`, `remainingLockedCount`(0 포함) |
 | `ALBUM_ALL_VIEWED` | 작성자 GUARDIAN·독자 SENIOR 조합의 보호자 작성자만 | `PUSH_AND_CENTER` A07 | 총수·읽은 수를 ACTIVE 기준으로 일치, `/album`, `seniorId=읽은 시니어` |
