@@ -85,6 +85,7 @@ public enum ErrorCode {
     // 건강 일정 관련
     HEALTH_SCHEDULE_INVALID_PROGRESS_TRANSITION(HttpStatus.BAD_REQUEST, "HEALTH_SCHEDULE_4000", "완료는 방문 인증으로만 처리됩니다."),
     HEALTH_SCHEDULE_EDIT_LOCKED(HttpStatus.CONFLICT, "HEALTH_SCHEDULE_4090", "방문 인증을 마친 건강 일정은 수정하거나 삭제할 수 없습니다."),
+    MEDICINE_SCHEDULE_TIME_DUPLICATED(HttpStatus.CONFLICT, "MEDICINE_SCHEDULE_4090", "같은 시각에 이미 약 알람이 있습니다."),
 
     // fcm 관련
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),
@@ -146,9 +147,11 @@ public enum ErrorCode {
 
     // 위치 원본 관련
     LOCATION_FIX_INVALID(HttpStatus.BAD_REQUEST, "LOCATION_4000", "위치 원본 형식이 올바르지 않습니다."),
+    LOCATION_ACCESS_EXPORT_RANGE_INVALID(HttpStatus.BAD_REQUEST, "LOCATION_4001", "열람 기록 내보내기 기간이 올바르지 않습니다."),
 
     // 기기 상태 하트비트 관련
     HEARTBEAT_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4000", "하트비트 형식이 올바르지 않습니다."),
+    DEVICE_EVENT_BATCH_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4001", "기기 이벤트 묶음 형식이 올바르지 않습니다."),
 
     // 측정회차 관련
     RUN_NOT_FOUND(HttpStatus.NOT_FOUND, "RUN_4041", "측정회차를 찾을 수 없습니다."),

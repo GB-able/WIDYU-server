@@ -171,6 +171,28 @@ class MedicineScheduleRepositoryTest {
     }
 
     @Test
+    @DisplayName("같은 시각 중복을 확인하면 종료되지 않은 알람만 보고 종료된 옛 알람과 다른 회원은 뺀다")
+    void 같은_시각_중복을_확인하면_종료되지_않은_알람만_보고_종료된_옛_알람과_다른_회원은_뺀다() {
+        // given: 08시는 오늘까지로 끝났고, 09시는 계속, 20시는 내일부터 시작한다
+        Member member = persistSenior("01088889999");
+        LocalDate today = LocalDate.of(2026, 11, 9);
+        persistSchedule(member, LocalTime.of(8, 0), today.minusDays(5), today);
+        persistSchedule(member, LocalTime.of(9, 0), today.minusDays(5), null);
+        persistSchedule(member, LocalTime.of(20, 0), today.plusDays(1), null);
+        persistSchedule(persistSenior("01088880000"), LocalTime.of(7, 0), today.minusDays(5), null);
+
+        // when / then
+        assertThat(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                member, Status.ACTIVE, LocalTime.of(8, 0))).isFalse();
+        assertThat(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                member, Status.ACTIVE, LocalTime.of(9, 0))).isTrue();
+        assertThat(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                member, Status.ACTIVE, LocalTime.of(20, 0))).isTrue();
+        assertThat(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                member, Status.ACTIVE, LocalTime.of(7, 0))).isFalse();
+    }
+
+    @Test
     @DisplayName("월 범위와 겹치는 스케줄 버전만 조회한다")
     void 월_범위와_겹치는_스케줄_버전만_조회한다() {
         // given

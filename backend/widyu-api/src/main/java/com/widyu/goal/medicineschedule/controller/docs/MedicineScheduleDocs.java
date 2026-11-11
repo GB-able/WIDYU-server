@@ -371,6 +371,7 @@ public interface MedicineScheduleDocs {
                     - 오늘 인증 가능 시간(알람 ±30분)이 남은 시각이면 오늘부터, 이미 지난 시각이면 다음 날부터 적용합니다.
                     - 응답의 scheduleRevision은 시니어의 복약 알람 revision입니다.
                     - 시니어 한 명당 약 알람은 최대 6개입니다. 종료되지 않은 알람(내일부터 시작하는 알람 포함)이 이미 6개면 400입니다. 삭제하면 바로 자리가 비고, 수정은 개수를 바꾸지 않습니다.
+                    - 같은 시각의 종료되지 않은 알람(내일부터 시작하는 알람 포함)이 이미 있으면 409(`MEDICINE_SCHEDULE_4090`)입니다. 지웠거나 시각을 바꾼 옛 알람과 같은 시각은 등록할 수 있습니다.
 
                     **권한:**
                     - 현재 가족 방장만 등록할 수 있습니다. 대상 시니어 memberId는 필수입니다.
@@ -429,7 +430,8 @@ public interface MedicineScheduleDocs {
             ),
             @ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
-            @ApiResponse(responseCode = "403", description = "권한 없음")
+            @ApiResponse(responseCode = "403", description = "권한 없음"),
+            @ApiResponse(responseCode = "409", description = "같은 시각의 약 알람이 이미 있음 (MEDICINE_SCHEDULE_4090)")
     })
     ApiResponseTemplate<MedicineScheduleIdResponse> createSchedule(
             @Valid @RequestBody CreateMedicineScheduleRequest request,
@@ -449,6 +451,7 @@ public interface MedicineScheduleDocs {
                     - 적용일 전날까지의 기록은 기존 버전에 남습니다. 적용일 전날에 유효하지 않았던 버전(오늘 시작·시작 전)은 해당 버전을 그대로 갱신합니다.
                     - 응답의 medicineScheduleId는 적용될 버전 ID, effectiveFromDate는 적용 시작일입니다.
                     - 이미 종료된 과거 버전(닫힌 scheduleId)은 수정할 수 없습니다.
+                    - 바꿀 시각이 다른 종료되지 않은 알람(내일부터 시작하는 알람 포함)과 같으면 409(`MEDICINE_SCHEDULE_4090`)입니다. 자기 시각을 그대로 두고 약만 바꾸는 수정은 됩니다.
 
                     **권한:**
                     - 현재 가족 방장만 수정할 수 있습니다. 대상 시니어 memberId는 필수입니다.
@@ -498,7 +501,8 @@ public interface MedicineScheduleDocs {
             ),
             @ApiResponse(responseCode = "400", description = "존재하지 않는 스케줄"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
-            @ApiResponse(responseCode = "403", description = "권한 없음")
+            @ApiResponse(responseCode = "403", description = "권한 없음"),
+            @ApiResponse(responseCode = "409", description = "같은 시각의 약 알람이 이미 있음 (MEDICINE_SCHEDULE_4090)")
     })
     ApiResponseTemplate<MedicineScheduleIdResponse> updateSchedule(
             @Parameter(description = "약 복용 스케줄 ID", required = true)

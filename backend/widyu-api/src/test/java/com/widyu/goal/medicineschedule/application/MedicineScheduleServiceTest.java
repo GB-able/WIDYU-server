@@ -7,11 +7,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.never;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.NotificationType;
@@ -515,6 +517,99 @@ class MedicineScheduleServiceTest {
         then(medicineScheduleRepository).should(never()).save(any(MedicineSchedule.class));
         then(fcmService).shouldHaveNoInteractions();
         assertThat(targetMember.getMedicationAlarmRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("같은 시각의 알람이 이미 있으면 새 알람 생성을 409로 거부하고 저장·알림을 하지 않는다")
+    void 같은_시각의_알람이_이미_있으면_새_알람_생성을_409로_거부한다() {
+        // given
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, LocalTime.of(23, 59))).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.createSchedule(createRequest("23:59"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+        then(medicineScheduleRepository).should(never()).save(any(MedicineSchedule.class));
+        then(fcmService).shouldHaveNoInteractions();
+        assertThat(targetMember.getMedicationAlarmRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("알람이 6개여도 같은 시각이면 개수 초과 400이 아니라 중복 409로 거부한다")
+    void 알람이_6개여도_같은_시각이면_중복_409로_거부한다() {
+        // given
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        // 중복 검사가 먼저면 개수는 조회되지 않는다. 순서가 뒤집히면 이 6개 때문에 400이 나가 테스트가 깨진다.
+        lenient().when(medicineScheduleRepository.countByMemberAndStatusAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE)).thenReturn(6L);
+        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, LocalTime.of(23, 59))).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.createSchedule(createRequest("23:59"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+    }
+
+    @Test
+    @DisplayName("다른 알람과 같은 시각으로 수정하면 409로 거부하고 기존 버전을 마감하지 않는다")
+    void 다른_알람과_같은_시각으로_수정하면_409로_거부하고_기존_버전을_마감하지_않는다() {
+        // given
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(scheduleId, targetMember, OPEN_ALARM, today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        given(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, LocalTime.of(9, 0))).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.updateSchedule(scheduleId, updateRequest("09:00"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.MEDICINE_SCHEDULE_TIME_DUPLICATED);
+        assertThat(existing.getEffectiveTo()).isNull();
+        assertThat(existing.getAlarmTime()).isEqualTo(OPEN_ALARM);
+        then(medicineScheduleRepository).should(never()).save(any(MedicineSchedule.class));
+        then(fcmService).shouldHaveNoInteractions();
+        assertThat(targetMember.getMedicationAlarmRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("같은 시각 알람이 이미 둘 있어도 시각을 그대로 두고 약만 수정하면 허용한다")
+    void 같은_시각_알람이_이미_둘_있어도_시각을_그대로_두고_약만_수정하면_허용한다() {
+        // given: 이 규칙 전에 저장된 같은 시각 알람이 하나 더 있다
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(scheduleId, targetMember, OPEN_ALARM, today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        // 시각이 그대로면 중복을 조회하지 않는다. 조회하면 이 true 때문에 409가 나 테스트가 깨진다.
+        lenient().when(medicineScheduleRepository.existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(
+                targetMember, Status.ACTIVE, OPEN_ALARM)).thenReturn(true);
+        given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
+        givenProvedToday(existing, false);
+        givenSavedScheduleId(101L);
+
+        // when
+        MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
+                scheduleId, updateRequest("23:59"), memberId);
+
+        // then
+        assertThat(response.medicineScheduleId()).isEqualTo(101L);
+        assertThat(response.effectiveFromDate()).isEqualTo(today());
     }
 
     @Test

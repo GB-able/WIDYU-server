@@ -40,7 +40,7 @@
 
 ### `goal` — 건강 목표
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
-- **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). → LLD-0007·0008·0009
+- **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). 같은 시각의 종료되지 않은 알람은 하나만 둔다(생성, 시각을 바꾸는 수정 시 409 `MEDICINE_SCHEDULE_4090`, #982). → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
 - 심박 측정값 1건을 1초마다 수신 → AI(`POST /api/hr`) 1회 호출 → 즉시 판정·저장
@@ -132,6 +132,7 @@
 - 폰이 60초마다 보내는 기기 상태를 `POST /api/v1/device/heartbeats`로 받아 원문 + 질의용 필드를 `device_heartbeat`에 저장한다. 자료가 비었을 때 **왜 비었는지**(배터리·미착용·앱 종료·네트워크)를 아는 유일한 근거다 → LLD-0049, 지시서 B7
 - **멱등 키는 `(device_id, session_id, ts_ms)`** — 이 스트림에는 `seq`가 없다. 같은 조합이면 `DUPLICATE`, UK 경합은 재조회로 확인될 때만 중복으로 본다. 회차 귀속은 B8의 `resolveRun`을 재사용한다
 - `watch.connected=false`면 나머지 `watch_*`는 **null로 저장한다**(0 치환 금지 — 배터리 0%로 읽힌다). `on_body=false`도 값 그대로 남긴다. **배터리·큐·권한 값을 어떤 로그 레벨에도 남기지 않는다** — memberId·deviceId·result만
+- **상태 바뀜 기록**(`device_event`): 실험 모드에서 충전·착용·폰 연결·네트워크 등이 바뀐 시각을 `POST /api/v1/device/events`(이벤트 배열)로 받아 항목마다 `STORED`·`DUPLICATE`·`REJECTED`를 돌려준다. 멱등 키 `(device_id, event_id)`, **모르는 `kind`도 저장한다**(길이만 검증), 한 항목 형식 오류가 다른 항목을 막지 않는다. 회차는 `resolveRun`, 기간 내보내기 `device_events.csv` → LLD-0129
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
@@ -150,6 +151,7 @@
 - **합쳐진 건은 `notified_at`을 비워 둔다.** 다이제스트가 `notified_at IS NULL` 전체를 묶으므로 즉시 모드에서 빠진 건도 결국 알린다
 - `FcmCategory.LOCATION_NOTICE`는 알림 설정 그룹에 없다 — 법 요건이라 끄지 않는다(미등록 카테고리는 기본 허용)
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
+- 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132
 - 자동 삭제가 없다(ADR-0036 결정 6)
 
 ### `consent` — 인앱 동의 기록
