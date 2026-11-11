@@ -303,7 +303,7 @@ class SensorBatchWebSocketControllerTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         WebSocketWorkDispatcher dispatcher =
                 new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), registry);
-        SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null);
+        SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null, null);
         return new SensorBatchWebSocketController(sensorBatchService, new ObjectMapper(), dispatcher, executor, properties);
     }
 

@@ -52,6 +52,25 @@ sensor:
     decider-version: ${SENSOR_HEART_AI_DECIDER_VERSION:ver7}
     # 착용이 확실하지 않은 심박은 판정하지 않는다(LLD-0126). 앱 #109 실기기 확인 뒤 켠다.
     wear-gate-enabled: ${SENSOR_HEART_AI_WEAR_GATE_ENABLED:false}
+    # 손목 움직임 활동 상태를 AI context로 보낸다(LLD-0138). 꺼져 있으면 지금처럼 UNKNOWN이다.
+    # 지금 AI는 REST가 오면 고정 기준(40 이하, 150 이상)을 꺼 쉬는 중 급락을 늦게 잡는다.
+    # AI가 「고정 기준은 어떤 상태에서도 유지」(노션 3-1)를 배포하고 ADR-0042 결정 4의 검증을 마치기 전에는 켜지 않는다.
+    activity-context-enabled: ${SENSOR_HEART_AI_ACTIVITY_CONTEXT_ENABLED:false}
+
+  # 손목 움직임 5초 구간 활동 상태(LLD-0138, ADR-0042 결정 6). 연구팀 후보 값이라 규칙 문서가 오면 바꾼다.
+  # 움직임 크기 = 구간 안 (가속도 벡터 크기 - 1g)의 표준편차(g). rest-max-g 미만 REST, active-min-g 이상 ACTIVE, 사이는 LOW.
+  activity:
+    window-sec: 5
+    # 50Hz면 구간당 250개다. 이보다 적은 구간은 상태를 정하지 않고 심박에 UNKNOWN이 붙는다.
+    min-window-samples: ${SENSOR_ACTIVITY_MIN_WINDOW_SAMPLES:125}
+    rest-max-g: ${SENSOR_ACTIVITY_REST_MAX_G:0.04}
+    active-min-g: ${SENSOR_ACTIVITY_ACTIVE_MIN_G:0.20}
+    # 마지막 ACTIVE 구간이 끝난 뒤 이 시간 안이면 REST·LOW 대신 RECOVERY다.
+    recovery-sec: ${SENSOR_ACTIVITY_RECOVERY_SEC:600}
+    # 이 시간 전후 위치가 모두 이 속도를 넘으면 IN_VEHICLE. 정확도가 이 값(m)보다 나쁜 위치는 보지 않는다.
+    vehicle-speed-kmh: ${SENSOR_ACTIVITY_VEHICLE_SPEED_KMH:20}
+    vehicle-sec: ${SENSOR_ACTIVITY_VEHICLE_SEC:60}
+    vehicle-max-accuracy-m: ${SENSOR_ACTIVITY_VEHICLE_MAX_ACCURACY_M:50}
 
   # 본인확인 선행은 시니어 앱 준비 뒤 운영에서 켠다(LLD-0070).
   incident:

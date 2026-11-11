@@ -329,10 +329,10 @@ final class RunExportFixture {
                         "NO_DATA_IN_THIS_RUN"),
                 new com.widyu.global.properties.SensorProperties.FallAi(
                         false, "/api/fall", 2, "widyu-server", "abstain-v1"),
-                new com.widyu.global.properties.SensorProperties.HeartAi("widyu-ai-hr", "ver7", false),
+                new com.widyu.global.properties.SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, false),
                 new com.widyu.global.properties.SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new com.widyu.global.properties.SensorProperties.Followup(false, false),
-                new com.widyu.global.properties.SensorProperties.Medication(true));
+                new com.widyu.global.properties.SensorProperties.Medication(true), null);
     }
 
     // ── 현실 분량 합성 회차(LLD-0050 7절) ──────────────────────────

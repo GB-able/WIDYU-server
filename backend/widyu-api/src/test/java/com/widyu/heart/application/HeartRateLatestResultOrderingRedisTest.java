@@ -23,6 +23,7 @@ import com.widyu.heart.repository.HeartRateRedisFixture;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
+import com.widyu.sensor.application.ActivityStateService;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -216,7 +217,8 @@ class HeartRateLatestResultOrderingRedisTest {
                 eventRepository,
                 mock(DecisionRecordPersistenceService.class),
                 mock(SensorProperties.class),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(ActivityStateService.class));
     }
 
     /** 최신값 쓰기만 실제 Redis로 가고 MySQL 저장은 대역이다. */

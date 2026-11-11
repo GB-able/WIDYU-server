@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -30,6 +31,7 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.CollectionRunStatus;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import com.widyu.sensor.repository.SensorBatchRepository;
@@ -59,6 +61,7 @@ class SensorBatchServiceTest {
     @Mock private ClockMappingService clockMappingService;
     @Mock private com.widyu.heart.application.HeartRateBatchService heartRateBatchService;
     @Mock private com.widyu.decision.application.FallAssessmentService fallAssessmentService;
+    @Mock private ActivityStateService activityStateService;
     @Mock private com.widyu.run.application.CollectionRunService collectionRunService;
     @Mock private MemberRepository memberRepository;
     @Mock private S3Service s3Service;
@@ -175,6 +178,24 @@ class SensorBatchServiceTest {
         assertThat(saved.getGyroT0ElapsedNs()).isNull();
         assertThat(saved.getGyroFsHzRequested()).isNull();
         assertThat(saved.getAccN()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("워치 IMU 배치를 저장하면 수신 때 파싱한 가속도를 활동 상태 계산에 넘긴다")
+    void 워치_IMU_배치를_저장하면_파싱한_가속도를_활동_상태_계산에_넘긴다() {
+        // given
+        givenMemberExists();
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+
+        // then
+        // S3 원문을 다시 읽지 않고 이미 검증한 DTO 값을 넘긴다(LLD-0138 5.1).
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        ArgumentCaptor<SensorBatchRequest.Axis> acc = ArgumentCaptor.forClass(SensorBatchRequest.Axis.class);
+        then(activityStateService).should()
+                .record(eq(MEMBER_ID), eq("imu_watch"), any(SensorBatchRequest.Clock.class), acc.capture(), isNull());
+        assertThat(acc.getValue().n()).isEqualTo(3);
     }
 
     @Test
@@ -1007,6 +1028,7 @@ class SensorBatchServiceTest {
                 clockMappingService,
                 heartRateBatchService,
                 fallAssessmentService,
+                activityStateService,
                 collectionRunService,
                 memberRepository,
                 s3Service,
