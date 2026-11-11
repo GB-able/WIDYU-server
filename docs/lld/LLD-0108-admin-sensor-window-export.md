@@ -18,7 +18,7 @@
 
 ### In scope
 - 변경 모듈: widyu-api, 운영 스크립트
-- 관리자 전용 동기 API 하나. 응답은 CSV 여덟 개를 담은 zip(#983에서 `dropped_ranges.csv`, #987에서 `rejections.csv` 추가).
+- 관리자 전용 동기 API 하나. 응답은 3절 표의 CSV 전부(`location`, `hr`, `imu`, `sensor_batches`, `device_heartbeat`, `device_events`, `dropped_ranges`, `rejections`, `summary`)를 담은 zip(#983에서 `dropped_ranges.csv`, #990에서 `device_events.csv`, #987에서 `rejections.csv` 추가).
 - 위치 원본(`location_fix`), 기기 상태(`device_heartbeat`), 센서 묶음 목록(`sensor_batch`), 그리고 S3 원문을 표본 단위로 펼친 심박(`hr`)·가속도/자이로(`imu_watch`·`imu_phone`).
 - 개발 서버에서 회원별 수신 상태를 보는 조회 스크립트 `scripts/ops/sensor-status.sh`.
 - (#990) zip에 실험 모드 기기 상태 바뀜 `device_events.csv`를 더한다(LLD-0129).
@@ -95,7 +95,7 @@ IMU 표본 시각은 축마다 `t0_elapsed_ns`에서 `dt_ns`를 누적한 경과
 
 ## 7. 인수조건 (Acceptance Criteria)
 
-- [x] 회원 ID와 한국 시간 `from`·`to`를 주면 앞뒤 여유를 붙인 구간의 CSV 여섯 개가 zip으로 내려온다.
+- [x] 회원 ID와 한국 시간 `from`·`to`를 주면 앞뒤 여유를 붙인 구간의 CSV가 3절 표의 파일 목록대로 zip으로 내려온다.
 - [x] (#983) 버린 시각이 구간 안인 `imu_dropped` 기록이 `dropped_ranges.csv`에 한 줄씩 들어가고 `summary.csv`에 행 수가 남는다. 기록이 없어도 헤더만 있는 파일이 들어간다.
 - [x] (#987) `sensor_batches.csv`에 `ingest_channel` 열이 있고, 수신 시각이 구간 안인 거절 기록이 `rejections.csv`에 한 줄씩 들어간다. 기록이 없어도 헤더만 있는 파일이 들어간다.
 - [x] 구간 밖 위치·기기 상태·표본은 들어가지 않고, 경계에 걸친 묶음은 구간 안 표본만 들어간다.

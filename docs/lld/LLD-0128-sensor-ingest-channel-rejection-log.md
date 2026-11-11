@@ -196,6 +196,7 @@ DDL: `scripts/mysql/create_sensor_batch_rejection.sql`, `scripts/mysql/add_senso
 - `SensorBatchService.ingest` 시그니처가 바뀐다(경로 인자 추가). 호출부는 두 컨트롤러뿐이다
 - `SensorBatchService` 생성자에 `SensorBatchRejectionRecorder`, `MeterRegistry`가, `SensorBatchWebSocketController` 생성자에 `MeterRegistry`가 추가된다
 - 거절 한 건마다 DB 쓰기 한 번이 늘어난다. 거절은 정상 수신보다 드물고, 기록 실패가 응답을 막지 않는다
+- **연구 철회 수동 삭제 대상에 넣는다.** 거절 기록에는 원문이 없지만 회원·기기·묶음 식별자가 남는다. `run_id`가 없어 회원과 회차 기간의 수신 시각, 또는 회차 배치의 `batch_id`로 찾는다(`docs/operations/study-withdrawal-procedure.md`)
 
 ## 9. 미결정 사항 (Open Questions)
 
