@@ -20,6 +20,10 @@ public interface LocationAccessLogRepository extends JpaRepository<LocationAcces
     Page<LocationAccessLog> findBySeniorMemberIdAndAccessedAtBetween(
             Long seniorMemberId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
+    /** 관리자 내보내기(LLD-0132). 기간 안의 행 전체를 시간순으로 읽는다. 인덱스 {@code (senior_member_id, accessed_at)}. */
+    List<LocationAccessLog> findBySeniorMemberIdAndAccessedAtBetweenOrderByAccessedAtAscIdAsc(
+            Long seniorMemberId, LocalDateTime from, LocalDateTime to);
+
     /**
      * 쿨다운 안에 같은 보호자에게 이미 통보했는지 본다(LLD-0056 5.3).
      * 방금 넣은 행은 {@code notified_at}이 비어 있어 자기 자신에 걸리지 않는다.

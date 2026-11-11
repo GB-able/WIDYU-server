@@ -150,6 +150,7 @@
 - **합쳐진 건은 `notified_at`을 비워 둔다.** 다이제스트가 `notified_at IS NULL` 전체를 묶으므로 즉시 모드에서 빠진 건도 결국 알린다
 - `FcmCategory.LOCATION_NOTICE`는 알림 설정 그룹에 없다 — 법 요건이라 끄지 않는다(미등록 카테고리는 기본 허용)
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
+- 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132
 - 자동 삭제가 없다(ADR-0036 결정 6)
 
 ### `consent` — 인앱 동의 기록
