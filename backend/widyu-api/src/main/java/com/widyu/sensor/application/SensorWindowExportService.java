@@ -3,7 +3,9 @@ package com.widyu.sensor.application;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.widyu.device.DeviceEvent;
 import com.widyu.device.DeviceHeartbeat;
+import com.widyu.device.repository.DeviceEventRepository;
 import com.widyu.device.repository.DeviceHeartbeatRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -67,6 +69,7 @@ public class SensorWindowExportService {
     private final MemberRepository memberRepository;
     private final LocationFixRepository locationFixRepository;
     private final DeviceHeartbeatRepository deviceHeartbeatRepository;
+    private final DeviceEventRepository deviceEventRepository;
     private final SensorBatchRepository sensorBatchRepository;
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
     private final S3Service s3Service;
@@ -91,6 +94,8 @@ public class SensorWindowExportService {
                 memberId, window.startMs(), window.endMs());
         List<DeviceHeartbeat> heartbeats = deviceHeartbeatRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(
                 memberId, window.startMs(), window.endMs());
+        List<DeviceEvent> deviceEvents = deviceEventRepository
+                .findByMemberIdAndOccurredAtMsBetweenOrderByOccurredAtMsAsc(memberId, window.startMs(), window.endMs());
         List<SensorBatch> batches = sensorBatchRepository.findMemberWindowBatches(
                 memberId, window.startMs(), window.endMs());
         List<SensorDroppedRange> droppedRanges = sensorDroppedRangeRepository
@@ -110,6 +115,10 @@ public class SensorWindowExportService {
             counts.put("device_heartbeat.csv", writeEntry(zip, out, "device_heartbeat.csv",
                     SensorWindowCsv.HEARTBEAT_HEADER,
                     heartbeats.stream().map(heartbeat -> SensorWindowCsv.heartbeat(heartbeat, window)).toList()));
+            // 실험 모드에서 기기 상태가 바뀐 시각이다(LLD-0129).
+            counts.put("device_events.csv", writeEntry(zip, out, "device_events.csv",
+                    SensorWindowCsv.DEVICE_EVENT_HEADER,
+                    deviceEvents.stream().map(event -> SensorWindowCsv.deviceEvent(event, window)).toList()));
             // 묶음 번호가 빠졌을 때 워치가 버린 것인지 서버가 못 받은 것인지 가르는 근거다(#983).
             counts.put("dropped_ranges.csv", writeEntry(zip, out, "dropped_ranges.csv",
                     SensorWindowCsv.DROPPED_HEADER,
