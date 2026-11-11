@@ -90,8 +90,8 @@ class LocationAccessDigestSchedulerTest {
     }
 
     @Test
-    @DisplayName("시작 시 요약은 반복 주기 없이 initialDelay만 가진 1회 작업으로 등록된다")
-    void 시작_시_요약은_1회_작업이다() throws NoSuchMethodException {
+    @DisplayName("시작 시 요약을 등록하면 반복 주기 없는 1회 작업으로 등록한다")
+    void 시작_시_요약을_등록하면_1회_작업으로_등록한다() throws NoSuchMethodException {
         // given & when
         Scheduled scheduled = LocationAccessDigestScheduler.class
                 .getMethod("flushOnStartup")
@@ -107,8 +107,8 @@ class LocationAccessDigestSchedulerTest {
     }
 
     @Test
-    @DisplayName("운영값을 따로 주지 않으면 정기 요약은 꺼지고 반복 조회를 합치는 쿨다운 설정은 없다")
-    void 기본값은_정기_요약_꺼짐이고_쿨다운_설정이_없다() {
+    @DisplayName("운영값을 따로 주지 않으면 정기 요약을 끄고 반복 조회를 합치는 쿨다운 설정을 두지 않는다")
+    void 운영값을_주지_않으면_정기_요약을_끄고_쿨다운_설정을_두지_않는다() {
         // given
         YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
         yaml.setResources(new ClassPathResource("application.yml"));
