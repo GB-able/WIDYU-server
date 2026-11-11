@@ -67,7 +67,7 @@ POST /api/v1/admin/studies/participations/{participationId}/withdrawal
 | MySQL `sensor_batch` | IMU·심박·ECG 배치 인덱스 | `run_id` |
 | S3 `sensor/...` | 배치 원문 | 삭제 전 캡처한 `sensor_batch.s3_key` |
 | MySQL `heart_rate_event`, `heart_rate_emergency` | 배치 심박·위급 | 삭제 전 캡처한 `batch_id`, 회원·측정시각 |
-| MySQL `sensor_batch_rejection` | 서버가 받고 거절한 묶음 기록(#987). 원문·센서값은 없지만 회원·기기·묶음 식별자(`member_id`, `device_id`, `batch_id`, `session_id`, `seq`)와 수신 시각이 있다 | `run_id`가 없으므로 회원과 회차 기간의 수신 시각, 또는 캡처한 `batch_id` |
+| MySQL `sensor_batch_rejection` | 서버가 받고 거절한 묶음 기록(#987). 원문·센서값은 없지만 회원·기기·묶음 식별자(`member_id`, `device_id`, `batch_id`, `session_id`, `seq`)와 수신 시각이 있다 | `run_id`가 없으므로 회원과 회차 기간의 수신 시각, 또는 캡처한 회원·`batch_id` |
 | MySQL `location_fix`, `device_heartbeat`, `device_event` | 위치·기기 상태·기기 상태 바뀜 | `run_id` |
 | MySQL `clock_mapping`, `run_marker`, `run_device_assignment` | 시계 기준점·마커·배정 | 삭제 전 캡처한 ID. 다른 회차가 공유하는 시계 기준점은 보존 |
 | MySQL `decision_record`, `incident` | 판정·본인확인·사후 판정 | `run_id`, `decision_id` |
@@ -94,7 +94,7 @@ WHERE p.participation_id = :pid;
 
 -- 전체 철회용 배치. 일부 ECG 철회면 마지막 조건을 AND b.stream = 'ecg'로 좁힌다.
 CREATE TEMPORARY TABLE wd_batches AS
-SELECT b.batch_id, b.s3_key, b.clock_mapping_id
+SELECT b.batch_id, b.member_id, b.s3_key, b.clock_mapping_id
 FROM sensor_batch b JOIN wd_runs r ON r.run_id = b.run_id;
 
 CREATE TEMPORARY TABLE wd_heart_events AS
@@ -133,7 +133,7 @@ CREATE TEMPORARY TABLE wd_device_events AS
 SELECT e.device_event_id
 FROM device_event e JOIN wd_runs r ON r.run_id = e.run_id;
 
--- 거절 기록에는 run_id가 없다. 회차 기간에 받은 그 회원의 거절과, 회차 배치와 같은 batch_id의 거절(회차가 닫힌 뒤 재전송이 거절된 경우)을 함께 잡는다.
+-- 거절 기록에는 run_id가 없다. 회차 기간에 받은 그 회원의 거절과, 회원과 batch_id가 회차 배치와 같은 거절(회차가 닫힌 뒤 재전송이 거절된 경우)을 함께 잡는다.
 -- 일부 ECG 철회면 두 SELECT 모두에 AND j.stream = 'ecg'를 붙인다.
 CREATE TEMPORARY TABLE wd_batch_rejections AS
 SELECT j.sensor_batch_rejection_id
@@ -144,7 +144,8 @@ WHERE j.received_at_ms >= r.started_at_ms
   AND j.received_at_ms <= COALESCE(r.ended_at_ms, UNIX_TIMESTAMP(NOW(3)) * 1000)
 UNION
 SELECT j.sensor_batch_rejection_id
-FROM sensor_batch_rejection j JOIN wd_batches b ON b.batch_id = j.batch_id;
+FROM sensor_batch_rejection j
+JOIN wd_batches b ON b.batch_id = j.batch_id AND b.member_id = j.member_id;
 
 CREATE TEMPORARY TABLE wd_markers AS
 SELECT m.id, m.clock_mapping_id
