@@ -170,6 +170,11 @@
 ### `admin` — 관리자
 - **접속기록**: `AdminAccessLogInterceptor`(`WebMvcConfig` 등록)가 `/api/v1/admin/**`·`/api/v1/auth/admin/**` 전 요청을 `admin_access_log`에 남긴다. 요청 본문·Authorization 헤더는 기록하지 않고, 삭제 스케줄러 없이 최소 2년 보관한다. 업무 행위 기록인 `admin_audit_log`와 역할이 다르다 → LLD-0057, ADR-0036
 
+### `retention` — 처리방침 보관 기간 정리
+- 매일 03:30 `RetentionPurgeScheduler`가 대상 11개 테이블의 기간 지난 행을 센다. **1단계(#1015)는 아무것도 지우지 않고** 테이블별 대상 건수·참가자 제외 건수를 `data_purge_log`에 남긴다. 실제 삭제(2단계)와 S3 원문 삭제(3단계)는 다음 PR이다 → ADR-0043, LLD-0136
+- 테이블별 기준 시각 칸·보관 기간·추가 조건·참가자 제외는 `RetentionTarget` 한 곳에 둔다. 건수와 삭제가 같은 조건을 써야 하므로 다른 곳에 조건을 복제하지 않는다
+- 기준 시각 인덱스가 없다. 기준 시각이 PK와 함께 늘어나는 점을 써서 PK 이분 탐색으로 경계를 찾고 `pk < 경계` 범위만 읽는다. 새 대상 테이블도 서버가 채우는 생성 시각 칸이어야 한다
+
 ## Redis 임시 데이터
 
 쿼리 캐시가 아닌 **TTL 기반 임시 저장**. `@RedisHash` + `@TimeToLive`로 자동 만료.
