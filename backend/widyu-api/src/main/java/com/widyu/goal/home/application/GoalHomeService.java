@@ -414,19 +414,17 @@ public class GoalHomeService {
                         BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
-        int totalCount = 0;
+        // 복용 횟수(알람 수)로 센다. 시니어 목표 홈·보호자 홈 카드와 같은 기준이다 (#1021).
+        int totalCount = schedules.size();
         int takenCount = 0;
 
         List<GuardianGoalHomeResponse.ScheduleItem> scheduleItems = new ArrayList<>();
 
         for (MedicineSchedule schedule : schedules) {
-            int scheduleTotal = schedule.getTotalCount();
-            totalCount += scheduleTotal;
-
             MedicationProof proof = proofMap.get(schedule.getId());
             boolean taken = proof != null;
             if (taken) {
-                takenCount += scheduleTotal;
+                takenCount++;
             }
 
             MedicationStatus status = MedicationStatus.of(taken, today, schedule.getAlarmTime(), now);

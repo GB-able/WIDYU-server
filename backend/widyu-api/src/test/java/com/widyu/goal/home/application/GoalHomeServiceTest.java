@@ -598,6 +598,55 @@ class GoalHomeServiceTest {
     }
 
     @Test
+    @DisplayName("1정과 2정 알람 중 하나를 인증하면 보호자 목표 홈은 복용 횟수 1/2와 약별 개수를 반환한다")
+    void 보호자_목표_홈은_복용_횟수를_알람_수로_센다() {
+        // given: 알약 개수 합(3)이 아니라 알람 수(2)로 세야 한다 (#1021)
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = dosedSchedule(senior, 1L, LocalTime.of(8, 0), 1);
+        MedicineSchedule night = dosedSchedule(senior, 2L, LocalTime.of(20, 0), 2);
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning, night));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/m.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().totalCount()).isEqualTo(2);
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+        assertThat(response.medicine().medicineSchedules())
+                .extracting(schedule -> schedule.medicines().getFirst().count())
+                .containsExactly(1, 2);
+    }
+
+    @Test
+    @DisplayName("1정과 2정 알람을 모두 인증하면 보호자 목표 홈은 복용 횟수 2/2를 반환한다")
+    void 보호자_목표_홈은_모두_인증하면_알람_수만큼_센다() {
+        // given
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = dosedSchedule(senior, 1L, LocalTime.of(8, 0), 1);
+        MedicineSchedule night = dosedSchedule(senior, 2L, LocalTime.of(9, 0), 2);
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning, night));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(
+                        proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/m.jpg"),
+                        proof(night, senior, today.atTime(9, 5), "https://cdn.widyu.shop/n.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().totalCount()).isEqualTo(2);
+        assertThat(response.medicine().takenCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("오늘 지난 일정·완료 일정·남은 일정과 내일 일정이 있으면 보호자 목표 홈은 오늘 일정만 오름차순으로 담고 다음 일정은 오늘 남은 일정을 반환한다")
     void 보호자_목표_홈은_오늘_일정만_담고_다음_일정은_오늘_남은_일정이다() {
         // given

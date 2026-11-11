@@ -270,6 +270,9 @@ public interface GoalHomeDocs {
                     - 오늘 일정이 없으면 todaySchedules는 빈 배열입니다(null 아님).
                     - 현재 시각 이후 일정이 없으면 hospital은 null이며, 클라이언트는 이 자리에 일정 추가 요청 컴포넌트를 표시합니다.
 
+                    **약 복용 횟수:**
+                    - totalCount는 오늘 유효한 알람 수, takenCount는 그중 오늘 인증한 알람 수입니다(시니어 목표 홈과 같은 기준, "1/6회"). 알약 개수 합이 아닙니다.
+
                     **약 스케줄 상세:**
                     - 각 알람 시간 (HH:mm 형식, 예: "19:00")
                     - 복용 상태 (DONE: 복용 완료, UPCOMING: 복용 시간 전, MISSED: 놓침)
