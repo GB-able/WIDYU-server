@@ -30,6 +30,7 @@ public enum ErrorCode {
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4008", "이미 연동된 소셜 계정입니다."),
     SOCIAL_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(HttpStatus.BAD_REQUEST, "AUTH_4009", "현재 사용자에게 이미 연동된 소셜 계정입니다."),
     SOCIAL_PROVIDER_ALREADY_LINKED(HttpStatus.BAD_REQUEST, "AUTH_4019", "이미 연동된 소셜 로그인 제공자입니다."),
+    ALREADY_REGISTERED_PHONE_NUMBER(HttpStatus.BAD_REQUEST, "AUTH_4021", "이미 가입된 전화번호입니다."),
 
     // 가족 관련
     FAMILY_LEADER_MUST_DELEGATE_BEFORE_WITHDRAW(HttpStatus.BAD_REQUEST, "FAMILY_4001", "방장 권한을 다른 구성원에게 위임한 후 탈퇴해주세요."),
@@ -72,14 +73,19 @@ public enum ErrorCode {
     APPLE_PRIVATE_KEY_PARSING_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "APPLE_5005", "애플 비밀 키 파싱에 실패하였습니다."),
     APPLE_WITHDRAW_ERROR(HttpStatus.BAD_GATEWAY, "APPLE_5006", "애플 계정 탈퇴에 실패하였습니다."),
 
+    // 도로명주소 검색
+    JUSO_COMMUNICATION_ERROR(HttpStatus.BAD_GATEWAY, "JUSO_5000", "주소 검색 서비스와 통신하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+
     // 회원 관련
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4041", "회원을 찾을 수 없습니다."),
     SENIOR_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "MEMBER_4042", "시니어 프로필을 찾을 수 없습니다."),
     TEMPORARY_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_4041", "임시 회원을 찾을 수 없습니다."),
+    PHONE_NUMBER_SHARED_BY_MEMBERS(HttpStatus.CONFLICT, "MEMBER_4090", "같은 전화번호로 가입된 회원이 여러 명이라 본인을 확인할 수 없습니다. 고객센터로 문의해 주세요."),
 
     // 건강 일정 관련
     HEALTH_SCHEDULE_INVALID_PROGRESS_TRANSITION(HttpStatus.BAD_REQUEST, "HEALTH_SCHEDULE_4000", "완료는 방문 인증으로만 처리됩니다."),
     HEALTH_SCHEDULE_EDIT_LOCKED(HttpStatus.CONFLICT, "HEALTH_SCHEDULE_4090", "방문 인증을 마친 건강 일정은 수정하거나 삭제할 수 없습니다."),
+    MEDICINE_SCHEDULE_TIME_DUPLICATED(HttpStatus.CONFLICT, "MEDICINE_SCHEDULE_4090", "같은 시각에 이미 약 알람이 있습니다."),
 
     // fcm 관련
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),
@@ -141,9 +147,11 @@ public enum ErrorCode {
 
     // 위치 원본 관련
     LOCATION_FIX_INVALID(HttpStatus.BAD_REQUEST, "LOCATION_4000", "위치 원본 형식이 올바르지 않습니다."),
+    LOCATION_ACCESS_EXPORT_RANGE_INVALID(HttpStatus.BAD_REQUEST, "LOCATION_4001", "열람 기록 내보내기 기간이 올바르지 않습니다."),
 
     // 기기 상태 하트비트 관련
     HEARTBEAT_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4000", "하트비트 형식이 올바르지 않습니다."),
+    DEVICE_EVENT_BATCH_INVALID(HttpStatus.BAD_REQUEST, "DEVICE_4001", "기기 이벤트 묶음 형식이 올바르지 않습니다."),
 
     // 측정회차 관련
     RUN_NOT_FOUND(HttpStatus.NOT_FOUND, "RUN_4041", "측정회차를 찾을 수 없습니다."),

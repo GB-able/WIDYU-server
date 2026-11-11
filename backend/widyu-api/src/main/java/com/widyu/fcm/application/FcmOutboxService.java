@@ -95,7 +95,7 @@ public class FcmOutboxService {
                     .notificationType(type).dataPayload(dataPayload).notificationId(notificationId)
                     .fcmCategory(category(message)).emergency(message.emergency())
                     .decisionId(message.decisionId()).state(FcmOutbox.State.PENDING)
-                    .availableAt(now).expiresAt(now.plus(properties.ttl(message.emergency()))).build();
+                    .availableAt(now).expiresAt(pushExpiresAt(now, message)).build();
             outbox.save(row);
             Long id = row.getId();
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -103,6 +103,15 @@ public class FcmOutboxService {
                 public void afterCommit() { dispatcher.submit(id); }
             });
         }
+    }
+
+    /** 일반·위급 TTL과 메시지가 정한 상한 중 이른 값이다(LLD-0127). */
+    private LocalDateTime pushExpiresAt(LocalDateTime now, FcmSendDto message) {
+        LocalDateTime byTtl = now.plus(properties.ttl(message.emergency()));
+        if (message.pushExpiresAt() != null && message.pushExpiresAt().isBefore(byTtl)) {
+            return message.pushExpiresAt();
+        }
+        return byTtl;
     }
 
     private LocalDateTime centerExpiresAt(LocalDateTime now, NotificationType type) {

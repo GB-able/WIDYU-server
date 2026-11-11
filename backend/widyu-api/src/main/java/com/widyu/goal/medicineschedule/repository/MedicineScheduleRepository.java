@@ -35,6 +35,20 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
             @Param("date") LocalDate date
     );
 
+    // date 이후 하루라도 유효한 스케줄 버전 조회 (복약 알람 동기화용, LLD-0125).
+    // 내일부터 시작하는 버전을 포함하고, 시작 전에 취소돼 하루도 유효하지 않은 버전은 뺀다.
+    @Query("SELECT DISTINCT ms FROM MedicineSchedule ms " +
+           "LEFT JOIN FETCH ms.categories c " +
+           "WHERE ms.member = :member AND ms.status = :status " +
+           "AND (ms.effectiveTo IS NULL OR (ms.effectiveTo >= :date " +
+           "     AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= ms.effectiveTo))) " +
+           "ORDER BY ms.alarmTime ASC, ms.effectiveFrom ASC")
+    List<MedicineSchedule> findEffectiveFromDateByMemberWithDetails(
+            @Param("member") Member member,
+            @Param("status") Status status,
+            @Param("date") LocalDate date
+    );
+
     // [start, end] 기간과 겹치는 모든 스케줄 버전 조회 (월별 통계에서 날짜별 유효 수 계산용)
     @Query("SELECT ms FROM MedicineSchedule ms " +
            "WHERE ms.member = :member AND ms.status = :status " +
@@ -61,6 +75,9 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
 
     // 종료되지 않은 현재 알람 개수. 내일부터 시작하는 알람도 포함한다 (알람 개수 상한 판정)
     long countByMemberAndStatusAndEffectiveToIsNull(Member member, Status status);
+
+    // 같은 시각의 종료되지 않은 알람이 있는지. 내일부터 시작하는 알람도 포함한다 (시각 중복 판정)
+    boolean existsByMemberAndStatusAndAlarmTimeAndEffectiveToIsNull(Member member, Status status, LocalTime alarmTime);
 
     // 특정 날짜에 유효했던 스케줄 개수 (복약 포인트 완주 보너스 판정의 분모)
     @Query("SELECT COUNT(ms) FROM MedicineSchedule ms " +

@@ -65,10 +65,14 @@ public record SensorProperties(
     /**
      * 심박 판정기의 이름과 판. AI 응답에 판정기 식별자가 없어 설정값으로 적는다(ADR-0035 부정 1).
      * AI 이미지 태그를 올릴 때 손으로 맞춰야 한다.
+     *
+     * <p>{@code wearGateEnabled}는 착용이 확실하지 않은 심박을 판정하지 않는 스위치다(LLD-0126). 워치가 다시 찬 뒤에도
+     * 미착용을 보내는 문제(앱 #109)가 실기기에서 확인되기 전에는 꺼 둔다. 먼저 켜면 정상 착용 심박까지 판정에서 빠진다.
      */
     public record HeartAi(
             String deciderId,
-            String deciderVersion
+            String deciderVersion,
+            boolean wearGateEnabled
     ) {}
 
     /** 본인확인 마감·순서 전환·상황 창(LLD-0070), 확인 화면 수신 대기(LLD-0085). */

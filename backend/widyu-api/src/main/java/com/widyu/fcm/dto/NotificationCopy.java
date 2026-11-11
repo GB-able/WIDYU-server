@@ -2,6 +2,9 @@ package com.widyu.fcm.dto;
 
 import com.widyu.fcm.NotificationType;
 import java.util.Map;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -79,6 +82,50 @@ public record NotificationCopy(String title, String body) {
             safeValues = values;
         }
         return new NotificationCopy(render(template.title(), safeValues), render(template.body(), safeValues));
+    }
+
+    /**
+     * 관리자 테스트 발송의 기본 문구 코드. 테스트도 실제 OS 푸시로 나가므로 서버가 보내는 OS 문구를 고른다.
+     * H01은 서버가 {@code H01-S-OS}만 보내므로 그 코드로 고정하고(INAPP·보호자 변형은 잠금화면에 일정명이 드러난다),
+     * 그 밖에는 {@code -OS} 변형이 있으면 그중 첫 코드, 없으면 사전순 첫 코드를 쓴다.
+     */
+    public static String defaultCode(NotificationType type) {
+        if (type == null || type.copyCode() == null) {
+            throw new IllegalArgumentException("문구가 없는 알림 타입입니다.");
+        }
+        if (type == NotificationType.HEALTH_SCHEDULE_UPCOMING) {
+            return "H01-S-OS";
+        }
+        List<String> codes = CATALOG.keySet().stream()
+                .filter(code -> allowed(type, code))
+                .sorted()
+                .toList();
+        if (codes.isEmpty()) {
+            throw new IllegalArgumentException("문구가 없는 알림 타입입니다.");
+        }
+        return codes.stream()
+                .filter(code -> code.endsWith("-OS"))
+                .findFirst()
+                .orElse(codes.getFirst());
+    }
+
+    /** 문구 코드의 제목·본문에 들어가는 변수 이름. 등록되지 않은 코드면 빈 목록이다. */
+    public static Set<String> variables(String code) {
+        NotificationCopy template = CATALOG.get(code);
+        Set<String> names = new LinkedHashSet<>();
+        if (template == null) {
+            return names;
+        }
+        for (String text : new String[] {template.title(), template.body()}) {
+            if (text == null) {
+                continue;
+            }
+            Matcher matcher = VARIABLE.matcher(text);
+            while (matcher.find()) {
+                names.add(matcher.group(1));
+            }
+        }
+        return names;
     }
 
     private static boolean allowed(NotificationType type, String code) {

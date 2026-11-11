@@ -165,15 +165,20 @@ public class RunExportAssembler {
         return node;
     }
 
-    /** 판정이 무엇을 보고 그렇게 말했는지. 심박 값이 있는 행에만 붙는다(LLD-0053 3절). 낙상 행에는 없다. */
+    /**
+     * 판정이 무엇을 보고 그렇게 말했는지. 심박 값이나 사유가 있는 행에만 붙는다(LLD-0053 3절, LLD-0126 5.4).
+     * 착용이 불확실해 판단하지 않은 행은 사유만 갖는다. 낙상 행에는 없다.
+     */
     private void putEvidence(ObjectNode node, DecisionRecord record) {
-        if (record.getHrBpm() == null) {
+        if (record.getHrBpm() == null && record.getReason() == null) {
             return;
         }
         ObjectNode evidence = node.putObject("evidence");
-        evidence.put("hr_bpm", record.getHrBpm());
-        putNullableLong(evidence, "hr_measured_at_ms", record.getHrMeasuredAtMs());
-        putNullableString(evidence, "hr_accuracy", record.getHrAccuracy());
+        if (record.getHrBpm() != null) {
+            evidence.put("hr_bpm", record.getHrBpm());
+            putNullableLong(evidence, "hr_measured_at_ms", record.getHrMeasuredAtMs());
+            putNullableString(evidence, "hr_accuracy", record.getHrAccuracy());
+        }
         putNullableString(evidence, "reason", record.getReason());
     }
 

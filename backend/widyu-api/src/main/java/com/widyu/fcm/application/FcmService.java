@@ -21,6 +21,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Member;
+import com.widyu.notification.NotificationCenterFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -59,24 +60,15 @@ public class FcmService {
         int fetchSize = pageSize + 1;
         Pageable pageable = PageRequest.of(0, fetchSize);
 
+        NotificationCenterFilter tab = NotificationCenterFilter.parse(category, member.getType());
+        LocalDateTime now = LocalDateTime.now();
         List<FcmNotification> notifications;
-
-        if ("ALL".equals(category)) {
-            notifications = fcmNotificationRepository.findNotificationsWithCursor(
-                    member.getId(), cursor, pageable);
-        } else if ("UNREAD".equals(category)) {
-            notifications = fcmNotificationRepository.findUnreadNotificationsWithCursor(
-                    member.getId(), cursor, pageable);
+        if (tab.isCategory()) {
+            notifications = fcmNotificationRepository.findCenterPageByCategory(
+                    member.getId(), now, cursor, tab.types(), tab.legacyCategories(), pageable);
         } else {
-            try {
-                FcmCategory fcmCategory = FcmCategory.valueOf(category);
-                notifications = fcmNotificationRepository.findNotificationsByCategoryWithCursor(
-                        member.getId(), fcmCategory, cursor, pageable);
-            } catch (IllegalArgumentException e) {
-                // 잘못된 카테고리인 경우 전체 조회로 처리
-                notifications = fcmNotificationRepository.findNotificationsWithCursor(
-                        member.getId(), cursor, pageable);
-            }
+            notifications = fcmNotificationRepository.findCenterPage(
+                    member.getId(), now, cursor, tab == NotificationCenterFilter.UNREAD, pageable);
         }
 
         if (notifications.isEmpty()) {
@@ -135,15 +127,19 @@ public class FcmService {
     public List<FcmCategoryResponse> getNotificationCategories() {
         Member member = memberUtil.getCurrentMember();
 
-        return Arrays.stream(FcmCategory.values())
-                .map(category -> {
-                    long count = switch (category) {
-                        case ALL, UNREAD -> fcmNotificationRepository.countByMemberFcmToken_MemberIdAndIsReadFalse(member.getId());
-                        default -> fcmNotificationRepository.countByMemberFcmToken_MemberIdAndFcmCategoryAndIsReadFalse(member.getId(), category);
-                    };
-                    return FcmCategoryResponse.of(category, count);
-                })
+        LocalDateTime now = LocalDateTime.now();
+
+        return NotificationCenterFilter.tabs(member.getType()).stream()
+                .map(tab -> FcmCategoryResponse.of(tab, countUnread(member.getId(), tab, now)))
                 .toList();
+    }
+
+    private long countUnread(Long memberId, NotificationCenterFilter tab, LocalDateTime now) {
+        if (tab.isCategory()) {
+            return fcmNotificationRepository.countCenterUnreadByCategory(
+                    memberId, now, tab.types(), tab.legacyCategories());
+        }
+        return fcmNotificationRepository.countCenterUnread(memberId, now);
     }
 
     // 토스트 모달 알림

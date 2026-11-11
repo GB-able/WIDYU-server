@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.widyu.auth.TemporaryMember;
 import com.widyu.auth.infrastructure.AuthLimitStore;
 import com.widyu.auth.infrastructure.ClientIpResolver;
+import com.widyu.auth.dto.request.ChangePasswordRequest;
 import com.widyu.auth.dto.request.EmailCheckRequest;
 import com.widyu.auth.dto.request.LocalGuardianSignInRequest;
 import com.widyu.auth.dto.request.SmsVerificationRequest;
@@ -28,6 +29,7 @@ import com.widyu.member.MemberType;
 import com.widyu.member.repository.LocalAccountRepository;
 import com.widyu.member.repository.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,7 +68,7 @@ class LocalLoginServiceTest {
         TokenPairResponse tokenPair = TokenPairResponse.of(1L, "access-token", "refresh-token");
 
         given(localAccountRepository.existsByEmail(email)).willReturn(false);
-        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동")).willReturn(Optional.empty());
+        given(memberRepository.existsByPhoneNumber("01012345678")).willReturn(false);
         given(memberRepository.save(any(Member.class))).willReturn(newMember);
         given(passwordEncoder.encode(rawPassword)).willReturn("encoded-password");
         given(localAccountRepository.save(any(LocalAccount.class))).willReturn(
@@ -85,29 +87,21 @@ class LocalLoginServiceTest {
     }
 
     @Test
-    @DisplayName("기존 전화번호+이름의 멤버가 있으면 새 멤버를 생성하지 않고 재사용한다")
-    void 기존_전화번호_이름의_멤버가_있으면_기존_멤버를_재사용한다() {
+    @DisplayName("같은 전화번호의 기존 회원이 있으면 회원과 로컬 계정을 저장하지 않고 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생한다")
+    void 같은_전화번호의_기존_회원이_있으면_가입을_거부한다() {
         // given
-        TemporaryMember temp = TemporaryMember.createTemporaryMember("홍길동", "01012345678");
-        String email = "new@test.com";
-        Member existingMember = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
-        ReflectionTestUtils.setField(existingMember, "id", 1L);
-        TokenPairResponse tokenPair = TokenPairResponse.of(1L, "access", "refresh");
-
+        TemporaryMember temp = TemporaryMember.createTemporaryMember("가상보호자", "01000000001");
+        String email = "virtual@test.com";
         given(localAccountRepository.existsByEmail(email)).willReturn(false);
-        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동"))
-                .willReturn(Optional.of(existingMember));
-        given(passwordEncoder.encode(any())).willReturn("encoded");
-        given(localAccountRepository.save(any())).willReturn(
-                LocalAccount.createLocalAccount(existingMember, email, "encoded")
-        );
-        given(jwtTokenProvider.generateTokenPair(any(), any(), any())).willReturn(tokenPair);
+        given(memberRepository.existsByPhoneNumber("01000000001")).willReturn(true);
 
-        // when
-        localLoginService.signupGuardianWithLocal(temp, email, "password");
-
-        // then
+        // when & then
+        assertThatThrownBy(() -> localLoginService.signupGuardianWithLocal(temp, email, "password"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         verify(memberRepository, never()).save(any(Member.class));
+        verify(localAccountRepository, never()).save(any(LocalAccount.class));
+        verifyNoInteractions(jwtTokenProvider);
     }
 
     @Test
@@ -213,7 +207,7 @@ class LocalLoginServiceTest {
         Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(member, "localAccount",
                 LocalAccount.createLocalAccount(member, "guardian@test.com", "encoded"));
-        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동")).willReturn(Optional.of(member));
+        given(memberRepository.findTop2ByPhoneNumberAndName("01012345678", "홍길동")).willReturn(List.of(member));
 
         // when
         MemberInfoResponse response = localLoginService.findMemberByPhoneNumberAndName(
@@ -264,13 +258,59 @@ class LocalLoginServiceTest {
         given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
 
         Member socialOnlyMember = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
-        given(memberRepository.findByPhoneNumberAndName("01012345678", "홍길동"))
-                .willReturn(Optional.of(socialOnlyMember));
+        given(memberRepository.findTop2ByPhoneNumberAndName("01012345678", "홍길동"))
+                .willReturn(List.of(socialOnlyMember));
 
         // when & then
         assertThatThrownBy(() -> localLoginService.findMemberByPhoneNumberAndName(
                 new SmsVerificationRequest("홍길동", "01012345678"), httpRequest))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("같은 이름과 전화번호의 회원이 둘 이상이면 이메일 찾기를 임의 회원으로 처리하지 않고 PHONE_NUMBER_SHARED_BY_MEMBERS 예외가 발생한다")
+    void 같은_이름과_전화번호의_회원이_둘_이상이면_이메일_찾기에서_예외가_발생한다() {
+        // given
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("홍길동", "01000000001");
+        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
+
+        Member first = Member.createMember(MemberType.GUARDIAN, "홍길동", "01000000001");
+        Member second = Member.createMember(MemberType.GUARDIAN, "홍길동", "01000000001");
+        given(memberRepository.findTop2ByPhoneNumberAndName("01000000001", "홍길동"))
+                .willReturn(List.of(first, second));
+
+        // when & then
+        assertThatThrownBy(() -> localLoginService.findMemberByPhoneNumberAndName(
+                new SmsVerificationRequest("홍길동", "01000000001"), httpRequest))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+    }
+
+    @Test
+    @DisplayName("같은 이름과 전화번호의 회원이 둘 이상이면 비밀번호 변경을 거부하고 어느 계정의 비밀번호도 바꾸지 않는다")
+    void 같은_이름과_전화번호의_회원이_둘_이상이면_비밀번호를_바꾸지_않는다() {
+        // given
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("홍길동", "01000000001");
+        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
+
+        Member first = Member.createMember(MemberType.GUARDIAN, "홍길동", "01000000001");
+        LocalAccount firstAccount = LocalAccount.createLocalAccount(first, "first@test.com", "encoded-first");
+        ReflectionTestUtils.setField(first, "localAccount", firstAccount);
+        Member second = Member.createMember(MemberType.GUARDIAN, "홍길동", "01000000001");
+        LocalAccount secondAccount = LocalAccount.createLocalAccount(second, "second@test.com", "encoded-second");
+        ReflectionTestUtils.setField(second, "localAccount", secondAccount);
+        given(memberRepository.findTop2ByPhoneNumberAndName("01000000001", "홍길동"))
+                .willReturn(List.of(first, second));
+
+        // when & then
+        assertThatThrownBy(() -> localLoginService.changePassword(
+                new ChangePasswordRequest("newPass1!"), httpRequest))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        assertThat(firstAccount.getPassword()).isEqualTo("encoded-first");
+        assertThat(secondAccount.getPassword()).isEqualTo("encoded-second");
     }
 }

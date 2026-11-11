@@ -50,6 +50,8 @@ sensor:
   heart-ai:
     decider-id: ${SENSOR_HEART_AI_DECIDER_ID:widyu-ai-hr}
     decider-version: ${SENSOR_HEART_AI_DECIDER_VERSION:ver7}
+    # 착용이 확실하지 않은 심박은 판정하지 않는다(LLD-0126). 앱 #109 실기기 확인 뒤 켠다.
+    wear-gate-enabled: ${SENSOR_HEART_AI_WEAR_GATE_ENABLED:false}
 
   # 본인확인 선행은 시니어 앱 준비 뒤 운영에서 켠다(LLD-0070).
   incident:

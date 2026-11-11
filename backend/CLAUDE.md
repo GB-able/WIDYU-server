@@ -31,6 +31,7 @@
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
 - `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE, INCIDENT_SELF_CHECK
+- 알림 목록 탭은 저장 카테고리가 아니라 `NotificationCenterFilter`(전체, 안 읽음, 메시지, 목표, 앨범, 위치(보호자만), 기타)다. v1 `/api/v1/fcm`과 v2 `/api/v1/notifications`가 같은 분류를 쓴다. 새 `NotificationType`은 `centerFilter`를 정해야 탭에 보인다. → LLD-0117
 - 비활성 유저 스케줄 알림(3/5/7일). → LLD-0002·0014
 
 ### `pay` — 결제·포인트
@@ -39,7 +40,7 @@
 
 ### `goal` — 건강 목표
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
-- **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). → LLD-0007·0008·0009
+- **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). 같은 시각의 종료되지 않은 알람은 하나만 둔다(생성, 시각을 바꾸는 수정 시 409 `MEDICINE_SCHEDULE_4090`, #982). → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
 - 심박 측정값 1건을 1초마다 수신 → AI(`POST /api/hr`) 1회 호출 → 즉시 판정·저장
@@ -60,6 +61,7 @@
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 - **배치 위급 판정은 `decision_record`에 한 줄 남고 그 `decision_id`가 FCM outbox 행을 타고 흘러간다**. 전송이 성공하면 그 판정의 `alert_delivered`·`alert_at_ms`가 채워진다. 단건 경로는 판정 기록을 남기지 않아 `decision_id`가 null이다 → LLD-0053
 - **로그에 bpm 값·AI 응답 본문·판정 사유를 남기지 않는다** (#639, 정책 1.6.7·완료기준 C9-6). 사유와 심박 값이 사는 곳은 판정 기록 행뿐이다
+- **착용 게이트**(`sensor.heart-ai.wear-gate-enabled`, 기본 false): 켜면 `on_body=false`이거나 `wear_state`가 `UNKNOWN`·`WORN_INVALID`·`PLANNED_NOT_WORN`·`ACTUAL_NOT_WORN`인 배치는 저장만 하고 AI를 부르지 않는다. 회차 배치는 `ABSTAIN`(`reason=WEAR_UNCERTAIN`, `decision_id=dec-ab-<batch_id>`), 단건은 착용 정보가 없어 판정하지 않고 DB 장애 때도 저하 알림 없이 예외를 낸다. 앱 #109 실기기 확인과 단건 트래픽 0(`heart.websocket.processing{path=single}`) 확인 뒤 켠다 → LLD-0126
 
 ### `sensor` — 원시 IMU 배치 (연구 수집, v2 형식)
 - 워치·폰의 가속도·자이로 배치를 **재표본화 없이** 저장. 배치 1건 = S3 객체 1개(`sensor/{memberId}/{deviceId}/{stream}/{batch_id}-{sha256}.json`) + `sensor_batch` 인덱스 행 1개 → ADR-0030 v2, LLD-0041 v2
@@ -75,6 +77,7 @@
 - 본문 상한은 `sensor.max-payload-bytes`(기본 32768, `application-sensor.yml`)
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`
+ - `stream: "imu_dropped"`(워치 IMU 큐가 넘쳐 버린 `seq` 구간)는 같은 endpoint로 와서 `sensor_batch`·S3가 아니라 `sensor_dropped_range`에 원문과 함께 저장한다. 멱등 키 `(member_id, session_id, from_seq)`, `batch_id`가 없어 응답 `batchId`·`seq`는 null → LLD-0124
 
 ### `decision` — 판정 기록 (연구 수집)
 
@@ -129,12 +132,13 @@
 - 폰이 60초마다 보내는 기기 상태를 `POST /api/v1/device/heartbeats`로 받아 원문 + 질의용 필드를 `device_heartbeat`에 저장한다. 자료가 비었을 때 **왜 비었는지**(배터리·미착용·앱 종료·네트워크)를 아는 유일한 근거다 → LLD-0049, 지시서 B7
 - **멱등 키는 `(device_id, session_id, ts_ms)`** — 이 스트림에는 `seq`가 없다. 같은 조합이면 `DUPLICATE`, UK 경합은 재조회로 확인될 때만 중복으로 본다. 회차 귀속은 B8의 `resolveRun`을 재사용한다
 - `watch.connected=false`면 나머지 `watch_*`는 **null로 저장한다**(0 치환 금지 — 배터리 0%로 읽힌다). `on_body=false`도 값 그대로 남긴다. **배터리·큐·권한 값을 어떤 로그 레벨에도 남기지 않는다** — memberId·deviceId·result만
+- **상태 바뀜 기록**(`device_event`): 실험 모드에서 충전·착용·폰 연결·네트워크 등이 바뀐 시각을 `POST /api/v1/device/events`(이벤트 배열)로 받아 항목마다 `STORED`·`DUPLICATE`·`REJECTED`를 돌려준다. 멱등 키 `(device_id, event_id)`, **모르는 `kind`도 저장한다**(길이만 검증), 한 항목 형식 오류가 다른 항목을 막지 않는다. 회차는 `resolveRun`, 기간 내보내기 `device_events.csv` → LLD-0129
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 - **v2 원본 저장**: `/app/location/update`를 `Message<byte[]>`로 받아 파싱한다. `v==2`·`device_id`·`ts_ms`가 오면 잰 시각·정확도·속도·`reason`(move/keepalive/incident)과 원문을 `location_fix`에 남긴다. 멱등 키는 `(device_id, session_id, seq)`, 회차 귀속은 B8 재사용 → LLD-0048
-- **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 하고(`LOCATION_4000`), 저장 실패는 WARN만 남기고 ACK를 막지 않는다. **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
+- **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 한다(`LOCATION_4000`). **v2 위치의 ACK(`LocationAckResponse`)는 「앱이 큐에서 지워도 된다」는 뜻이다**: 요청의 `deviceId`·`sessionId`·`seq`와 `result`(`STORED`·`DUPLICATE`·`REJECTED`)를 싣고, 업무 예외는 `REJECTED`, 원본 저장 실패(업무 예외 아님)는 ACK 없이 오류로 보내 앱이 재전송하게 한다. 이 경로에서 일시적 실패를 `BusinessException`으로 던지지 않는다 → LLD-0123 **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
 
 ### `location.access` — 보호자 위치 열람 기록·통보
 - 보호자가 시니어 위치를 읽으면 **읽기 경로마다 `location_access_log` 한 줄**을 남기고 시니어에게 통보한다(위치정보법 제16조②·제19조③④) → ADR-0036 결정 3·4, LLD-0056
@@ -147,6 +151,7 @@
 - **합쳐진 건은 `notified_at`을 비워 둔다.** 다이제스트가 `notified_at IS NULL` 전체를 묶으므로 즉시 모드에서 빠진 건도 결국 알린다
 - `FcmCategory.LOCATION_NOTICE`는 알림 설정 그룹에 없다 — 법 요건이라 끄지 않는다(미등록 카테고리는 기본 허용)
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
+- 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132
 - 자동 삭제가 없다(ADR-0036 결정 6)
 
 ### `consent` — 인앱 동의 기록

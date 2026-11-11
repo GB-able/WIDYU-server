@@ -264,6 +264,20 @@ erDiagram
         Boolean configMismatch "앱 적용 설정이 서버 지시값과 다름 (B12)"
     }
 
+    SensorDroppedRange {
+        Long id PK
+        Long memberId FK
+        String sessionId "버린 IMU 배치의 세션"
+        Long fromSeq "UK (member_id, session_id, from_seq)"
+        Long toSeq "양 끝 포함"
+        String reason "결측 사유, 값 목록 S2 대기"
+        Long tsMs "워치가 버린 시각"
+        Long serverReceivedAtMs
+        Long persistedAtMs
+        String payload "원문 JSON"
+        String payloadSha256
+    }
+
     DeviceHeartbeat {
         Long id PK
         Long member_id FK
@@ -279,6 +293,22 @@ erDiagram
         Long serverReceivedAtMs
         Long acceptedAtMs
         Long persistedAtMs
+    }
+
+    DeviceEvent {
+        Long id PK
+        Long member_id FK
+        String eventId "앱 생성, (device_id, event_id) UK"
+        String deviceId "상태가 바뀐 기기"
+        String source "watch / phone"
+        String kind "종류, 모르는 값도 저장"
+        Long occurredAtMs "바뀐 시각 (기기 벽시계)"
+        String sessionId
+        String attributes "종류별 값 JSON"
+        String runId "회차 귀속 (B8 재사용)"
+        Long serverReceivedAtMs
+        String payload "항목 원문 JSON"
+        String payloadSha256
     }
 
     LocationFix {
@@ -717,6 +747,8 @@ erDiagram
     SensorBatch }o--|| ClockMapping : "clock_mapping_id 참조 (FK 없음)"
     Member ||--o{ LocationFix : "위치 원본 (잰 시각·정확도·속도·사유)"
     Member ||--o{ DeviceHeartbeat : "기기 상태 하트비트 (60초)"
+    Member ||--o{ DeviceEvent : "실험 모드 기기 상태 바뀜"
+    Member ||--o{ SensorDroppedRange : "워치 IMU 큐가 버린 구간"
     Member ||--o{ CollectionRun : "측정회차 (대상 참가자)"
     Member ||--o{ Incident : "위급 사건 (본인확인·사후 판정)"
     Incident ||--o{ IncidentGuardianResponse : "보호자별 멈춤"
@@ -832,6 +864,8 @@ erDiagram
 | `sensor_batch` | `idx_sensor_batch_member_stream_time` | `(member_id, stream, measured_at_start_ms)` | 스트림별 시각 범위 조회 |
 | `sensor_batch` | `idx_sensor_batch_seq` | `(device_id, session_id, seq)` | 순번 누락 검사 |
 | `sensor_batch` | `idx_sensor_batch_run` | `(run_id)` | 회차별 조회 (B8 후속) |
+| `sensor_dropped_range` | UK `uk_sensor_dropped_range` | `(member_id, session_id, from_seq)` | 워치가 같은 구간을 다시 보내도 한 행 (LLD-0124) |
+| `sensor_dropped_range` | `idx_sensor_dropped_range_member_time` | `(member_id, ts_ms)` | 참가자별 시각순 조회 |
 | `clock_mapping` | UK `uk_clock_mapping_id` | `(clock_mapping_id)` | 한 식별자의 다섯 값은 불변. 다르면 409 (LLD-0044) |
 | `clock_mapping` | `idx_clock_mapping_device` | `(device_id)` | 기기별 매핑 조회 |
 | `collection_run` | UK `uk_collection_run_run_id` | `(run_id)` | 서버 발급 회차 식별자 |
@@ -873,6 +907,8 @@ erDiagram
 | `device_heartbeat` | UK `uk_device_heartbeat_ts` | `(device_id, session_id, ts_ms)` | seq 없는 하트비트 멱등 키 |
 | `device_heartbeat` | `idx_device_heartbeat_member_time` | `(member_id, ts_ms)` | 참가자별 시각순 조회 |
 | `device_heartbeat` | `idx_device_heartbeat_run` | `(run_id)` | 회차별 상태 조회 |
+| `device_event` | UK `uk_device_event` | `(device_id, event_id)` | 앱이 같은 기록을 다시 보내도 한 행 (LLD-0129) |
+| `device_event` | `idx_device_event_member_time` | `(member_id, occurred_at_ms)` | 참가자별 바뀐 시각순 조회·기간 내보내기 |
 | `consent_record` | `idx_consent_record_member_key_time` | `(member_id, consent_key, recorded_at)` | 항목별 최신 행 조회. UK를 두지 않는다 — 같은 항목에 행이 여러 개인 것이 이력이다 (LLD-0055) |
 | `location_access_log` | `idx_location_access_log_senior_time` | `(senior_member_id, accessed_at)` | 시니어가 자기 열람 기록을 기간으로 조회 (LLD-0056) |
 | `location_access_log` | `idx_location_access_log_senior_notified` | `(senior_member_id, notified_at)` | 즉시 통보 쿨다운 판단과 다이제스트 대상(`notified_at IS NULL`) 조회 (LLD-0056) |
@@ -906,6 +942,8 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-09 | `device_event` | 신규 테이블 (LLD-0129). 실험 모드 기기 상태 바뀜의 종류·바뀐 시각·종류별 값과 항목 원문 JSON. `source`·`kind`는 VARCHAR | `scripts/mysql/create_device_event.sql` |
+| 2026-11-05 | `sensor_dropped_range` | 신규 테이블 (LLD-0124). 워치 IMU 큐가 넘쳐 버린 구간과 원문 JSON | `scripts/mysql/create_sensor_dropped_range.sql` |
 | 2026-10-26 | `member_notification_setting` | 시니어 `GENERAL=false`를 `ALBUM/GOAL/HOME/ETC=false` 네 행으로 이행하고 시니어 `GENERAL` 행 제거 (LLD-0095) | `scripts/mysql/migrate_senior_notification_settings.sql` |
 | 2026-10-13 | `incident` | 확인 화면 수신 시각·기기 `prompt_displayed_at_ms`·`prompt_displayed_via` 추가 (LLD-0085) | `scripts/mysql/alter_incident_prompt_displayed.sql` |
 | 2026-10-11 | `incident` | 워치 도움 요청 취소 상태를 위한 `state VARCHAR(24)` 확장 (LLD-0083) | `scripts/mysql/alter_incident_state_length.sql` |

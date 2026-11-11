@@ -1161,6 +1161,52 @@ class FcmOutboxIntegrationTest {
         assertThat(outbox.findAll().getFirst().getDecisionId()).isEqualTo("dec-01");
     }
 
+    @Test
+    @DisplayName("푸시 만료 상한이 일반 TTL보다 이르면 outbox 만료는 그 상한이다")
+    void 푸시_만료_상한이_TTL보다_이르면_outbox_만료는_그_상한이다() {
+        // given
+        Long member = memberWithToken();
+        LocalDateTime deadline = LocalDateTime.now().plusMinutes(10).withNano(0);
+
+        // when
+        service.enqueue(member, FcmSendDto.builder().title("제목").content("본문")
+                .fcmCategory(FcmCategory.MEDICINE_SCHEDULE).pushExpiresAt(deadline).build());
+
+        // then
+        assertThat(outbox.findAll().getFirst().getExpiresAt()).isEqualTo(deadline);
+    }
+
+    @Test
+    @DisplayName("푸시 만료 상한이 일반 TTL보다 늦으면 outbox 만료는 일반 TTL이다")
+    void 푸시_만료_상한이_TTL보다_늦으면_outbox_만료는_일반_TTL이다() {
+        // given
+        Long member = memberWithToken();
+        LocalDateTime before = LocalDateTime.now();
+        LocalDateTime farDeadline = before.plusHours(48);
+
+        // when
+        service.enqueue(member, FcmSendDto.builder().title("제목").content("본문")
+                .fcmCategory(FcmCategory.MEDICINE_SCHEDULE).pushExpiresAt(farDeadline).build());
+
+        // then
+        LocalDateTime expiresAt = outbox.findAll().getFirst().getExpiresAt();
+        assertThat(expiresAt).isBefore(farDeadline).isAfterOrEqualTo(before.plusHours(24));
+    }
+
+    @Test
+    @DisplayName("FCM 메시지를 복사해도 푸시 만료 상한이 유지된다")
+    void FCM_메시지를_복사해도_푸시_만료_상한이_유지된다() {
+        // given
+        LocalDateTime deadline = LocalDateTime.of(2026, 11, 9, 8, 30);
+        FcmSendDto message = FcmSendDto.builder().title("제목").content("본문").pushExpiresAt(deadline).build();
+
+        // when & then
+        assertThat(message.withRelatedMember(7L).pushExpiresAt()).isEqualTo(deadline);
+        assertThat(message.withData(java.util.Map.of("k", "v")).pushExpiresAt()).isEqualTo(deadline);
+        assertThat(message.withCenterCopy(new NotificationCopy("t", "b")).pushExpiresAt()).isEqualTo(deadline);
+        assertThat(message.withSeniorUnlockDetails("이름", 1).pushExpiresAt()).isEqualTo(deadline);
+    }
+
     private Long queued() {
         service.enqueue(memberWithToken(), message());
         return outbox.findAll().getFirst().getId();

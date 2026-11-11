@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.properties.SensorProperties;
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.global.websocket.WebSocketWorkDispatcher;
 import com.widyu.sensor.application.SensorBatchService;
@@ -39,6 +40,7 @@ public class SensorBatchWebSocketController {
     private final ObjectMapper objectMapper;
     private final WebSocketWorkDispatcher workDispatcher;
     private final TaskExecutor websocketSensorExecutor;
+    private final SensorProperties sensorProperties;
 
     @MessageMapping("/sensor/batches/send")
     public void ingestBatch(
@@ -50,6 +52,13 @@ public class SensorBatchWebSocketController {
         Long memberId = resolveMemberId(headerAccessor.getUser());
         String sessionId = headerAccessor.getSessionId();
         byte[] payload = message.getPayload();
+
+        if (payload.length > sensorProperties.maxPayloadBytes()) {
+            // 대기열에 넣기 전에 거절해 센서 대기열 메모리 상한(본문 상한 × 칸 수, LLD-0091)을 지킨다(LLD-0122).
+            workDispatcher.sendToSession(memberId.toString(), sessionId, ACK_DESTINATION,
+                    rejected(memberId, payload, new BusinessException(ErrorCode.SENSOR_BATCH_TOO_LARGE)));
+            return;
+        }
 
         workDispatcher.dispatch(websocketSensorExecutor, API, headerAccessor, () -> workDispatcher.sendToSession(
                 memberId.toString(), sessionId, ACK_DESTINATION, process(memberId, payload, serverReceivedAtMs)));

@@ -42,6 +42,7 @@ import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -301,7 +302,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(20, 0)));
 
         // when
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 0));
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 0), Set.of());
 
         // then
         assertThat(nextSchedule.getId()).isEqualTo(3L);
@@ -319,7 +320,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(20, 0)));
 
         // when
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(9, 0));
+        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(9, 0), Set.of());
 
         // then
         assertThat(nextSchedule.getId()).isEqualTo(2L);
@@ -338,7 +339,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(21, 39)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now);
+        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
@@ -356,10 +357,31 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(21, 39)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now);
+        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
+    }
+
+    @Test
+    @DisplayName("인증창이 겹칠 때 앞 일정을 인증했으면 인증하지 않은 다음 일정을 반환한다")
+    void 인증창이_겹칠_때_인증한_일정은_건너뛴다() {
+        // given
+        Member member = mock(Member.class);
+        List<MedicineSchedule> schedules = List.of(
+                alarmSchedule(member, 1L, LocalTime.of(17, 13)),
+                alarmSchedule(member, 2L, LocalTime.of(17, 15)),
+                alarmSchedule(member, 3L, LocalTime.of(17, 20)));
+
+        // when
+        MedicineSchedule afterFirst = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 14), Set.of(1L));
+        MedicineSchedule afterSecond = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 19), Set.of(1L, 2L));
+        MedicineSchedule allVerified = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 21), Set.of(1L, 2L, 3L));
+
+        // then
+        assertThat(afterFirst.getId()).isEqualTo(2L);
+        assertThat(afterSecond.getId()).isEqualTo(3L);
+        assertThat(allVerified.getId()).isEqualTo(3L);
     }
 
     @ParameterizedTest
@@ -373,7 +395,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(23, 50)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now);
+        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
@@ -389,7 +411,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(23, 50)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 55));
+        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 55), Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(1L);

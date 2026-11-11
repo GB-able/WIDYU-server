@@ -169,6 +169,11 @@ public class HeartRateAnomalyDetector {
      * 로그·응답 DTO로 흘려보내지 않는다.
      */
     public record DetectionResult(HeartRateStatus status, boolean emergency, String level, String reason) {
+
+        /** AI를 부르지 않은 결과. 착용이 확실하지 않은 심박이 이 값으로 저장된다(LLD-0126). */
+        public static DetectionResult notAssessed() {
+            return new DetectionResult(HeartRateStatus.UNKNOWN, false, null, null);
+        }
     }
 
     private record AiHeartRateRequest(

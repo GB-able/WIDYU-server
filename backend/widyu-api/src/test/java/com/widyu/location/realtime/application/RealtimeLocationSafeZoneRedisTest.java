@@ -1,9 +1,18 @@
 package com.widyu.location.realtime.application;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 
 import com.widyu.auth.infrastructure.AuthRedisFixture;
+import com.widyu.location.SeniorLocation;
+import java.util.concurrent.TimeUnit;
+import org.springframework.dao.QueryTimeoutException;
 import com.widyu.fcm.event.safezone.dto.SafeZoneEnterEvent;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import com.widyu.global.config.RedisConfig;
@@ -11,6 +20,7 @@ import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
+import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.member.Family;
@@ -54,6 +64,7 @@ class RealtimeLocationSafeZoneRedisTest {
     private static final double HOME_LNG = 126.9780;
     private static final double NEAR_HOME_LAT = 37.5666; // 약 11m, 같은 체류
     private static final double AWAY_LAT = 37.5765; // 약 1.1km, 안심구역(75m) 밖
+    private static final String STAY_KEY = "location:stay:" + SENIOR_ID;
 
     @Mock private SeniorLocationRepository seniorLocationRepository;
     @Mock private PlatformTransactionManager transactionManager;
@@ -114,6 +125,87 @@ class RealtimeLocationSafeZoneRedisTest {
             assertThat(safeZoneEvents).containsExactly(
                     new SafeZoneExitEvent(SENIOR_ID), new SafeZoneExitEvent(SENIOR_ID));
         }
+    }
+
+    @Test
+    @DisplayName("이탈 알림을 예약한 뒤 최신 위치 저장이 실패하고 같은 위치를 다시 보내면 이탈을 다시 알리지 않고 최신 위치를 저장한다")
+    void 이탈_후_최신_위치_저장이_실패하고_재전송하면_이탈을_다시_알리지_않는다() throws Exception {
+        try (AuthRedisFixture redis = new AuthRedisFixture()) {
+            // given
+            List<Object> safeZoneEvents = new ArrayList<>();
+            RealtimeLocationService service = service(redis, safeZoneEvents);
+            seniorWithHomeSafeZone();
+            service.updateAndBroadcast(request(HOME_LAT), SENIOR_ID);
+            long measuredAtMs = System.currentTimeMillis();
+            latestLocationAtHomeMeasuredBefore(measuredAtMs);
+            given(seniorLocationRepository.save(any(SeniorLocation.class)))
+                    .willThrow(new QueryTimeoutException("Redis command timed out"))
+                    .willAnswer(invocation -> invocation.getArgument(0));
+            byte[] away = v2Payload(AWAY_LAT, measuredAtMs);
+            Throwable firstAttempt = catchThrowable(() -> service.updateAndBroadcast(away, SENIOR_ID));
+
+            // when
+            LocationAckResponse retried = service.updateAndBroadcast(away, SENIOR_ID);
+
+            // then
+            // 첫 시도는 이탈 알림 예약(운영에서는 outbox)과 체류 저장까지 커밋된 뒤 최신 위치 저장에서 실패했다.
+            // 최신 위치가 갱신되지 않아 같은 측정 시각의 재전송이 실시간 후보로 다시 평가되고, 체류가 이미 "밖"이라
+            // 이탈을 다시 판정하지 않는다.
+            assertThat(firstAttempt).isInstanceOf(QueryTimeoutException.class);
+            assertThat(safeZoneEvents).containsExactly(new SafeZoneExitEvent(SENIOR_ID));
+            assertThat(retried.location().locationType()).isNull();
+            assertThat(service.getOutingStatus(SENIOR_ID)).isTrue();
+            // 밖 좌표 저장은 첫 시도(실패)와 재전송(성공) 두 번 시도됐다.
+            then(seniorLocationRepository).should(times(2))
+                    .save(argThat(location -> location.getLatitude().equals(AWAY_LAT)));
+        }
+    }
+
+    @Test
+    @DisplayName("커밋 뒤 체류 저장과 최신 위치 저장이 모두 실패한 뒤 같은 위치를 다시 보내면 이탈을 다시 판정해도 알림은 한 번만 예약한다")
+    void 체류_저장까지_실패한_뒤_재전송해도_이탈_알림은_한번만_예약한다() throws Exception {
+        try (AuthRedisFixture redis = new AuthRedisFixture()) {
+            // given
+            List<Object> safeZoneEvents = new ArrayList<>();
+            RealtimeLocationService service = service(redis, safeZoneEvents);
+            RedisTemplate<String, Object> redisTemplate =
+                    new RedisConfig(null).redisTemplate(redis.connectionFactory());
+            seniorWithHomeSafeZone();
+            service.updateAndBroadcast(request(HOME_LAT), SENIOR_ID);
+            Object homeStay = redisTemplate.opsForValue().get(STAY_KEY);
+            long measuredAtMs = System.currentTimeMillis();
+            latestLocationAtHomeMeasuredBefore(measuredAtMs);
+            given(seniorLocationRepository.save(any(SeniorLocation.class)))
+                    .willThrow(new QueryTimeoutException("Redis command timed out"))
+                    .willAnswer(invocation -> invocation.getArgument(0));
+            byte[] away = v2Payload(AWAY_LAT, measuredAtMs);
+            Throwable firstAttempt = catchThrowable(() -> service.updateAndBroadcast(away, SENIOR_ID));
+            // 커밋 후 콜백의 체류 저장도 실패했다고 보고, 체류를 이탈 전("집")으로 되돌린다. 이탈 표식은 남아 있다.
+            redisTemplate.opsForValue().set(STAY_KEY, homeStay, 86_400, TimeUnit.SECONDS);
+
+            // when
+            service.updateAndBroadcast(away, SENIOR_ID);
+
+            // then
+            // 재전송은 "집 → 밖" 전이를 다시 판정하지만 이탈 표식(SETNX)이 남아 있어 알림을 다시 예약하지 않는다.
+            assertThat(firstAttempt).isInstanceOf(QueryTimeoutException.class);
+            assertThat(safeZoneEvents).containsExactly(new SafeZoneExitEvent(SENIOR_ID));
+            assertThat(service.getOutingStatus(SENIOR_ID)).isTrue();
+        }
+    }
+
+    private void latestLocationAtHomeMeasuredBefore(long measuredAtMs) {
+        given(seniorLocationRepository.findById(SENIOR_ID))
+                .willReturn(Optional.of(SeniorLocation.of(SENIOR_ID, HOME_LAT, HOME_LNG, measuredAtMs - 60_000)));
+    }
+
+    /** 측정 시각이 있는 v2 페이로드. 재전송이 최신 위치 비교(isRealtimeCandidate)를 다시 통과하는지 함께 본다. */
+    private static byte[] v2Payload(double latitude, long measuredAtMs) {
+        return """
+                {"v":2,"memberId":%d,"device_id":"ph-1","session_id":"s-1","seq":7,
+                 "lat":%s,"lon":%s,"accuracy_m":8.0,"speed_mps":1.0,"provider":"fused",
+                 "is_mock":false,"ts_ms":%d,"reason":"move"}"""
+                .formatted(SENIOR_ID, latitude, HOME_LNG, measuredAtMs).getBytes(UTF_8);
     }
 
     private RealtimeLocationService service(AuthRedisFixture redis, List<Object> safeZoneEvents) {

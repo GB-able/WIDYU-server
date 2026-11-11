@@ -38,7 +38,12 @@ public interface MedicineScheduleDocs {
     @Operation(
             summary = "복약 알람 스냅샷 조회",
             description = """
-                    앱이 OS 로컬 알람을 동기화하기 위한 본인의 오늘 복약 스케줄과 인증 완료 정보를 조회합니다.
+                    앱이 OS 로컬 알람을 동기화하기 위한 본인의 복약 스케줄과 인증 완료 정보를 조회합니다.
+
+                    `schedules`는 오늘 이후 하루라도 유효한 스케줄 버전입니다. 오늘까지만 유효한 버전(오늘 인증이 끝난 뒤
+                    지우거나 시각을 바꾼 알람)과 내일부터 시작하는 버전이 함께 들어갑니다.
+                    앱은 날짜마다 `effectiveFrom ≤ 날짜 ≤ effectiveTo`인 스케줄만 로컬 알람으로 거세요.
+                    `effectiveTo`가 null이면 끝나는 날이 없습니다. 날짜는 `timeZone` 기준입니다.
 
                     `revision`은 복약 스케줄 또는 오늘 복용 인증이 바뀔 때 증가합니다.
                     FCM data에 `revision`이 있고 앱이 가진 값과 다르거나, 앱이 포그라운드가 될 때 이 API를 호출하세요.
@@ -62,8 +67,12 @@ public interface MedicineScheduleDocs {
                                               "data": {
                                                 "revision": 42,
                                                 "timeZone": "Asia/Seoul",
-                                                "schedules": [{"scheduleId": 15, "alarmTime": "19:27", "doseCount": 2}],
-                                                "completed": ["15:2026-09-16"]
+                                                "schedules": [
+                                                  {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
+                                                  {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2, "effectiveFrom": "2026-10-15", "effectiveTo": null},
+                                                  {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2, "effectiveFrom": "2026-11-10", "effectiveTo": null}
+                                                ],
+                                                "completed": ["15:2026-11-09"]
                                               }
                                             }
                                             """
@@ -362,6 +371,7 @@ public interface MedicineScheduleDocs {
                     - 오늘 인증 가능 시간(알람 ±30분)이 남은 시각이면 오늘부터, 이미 지난 시각이면 다음 날부터 적용합니다.
                     - 응답의 scheduleRevision은 시니어의 복약 알람 revision입니다.
                     - 시니어 한 명당 약 알람은 최대 6개입니다. 종료되지 않은 알람(내일부터 시작하는 알람 포함)이 이미 6개면 400입니다. 삭제하면 바로 자리가 비고, 수정은 개수를 바꾸지 않습니다.
+                    - 같은 시각의 종료되지 않은 알람(내일부터 시작하는 알람 포함)이 이미 있으면 409(`MEDICINE_SCHEDULE_4090`)입니다. 지웠거나 시각을 바꾼 옛 알람과 같은 시각은 등록할 수 있습니다.
 
                     **권한:**
                     - 현재 가족 방장만 등록할 수 있습니다. 대상 시니어 memberId는 필수입니다.
@@ -420,7 +430,8 @@ public interface MedicineScheduleDocs {
             ),
             @ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
-            @ApiResponse(responseCode = "403", description = "권한 없음")
+            @ApiResponse(responseCode = "403", description = "권한 없음"),
+            @ApiResponse(responseCode = "409", description = "같은 시각의 약 알람이 이미 있음 (MEDICINE_SCHEDULE_4090)")
     })
     ApiResponseTemplate<MedicineScheduleIdResponse> createSchedule(
             @Valid @RequestBody CreateMedicineScheduleRequest request,
@@ -440,6 +451,7 @@ public interface MedicineScheduleDocs {
                     - 적용일 전날까지의 기록은 기존 버전에 남습니다. 적용일 전날에 유효하지 않았던 버전(오늘 시작·시작 전)은 해당 버전을 그대로 갱신합니다.
                     - 응답의 medicineScheduleId는 적용될 버전 ID, effectiveFromDate는 적용 시작일입니다.
                     - 이미 종료된 과거 버전(닫힌 scheduleId)은 수정할 수 없습니다.
+                    - 바꿀 시각이 다른 종료되지 않은 알람(내일부터 시작하는 알람 포함)과 같으면 409(`MEDICINE_SCHEDULE_4090`)입니다. 자기 시각을 그대로 두고 약만 바꾸는 수정은 됩니다.
 
                     **권한:**
                     - 현재 가족 방장만 수정할 수 있습니다. 대상 시니어 memberId는 필수입니다.
@@ -489,7 +501,8 @@ public interface MedicineScheduleDocs {
             ),
             @ApiResponse(responseCode = "400", description = "존재하지 않는 스케줄"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
-            @ApiResponse(responseCode = "403", description = "권한 없음")
+            @ApiResponse(responseCode = "403", description = "권한 없음"),
+            @ApiResponse(responseCode = "409", description = "같은 시각의 약 알람이 이미 있음 (MEDICINE_SCHEDULE_4090)")
     })
     ApiResponseTemplate<MedicineScheduleIdResponse> updateSchedule(
             @Parameter(description = "약 복용 스케줄 ID", required = true)

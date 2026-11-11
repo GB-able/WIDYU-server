@@ -75,6 +75,7 @@ public interface GuardianAuthDocs {
             description = """
                     SMS 인증 후 발급받은 임시 토큰을 Authorization 헤더(스킴: `Bearer`)로 전달해야 합니다.
                     임시 토큰이 유효하면 이메일/비밀번호로 로컬 계정을 생성하고 Access/Refresh 토큰을 발급합니다.
+                    같은 전화번호로 가입된 회원(시니어, 소셜 보호자 포함)이 이미 있으면 가입하지 않고 400 `AUTH_4021`을 반환합니다.
                     """
     )
     @ApiResponse(
@@ -103,6 +104,8 @@ public interface GuardianAuthDocs {
                     )
             )
     )
+    @ApiResponse(responseCode = "400",
+            description = "AUTH_4001: 이미 등록된 이메일 / AUTH_4021: 이 전화번호로 가입된 회원이 이미 있음. 기존 회원에 로컬 계정을 붙이지 않는다")
     ApiResponseTemplate<LocalSignupResponse> signupLocal(
             HttpServletRequest httpServletRequest,
             @Valid @RequestBody
@@ -260,6 +263,7 @@ public interface GuardianAuthDocs {
                     )
             )
     )
+    @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 전화번호로 가입된 회원이 여러 명이라 본인을 특정할 수 없음")
     ApiResponseTemplate<SocialLoginResponse> signInSocial(
             @Parameter(
                     name = "provider",
@@ -358,6 +362,7 @@ public interface GuardianAuthDocs {
     @ApiResponse(responseCode = "401", description = "AUTH_4010·AUTH_4014: 임시 토큰 없음·만료·유효하지 않음")
     @ApiResponse(responseCode = "403", description = "AUTH_4030: 요청의 이름·전화번호가 SMS 인증 정보와 다름")
     @ApiResponse(responseCode = "404", description = "MEMBER_4041: 일치하는 회원 없음 또는 로컬 계정 없음")
+    @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 전화번호로 가입된 회원이 여러 명이라 본인을 특정할 수 없음")
     ApiResponseTemplate<MemberInfoResponse> findMemberByPhoneNumber(
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -420,6 +425,7 @@ public interface GuardianAuthDocs {
                     )
             )
     )
+    @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 전화번호로 가입된 회원이 여러 명이라 본인을 특정할 수 없음")
     ApiResponseTemplate<Boolean> changePassword(
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -489,6 +495,7 @@ public interface GuardianAuthDocs {
             content = @Content(schema = @Schema(implementation = ApiResponseTemplate.class))
     )
     @ApiResponse(responseCode = "404", description = "MEMBER_4041: 해당 이메일의 애플 회원 없음")
+    @ApiResponse(responseCode = "400", description = "AUTH_4021: 다른 회원이 이미 쓰는 전화번호")
     ApiResponseTemplate<Void> updatePhoneNumberIfAppleSignUp(
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -555,6 +562,7 @@ public interface GuardianAuthDocs {
                     )
             )
     )
+    @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 전화번호로 가입된 회원이 여러 명이라 본인을 특정할 수 없음")
     ApiResponseTemplate<UserProfile> getUserProfileByTemporaryToken(
             HttpServletRequest httpServletRequest
     );

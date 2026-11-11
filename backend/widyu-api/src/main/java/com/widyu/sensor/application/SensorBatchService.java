@@ -58,6 +58,7 @@ public class SensorBatchService {
     private static final String STREAM_WATCH = "imu_watch";
     private static final String STREAM_PHONE = "imu_phone";
     private static final String STREAM_HR = "hr";
+    private static final String STREAM_IMU_DROPPED = "imu_dropped";
     private static final int MAX_HR_SAMPLES = 60;
     private static final int MAX_BPM = 300;
     private static final String ACCURACY_UNRELIABLE = "UNRELIABLE";
@@ -88,6 +89,7 @@ public class SensorBatchService {
     private final Validator validator;
     private final SensorProperties sensorProperties;
     private final ObjectMapper payloadMapper;
+    private final SensorDroppedRangeService sensorDroppedRangeService;
 
     public SensorBatchService(
             SensorBatchRepository sensorBatchRepository,
@@ -99,7 +101,8 @@ public class SensorBatchService {
             S3Service s3Service,
             Validator validator,
             SensorProperties sensorProperties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            SensorDroppedRangeService sensorDroppedRangeService
     ) {
         this.sensorBatchRepository = sensorBatchRepository;
         this.clockMappingService = clockMappingService;
@@ -110,6 +113,7 @@ public class SensorBatchService {
         this.s3Service = s3Service;
         this.validator = validator;
         this.sensorProperties = sensorProperties;
+        this.sensorDroppedRangeService = sensorDroppedRangeService;
         // 나노초 필드는 64비트 정밀도를 지키려고 JSON 문자열로 받는다. Jackson 기본값은 number를
         // String 필드에 조용히 넣어주므로, 문자열 대상 강제 변환을 꺼서 number면 파싱이 실패하게 한다(검사기 A3).
         this.payloadMapper = objectMapper.copy()
@@ -138,8 +142,13 @@ public class SensorBatchService {
 
         // 심박과 IMU가 같은 endpoint로 온다(ADR-0031 결정 1). stream만 먼저 읽어 DTO를 고른다.
         JsonNode root = readTree(payload);
-        if (STREAM_HR.equals(streamOf(root))) {
+        String stream = streamOf(root);
+        if (STREAM_HR.equals(stream)) {
             return ingestHeartRate(member, memberId, payload, root, serverReceivedAtMs);
+        }
+        // 워치 IMU 큐가 넘쳐 버린 구간 기록. 배치가 아니라 결측 근거라 따로 저장한다(LLD-0124).
+        if (STREAM_IMU_DROPPED.equals(stream)) {
+            return sensorDroppedRangeService.record(memberId, payload, root, serverReceivedAtMs);
         }
         return ingestImu(member, memberId, payload, root, serverReceivedAtMs);
     }
@@ -215,7 +224,8 @@ public class SensorBatchService {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         String value = stream.asText();
-        if (!STREAM_HR.equals(value) && !STREAM_WATCH.equals(value) && !STREAM_PHONE.equals(value)) {
+        if (!STREAM_HR.equals(value) && !STREAM_WATCH.equals(value) && !STREAM_PHONE.equals(value)
+                && !STREAM_IMU_DROPPED.equals(value)) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         return value;
@@ -673,7 +683,8 @@ public class SensorBatchService {
         // 샘플 행이 인덱스 행보다 먼저다. 인덱스가 먼저 생기면 그 뒤 샘플 저장이 실패했을 때
         // 재전송이 DUPLICATE로 막혀 샘플이 영영 비는 구멍이 생긴다(ADR-0031 결정 4).
         HeartRateBatchService.BatchOutcome outcome = heartRateBatchService.storeAndAssess(
-                member, request.batchId(), attribution.runId(), samples, serverReceivedAtMs);
+                member, request.batchId(), attribution.runId(), request.onBody(), request.wearState(),
+                samples, serverReceivedAtMs);
 
         long persistedAtMs = System.currentTimeMillis();
         SensorBatch batch = heartRateEntity(member, request, payload, payloadSha256, objectKey, attribution,
@@ -793,6 +804,7 @@ public class SensorBatchService {
                 .persistedAtMs(persistedAtMs)
                 .modelAvailableAtServerMs(persistedAtMs)
                 .onBody(request.onBody())
+                .wearState(request.wearState())
                 .watchBatteryPct(request.watchBatteryPct())
                 .qualityStatus(QUALITY_STATUS_OK)
                 .gyroBackfill(false)

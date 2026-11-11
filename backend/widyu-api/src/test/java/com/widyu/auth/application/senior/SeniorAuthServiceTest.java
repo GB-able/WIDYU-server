@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.auth.dto.request.SeniorSignInRequest;
@@ -65,8 +67,8 @@ class SeniorAuthServiceTest {
         ReflectionTestUtils.setField(guardian, "id", 1L);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567"),
-                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567", null, null),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321", null, null)
         );
 
         Member seniorMember1 = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
@@ -98,6 +100,42 @@ class SeniorAuthServiceTest {
     }
 
     @Test
+    @DisplayName("좌표를 보낸 시니어는 주소 좌표 변환 없이 보낸 좌표로, 보내지 않은 시니어는 주소 좌표로 HOME 안심구역을 만든다")
+    void 좌표를_보낸_시니어만_주소_좌표_변환을_건너뛴다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01099999999");
+        ReflectionTestUtils.setField(guardian, "id", 1L);
+
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567", 37.4979, 127.0276),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321", null, null)
+        );
+
+        Member seniorMember1 = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
+        Member seniorMember2 = Member.createMember(MemberType.SENIOR, "할머니", "01033334444");
+        Family family = Family.createFamily("ABC123");
+        ReflectionTestUtils.setField(family, "id", 1L);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(familyRepository.existsByFamilyCode(anyString())).willReturn(false);
+        given(familyRepository.save(any(Family.class))).willReturn(family);
+        given(memberRepository.saveAll(anyList())).willReturn(List.of(seniorMember1, seniorMember2));
+        given(seniorProfileRepository.saveAll(anyList())).willAnswer(inv -> inv.getArgument(0));
+        given(familyMembershipRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(geocodingService.geocode("서울시 서초구")).willReturn(new GeocodingResponse(37.4837, 127.0324));
+        ArgumentCaptor<ParentLocation> locations = ArgumentCaptor.forClass(ParentLocation.class);
+
+        // when
+        seniorAuthService.seniorSignUpBulk(requests);
+
+        // then
+        verify(parentLocationRepository, times(2)).save(locations.capture());
+        assertThat(locations.getAllValues()).extracting(ParentLocation::getLatitude)
+                .containsExactly(37.4979, 37.4837);
+        verify(geocodingService, times(1)).geocode(anyString());
+    }
+
+    @Test
     @DisplayName("시니어 일괄 등록 시 각 시니어의 HOME 안심구역이 생성된다")
     void 시니어_일괄_등록_시_HOME_안심구역이_생성된다() {
         // given
@@ -110,8 +148,8 @@ class SeniorAuthServiceTest {
         ReflectionTestUtils.setField(family, "id", 1L);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567"),
-                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567", null, null),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "서울시 서초구", "7654321", null, null)
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -141,7 +179,7 @@ class SeniorAuthServiceTest {
         ReflectionTestUtils.setField(family, "id", 1L);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울시 강남구", "1234567", null, null)
         );
 
         given(memberUtil.getCurrentMember()).willReturn(guardian);
@@ -169,7 +207,7 @@ class SeniorAuthServiceTest {
         given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(mock(FamilyMembership.class)));
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567", null, null)
         );
 
         // when & then
@@ -221,8 +259,8 @@ class SeniorAuthServiceTest {
         );
         TokenPairResponse expectedToken = TokenPairResponse.of(2L, "access", "refresh");
 
-        given(seniorProfileRepository.findByInviteCodeAndMemberPhoneNumber(inviteCode, phone))
-                .willReturn(Optional.of(seniorProfile));
+        given(seniorProfileRepository.findAllByInviteCodeAndMemberPhoneNumber(inviteCode, phone))
+                .willReturn(List.of(seniorProfile));
         given(jwtTokenProvider.generateTokenPair(any(), any(), any())).willReturn(expectedToken);
 
         // when
@@ -236,8 +274,8 @@ class SeniorAuthServiceTest {
     @DisplayName("유효하지 않은 초대코드로 로그인 시 BusinessException을 던진다")
     void 유효하지_않은_초대코드로_로그인_시_예외가_발생한다() {
         // given
-        given(seniorProfileRepository.findByInviteCodeAndMemberPhoneNumber("0000000", "01011112222"))
-                .willReturn(Optional.empty());
+        given(seniorProfileRepository.findAllByInviteCodeAndMemberPhoneNumber("0000000", "01011112222"))
+                .willReturn(List.of());
 
         // when & then
         assertThatThrownBy(() -> seniorAuthService.seniorSignIn(
@@ -255,7 +293,7 @@ class SeniorAuthServiceTest {
         given(familyRepository.existsByFamilyCode(anyString())).willReturn(true);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567", null, null)
         );
 
         // when & then
@@ -277,8 +315,8 @@ class SeniorAuthServiceTest {
         given(familyRepository.save(any(Family.class))).willReturn(family);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567"),
-                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "부산", "7654321")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567", null, null),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01033334444", "부산", "7654321", null, null)
         );
 
         given(memberRepository.saveAll(anyList())).willAnswer(inv -> {
@@ -305,12 +343,66 @@ class SeniorAuthServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
 
         List<SeniorSignUpRequest> requests = List.of(
-                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567")
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01011112222", "서울", "1234567", null, null)
         );
 
         // when & then
         assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("한 요청 안에 같은 전화번호의 시니어가 두 번 있으면 일괄 등록을 거부하고 가족과 회원을 저장하지 않는다")
+    void 요청_안에_같은_전화번호가_있으면_시니어_일괄_등록을_거부한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01000000009");
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01000000001", "서울", "1234567", null, null),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01000000001", "서울", "7654321", null, null)
+        );
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+        verify(familyRepository, never()).save(any(Family.class));
+        verify(memberRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("다른 회원이 이미 쓰는 전화번호로 시니어를 일괄 등록하면 거부하고 가족과 회원을 저장하지 않는다")
+    void 다른_회원이_쓰는_전화번호로_시니어_일괄_등록을_하면_거부한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01000000009");
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(memberRepository.existsByPhoneNumber("01000000001")).willReturn(false);
+        given(memberRepository.existsByPhoneNumber("01000000002")).willReturn(true);
+        List<SeniorSignUpRequest> requests = List.of(
+                new SeniorSignUpRequest("부모님", LocalDate.of(1950, 1, 1), "01000000001", "서울", "1234567", null, null),
+                new SeniorSignUpRequest("할머니", LocalDate.of(1948, 2, 2), "01000000002", "서울", "7654321", null, null)
+        );
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignUpBulk(requests))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
+        verify(familyRepository, never()).save(any(Family.class));
+        verify(memberRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("같은 초대코드와 전화번호의 시니어가 둘 이상이면 임의 시니어로 로그인시키지 않고 PHONE_NUMBER_SHARED_BY_MEMBERS 예외가 발생한다")
+    void 같은_초대코드와_전화번호의_시니어가_둘_이상이면_로그인을_거부한다() {
+        // given
+        given(seniorProfileRepository.findAllByInviteCodeAndMemberPhoneNumber("1234567", "01000000001"))
+                .willReturn(List.of(mock(SeniorProfile.class), mock(SeniorProfile.class)));
+
+        // when & then
+        assertThatThrownBy(() -> seniorAuthService.seniorSignIn(new SeniorSignInRequest("1234567", "01000000001")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        verify(jwtTokenProvider, never()).generateTokenPair(any(), any(), any());
     }
 }

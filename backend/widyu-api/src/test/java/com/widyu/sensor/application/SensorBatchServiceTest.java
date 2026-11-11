@@ -62,6 +62,28 @@ class SensorBatchServiceTest {
     @Mock private com.widyu.run.application.CollectionRunService collectionRunService;
     @Mock private MemberRepository memberRepository;
     @Mock private S3Service s3Service;
+    @Mock private SensorDroppedRangeService sensorDroppedRangeService;
+
+    @Test
+    @DisplayName("stream이 imu_dropped이면 버린 구간 저장으로 넘기고 그 결과를 돌려주며 배치는 저장하지 않는다")
+    void stream이_imu_dropped이면_버린_구간_저장으로_넘긴다() {
+        // given
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        byte[] payload = """
+            {"stream":"imu_dropped","session_id":"s-01","from_seq":10,"to_seq":15,"reason":"queue_overflow","ts_ms":1760000000200}"""
+                .getBytes(UTF_8);
+        given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+        given(sensorDroppedRangeService.record(eq(MEMBER_ID), eq(payload), any(), anyLong()))
+                .willReturn(SensorBatchResultResponse.of(null, null, SensorBatchResult.STORED));
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        then(sensorBatchRepository).should(never()).save(any());
+        then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
+    }
 
     @Test
     @DisplayName("부록 A 배치를 저장하면 원문 바이트와 해시·환산 시각이 그대로 담긴 행을 남긴다")
@@ -799,7 +821,7 @@ class SensorBatchServiceTest {
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
         given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
-        given(heartRateBatchService.storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong()))
+        given(heartRateBatchService.storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
                 .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
         byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
 
@@ -813,7 +835,7 @@ class SensorBatchServiceTest {
         // 인덱스 행이 먼저 생기면 샘플 저장 실패 시 재전송이 DUPLICATE로 막힌다(ADR-0031 결정 4).
         InOrder inOrder = inOrder(s3Service, heartRateBatchService, sensorBatchRepository);
         inOrder.verify(s3Service).uploadBytes(anyString(), any(), anyString());
-        inOrder.verify(heartRateBatchService).storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), anyLong());
+        inOrder.verify(heartRateBatchService).storeAndAssess(eq(member), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong());
         inOrder.verify(sensorBatchRepository).save(any(SensorBatch.class));
 
         SensorBatch saved = savedBatch();
@@ -826,6 +848,8 @@ class SensorBatchServiceTest {
         assertThat(saved.getMeasuredAtStartMs()).isEqualTo(1_760_000_000_123L);
         assertThat(saved.getMeasuredAtEndMs()).isEqualTo(1_760_000_002_118L);
         assertThat(saved.getOnBody()).isTrue();
+        // 착용 상태를 싣지 않은 배치는 인덱스도 비워 둔다.
+        assertThat(saved.getWearState()).isNull();
         assertThat(saved.getWatchBatteryPct()).isEqualTo(63);
         // 축·충격·설정 대조는 IMU만의 개념이다.
         assertThat(saved.getAccN()).isNull();
@@ -835,6 +859,41 @@ class SensorBatchServiceTest {
         assertThat(saved.getConfigMismatch()).isFalse();
         // 지연은 서버 수신 시각에서 마지막 잰 시각을 뺀 값이다(정책 1.1.8).
         assertThat(saved.getServerReceivedAtMs()).isGreaterThan(saved.getMeasuredAtEndMs());
+    }
+
+    @Test
+    @DisplayName("심박 배치에 착용 상태가 실려 오면 인덱스 행에 같은 값을 저장한다")
+    void 심박_배치에_착용_상태가_실려_오면_인덱스_행에_같은_값을_저장한다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
+        given(heartRateBatchService.storeAndAssess(any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
+                .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
+        String withWearState = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES)
+                .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"WORN_INVALID\"");
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, withWearState.getBytes(UTF_8));
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        assertThat(savedBatch().getWearState()).isEqualTo("WORN_INVALID");
+    }
+
+    @Test
+    @DisplayName("심박 배치의 착용 상태가 다섯 값 밖이면 필드 오류로 거부한다")
+    void 심박_배치의_착용_상태가_다섯_값_밖이면_필드_오류로_거부한다() {
+        // given
+        givenMemberExists();
+        String invalidWearState = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES)
+                .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"MAYBE_WORN\"");
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, invalidWearState.getBytes(UTF_8)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -895,7 +954,7 @@ class SensorBatchServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
-        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     @Test
@@ -953,7 +1012,8 @@ class SensorBatchServiceTest {
                 s3Service,
                 VALIDATOR,
                 SensorConfigFixture.properties(),
-                new ObjectMapper());
+                new ObjectMapper(),
+                sensorDroppedRangeService);
     }
 
     private String researchBatchWithRunId(String runId) {
@@ -970,7 +1030,7 @@ class SensorBatchServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", expected);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
         then(sensorBatchRepository).should(never()).save(any());
-        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), anyLong());
+        then(heartRateBatchService).should(never()).storeAndAssess(any(), anyString(), any(), any(), any(), any(), anyLong());
     }
 
     private void givenMemberExists() {

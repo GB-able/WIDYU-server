@@ -11,6 +11,8 @@
 | 작성일 | 2026-09-21 |
 | 선행 | PR #657(B10, `decision_record`). base upstream/develop f454832 |
 
+> 2026-11-09 갱신(#958, [LLD-0126](LLD-0126-heart-wear-gate.md)): 착용 게이트가 켜지면 착용이 확실하지 않은 배치도 아래 5.1의 `ABSTAIN` 조건으로 기록되고 `reason = "WEAR_UNCERTAIN"`을 채운다. `ABSTAIN` 행의 `decision_id`는 무작위가 아니라 `dec-ab-` + `batch_id`다(동시 재전송 중복 방지). 내보내기 `evidence`는 `hr_bpm`이나 `reason`이 있을 때 붙고, 사유만 있으면 `reason`만 담는다. 아래 3절, 5.1, 5.3, 7절의 해당 문장은 LLD-0126이 우선한다.
+
 ## 1. 목적 / 배경
 
 ADR-0035 결정 1~3. 실증 회차에 귀속된 심박 배치의 위급 판정을 `decision_record`에 남기고, 판정 사유·심박 값을 그 행에만 두며, 보호자 FCM 전송 성공을 그 판정의 알림 도달 사실로 채운다.

@@ -66,7 +66,7 @@ POST /api/v1/admin/studies/participations/{participationId}/withdrawal
 | MySQL `sensor_batch` | IMU·심박·ECG 배치 인덱스 | `run_id` |
 | S3 `sensor/...` | 배치 원문 | 삭제 전 캡처한 `sensor_batch.s3_key` |
 | MySQL `heart_rate_event`, `heart_rate_emergency` | 배치 심박·위급 | 삭제 전 캡처한 `batch_id`, 회원·측정시각 |
-| MySQL `location_fix`, `device_heartbeat` | 위치·기기 상태 | `run_id` |
+| MySQL `location_fix`, `device_heartbeat`, `device_event` | 위치·기기 상태·기기 상태 바뀜 | `run_id` |
 | MySQL `clock_mapping`, `run_marker`, `run_device_assignment` | 시계 기준점·마커·배정 | 삭제 전 캡처한 ID. 다른 회차가 공유하는 시계 기준점은 보존 |
 | MySQL `decision_record`, `incident` | 판정·본인확인·사후 판정 | `run_id`, `decision_id` |
 | MySQL `run_export`, S3 `exports/...` | 내보내기 잡·zip | `run_id`, 삭제 전 캡처한 `s3_key` |
@@ -127,6 +127,10 @@ CREATE TEMPORARY TABLE wd_heartbeats AS
 SELECT h.device_heartbeat_id
 FROM device_heartbeat h JOIN wd_runs r ON r.run_id = h.run_id;
 
+CREATE TEMPORARY TABLE wd_device_events AS
+SELECT e.device_event_id
+FROM device_event e JOIN wd_runs r ON r.run_id = e.run_id;
+
 CREATE TEMPORARY TABLE wd_markers AS
 SELECT m.id, m.clock_mapping_id
 FROM run_marker m JOIN wd_runs r ON r.collection_run_id = m.run_id;
@@ -170,7 +174,7 @@ S3 삭제가 일부 실패하면 `sensor_batch`와 `run_export` 인덱스 행을
 4. `heart_rate_emergency` — `wd_heart_emergencies.heart_rate_emergency_id`
 5. `heart_rate_event` — `wd_heart_events.heart_rate_event_id`
 6. `sensor_batch` — `wd_batches.batch_id`
-7. `location_fix`, `device_heartbeat`, `run_marker`, `run_device_assignment` — 각각 `wd_location_fixes`, `wd_heartbeats`, `wd_markers`, `wd_assignments`의 PK
+7. `location_fix`, `device_heartbeat`, `device_event`, `run_marker`, `run_device_assignment` — 각각 `wd_location_fixes`, `wd_heartbeats`, `wd_device_events`, `wd_markers`, `wd_assignments`의 PK
 8. `clock_mapping` — 캡처한 후보 중 다른 `sensor_batch`·`run_marker`가 더 이상 참조하지 않는 행만
 9. `run_export` — `wd_exports.id`
 10. `collection_run` — `wd_runs.run_id` (`ALL`일 때만)
@@ -195,6 +199,7 @@ SELECT COUNT(*) FROM fcm_notification f JOIN wd_fcm_notifications w ON w.id = f.
 SELECT COUNT(*) FROM incident i JOIN wd_incidents w ON w.incident_id = i.incident_id;
 SELECT COUNT(*) FROM location_fix l JOIN wd_location_fixes w ON w.location_fix_id = l.location_fix_id;
 SELECT COUNT(*) FROM device_heartbeat h JOIN wd_heartbeats w ON w.device_heartbeat_id = h.device_heartbeat_id;
+SELECT COUNT(*) FROM device_event e JOIN wd_device_events w ON w.device_event_id = e.device_event_id;
 SELECT COUNT(*) FROM run_marker m JOIN wd_markers w ON w.id = m.id;
 SELECT COUNT(*) FROM run_device_assignment a JOIN wd_assignments w ON w.id = a.id;
 SELECT COUNT(*) FROM collection_run r JOIN wd_runs w ON w.collection_run_id = r.id;

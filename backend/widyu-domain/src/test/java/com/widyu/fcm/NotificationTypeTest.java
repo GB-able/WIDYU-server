@@ -58,7 +58,7 @@ class NotificationTypeTest {
         assertThat(NotificationType.SAFETY_SELF_CHECK.deliveryMode())
                 .isEqualTo(DeliveryMode.PUSH_ONLY);
         assertThat(NotificationType.SAFETY_SELF_CHECK.settingGroup()).isEqualTo(PushSettingGroup.NONE);
-        assertThat(NotificationType.FAMILY_LEADER_CHANGED.centerFilter()).isNull();
+        assertThat(NotificationType.FAMILY_LEADER_CHANGED.centerFilter()).isEqualTo("ETC");
     }
 
     @Test

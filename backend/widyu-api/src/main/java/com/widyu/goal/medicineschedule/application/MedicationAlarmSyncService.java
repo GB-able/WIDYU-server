@@ -30,7 +30,10 @@ public class MedicationAlarmSyncService {
         List<Long> completedIds = medicationProofRepository.findVerifiedScheduleIdsByMemberAndDate(
                 member.getId(), today);
         List<String> completed = completedIds.stream().map(id -> id + ":" + today).toList();
+        // 앱은 받은 스케줄로 앞으로 여러 날의 로컬 알람을 건다. 오늘만 유효한 버전과 내일 시작하는 버전을
+        // 유효 기간과 함께 보내 날짜마다 걸지 말지를 앱이 정하게 한다(LLD-0125).
         return MedicationAlarmSyncResponse.of(member.getMedicationAlarmRevision(), TIME_ZONE,
-                medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today), completed);
+                medicineScheduleRepository.findEffectiveFromDateByMemberWithDetails(member, Status.ACTIVE, today),
+                completed);
     }
 }

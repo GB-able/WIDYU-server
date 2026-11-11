@@ -163,7 +163,7 @@ public class WalkService {
         LocalDate syncDate = request.date();
         validateSyncDate(syncDate, today);
 
-        Walk walk = walkRepository.findByMemberAndWalkDate(currentMember, syncDate)
+        Walk walk = walkRepository.findByMemberAndWalkDateForUpdate(currentMember, syncDate)
                 .orElseGet(() -> {
                     if (currentMember.getSeniorProfile() != null &&
                         currentMember.getSeniorProfile().hasDefaultWalkGoal()) {
