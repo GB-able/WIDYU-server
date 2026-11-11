@@ -159,6 +159,22 @@ class SensorBatchWebSocketControllerTest {
     }
 
     @Test
+    @DisplayName("공백뿐인 원문이 거절되면 ACK 없이 원래 예외를 그대로 전파한다")
+    void 공백뿐인_원문이_거절되면_원래_예외를_전파한다() {
+        // given
+        Long memberId = 42L;
+        byte[] payload = "   ".getBytes(StandardCharsets.UTF_8);
+        willThrow(new BusinessException(ErrorCode.SENSOR_PAYLOAD_INVALID))
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
+
+        // when & then
+        assertThatThrownBy(() -> controller().process(memberId, payload, RECEIVED_AT_MS))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.SENSOR_PAYLOAD_INVALID);
+    }
+
+    @Test
     @DisplayName("검증에 실패한 원문이 JSON이 아니면 ACK 없이 예외를 그대로 전파한다")
     void 검증에_실패한_원문이_JSON이_아니면_예외를_전파한다() {
         // given

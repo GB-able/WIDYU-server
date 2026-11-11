@@ -101,6 +101,11 @@ public class SensorBatchWebSocketController {
             log.warn("센서 배치 거절(본문 해석 불가): memberId={}, code={}", memberId, code);
             throw cause;
         }
+        // 비어 있거나 공백뿐인 본문은 예외 없이 빈 값으로 읽힌다. 식별자가 없으니 원래 예외를 그대로 낸다.
+        if (root == null || root.isMissingNode()) {
+            log.warn("센서 배치 거절(본문 해석 불가): memberId={}, code={}", memberId, code);
+            throw cause;
+        }
 
         String stream = streamOf(root);
         JsonNode batchId = root.get("batch_id");
