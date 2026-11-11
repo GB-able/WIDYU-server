@@ -13,6 +13,8 @@
 | 선행 | PR #644(B8, 5b434f8) — `CollectionRunService.hasOpenRun`. 이 브랜치는 feature/643 위에 쌓인다 |
 
 > 2026-11-09 갱신(#989): 열린 회차가 없을 때의 수집 모드를 `product` 고정에서 설정 `sensor.config.default-collection-mode`(환경변수 `SENSOR_DEFAULT_COLLECTION_MODE`, 기본 `product`)로 바꿨다. 개발 서버는 시험을 늘 실험 모드로 하므로 `research`로 둔다(`docker-compose.dev-server.yml`). 아래 3절, 5절, 7절의 「회차 없음 → product」는 「회차 없음 → 기본 모드」로 읽는다. 운영은 기본값이라 동작이 같다.
+>
+> 같은 날 함께 고쳤다: 열린 회차가 있으면 `research` 고정이 아니라 **그 회차의 `collection_mode`**를 내려준다. 전에는 `product` 회차가 열려 있으면 설정 API는 `research`, 배치 대조 기준은 회차의 `product`라 워치가 지시대로 보낸 배치가 설정 불일치로 표시됐다. 아래 「열린 회차 있음 → research」는 「열린 회차 있음 → 그 회차의 모드」로 읽는다.
 
 ## 1. 목적 / 배경
 
@@ -56,7 +58,7 @@ GET /api/v1/sensor/config
 }
 ```
 
-`collectionMode`만 호출자에 따라 다르다(열린 회차 있음 → `research`, 없음 → 기본 모드, 기본값 `product`, #989). 나머지는 서버 설정값이다. `refreshSec`은 워치가 다시 읽을 권고 주기다.
+`collectionMode`만 호출자에 따라 다르다(열린 회차 있음 → 그 회차의 `collection_mode`, 없음 → 기본 모드, 기본값 `product`, #989). 나머지는 서버 설정값이다. `refreshSec`은 워치가 다시 읽을 권고 주기다.
 
 ## 4. 데이터 모델
 
@@ -83,7 +85,7 @@ sensor:
 
 ## 5. 처리 흐름
 
-- 조회: `SecurityUtil.getCurrentMemberId()` → `collectionRunService.hasOpenRun(memberId)` → `SensorConfigResponse.of(properties.config(), mode)`. 서비스 하나(`SensorConfigService`), 트랜잭션 `readOnly`.
+- 조회: `SecurityUtil.getCurrentMemberId()` → `collectionRunService.findOpenRunCollectionMode(memberId)`(열린 회차의 모드, 없으면 기본 모드) → `SensorConfigResponse.of(properties.config(), mode)`. 서비스 하나(`SensorConfigService`), 트랜잭션 `readOnly`.
 - 배치 수신(`SensorBatchService.ingest`, 회차 귀속 뒤·S3 PUT 앞): 서버 지시값과 배치 값을 대조한다.
   - 기준 `collection_mode`: 회차 귀속(B8) 결과에 회차가 없으면 기본 모드(기본값 `product`, 개발 서버 `research`, #989). 회차가 정해졌는데 서버가 그 값을 아직 모르면(앱이 `run_id`를 실어 보냈거나 재전송이라 조회를 건너뛴 경우) `CollectionRunService.findCollectionMode(runId)`로 배치당 한 번 조회한다. 모르는 `run_id`면 기준이 없으므로 `collection_mode` 대조만 건너뛰고 나머지 필드는 그대로 대조한다.
   - 기준 `gyro_mode`·`acc_fs_hz`: `SensorProperties.config`.
@@ -100,6 +102,7 @@ sensor:
 ## 7. 인수조건 (Acceptance Criteria)
 
 - [x] 열린 회차가 없는 회원의 조회는 `collectionMode=product`, 회차를 열면 `research`, 닫으면 다시 `product`.
+- [x] (#989) `product` 회차가 열려 있으면 기본 모드와 관계없이 `collectionMode=product`라 배치 대조 기준과 같다.
 - [x] (#989) 기본 모드를 `research`로 두면 열린 회차가 없어도 `collectionMode=research`이고, 회차 없는 `research` 배치는 설정 불일치가 아니다. 기본 모드가 `product`, `research` 밖이면 기동하지 않는다.
 - [x] 나머지 값은 yml 설정값 그대로이고 환경변수로 덮인다.
 - [x] 배치의 `fs_hz_requested`가 설정과 다르면 `config_mismatch=true`로 저장되고 배치는 `STORED`다. `collection_mode`가 회차의 값과 다를 때, `gyro_mode`가 설정과 다를 때도 같다. 전부 같으면 `false`.

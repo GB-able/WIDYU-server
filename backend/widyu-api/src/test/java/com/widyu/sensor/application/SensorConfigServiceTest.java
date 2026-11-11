@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.run.application.CollectionRunService;
 import com.widyu.sensor.dto.response.SensorConfigResponse;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,7 +26,7 @@ class SensorConfigServiceTest {
     @DisplayName("열린 회차가 있는 회원이 조회하면 수집 모드가 research다")
     void 열린_회차가_있는_회원이_조회하면_수집_모드가_research다() {
         // given
-        given(collectionRunService.hasOpenRun(MEMBER_ID)).willReturn(true);
+        given(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).willReturn(Optional.of("research"));
 
         // when
         SensorConfigResponse response = service().currentConfig(MEMBER_ID);
@@ -35,10 +36,25 @@ class SensorConfigServiceTest {
     }
 
     @Test
+    @DisplayName("product 회차가 열려 있으면 기본 수집 모드가 research여도 수집 모드가 product다")
+    void product_회차가_열려_있으면_기본_수집_모드가_research여도_product다() {
+        // given
+        given(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).willReturn(Optional.of("product"));
+        SensorConfigService service = new SensorConfigService(
+                SensorConfigFixture.propertiesWithDefaultMode("research"), collectionRunService);
+
+        // when
+        SensorConfigResponse response = service.currentConfig(MEMBER_ID);
+
+        // then
+        assertThat(response.collectionMode()).isEqualTo("product");
+    }
+
+    @Test
     @DisplayName("열린 회차가 없는 회원이 조회하면 수집 모드가 product다")
     void 열린_회차가_없는_회원이_조회하면_수집_모드가_product다() {
         // given
-        given(collectionRunService.hasOpenRun(MEMBER_ID)).willReturn(false);
+        given(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).willReturn(Optional.empty());
 
         // when
         SensorConfigResponse response = service().currentConfig(MEMBER_ID);
@@ -51,7 +67,7 @@ class SensorConfigServiceTest {
     @DisplayName("기본 수집 모드를 research로 두면 열린 회차가 없어도 수집 모드가 research다")
     void 기본_수집_모드를_research로_두면_열린_회차가_없어도_research다() {
         // given
-        given(collectionRunService.hasOpenRun(MEMBER_ID)).willReturn(false);
+        given(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).willReturn(Optional.empty());
         SensorConfigService service = new SensorConfigService(
                 SensorConfigFixture.propertiesWithDefaultMode("research"), collectionRunService);
 
@@ -86,7 +102,7 @@ class SensorConfigServiceTest {
     @DisplayName("수집 모드를 뺀 나머지 값은 서버 설정값을 그대로 내려준다")
     void 수집_모드를_뺀_나머지_값은_서버_설정값을_그대로_내려준다() {
         // given
-        given(collectionRunService.hasOpenRun(MEMBER_ID)).willReturn(false);
+        given(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).willReturn(Optional.empty());
 
         // when
         SensorConfigResponse response = service().currentConfig(MEMBER_ID);
