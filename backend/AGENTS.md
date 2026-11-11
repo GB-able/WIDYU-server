@@ -67,6 +67,7 @@
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
+- **SUBSCRIBE 거부는 버리되 알린다**: 위치, 심박 토픽의 가족 인가가 실패하거나 허용 목록 밖이거나 목적지가 없으면 구독을 버리고, 인증된 세션이면 그 세션 `/user/queue/errors`에 `{error: "FORBIDDEN", message, destination}`을 보낸다. 대상이 없는 회원인지 가족이 아닌지는 가리지 않는다. STOMP ERROR 프레임은 연결을 닫으므로 쓰지 않는다 → LLD-0032 6절(#1027)
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 
 ### `mypage`
