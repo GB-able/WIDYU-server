@@ -44,7 +44,7 @@
 
 | 메서드 | 부르는 곳 | 동작 |
 | --- | --- | --- |
-| `record(memberId, stream, clock, acc, resend)` | `SensorBatchService.ingestImu` 묶음 저장 직후 | 구간별 합계를 더하고 상태를 다시 정한다. 예외를 던지지 않는다 |
+| `record(memberId, batchId, stream, clock, acc, resend)` | `SensorBatchService.ingestImu` 묶음 저장 직후 | 구간별 합계를 더하고 상태를 다시 정한다. 예외를 던지지 않는다 |
 | `contexts(memberId, firstTsMs, lastTsMs)` → `LongFunction<String>` | `HeartRateBatchService.storeAndAssess` | 심박 묶음 범위의 구간과 위치를 한 번 읽고, 측정 시각을 상태 문자열로 바꾸는 함수를 돌려준다 |
 
 AI `POST /api/hr` 요청의 `context`:
@@ -76,7 +76,7 @@ AI `POST /api/hr` 요청의 `context`:
 
 연구팀 상태 규칙 문서가 아직 없다. ADR-0042가 미결정으로 둔 「움직임 크기의 정의」를 아래로 가정한다.
 
-- 샘플마다 손목 가속도 3축(mg)의 벡터 크기 `|a| = √(x² + y² + z²)`를 1mg 정수로 반올림하고 1g(1000mg)를 뺀다. `d = round(|a|) − 1000`.
+- 샘플마다 손목 가속도 3축(mg)의 벡터 크기 `|a| = √(x² + y² + z²)`를 1mg 정수로 반올림하고 1g(1000mg)를 뺀다. `d = min(round(|a|), 64000) − 1000`. 크기는 실수로 계산하고 64g에서 자른다. 축 값은 `int` 범위까지 허용되므로 정수 제곱합이 넘쳐 큰 움직임이 정지로 읽히지 않게 한다. 워치 가속도계 범위(보통 ±16g)보다 넉넉하다.
 - 구간의 움직임 크기는 그 구간 `d`의 **모집단 표준편차**(g)다. 1g를 빼도 표준편차는 같으므로 「중력을 뺀 크기의 흔들림」과 같은 값이다.
 - 경계값은 위쪽 상태에 넣는다. 0.04g는 `LOW`, 0.20g는 `ACTIVE`다.
 - 자이로, 휴대폰 IMU(`imu_phone`)는 쓰지 않는다.
@@ -108,7 +108,7 @@ AI `POST /api/hr` 요청의 `context`:
 ### 5.1 구간 저장 (`record`)
 
 1. `stream`이 `imu_watch`가 아니거나 가속도가 없으면(자이로 보강 묶음) 끝낸다.
-2. 재전송 계보가 있고(`resend.is_resend=true`) 원 묶음(`original_batch_id`)이 `sensor_batch`에 이미 있으면 끝낸다. 내용이 바뀐 재전송은 새 `batch_id`로 오므로 원 묶음과 샘플이 겹쳐 두 번 더해진다.
+2. 재전송 계보가 있고(`resend.is_resend=true`) 원 묶음(`original_batch_id`)이 같은 회원의 다른 묶음으로 `sensor_batch`에 이미 있으면 끝낸다. 내용이 바뀐 재전송은 새 `batch_id`로 오므로 원 묶음과 샘플이 겹쳐 두 번 더해진다. 원 묶음이 자기 자신이거나 다른 회원 것이면 겹친 샘플이 아니므로 더한다.
 3. 샘플 배열을 한 번 돈다. 각 샘플의 측정 시각은 LLD-0041 4.3 환산식(`anchor_epoch_ms + floor((t − anchor_elapsed_ns) / 10⁶)`)으로 구하고 그 시각이 속한 구간에 `(1, d, d²)`를 더한다. 수신 시 검증·파싱한 DTO를 쓰고 S3 원문을 다시 읽지 않는다.
 4. 한 트랜잭션에서 구간마다 `SELECT ... FOR UPDATE`로 행을 읽어(없으면 새 행) 합계를 더하고 합계 전체로 상태를 다시 정해 저장한다. 잠금은 같은 구간에 동시에 더하는 두 묶음이 서로의 합계를 덮지 않게 한다.
 5. 두 묶음이 같은 새 구간을 동시에 INSERT하면 UK 충돌이나 잠금 충돌(`DataIntegrityViolationException`, `ConcurrencyFailureException`)이 난다. 한 번 다시 하면 잠금 조회로 합친다.

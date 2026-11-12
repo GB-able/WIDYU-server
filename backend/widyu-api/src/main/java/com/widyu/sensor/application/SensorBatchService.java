@@ -311,7 +311,8 @@ public class SensorBatchService {
             sensorBatchRepository.save(savedBatch);
             assessImpact(savedBatch);
             // 실패해도 예외를 던지지 않는다. 묶음 저장과 응답은 그대로다(LLD-0138 6절).
-            activityStateService.record(memberId, request.stream(), request.clock(), request.acc(), request.resend());
+            activityStateService.record(memberId, request.batchId(), request.stream(), request.clock(), request.acc(),
+                    request.resend());
         } catch (DataIntegrityViolationException e) {
             // UK 경합이면 같은 batch_id 행이 이미 있다. FK 오류나 스키마 불일치까지 DUPLICATE로
             // 응답하면 클라이언트가 재전송을 멈춰 그 배치가 유실되므로, 행이 확인될 때만 중복으로 본다.

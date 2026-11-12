@@ -40,6 +40,8 @@ class ActivityStateServiceTest {
     // 5초 경계에 맞춘 측정 시각(2025-11-12 03:00:00 KST 근처)
     private static final long T0 = 1_762_884_000_000L;
     private static final long DT_NS = 20_000_000L;
+    private static final String BATCH = "01j8y111111111111111111111";
+    private static final String ORIGINAL = "01j8y000000000000000000000";
     private static final SensorProperties.Activity ACTIVITY =
             new SensorProperties.Activity(5, 4, 0.04, 0.20, 600, 20, 60, 50);
 
@@ -63,7 +65,7 @@ class ActivityStateServiceTest {
         given(sensorProperties.activity()).willReturn(ACTIVITY);
 
         // when
-        service.record(memberId, "imu_watch", clock(), acc(0, high, low, high, low), null);
+        service.record(memberId, BATCH, "imu_watch", clock(), acc(0, high, low, high, low), null);
 
         // then
         ActivityWindow window = windows.findForUpdate(memberId, T0).orElseThrow();
@@ -81,10 +83,10 @@ class ActivityStateServiceTest {
         SensorBatchRequest.Axis second = acc(1_000, 1200, 800);
 
         // when
-        service.record(201L, "imu_watch", clock(), first, null);
-        service.record(201L, "imu_watch", clock(), second, null);
-        service.record(202L, "imu_watch", clock(), second, null);
-        service.record(202L, "imu_watch", clock(), first, null);
+        service.record(201L, BATCH, "imu_watch", clock(), first, null);
+        service.record(201L, BATCH, "imu_watch", clock(), second, null);
+        service.record(202L, BATCH, "imu_watch", clock(), second, null);
+        service.record(202L, BATCH, "imu_watch", clock(), first, null);
 
         // then
         ActivityWindow inOrder = windows.findForUpdate(201L, T0).orElseThrow();
@@ -104,7 +106,7 @@ class ActivityStateServiceTest {
         given(sensorProperties.activity()).willReturn(ACTIVITY);
 
         // when
-        service.record(301L, "imu_watch", clock(), acc(4_960, 1000, 1000, 1000, 1000), null);
+        service.record(301L, BATCH, "imu_watch", clock(), acc(4_960, 1000, 1000, 1000, 1000), null);
 
         // then
         assertThat(windows.findForUpdate(301L, T0).orElseThrow().getSampleCount()).isEqualTo(2);
@@ -116,26 +118,65 @@ class ActivityStateServiceTest {
     void 원_묶음이_이미_저장된_재전송_묶음은_다시_더하지_않는다() {
         // given
         given(sensorProperties.activity()).willReturn(ACTIVITY);
-        given(sensorBatchRepository.findByBatchId("01j8y000000000000000000000"))
-                .willReturn(Optional.of(Mockito.mock(SensorBatch.class)));
+        SensorBatch original = batchOf(401L);
+        given(sensorBatchRepository.findByBatchId(ORIGINAL)).willReturn(Optional.of(original));
         SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
-        service.record(401L, "imu_watch", clock(), acc, null);
+        service.record(401L, BATCH, "imu_watch", clock(), acc, null);
         SensorBatchRequest.Resend resend = new SensorBatchRequest.Resend(
-                true, "01j8y000000000000000000000", 7L, null, "s-1", T0 + 60_000);
+                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
 
         // when
-        service.record(401L, "imu_watch", clock(), acc, resend);
+        service.record(401L, BATCH, "imu_watch", clock(), acc, resend);
 
         // then
         assertThat(windows.findForUpdate(401L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
     }
 
     @Test
+    @DisplayName("원 묶음이 다른 회원 것이거나 자기 자신이면 재전송 묶음도 더한다")
+    void 원_묶음이_다른_회원_것이거나_자기_자신이면_재전송_묶음도_더한다() {
+        // given
+        given(sensorProperties.activity()).willReturn(ACTIVITY);
+        SensorBatch original = batchOf(999L);
+        given(sensorBatchRepository.findByBatchId(ORIGINAL)).willReturn(Optional.of(original));
+        SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
+        SensorBatchRequest.Resend othersOriginal = new SensorBatchRequest.Resend(
+                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
+        SensorBatchRequest.Resend selfOriginal = new SensorBatchRequest.Resend(
+                true, BATCH, 7L, null, "s-1", T0 + 60_000);
+
+        // when
+        service.record(402L, BATCH, "imu_watch", clock(), acc, othersOriginal);
+        service.record(403L, BATCH, "imu_watch", clock(), acc, selfOriginal);
+
+        // then
+        assertThat(windows.findForUpdate(402L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+        assertThat(windows.findForUpdate(403L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("축 값의 제곱합이 long 범위를 넘어도 큰 움직임은 ACTIVE로 저장된다")
+    void 축_값의_제곱합이_long_범위를_넘어도_큰_움직임은_ACTIVE로_저장된다() {
+        // given
+        given(sensorProperties.activity()).willReturn(ACTIVITY);
+        List<Integer> huge = List.of(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        List<Integer> zero = List.of(0, 0, 0);
+        SensorBatchRequest.Axis acc = new SensorBatchRequest.Axis(
+                50.0, 4, "0", List.of(DT_NS, DT_NS, DT_NS), List.of(huge, zero, huge, zero), null);
+
+        // when
+        service.record(404L, BATCH, "imu_watch", clock(), acc, null);
+
+        // then
+        assertThat(windows.findForUpdate(404L, T0).orElseThrow().getState()).isEqualTo(ActivityWindow.State.ACTIVE);
+    }
+
+    @Test
     @DisplayName("휴대폰 IMU와 가속도 없는 보강 묶음은 구간을 만들지 않는다")
     void 휴대폰_IMU와_가속도_없는_보강_묶음은_구간을_만들지_않는다() {
         // when
-        service.record(501L, "imu_phone", clock(), acc(0, 1040, 960, 1040, 960), null);
-        service.record(501L, "imu_watch", clock(), null, null);
+        service.record(501L, BATCH, "imu_phone", clock(), acc(0, 1040, 960, 1040, 960), null);
+        service.record(501L, BATCH, "imu_watch", clock(), null, null);
 
         // then
         assertThat(windows.findByMemberIdAndWindowStartMsBetween(501L, T0 - 60_000, T0 + 60_000)).isEmpty();
@@ -149,7 +190,7 @@ class ActivityStateServiceTest {
 
         // when & then
         // IMU 묶음 저장 뒤에 부르는 부수 작업이라 실패가 묶음 응답을 바꾸면 안 된다(LLD-0138 6절).
-        assertThatCode(() -> service.record(601L, "imu_watch", clock(), acc(0, 1040, 960), null))
+        assertThatCode(() -> service.record(601L, BATCH, "imu_watch", clock(), acc(0, 1040, 960), null))
                 .doesNotThrowAnyException();
         assertThat(windows.findByMemberIdAndWindowStartMsBetween(601L, T0 - 60_000, T0 + 60_000)).isEmpty();
     }
@@ -159,7 +200,7 @@ class ActivityStateServiceTest {
     void 샘플이_모자란_구간은_상태를_정하지_않고_UNKNOWN이_붙는다() {
         // given
         given(sensorProperties.activity()).willReturn(ACTIVITY);
-        service.record(701L, "imu_watch", clock(), acc(0, 1040, 960), null);
+        service.record(701L, BATCH, "imu_watch", clock(), acc(0, 1040, 960), null);
 
         // when
         LongFunction<String> contexts = service.contexts(701L, T0 + 1_000, T0 + 1_000);
@@ -239,6 +280,12 @@ class ActivityStateServiceTest {
         assertThat(service.contexts(1101L, ts, ts).apply(ts)).isEqualTo("REST");
         assertThat(service.contexts(1102L, ts, ts).apply(ts)).isEqualTo("REST");
         assertThat(service.contexts(1103L, ts, ts).apply(ts)).isEqualTo("REST");
+    }
+
+    private SensorBatch batchOf(Long memberId) {
+        SensorBatch batch = Mockito.mock(SensorBatch.class, Mockito.RETURNS_DEEP_STUBS);
+        given(batch.getMember().getId()).willReturn(memberId);
+        return batch;
     }
 
     private SensorBatchRequest.Clock clock() {

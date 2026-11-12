@@ -200,7 +200,8 @@ class SensorBatchServiceTest {
         assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
         ArgumentCaptor<SensorBatchRequest.Axis> acc = ArgumentCaptor.forClass(SensorBatchRequest.Axis.class);
         then(activityStateService).should()
-                .record(eq(MEMBER_ID), eq("imu_watch"), any(SensorBatchRequest.Clock.class), acc.capture(), isNull());
+                .record(eq(MEMBER_ID), eq(BATCH_ID), eq("imu_watch"), any(SensorBatchRequest.Clock.class), acc.capture(),
+                        isNull());
         assertThat(acc.getValue().n()).isEqualTo(3);
     }
 

@@ -38,6 +38,8 @@ public class ActivityStateService {
     private static final String IN_VEHICLE = "IN_VEHICLE";
     private static final String STREAM_WATCH = "imu_watch";
     private static final long ONE_G_MG = 1000L;
+    // 워치 가속도계 측정 범위(보통 ±16g)를 넉넉히 넘는 상한. 이상값이 제곱합을 넘치게 하지 않는다.
+    private static final long MAX_MAGNITUDE_MG = 64_000L;
     private static final long NANOS_PER_MILLI = 1_000_000L;
     private static final double KMH_PER_MPS = 3.6;
 
@@ -51,14 +53,14 @@ public class ActivityStateService {
      * 저장된 워치 IMU 묶음의 가속도를 구간별로 더한다. 수신 시 파싱한 값을 그대로 쓰고 S3 원문을 다시 읽지 않는다.
      * 같은 {@code batch_id} 재전송은 {@code sensor_batch} UK에서 끝나 여기 오지 않는다.
      */
-    public void record(Long memberId, String stream, SensorBatchRequest.Clock clock,
+    public void record(Long memberId, String batchId, String stream, SensorBatchRequest.Clock clock,
                        SensorBatchRequest.Axis acc, SensorBatchRequest.Resend resend) {
         if (!STREAM_WATCH.equals(stream) || acc == null) {
             return;
         }
         try {
             // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 원 묶음이 이미 더해졌으면 두 번 세지 않는다.
-            if (originalAlreadyStored(resend)) {
+            if (originalAlreadyStored(memberId, batchId, resend)) {
                 return;
             }
             Map<Long, long[]> sums = sumByWindow(clock, acc);
@@ -156,11 +158,15 @@ public class ActivityStateService {
                 && fix.getSpeedMps() != null && !Boolean.TRUE.equals(fix.getIsMock());
     }
 
-    private boolean originalAlreadyStored(SensorBatchRequest.Resend resend) {
-        if (resend == null || !Boolean.TRUE.equals(resend.isResend()) || resend.originalBatchId() == null) {
+    /** 원 묶음이 같은 회원의 다른 묶음으로 저장돼 있을 때만 이미 더했다고 본다. 자기 자신이나 남의 묶음을 가리키면 더한다. */
+    private boolean originalAlreadyStored(Long memberId, String batchId, SensorBatchRequest.Resend resend) {
+        if (resend == null || !Boolean.TRUE.equals(resend.isResend()) || resend.originalBatchId() == null
+                || resend.originalBatchId().equals(batchId)) {
             return false;
         }
-        return sensorBatchRepository.findByBatchId(resend.originalBatchId()).isPresent();
+        return sensorBatchRepository.findByBatchId(resend.originalBatchId())
+                .filter(original -> memberId.equals(original.getMember().getId()))
+                .isPresent();
     }
 
     /** 샘플 배열을 한 번 돈다. 시각은 SensorBatchService와 같은 환산식(LLD-0041 4.3)이다. */
@@ -178,7 +184,9 @@ public class ActivityStateService {
             long x = mg.get(0);
             long y = mg.get(1);
             long z = mg.get(2);
-            long deviationMg = Math.round(Math.sqrt((double) (x * x + y * y + z * z))) - ONE_G_MG;
+            // long 제곱합은 int 축 값 셋이면 넘칠 수 있어 double로 계산하고 상한을 둔다.
+            double magnitudeMg = Math.sqrt((double) x * x + (double) y * y + (double) z * z);
+            long deviationMg = Math.min(Math.round(magnitudeMg), MAX_MAGNITUDE_MG) - ONE_G_MG;
             long[] sum = sums.computeIfAbsent(windowStart(epochMs, windowMs), key -> new long[3]);
             sum[0]++;
             sum[1] += deviationMg;
