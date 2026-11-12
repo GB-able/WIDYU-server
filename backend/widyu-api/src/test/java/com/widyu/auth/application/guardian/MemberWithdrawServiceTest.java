@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.widyu.auth.application.guardian.unlink.SocialUnlinkService;
 import com.widyu.auth.dto.request.MemberWithdrawRequest;
@@ -16,7 +17,9 @@ import com.widyu.auth.event.MemberWithdrawnEvent;
 import com.widyu.auth.repository.RefreshTokenRepository;
 import com.widyu.fcm.application.degraded.EmergencyRecipientSnapshotService;
 import com.widyu.goal.medicineschedule.application.MedicationProofDeletionService;
+import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.Family;
@@ -317,5 +320,45 @@ class MemberWithdrawServiceTest {
 
         // then
         verify(s3ObjectDeletionTaskService).schedule(1L, List.of("https://bucket/profile/a.jpg"));
+    }
+
+    @Test
+    @DisplayName("어르신이 보호자 탈퇴를 부르면 접근 거부 예외가 발생하고 계정과 가족 연결이 그대로다")
+    void 어르신이_보호자_탈퇴를_부르면_접근_거부되고_아무것도_바뀌지_않는다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "김어르신", "01099998888");
+        ReflectionTestUtils.setField(senior, "id", 9L);
+        ReflectionTestUtils.setField(senior, "socialAccounts", new ArrayList<>());
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        // when & then
+        assertThatThrownBy(() -> memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(senior.getStatus()).isEqualTo(Status.ACTIVE);
+        assertThat(senior.getName()).isEqualTo("김어르신");
+        assertThat(senior.getPhoneNumber()).isEqualTo("01099998888");
+        assertThat(senior.getWithdrawnAt()).isNull();
+        verifyNoInteractions(refreshTokenRepository, medicationProofDeletionService, socialUnlinkService,
+                familyMembershipRepository, seniorProfileRepository, memberRepository,
+                s3ObjectDeletionTaskService, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("보호자가 탈퇴하면 비활성이 되고 탈퇴 시각이 남는다")
+    void 보호자가_탈퇴하면_비활성이_되고_탈퇴_시각이_남는다() {
+        // given
+        Member member = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(member, "id", 1L);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        given(memberUtil.getCurrentMember()).willReturn(member);
+
+        // when
+        memberWithdrawService.withdrawMember(new MemberWithdrawRequest("탈퇴 사유"));
+
+        // then
+        assertThat(member.getStatus()).isEqualTo(Status.INACTIVE);
+        assertThat(member.getWithdrawnAt()).isNotNull();
     }
 }

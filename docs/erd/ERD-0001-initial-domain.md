@@ -39,6 +39,7 @@ erDiagram
         Status status
         Long medicationAlarmRevision
         Long notificationPolicyRevision "푸시 설정 revision"
+        LocalDateTime withdrawn_at "본인 탈퇴 시각, 관리자 정지는 NULL"
     }
 
     LocalAccount {
@@ -742,6 +743,15 @@ erDiagram
         String last_error_type
     }
 
+    MemberWithdrawalRequest {
+        Long id PK
+        Long member_id "FK 없음"
+        MemberWithdrawalRequestStatus status
+        LocalDateTime requested_at
+        LocalDateTime processed_at
+        Long processed_by_admin_id
+    }
+
     Member ||--o{ LocalAccount : "1:1"
     Member ||--o{ SocialAccount : "1:N"
     Member ||--o{ FamilyMembership : "보호자"
@@ -787,6 +797,7 @@ erDiagram
     Member ||--o{ StudyParticipation : "실증 참여 (재식별 키)"
     Member ||--o{ S3ObjectDeletionTask : "S3 파일 삭제 작업 (복약 인증·프로필 사진)"
     Member ||..o{ SocialUnlinkTask : "탈퇴 시 소셜 연동 해제 작업 (member_id, FK 없음)"
+    Member ||..o{ MemberWithdrawalRequest : "어르신 탈퇴 요청 (member_id, FK 없음)"
 
     Family ||--o{ FamilyMembership : "보호자 구성"
     Family |o--o{ SeniorProfile : "시니어 구성"
@@ -855,7 +866,8 @@ erDiagram
 | `WithdrawalScope` | `ALL`, `SELECTED_CONSENTS` |
 | `StudyParticipationHistoryType` | `REGISTERED`, `RETENTION_CHANGED`, `WITHDRAWN`, `DELETION_PROCESSED` |
 | `SensorIngestChannel` | `WS`, `REST` (VARCHAR 매핑, `sensor_batch.ingest_channel`·`sensor_batch_rejection.ingest_channel`) |
-| `AdminAction` | `ADMIN_LOGIN`, `MEMBER_STATUS_CHANGE`, `FCM_TEST_SEND`, `COLLECTION_RUN_OPEN`, `COLLECTION_RUN_CLOSE`, `STUDY_PARTICIPATION_REGISTER`, `STUDY_PARTICIPATION_PERIOD_CHANGE`, `STUDY_PARTICIPATION_WITHDRAW`, `STUDY_PARTICIPATION_DELETION_PROCESSED` |
+| `AdminAction` | `ADMIN_LOGIN`, `MEMBER_STATUS_CHANGE`, `FCM_TEST_SEND`, `COLLECTION_RUN_OPEN`, `COLLECTION_RUN_CLOSE`, `STUDY_PARTICIPATION_REGISTER`, `STUDY_PARTICIPATION_PERIOD_CHANGE`, `STUDY_PARTICIPATION_WITHDRAW`, `STUDY_PARTICIPATION_DELETION_PROCESSED`, `MEMBER_WITHDRAWAL_REQUEST_PROCESSED`, `MEMBER_WITHDRAWAL_REQUEST_CANCELLED` |
+| `MemberWithdrawalRequestStatus` | `REQUESTED`, `PROCESSED`, `CANCELLED` |
 
 ## 주요 인덱스
 
@@ -958,6 +970,7 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |
 | 2026-11-12 | `data_purge_log` | 신규 테이블 (LLD-0136). 보관 기간 정리 작업의 날짜·테이블별 대상 건수·참가자 제외 건수. 회원 ID 없음. 운영 구축 때 적용 | `scripts/mysql/create_data_purge_log.sql` |
 | 2026-11-09 | `device_event` | 신규 테이블 (LLD-0129). 실험 모드 기기 상태 바뀜의 종류·바뀐 시각·종류별 값과 항목 원문 JSON. `source`·`kind`는 VARCHAR | `scripts/mysql/create_device_event.sql` |
 | 2026-11-09 | `sensor_batch_rejection` | 신규 테이블 (LLD-0128). 서버가 거절한 센서 묶음의 식별자·오류 코드·경로·수신 시각, 원문 없음, member FK 없음 | `scripts/mysql/create_sensor_batch_rejection.sql` |

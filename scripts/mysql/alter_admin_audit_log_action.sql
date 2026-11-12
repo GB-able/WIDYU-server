@@ -1,4 +1,5 @@
 -- #658: admin_audit_log.action에 실증 참여 관련 관리자 액션 값을 추가한다 (LLD-0052 8절).
+-- #1017: 탈퇴 요청 처리 완료·취소 값을 더한다 (LLD-0137 8절). 운영은 구축 때 적용, 개발 DB는 처리 API를 쓰기 전에 실행한다.
 -- 운영 배포 전에 실행한다. 적용하지 않으면 참여 등록·철회·삭제 처리의 감사 로그 INSERT가 실패하고,
 -- 감사 로그를 참여 변경과 같은 트랜잭션에 남기므로 참여 변경까지 통째로 롤백된다.
 --
@@ -24,5 +25,7 @@ ALTER TABLE admin_audit_log
         'STUDY_PARTICIPATION_REGISTER',
         'STUDY_PARTICIPATION_PERIOD_CHANGE',
         'STUDY_PARTICIPATION_WITHDRAW',
-        'STUDY_PARTICIPATION_DELETION_PROCESSED'
+        'STUDY_PARTICIPATION_DELETION_PROCESSED',
+        'MEMBER_WITHDRAWAL_REQUEST_PROCESSED',
+        'MEMBER_WITHDRAWAL_REQUEST_CANCELLED'
     ) NOT NULL;

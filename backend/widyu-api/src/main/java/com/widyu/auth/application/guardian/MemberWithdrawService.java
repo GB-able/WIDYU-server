@@ -8,6 +8,7 @@ import com.widyu.fcm.application.degraded.EmergencyRecipientSnapshotService;
 import com.widyu.goal.medicineschedule.application.MedicationProofDeletionService;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
@@ -16,6 +17,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -45,6 +47,11 @@ public class MemberWithdrawService {
     @Transactional
     public void withdrawMember(MemberWithdrawRequest request) {
         Member member = memberUtil.getCurrentMember();
+        // /api/v1/auth/**는 인가 규칙 없이 열려 있다. 어르신이 부르면 가족 연결이 남은 채 계정만 가려지므로
+        // 어떤 처리보다 먼저 막는다. 어르신은 탈퇴 요청 API를 쓴다(LLD-0137).
+        if (member.getType() != MemberType.GUARDIAN) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         log.info("회원 탈퇴 시작: memberId={}", member.getId());
 
@@ -66,8 +73,8 @@ public class MemberWithdrawService {
         String profileImage = member.getProfileImage();
         member.maskPersonalInfo();
 
-        // 5. 로컬 계정 삭제
-        member.withdraw();
+        // 5. 비활성화와 탈퇴 시각 기록 (관리자 정지와 구분한다, LLD-0137)
+        member.markWithdrawn(LocalDateTime.now());
 
         // 6. 회원 데이터 저장
         memberRepository.save(member);
