@@ -11,7 +11,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.MemberNotificationSetting;
 import com.widyu.fcm.PushSettingGroup;
@@ -32,7 +31,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -53,7 +51,6 @@ class EmergencyRecipientSnapshotServiceTest {
     @Autowired private SeniorProfileRepository seniors;
     @Autowired private TestEntityManager entityManager;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("스냅샷을 만들면 탈퇴 회원, 비활성 토큰, 안전 알림을 끈 보호자를 빼고 방장은 설정과 무관하게 넣는다")

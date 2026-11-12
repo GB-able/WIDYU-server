@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmNotification;
 import com.widyu.fcm.NotificationType;
@@ -38,7 +37,6 @@ class FcmNotificationTabIntegrationTest {
     @Autowired private FcmNotificationRepository notifications;
     @Autowired private MemberRepository members;
     @MockBean private MemberUtil memberUtil;
-    @MockBean private JPAQueryFactory queryFactory;
     @MockBean private FcmDeliveryProperties deliveryProperties;
     @MockBean private FirebaseProperties firebaseProperties;
     @MockBean private FcmOutboxService outboxService;

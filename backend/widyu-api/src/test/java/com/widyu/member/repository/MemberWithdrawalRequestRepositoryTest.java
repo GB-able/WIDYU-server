@@ -2,7 +2,6 @@ package com.widyu.member.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.member.MemberWithdrawalRequest;
 import com.widyu.member.MemberWithdrawalRequestStatus;
@@ -11,7 +10,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,7 +23,6 @@ class MemberWithdrawalRequestRepositoryTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 12, 10, 0);
 
     @Autowired private MemberWithdrawalRequestRepository repository;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("회원의 열린 요청을 찾으면 처리 완료된 요청은 빼고 처리 대기 요청만 돌려준다")

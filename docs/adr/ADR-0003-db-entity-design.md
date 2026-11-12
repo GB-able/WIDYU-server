@@ -28,7 +28,7 @@
 **연관관계**
 - JPA `@ManyToOne`, `@OneToMany`, `@JoinColumn` 사용
 - 물리적 FK 제약조건은 사용하지 않음 (데이터 삽입 유연성 확보, 대규모 데이터 성능)
-- Lazy Loading 기본 (`FetchType.LAZY`), N+1은 QueryDSL 또는 fetch join으로 해결
+- Lazy Loading 기본 (`FetchType.LAZY`), N+1은 `@Query` JPQL fetch join으로 해결 (QueryDSL은 ADR-0044에서 제거)
 
 **Soft Delete**
 - 전역 규칙이 아님. 필요한 엔티티만 `@SQLDelete` + `@Where` 적용

@@ -2,7 +2,6 @@ package com.widyu.album.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.album.Album;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.member.Member;
@@ -13,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -25,7 +23,6 @@ class AlbumUnlockFreeAlbumIdsQueryTest {
 
     @Autowired private AlbumUnlockRepository albumUnlockRepository;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("동영상 처리 중인 시니어 앨범은 포함하고 삭제된 앨범과 보호자 앨범은 제외한다")

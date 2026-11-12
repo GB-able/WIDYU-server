@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.application.FcmOutboxService;
 import com.widyu.fcm.event.safezone.dto.SafeZoneExitEvent;
 import com.widyu.global.entity.Status;
@@ -41,7 +40,6 @@ class SafeZoneNotificationListenerCommitTest {
     @MockBean private MemberRepository members;
     @MockBean private SeniorProfileRepository seniors;
     @MockBean private FamilyMembershipRepository memberships;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

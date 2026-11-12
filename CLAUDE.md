@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공유하는 Spring Boot 플랫폼입니다.
 포인트 기반 프리미엄 콘텐츠, WebSocket 실시간 위치 추적, 건강 목표 관리 기능을 포함합니다.
 
-**Tech Stack**: Java 21, Spring Boot 3.3.5, MySQL, Redis, WebSocket (STOMP), QueryDSL, JPA/Hibernate
+**Tech Stack**: Java 21, Spring Boot 3.3.5, MySQL, Redis, WebSocket (STOMP), Spring Data JPA/Hibernate
 
 ## Development Commands
 
@@ -20,7 +20,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ./gradlew test                                           # 전체 테스트 (모듈별: :backend:widyu-api:test)
 ./gradlew test --tests "PhoneNumberUtilTest"             # 단일 테스트
-./gradlew compileJava                                    # QueryDSL Q-class 재생성 (엔티티 변경 후 필수)
+./gradlew compileJava                                    # 컴파일만 빠르게 확인
 ```
 
 - **Docker**: `./scripts/docker/{dev,prod}-up.sh`·`{dev,prod}-down.sh`, 로그 `./scripts/docker/logs.sh {dev|prod} [service]`
@@ -31,7 +31,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 
 ### Multi-Module Structure
 - **`widyu-api`**: 실행 JAR — 컨트롤러, 서비스, 리포지토리, 설정. 진입점 `com.widyu.WidyuApiApplication`
-- **`widyu-domain`**: 라이브러리 JAR (`bootJar` off) — JPA 엔티티(`@Entity`, `@RedisHash`), QueryDSL Q-클래스 생성 위치. 리포지토리 없음
+- **`widyu-domain`**: 라이브러리 JAR (`bootJar` off) — JPA 엔티티(`@Entity`, `@RedisHash`). 리포지토리 없음
 
 **핵심 규칙**: 엔티티는 `widyu-domain`, 리포지토리는 `widyu-api`.
 
@@ -51,7 +51,7 @@ WIDYU는 시니어(부모)와 보호자(자녀·가족)가 사진·영상을 공
 - **Strategy + Factory** — OAuth 제공자별 로그인 처리 (`SocialLoginStrategyFactory`)
 - **AOP** — `@ValidateFamilyAccess`로 가디언-시니어 접근 권한 자동 검증 (`FamilyAccessAspect`가 `seniorId`를 추출해 `FamilyMembershipRepository`로 관계 확인, ADR-0002)
 - **Event-Driven** — `@EventListener`로 도메인 간 결합 제거 (앨범 이벤트 → FCM 알림)
-- **QueryDSL** — 복잡한 조건 쿼리, `./gradlew compileJava`로 Q-클래스 재생성
+- **Spring Data JPA 조회** — 메서드 이름 쿼리, 안 되면 `@Query` JPQL. QueryDSL은 쓰지 않는다 (ADR-0044)
 - **WebSocket STOMP** — JWT 핸드셰이크 인터셉터로 인증, `SimpMessagingTemplate`으로 브로드캐스트, 위치는 Redis 저장
 - **Redis 임시 데이터** — `@RedisHash` + `@TimeToLive` (인증코드, 임시토큰, OAuth state 등)
 
@@ -74,7 +74,6 @@ Java 파일 수정 시 `on-file-edit.sh` 훅이 `scripts/harness/validate-java-r
 2. 변경 계획 + 완료 조건 작성 (어떤 파일·왜, 그리고 "무엇이 되면 done"인지 검증 가능한 성공 기준으로)
 3. 코드 수정 (훅이 규칙 자동 검사)
 4. 테스트: `bash scripts/harness/run-module-tests.sh`
-5. 엔티티 변경 시 `./gradlew compileJava`
 
 ## 코드 작성 원칙
 

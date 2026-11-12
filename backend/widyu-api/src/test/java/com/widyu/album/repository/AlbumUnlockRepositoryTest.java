@@ -2,7 +2,6 @@ package com.widyu.album.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.album.Album;
 import com.widyu.album.AlbumUnlock;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -25,7 +23,6 @@ class AlbumUnlockRepositoryTest {
 
     @Autowired private TestEntityManager entityManager;
     @Autowired private AlbumUnlockRepository albumUnlockRepository;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("잠금 해제 뒤 남은 수를 세면 그 보호자의 활성 미해제 게시물만 포함한다")

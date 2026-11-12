@@ -3,7 +3,6 @@ package com.widyu.incident.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.application.FcmOutboxService;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.followup.application.FollowupCardService;
@@ -49,7 +48,6 @@ class IncidentGuardianResponsePersistenceTest {
     @Autowired private IncidentRepository incidents;
     @Autowired private IncidentGuardianResponseRepository responses;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private JPAQueryFactory queryFactory;
     @MockBean private FcmService fcmService;
     @MockBean private FamilyAccessService familyAccessService;
     @MockBean private SensorProperties sensorProperties;

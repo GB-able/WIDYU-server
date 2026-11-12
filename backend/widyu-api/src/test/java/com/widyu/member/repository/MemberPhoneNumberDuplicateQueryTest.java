@@ -2,7 +2,6 @@ package com.widyu.member.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -24,7 +22,6 @@ class MemberPhoneNumberDuplicateQueryTest {
 
     @Autowired private MemberRepository memberRepository;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("같은 번호의 회원이 이미 둘 이상 저장돼 있으면 단건 조회 예외 없이 두 건을 반환한다")

@@ -2,7 +2,6 @@ package com.widyu.fcm.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmNotification;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,7 +30,6 @@ class FcmNotificationConditionalReadIntegrationTest {
     @Autowired private FcmNotificationRepository notifications;
     @Autowired private MemberRepository members;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private JPAQueryFactory queryFactory;
 
     @AfterEach
     void cleanup() {

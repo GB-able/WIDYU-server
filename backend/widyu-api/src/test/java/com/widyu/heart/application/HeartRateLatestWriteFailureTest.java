@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.application.degraded.DegradedEmergencyAlertService;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -73,7 +72,6 @@ class HeartRateLatestWriteFailureTest {
     @MockBean private HeartRateResultRepository heartRateResultRepository;
     @MockBean private DegradedEmergencyAlertService degradedEmergencyAlertService;
     @MockBean private SensorProperties sensorProperties;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("Redis 최신값 쓰기가 실패해도 단건 위급 심박을 저장하고 커밋 뒤 위급 알림 신호를 낸다")
