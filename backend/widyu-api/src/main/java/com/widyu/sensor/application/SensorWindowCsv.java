@@ -1,8 +1,10 @@
 package com.widyu.sensor.application;
 
+import com.widyu.device.DeviceEvent;
 import com.widyu.device.DeviceHeartbeat;
 import com.widyu.location.raw.LocationFix;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorBatchRejection;
 import com.widyu.sensor.SensorDroppedRange;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
@@ -29,13 +31,17 @@ final class SensorWindowCsv {
     static final String BATCH_HEADER = line("phase", "ts_kst", "ts_ms", "stream", "device_id", "batch_id",
             "session_id", "seq", "measured_start_ms", "measured_end_ms", "acc_n", "gyro_n", "sample_count",
             "on_body", "wear_state", "missing_reason", "watch_battery_pct", "quality_status", "collection_mode",
-            "gyro_mode", "trigger_kind", "server_received_at_ms");
+            "gyro_mode", "trigger_kind", "server_received_at_ms", "ingest_channel");
     static final String DROPPED_HEADER = line("phase", "ts_kst", "ts_ms", "session_id", "from_seq", "to_seq",
             "reason", "server_received_at_ms");
+    static final String REJECTION_HEADER = line("phase", "ts_kst", "ts_ms", "stream", "device_id", "batch_id",
+            "session_id", "seq", "error_code", "ingest_channel");
     static final String HEARTBEAT_HEADER = line("phase", "ts_kst", "ts_ms", "device_id", "watch_device_id",
             "watch_connected", "watch_on_body", "watch_battery_pct", "phone_battery_pct", "phone_charging",
             "socket_connected", "last_hr_ts_ms", "last_imu_ts_ms", "location_permission", "background_restricted",
             "phone_queue_depth", "watch_queue_depth", "phone_app_ver", "watch_app_ver", "phone_os");
+    static final String DEVICE_EVENT_HEADER = line("phase", "ts_kst", "ts_ms", "device_id", "source", "kind",
+            "attributes", "session_id", "server_received_at_ms");
 
     private static final DateTimeFormatter KST_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(KST);
@@ -84,6 +90,13 @@ final class SensorWindowCsv {
                 heartbeat.getPhoneAppVer(), heartbeat.getWatchAppVer(), heartbeat.getPhoneOs());
     }
 
+    /** 기기 상태 바뀜 한 건. phase·시각은 바뀐 시각 기준이고 attributes는 JSON 문자열 그대로다(LLD-0129). */
+    static String deviceEvent(DeviceEvent event, Window window) {
+        long ts = event.getOccurredAtMs();
+        return line(window.phase(ts), kst(ts), ts, event.getDeviceId(), event.getSource(), event.getKind(),
+                event.getAttributes(), event.getSessionId(), event.getServerReceivedAtMs());
+    }
+
     /** 워치가 버린 묶음 번호 구간(양 끝 포함). phase·시각은 워치가 버린 시각 기준이다(LLD-0124). */
     static String dropped(SensorDroppedRange range, Window window) {
         long ts = range.getTsMs();
@@ -99,7 +112,15 @@ final class SensorWindowCsv {
                 batch.getAccN(), batch.getGyroN(), batch.getSampleCount(), batch.getOnBody(), batch.getWearState(),
                 batch.getMissingReason(), batch.getWatchBatteryPct(), batch.getQualityStatus(),
                 batch.getCollectionMode(), batch.getGyroMode(), batch.getTriggerKind(),
-                batch.getServerReceivedAtMs());
+                batch.getServerReceivedAtMs(), batch.getIngestChannel());
+    }
+
+    /** 서버가 거절한 묶음 한 건. 거절된 본문의 측정 시각은 믿을 수 없어 phase·시각은 서버 수신 시각 기준이다(LLD-0128). */
+    static String rejection(SensorBatchRejection rejection, Window window) {
+        long ts = rejection.getReceivedAtMs();
+        return line(window.phase(ts), kst(ts), ts, rejection.getStream(), rejection.getDeviceId(),
+                rejection.getBatchId(), rejection.getSessionId(), rejection.getSeq(), rejection.getErrorCode(),
+                rejection.getIngestChannel());
     }
 
     static List<String> heartRows(SensorBatch batch, HeartRateBatchRequest request, Window window) {

@@ -34,6 +34,7 @@ class ControllerFamilyAccessTest {
             "AdminMemberController#changeStatus",
             "AdminConsentController#getConsentHistory",
             "AdminSensorExportController#export",
+            "AdminLocationAccessExportController#export",
 
             // HealthScheduleService:184,225 — existsByGuardianIdAndSeniorProfileId
             "HealthScheduleController#getHealthScheduleCalendarForSenior",

@@ -3,7 +3,9 @@ package com.widyu.sensor.application;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.widyu.device.DeviceEvent;
 import com.widyu.device.DeviceHeartbeat;
+import com.widyu.device.repository.DeviceEventRepository;
 import com.widyu.device.repository.DeviceHeartbeatRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -12,11 +14,13 @@ import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorBatchRejection;
 import com.widyu.sensor.SensorDroppedRange;
 import com.widyu.sensor.application.SensorWindowCsv.Window;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.dto.response.SensorWindowExportFile;
+import com.widyu.sensor.repository.SensorBatchRejectionRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
 import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import jakarta.annotation.PreDestroy;
@@ -67,8 +71,10 @@ public class SensorWindowExportService {
     private final MemberRepository memberRepository;
     private final LocationFixRepository locationFixRepository;
     private final DeviceHeartbeatRepository deviceHeartbeatRepository;
+    private final DeviceEventRepository deviceEventRepository;
     private final SensorBatchRepository sensorBatchRepository;
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
+    private final SensorBatchRejectionRepository sensorBatchRejectionRepository;
     private final S3Service s3Service;
     private final ObjectMapper objectMapper;
 
@@ -91,10 +97,14 @@ public class SensorWindowExportService {
                 memberId, window.startMs(), window.endMs());
         List<DeviceHeartbeat> heartbeats = deviceHeartbeatRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(
                 memberId, window.startMs(), window.endMs());
+        List<DeviceEvent> deviceEvents = deviceEventRepository
+                .findByMemberIdAndOccurredAtMsBetweenOrderByOccurredAtMsAsc(memberId, window.startMs(), window.endMs());
         List<SensorBatch> batches = sensorBatchRepository.findMemberWindowBatches(
                 memberId, window.startMs(), window.endMs());
         List<SensorDroppedRange> droppedRanges = sensorDroppedRangeRepository
                 .findByMemberIdAndTsMsBetweenOrderByTsMsAsc(memberId, window.startMs(), window.endMs());
+        List<SensorBatchRejection> rejections = sensorBatchRejectionRepository
+                .findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc(memberId, window.startMs(), window.endMs());
 
         Map<String, Long> counts = new LinkedHashMap<>();
         List<String> skipped = new ArrayList<>();
@@ -110,10 +120,17 @@ public class SensorWindowExportService {
             counts.put("device_heartbeat.csv", writeEntry(zip, out, "device_heartbeat.csv",
                     SensorWindowCsv.HEARTBEAT_HEADER,
                     heartbeats.stream().map(heartbeat -> SensorWindowCsv.heartbeat(heartbeat, window)).toList()));
+            // 실험 모드에서 기기 상태가 바뀐 시각이다(LLD-0129).
+            counts.put("device_events.csv", writeEntry(zip, out, "device_events.csv",
+                    SensorWindowCsv.DEVICE_EVENT_HEADER,
+                    deviceEvents.stream().map(event -> SensorWindowCsv.deviceEvent(event, window)).toList()));
             // 묶음 번호가 빠졌을 때 워치가 버린 것인지 서버가 못 받은 것인지 가르는 근거다(#983).
             counts.put("dropped_ranges.csv", writeEntry(zip, out, "dropped_ranges.csv",
                     SensorWindowCsv.DROPPED_HEADER,
                     droppedRanges.stream().map(range -> SensorWindowCsv.dropped(range, window)).toList()));
+            // 빠진 묶음 번호가 서버 거절인지 가르는 근거다(LLD-0128).
+            counts.put("rejections.csv", writeEntry(zip, out, "rejections.csv", SensorWindowCsv.REJECTION_HEADER,
+                    rejections.stream().map(rejection -> SensorWindowCsv.rejection(rejection, window)).toList()));
             counts.put("hr.csv", writeExpanded(zip, out, "hr.csv", SensorWindowCsv.HR_HEADER,
                     batches.stream().filter(batch -> HR.equals(batch.getStream())).toList(), window, skipped));
             counts.put("imu.csv", writeExpanded(zip, out, "imu.csv", SensorWindowCsv.IMU_HEADER,
@@ -125,10 +142,10 @@ public class SensorWindowExportService {
             throw new UncheckedIOException(e);
         }
 
-        log.info("센서 시간대 내보내기: memberId={}, locations={}, batches={}, heartbeats={}, dropped={}, hr={}, imu={}, "
-                        + "skipped={}",
-                memberId, fixes.size(), batches.size(), heartbeats.size(), droppedRanges.size(), counts.get("hr.csv"),
-                counts.get("imu.csv"), skipped.size());
+        log.info("센서 시간대 내보내기: memberId={}, locations={}, batches={}, heartbeats={}, dropped={}, rejections={}, "
+                        + "hr={}, imu={}, skipped={}",
+                memberId, fixes.size(), batches.size(), heartbeats.size(), droppedRanges.size(), rejections.size(),
+                counts.get("hr.csv"), counts.get("imu.csv"), skipped.size());
         return SensorWindowExportFile.of(fileName(memberId, window), zipBytes.toByteArray());
     }
 

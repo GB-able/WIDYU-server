@@ -7,9 +7,16 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.widyu.location.access.repository.LocationAccessLogRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Properties;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.mock.env.MockEnvironment;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,5 +74,54 @@ class LocationAccessDigestSchedulerTest {
 
         // then
         then(locationAccessDigestSender).should(never()).send(any(), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("서버 시작 뒤 한 번 돌면 남아 있던 미통보 기록을 시니어마다 요약 통보한다")
+    void 시작_시_한_번_남은_미통보_기록을_통보한다() {
+        // given
+        given(locationAccessLogRepository.findSeniorIdsWithUnnotified()).willReturn(List.of(7L));
+
+        // when
+        locationAccessDigestScheduler.flushOnStartup();
+
+        // then
+        then(locationAccessDigestSender).should().send(eq(7L), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("시작 시 요약을 등록하면 반복 주기 없는 1회 작업으로 등록한다")
+    void 시작_시_요약을_등록하면_1회_작업으로_등록한다() throws NoSuchMethodException {
+        // given & when
+        Scheduled scheduled = LocationAccessDigestScheduler.class
+                .getMethod("flushOnStartup")
+                .getAnnotation(Scheduled.class);
+
+        // then
+        assertThat(scheduled.initialDelay()).isPositive();
+        assertThat(scheduled.cron()).isEmpty();
+        assertThat(scheduled.fixedDelay()).isNegative();
+        assertThat(scheduled.fixedRate()).isNegative();
+        assertThat(scheduled.fixedDelayString()).isEmpty();
+        assertThat(scheduled.fixedRateString()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("운영값을 따로 주지 않으면 정기 요약을 끄고 반복 조회를 합치는 쿨다운 설정을 두지 않는다")
+    void 운영값을_주지_않으면_정기_요약을_끄고_쿨다운_설정을_두지_않는다() {
+        // given
+        YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
+        yaml.setResources(new ClassPathResource("application.yml"));
+        Properties properties = yaml.getObject();
+        // 호스트 환경변수를 읽지 않도록 빈 환경에서 자리표시자를 푼다.
+        MockEnvironment environment = new MockEnvironment();
+
+        // when
+        String digestCron = environment.resolvePlaceholders(
+                properties.getProperty("location-access.digest-cron"));
+
+        // then
+        assertThat(digestCron).isEqualTo(Scheduled.CRON_DISABLED);
+        assertThat(properties).doesNotContainKey("location-access.immediate-cooldown-min");
     }
 }

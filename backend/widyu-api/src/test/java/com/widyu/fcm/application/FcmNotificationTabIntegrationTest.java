@@ -15,6 +15,7 @@ import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
@@ -42,6 +43,7 @@ class FcmNotificationTabIntegrationTest {
     @MockBean private FirebaseProperties firebaseProperties;
     @MockBean private FcmOutboxService outboxService;
     @MockBean private FcmTransport transport;
+    @MockBean private FamilyAccessService familyAccessService;
 
     @Test
     @DisplayName("보호자가 알림 탭을 조회하면 전체부터 기타까지 7개를 순서대로 반환한다")

@@ -106,7 +106,7 @@ class GuardianHomeServiceTest {
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
+        given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
         given(realtimeLocationService.getOutingStatus(any())).willReturn(true);
 
         // when
@@ -135,7 +135,7 @@ class GuardianHomeServiceTest {
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
+        given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
@@ -162,7 +162,7 @@ class GuardianHomeServiceTest {
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(any(), any(), any())).willReturn(List.of());
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
+        given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
@@ -199,7 +199,7 @@ class GuardianHomeServiceTest {
                 .willReturn(List.of());
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
-        given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
+        given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);

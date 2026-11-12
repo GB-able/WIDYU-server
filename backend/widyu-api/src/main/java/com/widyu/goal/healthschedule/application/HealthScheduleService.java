@@ -15,6 +15,7 @@ import com.widyu.fcm.NotificationType;
 import java.time.LocalDate;
 import com.widyu.goal.healthschedule.dto.response.HealthScheduleResponse;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.validator.GoalMonthValidator;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
@@ -193,6 +194,7 @@ public class HealthScheduleService {
      * 시니어 본인 캘린더 조회
      */
     public List<HealthScheduleDayResponse> getHealthScheduleCalendarForMe(int year, int month) {
+        GoalMonthValidator.validate(year, month, true);
         Member currentMember = memberUtil.getCurrentMember();
 
         // 해당 월의 시작일과 종료일 계산
@@ -213,6 +215,7 @@ public class HealthScheduleService {
      * 보호자가 시니어 캘린더 조회
      */
     public List<HealthScheduleDayResponse> getHealthScheduleCalendarForSenior(Long memberId, int year, int month) {
+        GoalMonthValidator.validate(year, month, true);
         Member currentMember = memberUtil.getCurrentMember();
 
         // 시니어 프로필 조회

@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 
@@ -95,6 +96,7 @@ public class AlbumFileService {
 
         MultipartFile processedFile = file;
         File tempCompressedFile = null;
+        File tempTrimmedFile = null;
         File tempThumbnailFile = null;
 
         File sourceFile = null;
@@ -115,16 +117,25 @@ public class AlbumFileService {
                 ownedSourceFile = true;
             }
 
-            // 2) sourceFile 기준으로 길이 추출 → 썸네일 생성 (파일 복사 없음)
-            int duration = videoCompressionService.extractDuration(sourceFile);
+            // 2) 최대 길이를 넘으면 앞부분만 남기고, 이후 단계는 자른 파일을 쓴다 (#1010)
+            File videoFile = sourceFile;
+            Optional<File> trimmedFile = videoCompressionService.trimToMaxDuration(sourceFile);
+            if (trimmedFile.isPresent()) {
+                tempTrimmedFile = trimmedFile.get();
+                videoFile = tempTrimmedFile;
+                processedFile = wrapFileAsMultipart(tempTrimmedFile, safeOriginalName(file));
+            }
+
+            // 3) 최종 영상 파일 기준으로 길이 추출 (파일 복사 없음)
+            int duration = videoCompressionService.extractDuration(videoFile);
             log.info("동영상 길이 추출 완료: duration={}s", duration);
 
             log.info("썸네일 생성 시작: memberId={}", memberId);
-            tempThumbnailFile = videoCompressionService.generateThumbnail(sourceFile, (double) duration);
+            tempThumbnailFile = videoCompressionService.generateThumbnail(videoFile, (double) duration);
             String thumbName = baseName(safeOriginalName(file)) + "_thumbnail.jpg";
             MultipartFile thumbnailPart = wrapFileAsMultipart(tempThumbnailFile, thumbName);
 
-            // 3) 업로드
+            // 4) 업로드
             String videoDir = ALBUM_VIDEO_PREFIX + "/" + memberId;
             String videoKey = s3Service.generateFilePath(videoDir, safeOriginalName(processedFile));
             String videoUrl = s3Service.uploadFile(processedFile, videoKey);
@@ -145,6 +156,7 @@ public class AlbumFileService {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         } finally {
             cleanupTemp(tempCompressedFile);
+            cleanupTemp(tempTrimmedFile);
             cleanupTemp(tempThumbnailFile);
             if (ownedSourceFile) {
                 cleanupTemp(sourceFile);

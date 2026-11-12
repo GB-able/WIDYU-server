@@ -30,13 +30,17 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.walk.Walk;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -126,6 +130,23 @@ class WalkServiceTest {
         return member;
     }
 
+    /** 31일까지 있는 지난달(이번 달 기준 최대 2개월 전). 월 조회는 지난 12개월까지만 허용한다(#1005). */
+    private YearMonth pastMonthWith31Days() {
+        YearMonth month = YearMonth.now().minusMonths(1);
+        while (month.lengthOfMonth() != 31) {
+            month = month.minusMonths(1);
+        }
+        return month;
+    }
+
+    /** 조회 가능한 지난 12개월 각각의 (연, 월, 일수). */
+    private static Stream<Arguments> recentPastMonths() {
+        YearMonth current = YearMonth.now(ZoneId.of("Asia/Seoul"));
+        return IntStream.rangeClosed(1, 12)
+                .mapToObj(current::minusMonths)
+                .map(month -> Arguments.of(month.getYear(), month.getMonthValue(), month.lengthOfMonth()));
+    }
+
     private SeniorProfile seniorProfile(Member senior) {
         SeniorProfile profile = SeniorProfile.createSeniorProfile(
                 senior, Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
@@ -180,7 +201,7 @@ class WalkServiceTest {
         // given
         Member senior = member(2L, MemberType.SENIOR);
         seniorProfile(senior).updateDefaultWalkGoal(8000);
-        YearMonth month = YearMonth.of(2025, 10);
+        YearMonth month = pastMonthWith31Days();
         Walk first = Walk.createWithGoal(senior, month.atDay(1), 5000);
         first.updateActualSteps(6000);
         Walk middle = Walk.createWithGoal(senior, month.atDay(15), 7000);
@@ -199,18 +220,18 @@ class WalkServiceTest {
         given(walkRepository.countTotalRecords(2L, month.atDay(1), month.atEndOfMonth())).willReturn(3L);
 
         // when
-        WalkMonthlyResponse response = walkService.getMonthlyStats(2025, 10, 2L);
+        WalkMonthlyResponse response = walkService.getMonthlyStats(month.getYear(), month.getMonthValue(), 2L);
 
         // then
         assertThat(response.dailyData()).extracting(WalkMonthlyResponse.WalkDaily::date)
                 .containsExactlyElementsOf(month.atDay(1).datesUntil(month.plusMonths(1).atDay(1))
                         .map(LocalDate::toString).toList());
         assertThat(response.dailyData().get(0)).isEqualTo(
-                WalkMonthlyResponse.WalkDaily.of("2025-10-01", 5000, 6000));
+                WalkMonthlyResponse.WalkDaily.of(month.atDay(1).toString(), 5000, 6000));
         assertThat(response.dailyData().get(14)).isEqualTo(
-                WalkMonthlyResponse.WalkDaily.of("2025-10-15", 7000, 3200));
+                WalkMonthlyResponse.WalkDaily.of(month.atDay(15).toString(), 7000, 3200));
         assertThat(response.dailyData().get(30)).isEqualTo(
-                WalkMonthlyResponse.WalkDaily.of("2025-10-31", 9000, 0));
+                WalkMonthlyResponse.WalkDaily.of(month.atDay(31).toString(), 9000, 0));
         assertThat(response.dailyData().subList(1, 14)).allSatisfy(daily -> {
             assertThat(daily.actual()).isZero();
             assertThat(daily.goal()).isEqualTo(7000);
@@ -232,9 +253,9 @@ class WalkServiceTest {
         // given
         Member senior = member(2L, MemberType.SENIOR);
         seniorProfile(senior).updateDefaultWalkGoal(8000);
-        YearMonth month = YearMonth.of(2025, 10);
+        YearMonth month = pastMonthWith31Days();
         Walk firstEver = Walk.createWithGoal(senior, month.atDay(10), 5000);
-        Walk nextMonth = Walk.createWithGoal(senior, LocalDate.of(2025, 11, 5), 6000);
+        Walk nextMonth = Walk.createWithGoal(senior, month.plusMonths(1).atDay(5), 6000);
         given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
         given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
                 senior, month.atDay(1), month.atEndOfMonth())).willReturn(List.of(firstEver));
@@ -243,7 +264,7 @@ class WalkServiceTest {
                 .willReturn(Optional.of(nextMonth));
 
         // when
-        WalkMonthlyResponse response = walkService.getMonthlyStats(2025, 10, 2L);
+        WalkMonthlyResponse response = walkService.getMonthlyStats(month.getYear(), month.getMonthValue(), 2L);
 
         // then
         assertThat(response.dailyData().subList(0, 9)).allSatisfy(daily -> {
@@ -251,7 +272,7 @@ class WalkServiceTest {
             assertThat(daily.goal()).isNull();
         });
         assertThat(response.dailyData().get(9)).isEqualTo(
-                WalkMonthlyResponse.WalkDaily.of("2025-10-10", 5000, 0));
+                WalkMonthlyResponse.WalkDaily.of(month.atDay(10).toString(), 5000, 0));
         assertThat(response.dailyData().subList(10, 31)).allSatisfy(daily -> {
             assertThat(daily.actual()).isZero();
             assertThat(daily.goal()).isEqualTo(6000);
@@ -264,16 +285,16 @@ class WalkServiceTest {
         // given
         Member senior = member(2L, MemberType.SENIOR);
         seniorProfile(senior).updateDefaultWalkGoal(8000);
-        YearMonth month = YearMonth.of(2025, 10);
+        YearMonth month = pastMonthWith31Days();
         Walk lastWalk = Walk.createWithGoal(senior, month.atDay(5), 5000);
         given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
         given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
                 senior, month.atDay(1), month.atEndOfMonth())).willReturn(List.of(lastWalk));
         given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior))
-                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.of(2025, 9, 1), 4000)));
+                .willReturn(Optional.of(Walk.createWithGoal(senior, month.minusMonths(1).atDay(1), 4000)));
 
         // when
-        WalkMonthlyResponse response = walkService.getMonthlyStats(2025, 10, 2L);
+        WalkMonthlyResponse response = walkService.getMonthlyStats(month.getYear(), month.getMonthValue(), 2L);
 
         // then
         assertThat(response.dailyData().subList(0, 4)).allSatisfy(daily ->
@@ -310,7 +331,7 @@ class WalkServiceTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"2024, 2, 29", "2025, 2, 28", "2025, 4, 30", "2025, 10, 31"})
+    @MethodSource("recentPastMonths")
     @DisplayName("기록과 기본 목표가 없는 월을 조회하면 월 길이만큼 0걸음과 미설정 목표를 반환한다")
     void 기록과_기본_목표가_없어도_월_전체_날짜를_반환한다(int year, int month, int days) {
         // given
@@ -538,5 +559,66 @@ class WalkServiceTest {
         assertThatThrownBy(() -> walkService.updateSteps(new UpdateStepsRequest(6000, futureDate)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("이번 달을 보면 지난달 전체와 이번 달 오늘까지 걸음을 비교하고 하루 목표를 넘은 걸음은 세지 않는다")
+    void 월_비교는_지난달과_이번_달이고_목표_초과_걸음은_세지_않는다() {
+        // given: 기본 목표 5000보, 첫 기록은 지난달 1일
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(5000);
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth previousMonth = currentMonth.minusMonths(1);
+        LocalDate today = LocalDate.now();
+        Walk overGoal = Walk.createWithGoal(senior, previousMonth.atDay(1), 5000);
+        overGoal.updateActualSteps(8000);
+        Walk underGoal = Walk.createWithGoal(senior, previousMonth.atDay(2), 5000);
+        underGoal.updateActualSteps(2500);
+        Walk todayWalk = Walk.createWithGoal(senior, today, 5000);
+        todayWalk.updateActualSteps(6000);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior)).willReturn(Optional.of(overGoal));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                senior, currentMonth.atDay(1), currentMonth.atEndOfMonth())).willReturn(List.of(todayWalk));
+        given(walkRepository.findByMemberAndWalkDateBetweenOrderByWalkDateAsc(
+                senior, previousMonth.atDay(1), previousMonth.atEndOfMonth()))
+                .willReturn(List.of(overGoal, underGoal));
+
+        // when
+        WalkMonthlyResponse response = walkService.getMonthlyStats(
+                currentMonth.getYear(), currentMonth.getMonthValue(), 2L);
+
+        // then: 지난달 8000보는 5000보로 센다(8000 + 2500 = 10500이 아니라 7500), 나머지 날은 미수신 0보
+        WalkMonthlyResponse.MonthProgress left = response.comparison().left();
+        assertThat(left).extracting("year", "month", "achieved", "total", "achievedDays", "totalDays")
+                .containsExactly(previousMonth.getYear(), previousMonth.getMonthValue(), 7500L,
+                        5000L * previousMonth.lengthOfMonth(), 1L, (long) previousMonth.lengthOfMonth());
+        // 이번 달은 미래 날짜를 빼고 1일~오늘만 센다
+        WalkMonthlyResponse.MonthProgress right = response.comparison().right();
+        assertThat(right).extracting("year", "month", "achieved", "total", "achievedDays", "totalDays")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue(), 5000L,
+                        5000L * today.getDayOfMonth(), 1L, (long) today.getDayOfMonth());
+        assertThat(right.rate()).isEqualTo((int) Math.round(100.0 / today.getDayOfMonth()));
+    }
+
+    @Test
+    @DisplayName("지난 달을 보면 비교 왼쪽은 보는 달, 오른쪽은 이번 달이다")
+    void 지난_달을_보면_보는_달과_이번_달을_비교한다() {
+        // given: 두 달 전을 본다. 기록이 없고 목표도 없던 달이다
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior);
+        YearMonth currentMonth = YearMonth.now();
+        YearMonth viewedMonth = currentMonth.minusMonths(2);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(senior));
+
+        // when
+        WalkMonthlyResponse response = walkService.getMonthlyStats(
+                viewedMonth.getYear(), viewedMonth.getMonthValue(), 2L);
+
+        // then: 목표가 없으면 분모 0, 달성률 null
+        assertThat(response.comparison().left()).extracting("year", "month", "total", "rate")
+                .containsExactly(viewedMonth.getYear(), viewedMonth.getMonthValue(), 0L, null);
+        assertThat(response.comparison().right()).extracting("year", "month")
+                .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue());
     }
 }

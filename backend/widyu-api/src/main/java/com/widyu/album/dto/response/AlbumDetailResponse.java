@@ -98,13 +98,16 @@ public record AlbumDetailResponse(
     public static AlbumDetailResponse from(Album album, Long currentUserId, List<Member> viewers,
                                            List<AlbumComment> comments, boolean isUnlocked) {
         // 잠금 전에는 원본 URL을 싣지 않고 대표 썸네일 하나만 준다(#813). 사진은 썸네일이 곧 원본이다
+        // 댓글 목록도 싣지 않는다. 잠금 화면은 좋아요·댓글 수만 보여 준다(#1000)
         List<String> mediaUrls = List.of();
         List<String> thumbnailUrls = album.getThumbnailUrls().stream().limit(1).toList();
         List<MediaType> mediaTypes = album.getMediaTypes().stream().limit(1).toList();
+        List<AlbumComment> visibleComments = List.of();
         if (isUnlocked) {
             mediaUrls = album.getMediaUrls();
             thumbnailUrls = album.getThumbnailUrls();
             mediaTypes = album.getMediaTypes();
+            visibleComments = comments;
         }
         return new AlbumDetailResponse(
                 album.getId(),
@@ -119,7 +122,7 @@ public record AlbumDetailResponse(
                 AuthorInfo.from(album.getMember()),
                 viewers.stream().map(ViewerInfo::from).toList(),
                 Album.UNLOCK_PRICE,
-                comments.stream()
+                visibleComments.stream()
                         .map(comment -> CommentInfo.from(comment, currentUserId))
                         .toList(),
                 album.getMember().getId().equals(currentUserId),

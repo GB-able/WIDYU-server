@@ -3,6 +3,8 @@ services:
     environment:
       # 알림 분석기가 오류 시점의 소스를 가져오도록 배포 커밋을 로그에 남긴다 (LLD-0084)
       APP_COMMIT_SHA: ${IMAGE_TAG:-unknown}
+      # 개발 서버는 회차를 열지 않아도 실험 모드로 수집한다(#989). 운영은 기본값 product.
+      SENSOR_DEFAULT_COLLECTION_MODE: research
 
   grafana:
     environment:

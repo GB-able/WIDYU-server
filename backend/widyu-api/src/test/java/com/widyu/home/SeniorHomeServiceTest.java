@@ -89,7 +89,7 @@ class SeniorHomeServiceTest {
         MedicineSchedule schedule = mock(MedicineSchedule.class);
         given(schedule.getId()).willReturn(1L);
         given(schedule.getAlarmTime()).willReturn(LocalTime.of(8, 0));
-        given(schedule.getTotalCount()).willReturn(2);
+        given(schedule.getTotalCount()).willReturn(2.0);
 
         MedicationProof proof = mock(MedicationProof.class);
         given(proof.getMedicineSchedule()).willReturn(schedule);

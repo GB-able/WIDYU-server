@@ -168,7 +168,7 @@ class WebSocketMessageSizeIntegrationTest {
         given(wsTokenService.validateAndConsume(anyString()))
                 .willAnswer(invocation -> Long.parseLong(invocation.getArgument(0, String.class).split("-")[1]));
         given(activeMemberValidator.isActive(anyLong())).willReturn(true);
-        given(sensorBatchService.ingest(anyLong(), any(byte[].class), anyLong()))
+        given(sensorBatchService.ingest(anyLong(), any(byte[].class), anyLong(), any()))
                 .willAnswer(invocation -> {
                     JsonNode root = JSON.readTree(invocation.getArgument(1, byte[].class));
                     return SensorBatchResultResponse.of(root.get("batch_id").asText(), root.get("seq").asLong(),

@@ -30,6 +30,13 @@ public interface WalkDocs {
                     - 이전 달 / 현재 달(또는 요청 달) 목표 달성 통계
                     - 요청한 월의 일별 걷기 데이터 (목표/실제 걸음 수)
 
+                    **상단 두 달 비교(comparison):**
+                    - right는 항상 이번 달, left는 요청 달이 이번 달이면 지난달이고 아니면 요청 달
+                    - achieved는 걸은 걸음 합계(하루 걸음은 그날 목표까지만 셈), total은 목표 걸음 합계, rate는 achieved ÷ total 정수 퍼센트(반올림)
+                    - achievedDays, totalDays는 같은 기간의 목표 달성 일수와 목표가 있던 일수
+                    - 날짜별 목표는 일별 데이터의 goal과 같고 goal이 null인 날은 빼며, 이번 달은 1일~오늘, 지난 달은 1일~말일을 셈. 이번 달 이후 달은 total 0, rate null
+                    - summary는 폐기 예정
+
                     **일별 데이터:**
                     - 요청 월의 1일부터 말일까지 모든 날짜를 날짜순으로 반환
                     - 기록이 없는 날짜의 실제 걸음 수(actual)는 0
@@ -49,6 +56,9 @@ public interface WalkDocs {
                     - 요청 월이 현재 월이면 → 현재 월 통계
                     - 요청 월이 과거/미래이면 → 요청 월 통계
 
+                    **조회 가능한 달 (한국 시간 기준):**
+                    - 이번 달 기준 지난 12개월부터 앞으로 12개월까지, 벗어나면 400 GOAL_4000
+
                     **권한:**
                     - memberId가 null → 본인의 걸음 기록 조회
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 걸음 기록 조회
@@ -56,6 +66,7 @@ public interface WalkDocs {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "400", description = "조회할 수 없는 달 (GOAL_4000)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음 (가족 관계 아님)")
     })

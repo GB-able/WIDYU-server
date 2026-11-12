@@ -18,9 +18,10 @@
 
 ### In scope
 - 변경 모듈: widyu-api, 운영 스크립트
-- 관리자 전용 동기 API 하나. 응답은 CSV 일곱 개를 담은 zip(#983에서 `dropped_ranges.csv` 추가).
+- 관리자 전용 동기 API 하나. 응답은 3절 표의 CSV 전부(`location`, `hr`, `imu`, `sensor_batches`, `device_heartbeat`, `device_events`, `dropped_ranges`, `rejections`, `summary`)를 담은 zip(#983에서 `dropped_ranges.csv`, #990에서 `device_events.csv`, #987에서 `rejections.csv` 추가).
 - 위치 원본(`location_fix`), 기기 상태(`device_heartbeat`), 센서 묶음 목록(`sensor_batch`), 그리고 S3 원문을 표본 단위로 펼친 심박(`hr`)·가속도/자이로(`imu_watch`·`imu_phone`).
 - 개발 서버에서 회원별 수신 상태를 보는 조회 스크립트 `scripts/ops/sensor-status.sh`.
+- (#990) zip에 실험 모드 기기 상태 바뀜 `device_events.csv`를 더한다(LLD-0129).
 
 ### Out of scope
 - 90분을 넘는 구간(배터리 시험 같은 하루 단위). 회차 내보내기나 날짜별 분할로 다룬다.
@@ -51,9 +52,11 @@ Content-Disposition: attachment; filename="sensor_member28_20261030T0900-2026103
 | `location.csv` | `location_fix` (`ts_ms` 기준) | 위치 한 점: `device_id, session_id, seq, lat, lon, accuracy_m, speed_mps, speed_accuracy_mps, heading_deg, altitude_m, provider, is_mock, reason, run_id, server_received_at_ms` |
 | `hr.csv` | `hr` 묶음 S3 원문 `samples[]` | 심박 표본: `device_id, batch_id, bpm, accuracy` |
 | `imu.csv` | `imu_*` 묶음 S3 원문 `acc`·`gyro` | 축 표본: `device_id, stream, batch_id, sensor(acc/gyro), x, y, z, unit(mg/mrad_s)` |
-| `sensor_batches.csv` | `sensor_batch` (측정 구간이 내보내는 구간과 겹치는 묶음) | 묶음 한 건: `stream, device_id, batch_id, session_id, seq, measured_start_ms, measured_end_ms, acc_n, gyro_n, sample_count, on_body, wear_state, missing_reason, watch_battery_pct, quality_status, collection_mode, gyro_mode, trigger_kind, server_received_at_ms` (`phase`·`ts_*`는 측정 시작 기준) |
+| `sensor_batches.csv` | `sensor_batch` (측정 구간이 내보내는 구간과 겹치는 묶음) | 묶음 한 건: `stream, device_id, batch_id, session_id, seq, measured_start_ms, measured_end_ms, acc_n, gyro_n, sample_count, on_body, wear_state, missing_reason, watch_battery_pct, quality_status, collection_mode, gyro_mode, trigger_kind, server_received_at_ms, ingest_channel` (`phase`·`ts_*`는 측정 시작 기준). `ingest_channel`은 처음 저장된 경로 `WS`·`REST`이고 #987 이전 묶음은 빈 칸(LLD-0128) |
 | `device_heartbeat.csv` | `device_heartbeat` (`ts_ms` 기준) | 기기 상태 한 건: `device_id, watch_device_id, watch_connected, watch_on_body, watch_battery_pct, phone_battery_pct, phone_charging, socket_connected, last_hr_ts_ms, last_imu_ts_ms, location_permission, background_restricted, phone_queue_depth, watch_queue_depth, phone_app_ver, watch_app_ver, phone_os` |
+| `device_events.csv` | `device_event` (`occurred_at_ms` 기준, #990) | 기기 상태 바뀜 한 건: `device_id, source, kind, attributes, session_id, server_received_at_ms`. `phase`·`ts_*`는 바뀐 시각 기준. `attributes`는 JSON 문자열을 CSV 규칙대로 큰따옴표로 감싼다(LLD-0129) |
 | `dropped_ranges.csv` | `sensor_dropped_range` (`ts_ms` 기준, #983) | 워치가 버린 묶음 번호 구간 한 건: `session_id, from_seq, to_seq, reason, server_received_at_ms`. `phase`·`ts_*`는 워치가 버린 시각 기준. 사유는 앱이 보낸 문자열 그대로(LLD-0124) |
+| `rejections.csv` | `sensor_batch_rejection` (`received_at_ms` 기준, #987) | 서버가 받고 거절한 묶음 한 건: `stream, device_id, batch_id, session_id, seq, error_code, ingest_channel`. `phase`·`ts_*`는 서버 수신 시각 기준. 형식이 틀린 식별자는 빈 칸, 원문 없음(LLD-0128) |
 | `summary.csv` | — | `key,value`: 회원 ID, 요청 시각, 여유, 구간, 생성 시각, 파일별 행 수, 펼치지 못한 묶음(`skipped_batch`: 묶음 ID와 사유) |
 
 IMU 표본 시각은 축마다 `t0_elapsed_ns`에서 `dt_ns`를 누적한 경과 시각을 `anchor_epoch_ms + floor((elapsed_ns - anchor_elapsed_ns) / 1_000_000)`으로 바꾼다. 가속도와 자이로는 시간축이 독립이라 합치지 않는다. 경계에 걸친 묶음은 구간 안의 표본만 쓴다. 자료가 없으면 머리글만 있는 CSV가 들어간다.
@@ -64,7 +67,9 @@ IMU 표본 시각은 축마다 `t0_elapsed_ns`에서 `dt_ns`를 누적한 경과
 
 - `LocationFixRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAscSeqAsc` — 기존 인덱스 `(member_id, ts_ms)`
 - `DeviceHeartbeatRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc` — 기존 인덱스 `(member_id, ts_ms)`
+- (#990) `DeviceEventRepository.findByMemberIdAndOccurredAtMsBetweenOrderByOccurredAtMsAsc` — 인덱스 `(member_id, occurred_at_ms)`
 - `SensorBatchRepository.findMemberWindowBatches` — `member_id = ? AND measured_at_end_ms >= start AND measured_at_start_ms <= end`, 기존 인덱스 `(member_id, stream, measured_at_start_ms)`
+- (#987) `SensorBatchRejectionRepository.findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc` — 인덱스 `(member_id, received_at_ms)`. 테이블과 `sensor_batch.ingest_channel`은 LLD-0128에서 추가한다
 
 응답 파일 이름·바이트는 `dto/response/SensorWindowExportFile` record로 컨트롤러에 넘긴다.
 
@@ -90,9 +95,11 @@ IMU 표본 시각은 축마다 `t0_elapsed_ns`에서 `dt_ns`를 누적한 경과
 
 ## 7. 인수조건 (Acceptance Criteria)
 
-- [x] 회원 ID와 한국 시간 `from`·`to`를 주면 앞뒤 여유를 붙인 구간의 CSV 여섯 개가 zip으로 내려온다.
+- [x] 회원 ID와 한국 시간 `from`·`to`를 주면 앞뒤 여유를 붙인 구간의 CSV가 3절 표의 파일 목록대로 zip으로 내려온다.
 - [x] (#983) 버린 시각이 구간 안인 `imu_dropped` 기록이 `dropped_ranges.csv`에 한 줄씩 들어가고 `summary.csv`에 행 수가 남는다. 기록이 없어도 헤더만 있는 파일이 들어간다.
+- [x] (#987) `sensor_batches.csv`에 `ingest_channel` 열이 있고, 수신 시각이 구간 안인 거절 기록이 `rejections.csv`에 한 줄씩 들어간다. 기록이 없어도 헤더만 있는 파일이 들어간다.
 - [x] 구간 밖 위치·기기 상태·표본은 들어가지 않고, 경계에 걸친 묶음은 구간 안 표본만 들어간다.
+- [x] (#990) 바뀐 시각이 구간 안인 기기 상태 바뀜이 `device_events.csv`에 한 줄씩 들어간다. 기록이 없어도 헤더만 있는 파일이 들어간다.
 - [x] IMU 표본 시각이 3절 환산식과 같고, 각 행의 `phase`가 `from`·`to` 기준으로 매겨진다.
 - [x] 원문이 손상된 묶음은 건너뛰고 `summary.csv`에 묶음 ID와 사유가 남는다.
 - [x] `from >= to`나 90분 초과 구간은 `SENSOR_4004`, 없는 회원은 `MEMBER_4041`이다.
