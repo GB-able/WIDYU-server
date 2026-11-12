@@ -913,7 +913,7 @@ erDiagram
 | `device_event` | `idx_device_event_member_time` | `(member_id, occurred_at_ms)` | 참가자별 바뀐 시각순 조회·기간 내보내기 |
 | `consent_record` | `idx_consent_record_member_key_time` | `(member_id, consent_key, recorded_at)` | 항목별 최신 행 조회. UK를 두지 않는다 — 같은 항목에 행이 여러 개인 것이 이력이다 (LLD-0055) |
 | `location_access_log` | `idx_location_access_log_senior_time` | `(senior_member_id, accessed_at)` | 시니어가 자기 열람 기록을 기간으로 조회 (LLD-0056) |
-| `location_access_log` | `idx_location_access_log_senior_notified` | `(senior_member_id, notified_at)` | 즉시 통보 쿨다운 판단과 다이제스트 대상(`notified_at IS NULL`) 조회 (LLD-0056) |
+| `location_access_log` | `idx_location_access_log_senior_notified` | `(senior_member_id, notified_at)` | 다이제스트 대상(`notified_at IS NULL`) 조회 (LLD-0056, 쿨다운 판단은 LLD-0130에서 삭제) |
 | `study_participation` | UK `uk_study_participation_id` | `(participation_id)` | 서버 발급 참여 식별자 중복 방지 (LLD-0052) |
 | `study_participation` | `idx_study_participation_active` | `(study_id, member_id, status)` | 같은 연구·회원의 ACTIVE 참여 중복 검사 |
 | `study_participation` | UK `uk_study_participation_active` | `(study_id, member_id, active_key)` | 같은 연구·회원의 ACTIVE 참여 하나를 DB에서 보장. `active_key`는 ACTIVE일 때만 `'1'`이라 철회·종료 참여는 제약 대상에서 빠진다 (`collection_run.open_marker`와 같은 방식) |
