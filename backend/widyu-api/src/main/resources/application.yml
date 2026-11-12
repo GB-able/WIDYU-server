@@ -38,6 +38,14 @@ location-access:
   # 남은 미통보 기록은 서버 시작 1분 뒤 한 번 요약으로 나간다.
   digest-cron: ${LOCATION_ACCESS_DIGEST_CRON:-}
 
+# 처리방침 보관 기간 정리 작업(LLD-0136). 1단계는 테이블별 지울 대상 건수만 data_purge_log에 남기고 아무것도 지우지 않는다.
+retention:
+  purge:
+    # false면 스케줄러 빈을 만들지 않는다. 건수 조회가 DB에 부담이 되면 끈다.
+    enabled: ${RETENTION_PURGE_ENABLED:true}
+    # 매일 03:30(Asia/Seoul).
+    cron: ${RETENTION_PURGE_CRON:0 30 3 * * *}
+
 # WebSocket 느린 처리 전용 실행기(LLD-0091). 스레드 수는 고정(core = max)이고 대기열이 차면 과부하 오류를 돌려준다.
 websocket:
   executor:
