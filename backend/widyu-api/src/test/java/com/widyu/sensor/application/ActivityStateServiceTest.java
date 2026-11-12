@@ -133,6 +133,25 @@ class ActivityStateServiceTest {
     }
 
     @Test
+    @DisplayName("재전송 묶음이 먼저 저장된 뒤 온 원 묶음은 다시 더하지 않는다")
+    void 재전송_묶음이_먼저_저장된_뒤_온_원_묶음은_다시_더하지_않는다() {
+        // given
+        given(sensorProperties.activity()).willReturn(ACTIVITY);
+        SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
+        SensorBatchRequest.Resend resend = new SensorBatchRequest.Resend(
+                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
+        service.record(405L, BATCH, "imu_watch", clock(), acc, resend);
+        given(sensorBatchRepository.existsByMember_IdAndIsResendTrueAndOriginalBatchIdAndBatchIdNot(
+                405L, ORIGINAL, ORIGINAL)).willReturn(true);
+
+        // when
+        service.record(405L, ORIGINAL, "imu_watch", clock(), acc, null);
+
+        // then
+        assertThat(windows.findForUpdate(405L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+    }
+
+    @Test
     @DisplayName("원 묶음이 다른 회원 것이거나 자기 자신이면 재전송 묶음도 더한다")
     void 원_묶음이_다른_회원_것이거나_자기_자신이면_재전송_묶음도_더한다() {
         // given

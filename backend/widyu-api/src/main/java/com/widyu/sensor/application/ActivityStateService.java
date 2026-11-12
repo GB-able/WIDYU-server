@@ -59,8 +59,8 @@ public class ActivityStateService {
             return;
         }
         try {
-            // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 원 묶음이 이미 더해졌으면 두 번 세지 않는다.
-            if (originalAlreadyStored(memberId, batchId, resend)) {
+            // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 짝 중 먼저 저장된 쪽만 더한다.
+            if (originalAlreadyStored(memberId, batchId, resend) || resendAlreadyStored(memberId, batchId)) {
                 return;
             }
             Map<Long, long[]> sums = sumByWindow(clock, acc);
@@ -156,6 +156,15 @@ public class ActivityStateService {
     private boolean isUsable(LocationFix fix, SensorProperties.Activity props) {
         return fix.getAccuracyM() != null && fix.getAccuracyM() <= props.vehicleMaxAccuracyM()
                 && fix.getSpeedMps() != null && !Boolean.TRUE.equals(fix.getIsMock());
+    }
+
+    /**
+     * 원 묶음이 재전송보다 늦게 왔다. 재전송이 이미 더했으므로 원 묶음은 더하지 않는다.
+     * ponytail: 두 묶음이 거의 동시에 저장되면 서로를 보고 둘 다 건너뛸 수 있다. 실제로 생기면 묶음별 합산 기록을 둔다.
+     */
+    private boolean resendAlreadyStored(Long memberId, String batchId) {
+        return sensorBatchRepository.existsByMember_IdAndIsResendTrueAndOriginalBatchIdAndBatchIdNot(
+                memberId, batchId, batchId);
     }
 
     /** 원 묶음이 같은 회원의 다른 묶음으로 저장돼 있을 때만 이미 더했다고 본다. 자기 자신이나 남의 묶음을 가리키면 더한다. */

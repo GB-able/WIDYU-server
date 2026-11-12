@@ -41,7 +41,9 @@ import org.hibernate.type.SqlTypes;
         @Index(name = "idx_sensor_batch_member_stream_time",
                 columnList = "member_id, stream, measured_at_start_ms"),
         @Index(name = "idx_sensor_batch_seq", columnList = "device_id, session_id, seq"),
-        @Index(name = "idx_sensor_batch_run", columnList = "run_id")
+        @Index(name = "idx_sensor_batch_run", columnList = "run_id"),
+        // 원 묶음이 재전송보다 늦게 와도 활동 구간에 두 번 더하지 않게 재전송을 찾는다(LLD-0138 5.1).
+        @Index(name = "idx_sensor_batch_original_batch_id", columnList = "original_batch_id")
     }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

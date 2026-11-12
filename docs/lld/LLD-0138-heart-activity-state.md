@@ -108,7 +108,7 @@ AI `POST /api/hr` 요청의 `context`:
 ### 5.1 구간 저장 (`record`)
 
 1. `stream`이 `imu_watch`가 아니거나 가속도가 없으면(자이로 보강 묶음) 끝낸다.
-2. 재전송 계보가 있고(`resend.is_resend=true`) 원 묶음(`original_batch_id`)이 같은 회원의 다른 묶음으로 `sensor_batch`에 이미 있으면 끝낸다. 내용이 바뀐 재전송은 새 `batch_id`로 오므로 원 묶음과 샘플이 겹쳐 두 번 더해진다. 원 묶음이 자기 자신이거나 다른 회원 것이면 겹친 샘플이 아니므로 더한다.
+2. 재전송 계보가 있고(`resend.is_resend=true`) 원 묶음(`original_batch_id`)이 같은 회원의 다른 묶음으로 `sensor_batch`에 이미 있으면 끝낸다. 내용이 바뀐 재전송은 새 `batch_id`로 오므로 원 묶음과 샘플이 겹쳐 두 번 더해진다. 원 묶음이 자기 자신이거나 다른 회원 것이면 겹친 샘플이 아니므로 더한다. 반대로 원 묶음이 재전송보다 늦게 오면, 같은 회원의 다른 재전송 묶음(`is_resend=true`, `original_batch_id`=이 묶음)이 이미 있으므로 원 묶음을 끝낸다. 도착 순서와 무관하게 짝 중 먼저 저장된 쪽만 더한다. 두 묶음이 거의 동시에 저장돼 서로를 보면 둘 다 건너뛸 수 있다(9절). 이 조회를 위해 `sensor_batch.original_batch_id`에 인덱스를 둔다.
 3. 샘플 배열을 한 번 돈다. 각 샘플의 측정 시각은 LLD-0041 4.3 환산식(`anchor_epoch_ms + floor((t − anchor_elapsed_ns) / 10⁶)`)으로 구하고 그 시각이 속한 구간에 `(1, d, d²)`를 더한다. 수신 시 검증·파싱한 DTO를 쓰고 S3 원문을 다시 읽지 않는다.
 4. 한 트랜잭션에서 구간마다 `SELECT ... FOR UPDATE`로 행을 읽어(없으면 새 행) 합계를 더하고 합계 전체로 상태를 다시 정해 저장한다. 잠금은 같은 구간에 동시에 더하는 두 묶음이 서로의 합계를 덮지 않게 한다.
 5. 두 묶음이 같은 새 구간을 동시에 INSERT하면 UK 충돌이나 잠금 충돌(`DataIntegrityViolationException`, `ConcurrencyFailureException`)이 난다. 한 번 다시 하면 잠금 조회로 합친다.
@@ -175,6 +175,7 @@ AI `POST /api/hr` 요청의 `context`:
 
 ## 8. 영향 범위 / 마이그레이션
 
+- `sensor_batch`에 인덱스 `idx_sensor_batch_original_batch_id (original_batch_id)`를 더한다. 운영 DDL은 같은 스크립트에 있다.
 - 새 테이블 `activity_window`. dev는 `ddl-auto: update`가 만든다. 운영 DDL은 `scripts/mysql/create_activity_window.sql`이며 **운영 구축 때 적용**한다(운영 서버 구축 전).
 - MySQL ENUM 변경 없음(`state`는 VARCHAR).
 - `SensorProperties`에 `activity` 묶음, `HeartAi`에 `activityContextEnabled`가 늘어 테스트 픽스처 7곳을 고친다.
@@ -196,6 +197,7 @@ AI `POST /api/hr` 요청의 `context`:
 - 구간 허용 간격. 지금은 포함 구간만 본다.
 - 차량 이동의 「60초 동안」 해석. 지금은 60초 전 마지막 위치와 그 뒤 위치가 모두 기준을 넘는지로 본다. 위치 주기가 성기면 `IN_VEHICLE`이 덜 붙는다.
 - `activity_window` 보존 기간과 탈퇴 시 처리(#650, LLD-0136, LLD-0137).
+- 원 묶음과 재전송 묶음이 거의 동시에 저장되면 둘 다 건너뛸 수 있다. 앱은 원 묶음 ACK를 못 받았을 때 재전송하므로 드물다고 보고, 생기면 묶음별 합산 기록을 둔다.
 
 ## 10. 다음 단계
 
