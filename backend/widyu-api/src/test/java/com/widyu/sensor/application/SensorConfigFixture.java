@@ -20,7 +20,7 @@ final class SensorConfigFixture {
 
     private static SensorProperties properties(SensorProperties.Config config) {
         return new SensorProperties(32_768, config, export(), fallAi(), heartAi(), incident(),
-                new SensorProperties.Followup(false, false), new SensorProperties.Medication(true));
+                new SensorProperties.Followup(false, false), new SensorProperties.Medication(true), null);
     }
 
     static SensorProperties.Config config() {
@@ -49,7 +49,7 @@ final class SensorConfigFixture {
     }
 
     static SensorProperties.HeartAi heartAi() {
-        return new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false);
+        return new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, false);
     }
 
     static SensorProperties.Incident incident() {

@@ -890,8 +890,10 @@ erDiagram
 | `sensor_batch` | `idx_sensor_batch_member_stream_time` | `(member_id, stream, measured_at_start_ms)` | 스트림별 시각 범위 조회 |
 | `sensor_batch` | `idx_sensor_batch_seq` | `(device_id, session_id, seq)` | 순번 누락 검사 |
 | `sensor_batch` | `idx_sensor_batch_run` | `(run_id)` | 회차별 조회 (B8 후속) |
+| `sensor_batch` | `idx_sensor_batch_original_batch_id` | `(original_batch_id)` | 재전송 계보 조회, 활동 구간 중복 합산 방지 (LLD-0138) |
 | `sensor_dropped_range` | UK `uk_sensor_dropped_range` | `(member_id, session_id, from_seq)` | 워치가 같은 구간을 다시 보내도 한 행 (LLD-0124) |
 | `sensor_dropped_range` | `idx_sensor_dropped_range_member_time` | `(member_id, ts_ms)` | 참가자별 시각순 조회 |
+| `activity_window` | UK `uk_activity_window_member_start` | `(member_id, window_start_ms)` | 5초 구간 멱등 키이자 심박 시각 범위 조회 (LLD-0138) |
 | `sensor_batch_rejection` | `idx_sensor_batch_rejection_member_time` | `(member_id, received_at_ms)` | 회원별 거절 기록 수신 시각순 조회 (LLD-0128) |
 | `clock_mapping` | UK `uk_clock_mapping_id` | `(clock_mapping_id)` | 한 식별자의 다섯 값은 불변. 다르면 409 (LLD-0044) |
 | `clock_mapping` | `idx_clock_mapping_device` | `(device_id)` | 기기별 매핑 조회 |
@@ -970,6 +972,7 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-12 | `activity_window` | 신규 테이블 (LLD-0138). 손목 움직임 5초 구간의 샘플 수·크기 합계·제곱합과 상태(`REST`/`LOW`/`ACTIVE`, VARCHAR). `sensor_batch.original_batch_id` 인덱스 추가. 운영 구축 때 적용 | `scripts/mysql/create_activity_window.sql` |
 | 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |
 | 2026-11-12 | `data_purge_log` | 신규 테이블 (LLD-0136). 보관 기간 정리 작업의 날짜·테이블별 대상 건수·참가자 제외 건수. 회원 ID 없음. 운영 구축 때 적용 | `scripts/mysql/create_data_purge_log.sql` |
 | 2026-11-09 | `device_event` | 신규 테이블 (LLD-0129). 실험 모드 기기 상태 바뀜의 종류·바뀐 시각·종류별 값과 항목 원문 JSON. `source`·`kind`는 VARCHAR | `scripts/mysql/create_device_event.sql` |

@@ -7,6 +7,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import com.widyu.decision.DecisionRecord;
+import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.NotificationType;
@@ -85,6 +87,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
     @Autowired private FcmOutboxService outboxService;
     @Autowired private IncidentEscalation escalation;
     @Autowired private IncidentService incidentService;
+    @Autowired private DecisionRecordRepository decisionRecords;
     @MockBean private FollowupCardService followupCardService;
     @MockBean private IncidentRejectedAttemptRecorder rejectedAttemptRecorder;
     @MockBean private FcmService fcmService;
@@ -392,5 +395,86 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         assertThat(outbox.findAll().stream().filter(row -> row.getRecipientMember().getId().equals(memberId))
                 .findFirst().orElseThrow().getDataType()).isEqualTo("SAFETY_SELF_CHECK");
         assertThat(notifications.count()).isEqualTo(previousNotifications);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("판정 사유가 flatline_arrest인 위급이어도 보호자 푸시와 알림센터에는 사유가 없다")
+    void 판정_사유가_flatline_arrest인_위급이어도_보호자_푸시와_알림센터에는_사유가_없다() {
+        // given
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+        Long[] ids = transactions.execute(status -> {
+            Family family = families.save(Family.createFamily("FAM101"));
+            Member senior = members.save(Member.createMember(MemberType.SENIOR, "시니어", "01000001016"));
+            Member guardian = members.save(Member.createMember(MemberType.GUARDIAN, "보호자", "01000001017"));
+            seniorProfiles.save(SeniorProfile.createSeniorProfile(senior, family, "서울", "INV1016",
+                    LocalDate.of(1950, 1, 1)));
+            memberships.save(FamilyMembership.createLeaderMembership(family, guardian));
+            tokens.save(MemberFcmToken.builder().member(senior).token("senior-1016").active(true).build());
+            tokens.save(MemberFcmToken.builder().member(guardian).token("guardian-1016").active(true).build());
+            decisionRecords.save(flatlineDecision("dec-hr-1016", senior.getId()));
+            return new Long[] {senior.getId(), guardian.getId(), family.getId()};
+        });
+        given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, false, 5, 90));
+        given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.familyId(ids[0])).willReturn(ids[2]);
+        given(eligibility.sameActiveFamily(ids[1], ids[0], ids[2])).willReturn(true);
+        willAnswer(invocation -> {
+            outboxService.enqueue(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).given(fcmService).sendMessageToUser(anyLong(), any());
+
+        // when
+        transactions.executeWithoutResult(status -> {
+            Member senior = members.findById(ids[0]).orElseThrow();
+            heartEvents.save(HeartRateEvent.of(senior, 22, LocalDateTime.of(2026, 11, 12, 3, 0),
+                    HeartRateStatus.EMERGENCY, null, null));
+            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], "dec-hr-1016"));
+        });
+
+        // then
+        // 사유는 판정 기록 행에만 있다. 푸시 제목·본문·데이터와 알림센터 문구에 나가지 않는다(노션 5-1, ADR-0042 결정 5).
+        Incident incident = incidents.findAll().stream().filter(row -> row.getMemberId().equals(ids[0]))
+                .findFirst().orElseThrow();
+        List<FcmOutbox> pushes = outbox.findAll().stream()
+                .filter(row -> row.getRecipientMember().getId().equals(ids[0])
+                        || row.getRecipientMember().getId().equals(ids[1]))
+                .toList();
+        // 시니어 본인확인 1건, 보호자 최초 알림 1건
+        assertThat(pushes).hasSize(2);
+        for (FcmOutbox push : pushes) {
+            FcmDelivery delivery = transactions.execute(status ->
+                    FcmDelivery.from(outbox.findById(push.getId()).orElseThrow()));
+            assertThat(delivery.message().toString()).doesNotContainIgnoringCase("flatline");
+        }
+        var center = notifications.findByRecipientMemberIdAndEventId(ids[1], incident.getIncidentRef())
+                .orElseThrow();
+        assertThat(center.getTitle() + center.getBody()).doesNotContainIgnoringCase("flatline");
+        assertThat(decisionRecords.findByDecisionId("dec-hr-1016").orElseThrow().getReason())
+                .isEqualTo("flatline_arrest");
+    }
+
+    private DecisionRecord flatlineDecision(String decisionId, Long memberId) {
+        return DecisionRecord.builder()
+                .decisionId(decisionId)
+                .memberId(memberId)
+                .runId("run-1016")
+                .streamIdsUsed("[\"01j8zk3v9x2q4m7n8p1r5s6t7v\"]")
+                .decisionAtMs(1_762_884_000_400L)
+                .decisionOutput("ALERT")
+                .deciderId("widyu-ai-hr")
+                .deciderVersion("ver7")
+                .inputCutoffMs(1_762_884_000_300L)
+                .featureSupportEndMs(1_762_884_000_000L)
+                .modelAvailableAtServerMaxMs(1_762_884_000_300L)
+                .windowStartMs(1_762_884_000_000L)
+                .windowEndMs(1_762_884_000_000L)
+                .severity("EMERGENCY")
+                .triggerBatchId("01j8zk3v9x2q4m7n8p1r5s6t7v")
+                .hrBpm(22)
+                .hrMeasuredAtMs(1_762_884_000_000L)
+                .hrAccuracy("HIGH")
+                .reason("flatline_arrest")
+                .build();
     }
 }

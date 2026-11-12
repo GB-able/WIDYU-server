@@ -82,6 +82,7 @@
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`
  - `stream: "imu_dropped"`(워치 IMU 큐가 넘쳐 버린 `seq` 구간)는 같은 endpoint로 와서 `sensor_batch`·S3가 아니라 `sensor_dropped_range`에 원문과 함께 저장한다. 멱등 키 `(member_id, session_id, from_seq)`, `batch_id`가 없어 응답 `batchId`·`seq`는 null → LLD-0124
+ - **활동 상태**: `imu_watch` 저장 직후 5초 구간마다 손목 가속도 크기의 정수 합계를 `activity_window`에 더하고 `REST`·`LOW`·`ACTIVE`를 다시 정한다(합계라 역순·늦은 묶음에도 결과가 같다). 실패는 WARN만. `RECOVERY`·`IN_VEHICLE`은 심박에 붙일 때 계산한다. AI `context`로 보내는 것은 `sensor.heart-ai.activity-context-enabled`(기본 false)가 켜질 때만이며, AI가 고정 기준 유지(노션 3-1)를 배포·검증하기 전에는 켜지 않는다 → ADR-0042, LLD-0138
 
 ### `decision` — 판정 기록 (연구 수집)
 

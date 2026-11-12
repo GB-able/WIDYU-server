@@ -92,6 +92,7 @@ public class SensorBatchService {
     private final ClockMappingService clockMappingService;
     private final HeartRateBatchService heartRateBatchService;
     private final FallAssessmentService fallAssessmentService;
+    private final ActivityStateService activityStateService;
     private final CollectionRunService collectionRunService;
     private final MemberRepository memberRepository;
     private final S3Service s3Service;
@@ -107,6 +108,7 @@ public class SensorBatchService {
             ClockMappingService clockMappingService,
             HeartRateBatchService heartRateBatchService,
             FallAssessmentService fallAssessmentService,
+            ActivityStateService activityStateService,
             CollectionRunService collectionRunService,
             MemberRepository memberRepository,
             S3Service s3Service,
@@ -121,6 +123,7 @@ public class SensorBatchService {
         this.clockMappingService = clockMappingService;
         this.heartRateBatchService = heartRateBatchService;
         this.fallAssessmentService = fallAssessmentService;
+        this.activityStateService = activityStateService;
         this.collectionRunService = collectionRunService;
         this.memberRepository = memberRepository;
         this.s3Service = s3Service;
@@ -307,6 +310,9 @@ public class SensorBatchService {
                     channel);
             sensorBatchRepository.save(savedBatch);
             assessImpact(savedBatch);
+            // 실패해도 예외를 던지지 않는다. 묶음 저장과 응답은 그대로다(LLD-0138 6절).
+            activityStateService.record(memberId, request.batchId(), request.stream(), request.clock(), request.acc(),
+                    request.resend());
         } catch (DataIntegrityViolationException e) {
             // UK 경합이면 같은 batch_id 행이 이미 있다. FK 오류나 스키마 불일치까지 DUPLICATE로
             // 응답하면 클라이언트가 재전송을 멈춰 그 배치가 유실되므로, 행이 확인될 때만 중복으로 본다.
