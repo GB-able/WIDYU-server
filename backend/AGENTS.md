@@ -45,6 +45,7 @@
 
 ### `goal` — 건강 목표
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- **목표 캘린더 월 범위**: 약 복용·걷기 월간과 건강 일정 캘린더는 이번 달(KST) 기준 앞뒤 12개월만 조회한다(400 `GOAL_4000`). 보호자의 약 복용 월간은 미래 달도 400(`GOAL_4001`). 검사는 `GoalMonthValidator` 한 곳이다(#1005)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)

@@ -49,6 +49,9 @@ public interface WalkDocs {
                     - 요청 월이 현재 월이면 → 현재 월 통계
                     - 요청 월이 과거/미래이면 → 요청 월 통계
 
+                    **조회 가능한 달 (한국 시간 기준):**
+                    - 이번 달 기준 지난 12개월부터 앞으로 12개월까지, 벗어나면 400 GOAL_4000
+
                     **권한:**
                     - memberId가 null → 본인의 걸음 기록 조회
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 걸음 기록 조회
@@ -56,6 +59,7 @@ public interface WalkDocs {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "400", description = "조회할 수 없는 달 (GOAL_4000)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음 (가족 관계 아님)")
     })

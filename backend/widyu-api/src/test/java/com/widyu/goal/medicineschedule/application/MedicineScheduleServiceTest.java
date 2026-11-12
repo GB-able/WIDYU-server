@@ -40,6 +40,7 @@ import com.widyu.member.repository.MemberRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -763,17 +764,19 @@ class MedicineScheduleServiceTest {
     @Test
     @DisplayName("월별 달성률은 그날 유효했던 스케줄 수를 분모로 계산해 스케줄 시작 전 날짜는 0으로 나온다")
     void 월별_달성률은_날짜별_유효_스케줄_수를_분모로_계산한다() {
-        // given: 7월 15일부터 유효한 스케줄 1개, 15일에 인증 1건
+        // given: 31일인 지난달의 15일부터 유효한 스케줄 1개, 15일에 인증 1건
         Long memberId = 1L;
+        YearMonth month = pastMonthWith31Days();
         Member targetMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(Member.createMember(MemberType.SENIOR, "시니어", "01012345678"));
         given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
         given(targetMember.getId()).willReturn(memberId);
 
-        MedicineSchedule schedule = scheduleEffectiveFrom(1L, targetMember, LocalTime.of(8, 0), LocalDate.of(2026, 7, 15));
+        MedicineSchedule schedule = scheduleEffectiveFrom(1L, targetMember, LocalTime.of(8, 0), month.atDay(15));
 
         MedicationProof proof = mock(MedicationProof.class);
         given(proof.getMedicineSchedule()).willReturn(schedule);
-        given(proof.getVerifiedDate()).willReturn(LocalDate.of(2026, 7, 15));
+        given(proof.getVerifiedDate()).willReturn(month.atDay(15));
 
         given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
                 .willReturn(List.of(schedule));
@@ -781,14 +784,15 @@ class MedicineScheduleServiceTest {
                 .willReturn(List.of(proof));
 
         // when
-        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(2026, 7, memberId);
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                month.getYear(), month.getMonthValue(), memberId);
 
         // then
         List<Double> rates = response.monthlyGoalRates();
         assertThat(rates).hasSize(31);
-        assertThat(rates.get(0)).isEqualTo(0.0);   // 7/1: 스케줄 시작 전 → 분모 0 → 0.0
-        assertThat(rates.get(14)).isEqualTo(1.0);  // 7/15: 유효 1개 중 1개 인증 → 1.0
-        assertThat(rates.get(15)).isEqualTo(0.0);  // 7/16: 유효 1개, 인증 0 → 0.0
+        assertThat(rates.get(0)).isEqualTo(0.0);   // 1일: 스케줄 시작 전 → 분모 0 → 0.0
+        assertThat(rates.get(14)).isEqualTo(1.0);  // 15일: 유효 1개 중 1개 인증 → 1.0
+        assertThat(rates.get(15)).isEqualTo(0.0);  // 16일: 유효 1개, 인증 0 → 0.0
     }
 
     @Test
@@ -796,19 +800,21 @@ class MedicineScheduleServiceTest {
     void 유효하지_않은_스케줄의_인증은_달성률에서_제외한다() {
         // given
         Long memberId = 1L;
+        YearMonth month = pastMonthWith31Days();
         Member targetMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(Member.createMember(MemberType.SENIOR, "시니어", "01012345678"));
         given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
         given(targetMember.getId()).willReturn(memberId);
 
         MedicineSchedule oldSchedule = scheduleEffectiveFrom(
-                1L, targetMember, LocalTime.of(8, 0), LocalDate.of(2026, 7, 1));
-        ReflectionTestUtils.setField(oldSchedule, "effectiveTo", LocalDate.of(2026, 7, 14));
+                1L, targetMember, LocalTime.of(8, 0), month.atDay(1));
+        ReflectionTestUtils.setField(oldSchedule, "effectiveTo", month.atDay(14));
         MedicineSchedule currentSchedule = scheduleEffectiveFrom(
-                2L, targetMember, LocalTime.of(8, 0), LocalDate.of(2026, 7, 15));
+                2L, targetMember, LocalTime.of(8, 0), month.atDay(15));
 
         MedicationProof proof = mock(MedicationProof.class);
         given(proof.getMedicineSchedule()).willReturn(oldSchedule);
-        given(proof.getVerifiedDate()).willReturn(LocalDate.of(2026, 7, 15));
+        given(proof.getVerifiedDate()).willReturn(month.atDay(15));
 
         given(medicineScheduleRepository.findEffectiveByMemberAndDateRange(any(), any(), any(), any()))
                 .willReturn(List.of(oldSchedule, currentSchedule));
@@ -816,9 +822,71 @@ class MedicineScheduleServiceTest {
                 .willReturn(List.of(proof));
 
         // when
-        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(2026, 7, memberId);
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                month.getYear(), month.getMonthValue(), memberId);
 
         // then
         assertThat(response.monthlyGoalRates().get(14)).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("보호자가 다음 달 약 복용 월간 현황을 조회하면 GOAL_FUTURE_MONTH_NOT_ALLOWED 예외가 발생한다")
+    void 보호자가_다음_달_약_복용_월간을_조회하면_예외가_발생한다() {
+        // given
+        YearMonth nextMonth = YearMonth.now(ZoneId.of("Asia/Seoul")).plusMonths(1);
+        given(memberUtil.getCurrentMember()).willReturn(Member.createMember(MemberType.GUARDIAN, "보호자", "01099998888"));
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.getMonthlyStats(
+                nextMonth.getYear(), nextMonth.getMonthValue(), 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GOAL_FUTURE_MONTH_NOT_ALLOWED);
+        then(memberRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("보호자가 이번 달 약 복용 월간 현황을 조회하면 달성률을 반환한다")
+    void 보호자가_이번_달_약_복용_월간을_조회하면_달성률을_반환한다() {
+        // given
+        Long memberId = 1L;
+        YearMonth thisMonth = YearMonth.now(ZoneId.of("Asia/Seoul"));
+        Member targetMember = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(Member.createMember(MemberType.GUARDIAN, "보호자", "01099998888"));
+        given(memberRepository.findById(memberId)).willReturn(Optional.of(targetMember));
+        given(targetMember.getId()).willReturn(memberId);
+
+        // when
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                thisMonth.getYear(), thisMonth.getMonthValue(), memberId);
+
+        // then
+        assertThat(response.monthlyGoalRates()).hasSize(thisMonth.lengthOfMonth());
+    }
+
+    @Test
+    @DisplayName("시니어가 다음 달 약 복용 월간 현황을 조회하면 달성률을 반환한다")
+    void 시니어가_다음_달_약_복용_월간을_조회하면_달성률을_반환한다() {
+        // given
+        YearMonth nextMonth = YearMonth.now(ZoneId.of("Asia/Seoul")).plusMonths(1);
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
+
+        // when
+        MedicineMonthlyResponse response = medicineScheduleService.getMonthlyStats(
+                nextMonth.getYear(), nextMonth.getMonthValue(), null);
+
+        // then
+        assertThat(response.monthlyGoalRates()).hasSize(nextMonth.lengthOfMonth());
+    }
+
+    /** 오늘이 속한 달보다 앞서고 31일까지 있는 가장 가까운 달(이번 달 기준 최대 2개월 전). */
+    private YearMonth pastMonthWith31Days() {
+        YearMonth month = YearMonth.now(ZoneId.of("Asia/Seoul")).minusMonths(1);
+        while (month.lengthOfMonth() != 31) {
+            month = month.minusMonths(1);
+        }
+        return month;
     }
 }

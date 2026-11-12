@@ -177,6 +177,10 @@ public interface MedicineScheduleDocs {
                     **권한:**
                     - memberId가 null → 본인의 약 복용 통계 조회
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 약 복용 통계 조회
+
+                    **조회 가능한 달 (한국 시간 기준):**
+                    - 이번 달 기준 지난 12개월부터 앞으로 12개월까지, 벗어나면 400 GOAL_4000
+                    - 보호자는 이번 달 이후를 조회할 수 없음, 요청하면 400 GOAL_4001
                     """
     )
     @ApiResponses({
@@ -207,6 +211,7 @@ public interface MedicineScheduleDocs {
                             )
                     )
             ),
+            @ApiResponse(responseCode = "400", description = "조회할 수 없는 달 (GOAL_4000, 보호자의 미래 달 GOAL_4001)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
