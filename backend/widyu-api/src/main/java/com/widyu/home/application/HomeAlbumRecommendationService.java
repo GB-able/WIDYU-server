@@ -21,9 +21,25 @@ public class HomeAlbumRecommendationService {
     private static final int LIKE_WEIGHT = 3;
     private static final int COMMENT_WEIGHT = 2;
     private static final int DATE_BONUS = 10;
+    private static final int LATEST_ALBUM_SIZE = 10;
 
     private final AlbumRepository albumRepository;
     private final FamilyMemberQueryService familyMemberQueryService;
+
+    // 보호자 홈 앨범 카드: 앱이 자동으로 돌려 보여 주는 가족 앨범 최신 10개, 최신순 (#1002)
+    public List<Album> findLatestAlbums(Member senior) {
+        List<Long> familyMemberIds = familyMemberQueryService.getFamilyMemberIds(senior);
+
+        List<Long> latestIds = albumRepository
+                .findLatestAlbumIdsByMemberIds(familyMemberIds, PageRequest.of(0, LATEST_ALBUM_SIZE))
+                .getContent();
+
+        if (latestIds.isEmpty()) {
+            return List.of();
+        }
+
+        return albumRepository.findAlbumsWithCollectionsByIds(latestIds);
+    }
 
     public List<Album> recommendAlbums(Member senior, LocalDate today) {
         List<Long> familyMemberIds = familyMemberQueryService.getFamilyMemberIds(senior);
