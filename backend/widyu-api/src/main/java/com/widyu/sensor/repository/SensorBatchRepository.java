@@ -13,9 +13,21 @@ public interface SensorBatchRepository extends JpaRepository<SensorBatch, Long> 
 
     Optional<SensorBatch> findByBatchId(String batchId);
 
-    /** 이 묶음을 원 묶음으로 가리키는 같은 회원의 다른 재전송 묶음이 있는지(LLD-0138 5.1). */
-    boolean existsByMember_IdAndIsResendTrueAndOriginalBatchIdAndBatchIdNot(
-            Long memberId, String originalBatchId, String batchId);
+    /**
+     * 같은 회원의 같은 계보(원 묶음과 그 재전송들)에 이 묶음보다 먼저 저장된 묶음이 있는지(LLD-0138 5.1).
+     * 계보에서 저장 순서(PK)가 가장 앞선 묶음만 활동 구간에 더한다.
+     */
+    @Query("""
+            SELECT COUNT(batch) > 0 FROM SensorBatch batch
+             WHERE batch.member.id = :memberId
+               AND (batch.batchId = :rootBatchId
+                    OR (batch.isResend = true AND batch.originalBatchId = :rootBatchId))
+               AND batch.id < (SELECT self.id FROM SensorBatch self WHERE self.batchId = :batchId)
+            """)
+    boolean existsEarlierInLineage(
+            @Param("memberId") Long memberId,
+            @Param("rootBatchId") String rootBatchId,
+            @Param("batchId") String batchId);
 
     /** 내보내기: 회차·스트림의 배치를 잰 시각 순으로(LLD-0050 5.3). */
     java.util.List<SensorBatch> findByRunIdAndStreamOrderByMeasuredAtStartMsAscSeqAsc(

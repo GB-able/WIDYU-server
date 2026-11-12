@@ -9,23 +9,23 @@ import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
+import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.sensor.ActivityWindow;
 import com.widyu.sensor.SensorBatch;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.repository.ActivityWindowRepository;
-import com.widyu.sensor.repository.SensorBatchRepository;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.LongFunction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -42,13 +42,15 @@ class ActivityStateServiceTest {
     private static final long DT_NS = 20_000_000L;
     private static final String BATCH = "01j8y111111111111111111111";
     private static final String ORIGINAL = "01j8y000000000000000000000";
+    private static final String RESEND_1 = "01j8y000000000000000000001";
+    private static final String RESEND_2 = "01j8y000000000000000000002";
     private static final SensorProperties.Activity ACTIVITY =
             new SensorProperties.Activity(5, 4, 0.04, 0.20, 600, 20, 60, 50);
 
     @Autowired private ActivityStateService service;
     @Autowired private ActivityWindowRepository windows;
     @Autowired private LocationFixRepository fixes;
-    @MockBean private SensorBatchRepository sensorBatchRepository;
+    @Autowired private TestEntityManager entityManager;
     @MockBean private SensorProperties sensorProperties;
     @MockBean private JPAQueryFactory jpaQueryFactory;
 
@@ -114,22 +116,21 @@ class ActivityStateServiceTest {
     }
 
     @Test
-    @DisplayName("원 묶음이 이미 저장된 재전송 묶음은 다시 더하지 않는다")
-    void 원_묶음이_이미_저장된_재전송_묶음은_다시_더하지_않는다() {
+    @DisplayName("원 묶음이 먼저 저장된 뒤 온 재전송 묶음은 다시 더하지 않는다")
+    void 원_묶음이_먼저_저장된_뒤_온_재전송_묶음은_다시_더하지_않는다() {
         // given
         given(sensorProperties.activity()).willReturn(ACTIVITY);
-        SensorBatch original = batchOf(401L);
-        given(sensorBatchRepository.findByBatchId(ORIGINAL)).willReturn(Optional.of(original));
+        Member member = persistMember();
         SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
-        service.record(401L, BATCH, "imu_watch", clock(), acc, null);
-        SensorBatchRequest.Resend resend = new SensorBatchRequest.Resend(
-                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
+        persistBatch(member, ORIGINAL, null);
+        service.record(member.getId(), ORIGINAL, "imu_watch", clock(), acc, null);
+        persistBatch(member, RESEND_1, ORIGINAL);
 
         // when
-        service.record(401L, BATCH, "imu_watch", clock(), acc, resend);
+        service.record(member.getId(), RESEND_1, "imu_watch", clock(), acc, resendOf(ORIGINAL));
 
         // then
-        assertThat(windows.findForUpdate(401L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+        assertThat(windows.findForUpdate(member.getId(), T0).orElseThrow().getSampleCount()).isEqualTo(4);
     }
 
     @Test
@@ -137,18 +138,36 @@ class ActivityStateServiceTest {
     void 재전송_묶음이_먼저_저장된_뒤_온_원_묶음은_다시_더하지_않는다() {
         // given
         given(sensorProperties.activity()).willReturn(ACTIVITY);
+        Member member = persistMember();
         SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
-        SensorBatchRequest.Resend resend = new SensorBatchRequest.Resend(
-                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
-        service.record(405L, BATCH, "imu_watch", clock(), acc, resend);
-        given(sensorBatchRepository.existsByMember_IdAndIsResendTrueAndOriginalBatchIdAndBatchIdNot(
-                405L, ORIGINAL, ORIGINAL)).willReturn(true);
+        persistBatch(member, RESEND_1, ORIGINAL);
+        service.record(member.getId(), RESEND_1, "imu_watch", clock(), acc, resendOf(ORIGINAL));
+        persistBatch(member, ORIGINAL, null);
 
         // when
-        service.record(405L, ORIGINAL, "imu_watch", clock(), acc, null);
+        service.record(member.getId(), ORIGINAL, "imu_watch", clock(), acc, null);
 
         // then
-        assertThat(windows.findForUpdate(405L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+        assertThat(windows.findForUpdate(member.getId(), T0).orElseThrow().getSampleCount()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("같은 원 묶음의 재전송이 둘이면 먼저 저장된 하나만 더한다")
+    void 같은_원_묶음의_재전송이_둘이면_먼저_저장된_하나만_더한다() {
+        // given
+        given(sensorProperties.activity()).willReturn(ACTIVITY);
+        Member member = persistMember();
+        SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
+        // 두 묶음이 거의 동시에 저장돼 둘 다 저장된 뒤에 계산이 돌아도 결과가 같다.
+        persistBatch(member, RESEND_1, ORIGINAL);
+        persistBatch(member, RESEND_2, ORIGINAL);
+
+        // when
+        service.record(member.getId(), RESEND_2, "imu_watch", clock(), acc, resendOf(ORIGINAL));
+        service.record(member.getId(), RESEND_1, "imu_watch", clock(), acc, resendOf(ORIGINAL));
+
+        // then
+        assertThat(windows.findForUpdate(member.getId(), T0).orElseThrow().getSampleCount()).isEqualTo(4);
     }
 
     @Test
@@ -156,21 +175,21 @@ class ActivityStateServiceTest {
     void 원_묶음이_다른_회원_것이거나_자기_자신이면_재전송_묶음도_더한다() {
         // given
         given(sensorProperties.activity()).willReturn(ACTIVITY);
-        SensorBatch original = batchOf(999L);
-        given(sensorBatchRepository.findByBatchId(ORIGINAL)).willReturn(Optional.of(original));
+        Member other = persistMember();
+        Member member = persistMember();
+        Member self = persistMember();
         SensorBatchRequest.Axis acc = acc(0, 1040, 960, 1040, 960);
-        SensorBatchRequest.Resend othersOriginal = new SensorBatchRequest.Resend(
-                true, ORIGINAL, 7L, null, "s-1", T0 + 60_000);
-        SensorBatchRequest.Resend selfOriginal = new SensorBatchRequest.Resend(
-                true, BATCH, 7L, null, "s-1", T0 + 60_000);
+        persistBatch(other, ORIGINAL, null);
+        persistBatch(member, RESEND_1, ORIGINAL);
+        persistBatch(self, RESEND_2, RESEND_2);
 
         // when
-        service.record(402L, BATCH, "imu_watch", clock(), acc, othersOriginal);
-        service.record(403L, BATCH, "imu_watch", clock(), acc, selfOriginal);
+        service.record(member.getId(), RESEND_1, "imu_watch", clock(), acc, resendOf(ORIGINAL));
+        service.record(self.getId(), RESEND_2, "imu_watch", clock(), acc, resendOf(RESEND_2));
 
         // then
-        assertThat(windows.findForUpdate(402L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
-        assertThat(windows.findForUpdate(403L, T0).orElseThrow().getSampleCount()).isEqualTo(4);
+        assertThat(windows.findForUpdate(member.getId(), T0).orElseThrow().getSampleCount()).isEqualTo(4);
+        assertThat(windows.findForUpdate(self.getId(), T0).orElseThrow().getSampleCount()).isEqualTo(4);
     }
 
     @Test
@@ -301,10 +320,26 @@ class ActivityStateServiceTest {
         assertThat(service.contexts(1103L, ts, ts).apply(ts)).isEqualTo("REST");
     }
 
-    private SensorBatch batchOf(Long memberId) {
-        SensorBatch batch = Mockito.mock(SensorBatch.class, Mockito.RETURNS_DEEP_STUBS);
-        given(batch.getMember().getId()).willReturn(memberId);
-        return batch;
+    private Member persistMember() {
+        return entityManager.persistAndFlush(Member.createMember(MemberType.SENIOR, "시니어", "01012345678"));
+    }
+
+    private SensorBatchRequest.Resend resendOf(String originalBatchId) {
+        return new SensorBatchRequest.Resend(true, originalBatchId, 7L, null, "s-1", T0 + 60_000);
+    }
+
+    /** 묶음은 활동 계산 전에 저장된다. 원 묶음이 없으면 재전송이 아니다. */
+    private void persistBatch(Member member, String batchId, String originalBatchId) {
+        entityManager.persistAndFlush(SensorBatch.builder()
+                .batchId(batchId).member(member).stream("imu_watch").source("watch")
+                .deviceId("watch-1").sessionId("s-1").seq(1L).bootId("b1").clockMappingId("cm-1")
+                .anchorElapsedNs(0L).anchorEpochMs(T0).uncertaintyMs(1.0)
+                .measuredAtStartMs(T0).measuredAtEndMs(T0 + 60)
+                .serverReceivedAtMs(T0).acceptedAtMs(T0).persistedAtMs(T0).modelAvailableAtServerMs(T0)
+                .onBody(true).qualityStatus("OK").gyroBackfill(false).isResend(originalBatchId != null).originalBatchId(originalBatchId)
+                .configMismatch(false).s3Key("sensor/" + batchId + ".json").byteSize(256)
+                .payloadSha256("b".repeat(64))
+                .build());
     }
 
     private SensorBatchRequest.Clock clock() {

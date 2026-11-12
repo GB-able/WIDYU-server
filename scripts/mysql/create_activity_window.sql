@@ -23,5 +23,5 @@ CREATE TABLE activity_window (
     CONSTRAINT fk_activity_window_member FOREIGN KEY (member_id) REFERENCES member (id)
 ) DEFAULT CHARSET = utf8mb4;
 
--- 원 묶음이 재전송보다 늦게 와도 활동 구간에 두 번 더하지 않게 재전송 묶음을 찾는다(LLD-0138 5.1).
+-- 원 묶음과 재전송 계보에서 먼저 저장된 묶음만 활동 구간에 더하려고 재전송 묶음을 찾는다(LLD-0138 5.1).
 CREATE INDEX idx_sensor_batch_original_batch_id ON sensor_batch (original_batch_id);

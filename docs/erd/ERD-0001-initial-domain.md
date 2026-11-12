@@ -878,7 +878,7 @@ erDiagram
 | `sensor_batch` | `idx_sensor_batch_member_stream_time` | `(member_id, stream, measured_at_start_ms)` | 스트림별 시각 범위 조회 |
 | `sensor_batch` | `idx_sensor_batch_seq` | `(device_id, session_id, seq)` | 순번 누락 검사 |
 | `sensor_batch` | `idx_sensor_batch_run` | `(run_id)` | 회차별 조회 (B8 후속) |
-| `sensor_batch` | `idx_sensor_batch_original_batch_id` | `(original_batch_id)` | 늦게 온 원 묶음의 재전송 찾기, 활동 구간 중복 합산 방지 (LLD-0138) |
+| `sensor_batch` | `idx_sensor_batch_original_batch_id` | `(original_batch_id)` | 재전송 계보 조회, 활동 구간 중복 합산 방지 (LLD-0138) |
 | `sensor_dropped_range` | UK `uk_sensor_dropped_range` | `(member_id, session_id, from_seq)` | 워치가 같은 구간을 다시 보내도 한 행 (LLD-0124) |
 | `sensor_dropped_range` | `idx_sensor_dropped_range_member_time` | `(member_id, ts_ms)` | 참가자별 시각순 조회 |
 | `activity_window` | UK `uk_activity_window_member_start` | `(member_id, window_start_ms)` | 5초 구간 멱등 키이자 심박 시각 범위 조회 (LLD-0138) |

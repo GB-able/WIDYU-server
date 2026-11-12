@@ -59,8 +59,8 @@ public class ActivityStateService {
             return;
         }
         try {
-            // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 짝 중 먼저 저장된 쪽만 더한다.
-            if (originalAlreadyStored(memberId, batchId, resend) || resendAlreadyStored(memberId, batchId)) {
+            // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 계보에서 가장 먼저 저장된 묶음만 더한다.
+            if (earlierInLineage(memberId, batchId, resend)) {
                 return;
             }
             Map<Long, long[]> sums = sumByWindow(clock, acc);
@@ -159,23 +159,16 @@ public class ActivityStateService {
     }
 
     /**
-     * 원 묶음이 재전송보다 늦게 왔다. 재전송이 이미 더했으므로 원 묶음은 더하지 않는다.
-     * ponytail: 두 묶음이 거의 동시에 저장되면 서로를 보고 둘 다 건너뛸 수 있다. 실제로 생기면 묶음별 합산 기록을 둔다.
+     * 계보는 원 묶음과 그 재전송들이다. 묶음은 이 호출 전에 저장돼 PK가 정해졌으므로, 도착 순서나 동시 저장과 무관하게
+     * 계보에서 PK가 가장 작은 묶음 하나만 더한다. 원 묶음이 자기 자신이면 재전송이 아닌 것으로 본다.
+     * ponytail: 작은 PK 쪽 INSERT가 커밋되기 전 순간에 큰 쪽이 조회하면 둘 다 더한다. 생기면 묶음별 합산 기록을 둔다.
      */
-    private boolean resendAlreadyStored(Long memberId, String batchId) {
-        return sensorBatchRepository.existsByMember_IdAndIsResendTrueAndOriginalBatchIdAndBatchIdNot(
-                memberId, batchId, batchId);
-    }
-
-    /** 원 묶음이 같은 회원의 다른 묶음으로 저장돼 있을 때만 이미 더했다고 본다. 자기 자신이나 남의 묶음을 가리키면 더한다. */
-    private boolean originalAlreadyStored(Long memberId, String batchId, SensorBatchRequest.Resend resend) {
-        if (resend == null || !Boolean.TRUE.equals(resend.isResend()) || resend.originalBatchId() == null
-                || resend.originalBatchId().equals(batchId)) {
-            return false;
+    private boolean earlierInLineage(Long memberId, String batchId, SensorBatchRequest.Resend resend) {
+        String rootBatchId = batchId;
+        if (resend != null && Boolean.TRUE.equals(resend.isResend()) && resend.originalBatchId() != null) {
+            rootBatchId = resend.originalBatchId();
         }
-        return sensorBatchRepository.findByBatchId(resend.originalBatchId())
-                .filter(original -> memberId.equals(original.getMember().getId()))
-                .isPresent();
+        return sensorBatchRepository.existsEarlierInLineage(memberId, rootBatchId, batchId);
     }
 
     /** 샘플 배열을 한 번 돈다. 시각은 SensorBatchService와 같은 환산식(LLD-0041 4.3)이다. */
