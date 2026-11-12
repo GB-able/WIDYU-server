@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,11 +27,14 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.application.SeniorProfileService;
 import com.widyu.member.repository.SeniorProfileRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -48,6 +52,7 @@ class AlbumUnlockServiceTest {
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private FamilyAccessService familyAccessService;
     @Mock private SeniorProfileService seniorProfileService;
+    @Mock private EntityManager entityManager;
 
     @InjectMocks
     private AlbumUnlockService albumUnlockService;
@@ -335,5 +340,36 @@ class AlbumUnlockServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_UNLOCK_NOT_REQUIRED);
         verify(albumUnlockRepository, never()).save(any(AlbumUnlock.class));
         verify(seniorProfileService, never()).deductPointsFromMember(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("해금하면 중복 해금을 확인하기 전에 시니어 포인트 행을 잠근다")
+    void 해금하면_중복_확인_전에_포인트_행을_잠근다() {
+        // given
+        Member senior = Member.createMember(MemberType.SENIOR, "시니어", "01011112222");
+        ReflectionTestUtils.setField(senior, "id", 1L);
+        ReflectionTestUtils.setField(senior, "type", MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+
+        Member albumOwner = mock(Member.class);
+        given(albumOwner.getId()).willReturn(2L);
+        Album album = mock(Album.class);
+        given(album.getMember()).willReturn(albumOwner);
+        given(album.requiresUnlock()).willReturn(true);
+        given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
+
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
+        given(albumUnlockRepository.existsByAlbumAndMember(album, senior)).willReturn(true);
+
+        // when
+        assertThatThrownBy(() -> albumUnlockService.unlockAlbum(10L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_ALREADY_UNLOCKED);
+
+        // then
+        InOrder order = inOrder(entityManager, albumUnlockRepository);
+        order.verify(entityManager).refresh(seniorProfile, LockModeType.PESSIMISTIC_WRITE);
+        order.verify(albumUnlockRepository).existsByAlbumAndMember(album, senior);
     }
 }

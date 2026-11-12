@@ -7,6 +7,7 @@ import com.widyu.global.properties.SensorProperties;
 import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
+import com.widyu.heart.HeartRateFreshness;
 import com.widyu.heart.HeartRateResult;
 import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.dto.response.EmergencyEventResponse;
@@ -73,7 +74,7 @@ public class HeartRateService {
         try {
             validateMemberExists(memberId);
             if (heartRateEventRepository.existsByMemberIdAndMeasuredAt(memberId, request.measuredAt())) {
-                return getHeartRateStatus(memberId);
+                return findLatestStatus(memberId);
             }
         } catch (DataAccessException | TransactionException exception) {
             return respondWithoutDatabase(memberId, request, null, exception);
@@ -94,7 +95,7 @@ public class HeartRateService {
             // 그 UK 충돌이고 먼저 저장한 행이 있으면 순차 재전송과 같은 현재 상태를 준다. 다른 제약 위반은 그대로 던진다(LLD-0089).
             if (HeartEventConflict.storedByConcurrentRequest(
                     exception, heartRateEventRepository, memberId, request.measuredAt())) {
-                return getHeartRateStatus(memberId);
+                return findLatestStatus(memberId);
             }
             throw exception;
         } catch (DataAccessException | TransactionException exception) {
@@ -137,7 +138,17 @@ public class HeartRateService {
         return HeartRateStatusResponse.of(memberId, judged.status(), request.heartRate(), request.measuredAt());
     }
 
+    /** 최근 30초 안에 잰 값이 없으면 미착용으로 보고 UNKNOWN을 준다. 홈 카드와 같은 기준이다(#1023). */
     public HeartRateStatusResponse getHeartRateStatus(Long memberId) {
+        HeartRateStatusResponse latest = findLatestStatus(memberId);
+        if (!HeartRateFreshness.isFresh(latest.measuredAt(), LocalDateTime.now())) {
+            return HeartRateStatusResponse.unknown(memberId);
+        }
+        return latest;
+    }
+
+    /** 단건 재전송 응답은 신선도와 무관하게 저장된 최신값을 준다(LLD-0089). */
+    private HeartRateStatusResponse findLatestStatus(Long memberId) {
         return heartRateResultRepository.findByMemberId(memberId)
                 .map(HeartRateStatusResponse::from)
                 .or(() -> heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId)
@@ -284,7 +295,16 @@ public class HeartRateService {
         return buildCurrent(memberId, null, null);
     }
 
+    /** 위급 이력·이벤트와 달리 current는 지금의 값이라 30초보다 오래된 측정은 UNKNOWN으로 준다(#1023). */
     private HeartGraphCurrentResponse buildCurrent(Long memberId, Integer maxHeartRate, Integer minHeartRate) {
+        HeartGraphCurrentResponse latest = findLatestCurrent(memberId, maxHeartRate, minHeartRate);
+        if (!HeartRateFreshness.isFresh(latest.measuredAt(), LocalDateTime.now())) {
+            return HeartGraphCurrentResponse.unknown(maxHeartRate, minHeartRate);
+        }
+        return latest;
+    }
+
+    private HeartGraphCurrentResponse findLatestCurrent(Long memberId, Integer maxHeartRate, Integer minHeartRate) {
         HeartRateResult latest = heartRateResultRepository.findByMemberId(memberId).orElse(null);
         if (latest != null) {
             return HeartGraphCurrentResponse.of(

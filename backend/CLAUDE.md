@@ -12,6 +12,7 @@
 - 토큰 3종: Access(단기, `Bearer`) / Refresh(Redis TTL) / Temporary(회원가입 1회용, 30분)
 - SMS 플로우: 발송 → 코드 검증 → Temporary Token → 회원가입 → JWT. Apple은 전화번호 별도 수집. → ADR-0002, LLD-0004
 - **탈퇴 시 소셜 연동 해제는 트랜잭션 밖이다**: 탈퇴 트랜잭션은 `social_unlink_task`만 저장하고 `MemberWithdrawnEvent`를 발행한다. 커밋 뒤 리스너가 호출하고 실패하면 10분마다 최대 5회 재시도하며, 끝나면 oauthId·토큰을 지운다. 같은 이벤트로 Redis 위치 키도 지운다 → LLD-0059
+- **보호자 탈퇴 API(`DELETE /api/v1/auth/guardians/withdraw`)는 보호자만 부른다**(`/api/v1/auth/**`가 `permitAll`이라 서비스가 유형을 확인한다). 탈퇴는 `member.withdrawn_at`을 채운다. 관리자 정지(`INACTIVE`)는 채우지 않으므로 탈퇴 회원은 이 칸으로 고른다. 어르신은 `POST /api/v1/members/seniors/me/withdrawal-requests`로 요청만 남기고 운영자가 처리한 뒤 관리자 API로 처리 완료·취소를 기록한다. 서버는 어르신 계정을 바꾸지 않는다 → LLD-0137
 
 ### `member` — 회원 (가족 도메인)
 - `Member` + `MemberType`(SENIOR/GUARDIAN), `MemberRole`(ADMIN/USER/TEMPORARY)
@@ -37,9 +38,10 @@
 ### `pay` — 결제·포인트
 - **불변식**: 결제는 포인트를 충전·환수하지 않는다(ADR-0029). 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동
 - 결제 트랜잭션 경계·멱등성은 → LLD-0003·0015·0016·0017, ADR-0012
+- 앨범 해제는 `READ_COMMITTED`에서 시니어 포인트 행을 먼저 잠그고(`refresh(..., PESSIMISTIC_WRITE)`) 중복을 확인한다. 같은 시니어의 동시 해제가 교착(503) 대신 `ALBUM_UNLOCK_4001`로 끝난다 → LLD-0069 (#1025)
 
 ### `goal` — 건강 목표
-- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`: 500~10,000보, 정한 적 없으면 null #1003), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
 - **목표 캘린더 월 범위**: 약 복용·걷기 월간과 건강 일정 캘린더는 이번 달(KST) 기준 앞뒤 12개월만 조회한다(400 `GOAL_4000`). 보호자의 약 복용 월간은 미래 달도 400(`GOAL_4001`). 검사는 `GoalMonthValidator` 한 곳이다(#1005)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). 같은 시각의 종료되지 않은 알람은 하나만 둔다(생성, 시각을 바꾸는 수정 시 409 `MEDICINE_SCHEDULE_4090`, #982). → LLD-0007·0008·0009
 
@@ -58,6 +60,7 @@
 - **저장이 판정에 앞선다**: 값이 이상해도 저장하고(정책 1.2.1) AI가 실패하면 `UNKNOWN`으로 저장한 뒤 그 배치의 남은 샘플은 AI를 건너뛴다(단락). `bpm`이 1~299 밖이거나 `accuracy=UNRELIABLE`이면 저장만 하고 AI를 부르지 않는다
 - 샘플은 `(member_id, measured_at)` UK로 멱등이라 재전송·단건 중복은 스킵된다. `measured_at`은 Asia/Seoul 환산이고 원 시각은 S3 원문과 인덱스 행에 남는다
 - 수신한 단건 심박은 AI 판정 후 즉시 최신값에 반영한다.
+- **「지금」의 심박은 최근 30초 안에 잰 값뿐이다**(`HeartRateFreshness`). 홈 카드 착용 여부, `/heart-rate/status`, 그래프 `current`가 같은 기준을 쓰고 그보다 오래되면 `UNKNOWN`·값 null이다. 위급 이력·그래프 이벤트·단건 전송 응답은 이 기준을 적용하지 않는다(#1023)
 - `heart_rate_event`는 자동 삭제하지 않는다(#650). 보존 기간은 법률 검토 뒤 ADR로 정한다.
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 - **배치 위급 판정은 `decision_record`에 한 줄 남고 그 `decision_id`가 FCM outbox 행을 타고 흘러간다**. 전송이 성공하면 그 판정의 `alert_delivered`·`alert_at_ms`가 채워진다. 단건 경로는 판정 기록을 남기지 않아 `decision_id`가 null이다 → LLD-0053

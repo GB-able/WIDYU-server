@@ -32,16 +32,16 @@ public record GuardianGoalHomeResponse(
 
     @Schema(description = "약 스케줄 정보")
     public record MedicineInfo(
-            @Schema(description = "오늘 총 복용 예정 개수", example = "6")
-            Double totalCount,
+            @Schema(description = "오늘 총 복용 예정 횟수 (오늘 유효한 알람 수)", example = "6")
+            Integer totalCount,
 
-            @Schema(description = "오늘 복용한 개수", example = "1")
-            Double takenCount,
+            @Schema(description = "오늘 복용 완료 횟수 (오늘 인증한 알람 수)", example = "1")
+            Integer takenCount,
 
             @Schema(description = "약 스케줄 목록")
             List<ScheduleItem> medicineSchedules
     ) {
-        public static MedicineInfo of(Double totalCount, Double takenCount, List<ScheduleItem> medicineSchedules) {
+        public static MedicineInfo of(Integer totalCount, Integer takenCount, List<ScheduleItem> medicineSchedules) {
             return new MedicineInfo(totalCount, takenCount, medicineSchedules);
         }
     }

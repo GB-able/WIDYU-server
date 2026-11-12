@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |
-| Issue | #704 |
+| Issue | #704, #1025 |
 | 관련 ADR | ADR-0037, ADR-0029 |
 | 작성자 | Codex / feature-704 |
 | 작성일 | 2026-10-02 |
@@ -58,6 +58,7 @@ G01은 `NotificationType.GOAL_ACHIEVED`(`FcmCategory.TARGET`, `PUSH_AND_CENTER`,
 3. `HealthScheduleProgressService.completeAndReward`는 수동 방문과 위치 자동 완료의 공통 경로다. 시니어 소유이며 `isReward=false`일 때만 기존 `rewardPoint`를 적립하고 `claimReward()` 한 뒤 `G01:H:<scheduleId>`를 발행한다. 보호자 본인 일정의 완료는 적립·G01 없이 유지한다.
 4. `MedicationProofTransactionService.verifyMedication`은 기존 1회 인증 검증과 `MedicationPointPolicy` 계산을 유지한다. 완료 전 인증 1회의 10P는 일반 적립으로 P01만 만든다. 해당 인증으로 그날 유효한 일정을 모두 채우면 기존 계산대로 마지막 인증 10P와 완주 보너스 20P를 합쳐 한 번 적립하고, `하루 복약` 목표의 G01만 만든다. 유효 일정이 하나라 첫 인증이 완주라면 30P G01 한 건이다. 적립액이 0이거나 시니어 프로필이 없으면 알림도 없다. 증빙 S3 업로드는 현행처럼 DB 트랜잭션 밖에 있다.
 5. `AlbumUnlockService.unlockAlbum`은 권한·가족·자기 앨범·대상·잔액·중복 해금 검증을 그대로 수행한 뒤, 현재의 직접 `deductPoints`/`PointHistory.use`를 `SeniorProfileService.deductPointsFromMember(..., "앨범 해금", ...)` 호출로 바꾼다. 같은 트랜잭션에서 50P 차감, P02 센터 1건, 해금 기록, 기존 `AlbumUnlockedEvent`가 함께 커밋 또는 롤백된다. 기존 부족 잔액 오류(`ALBUM_UNLOCK_INSUFFICIENT_BALANCE`)와 응답 잔액 계약은 유지한다. 이 내부 호출에는 최외곽 재시도가 적용되지 않는다.
+   - 동시 해제(#1025): 해제는 `READ_COMMITTED` 트랜잭션에서 시니어 프로필을 조회한 직후 `EntityManager.refresh(seniorProfile, PESSIMISTIC_WRITE)`로 포인트 행을 잠그고 최신 잔액·버전으로 다시 읽은 뒤 중복 해금과 잔액을 확인한다. 같은 시니어의 해제는 이 잠금에서 줄을 서고, 뒤 요청은 앞 요청의 커밋을 본 상태로 중복 확인을 하므로 `ALBUM_ALREADY_UNLOCKED`(400 `ALBUM_UNLOCK_4001`)로 끝난다. 잠금이 없을 때는 두 요청이 포인트 이력 INSERT의 외래키 검사로 `senior_profile` 행에 공유 잠금을 함께 잡고, 한쪽은 커밋 때 잔액 UPDATE(배타 잠금)를, 다른 쪽은 해제 기록 유니크 검사를 서로 기다려 MySQL이 교착으로 한쪽을 끊었다(503 `SRV_5031`). 잠금 뒤 다시 읽는 이유는 가족 확인에서 같은 엔티티가 이미 영속성 컨텍스트에 올라와 있어 잠금 조회만으로는 옛 잔액·버전이 남기 때문이고, `READ_COMMITTED`인 이유는 반복 읽기에서는 첫 조회 때의 스냅숏이 앞 요청의 해제 기록을 보지 못하기 때문이다. 교착을 잡아 재시도·변환하는 방식은 원인을 남기고 이 경로의 「최외곽 재시도 없음」 결정과도 맞지 않아 택하지 않았다.
 6. G01 리스너는 `SeniorProfile.family`의 현재 보호자 멤버십을 조회한다. 시니어에게 G01-S 1건을 enqueue하고, 같은 가족의 활성 보호자마다 G01-C 1건을 enqueue한다. `relatedMemberId=seniorId`로 가족 검증을 거친다. 푸시 설정이 꺼진 보호자의 센터 행도 남고, `GENERAL`을 켠 보호자만 푸시 대상이다(ADR-0037). 토큰이 없어도 센터 행은 남는다. G01은 적립 포인트를 본문에 담고 P01을 만들지 않는다.
 7. `FcmOutboxService`는 센터 저장형 타입을 토큰 루프 전에 `UK(recipient_member_id,event_id)`로 저장한다. `CENTER_ONLY`는 outbox를 만들지 않는다. 트랜잭션 롤백 시 잔액·내역·센터·outbox가 같이 롤백되고, 커밋 뒤 dispatcher 전송은 기존 at-least-once 정책을 따른다.
 
@@ -74,6 +75,7 @@ G01은 `NotificationType.GOAL_ACHIEVED`(`FcmCategory.TARGET`, `PUSH_AND_CENTER`,
 - [x] 건강 일정의 수동 방문·위치 자동 완료는 각각 최초 보상에만 G01을 만들며, 보호자 본인 일정과 반복 완료에는 포인트·G01·P01을 만들지 않는다.
 - [x] 복약 인증의 미완주 10P 적립은 P01 센터 1건·G01 0건이다. 하루 완주 적립은 실제 증분(10P+20P)을 본문에 넣은 G01 센터 1건·P01 0건이다. 일정 하나인 날의 첫 인증도 완주 경로다.
 - [x] 앨범 해금 50P 차감은 시니어 P02 센터 1건·푸시/outbox 0건을 만들고, 본문은 `앨범 해금`, 딥링크는 포인트 내역이다. 중복 해금·잔액 부족은 추가 차감과 P02가 0건이다.
+- [x] 같은 앨범 해제 두 건이 겹치면 한 건은 성공, 다른 한 건은 `ALBUM_UNLOCK_4001`이고 503이 없다. 차감·포인트 이력·해제 기록은 각 1건이다. 실제 MySQL 테스트(`AlbumUnlockConcurrentMySqlTest`)가 수정 전 코드에서 교착·중복 키로 실패하고 수정 후 통과한다 (#1025).
 - [ ] 별도 일반 적립은 P01 센터 1건·푸시/outbox 0건을 만들고 `PointHistory.description`을 본문에 사용한다. P01/P02는 위듀 `전체`·`안 읽음`에만 나타난다.
 - [x] 동일 걸음 연동·건강 일정 재완료·복약 인증 재요청·앨범 해금 재요청 및 포인트 낙관적 락 재시도에서 커밋된 잔액/내역/센터 행은 한 번만 증가한다. 롤백된 시도의 센터/outbox 행은 0건이다.
 - [ ] 수신자에게 활성 토큰이 없거나 보호자의 `GENERAL` 푸시가 꺼져도 센터 행이 생성되며, 다른 가족·비활성 회원에게 G01을 보내지 않는다.

@@ -17,6 +17,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AccessLevel;
@@ -79,6 +80,10 @@ public class Member extends BaseTimeEntity {
     @Column(nullable = false)
     private long notificationPolicyRevision;
 
+    // 회원 본인이 탈퇴한 시각. 관리자 정지(withdraw)는 채우지 않아 INACTIVE 중 탈퇴만 가려낸다(LLD-0137).
+    @Column(name = "withdrawn_at")
+    private LocalDateTime withdrawnAt;
+
     @Builder(access = AccessLevel.PRIVATE)
     private Member(final MemberRole role, final MemberType type, final String name, final String phoneNumber,
                    final String profileImage, final Status status) {
@@ -140,8 +145,14 @@ public class Member extends BaseTimeEntity {
         this.status = Status.INACTIVE;
     }
 
+    public void markWithdrawn(LocalDateTime now) {
+        withdraw();
+        this.withdrawnAt = now;
+    }
+
     public void reactivate() {
         this.status = Status.ACTIVE;
+        this.withdrawnAt = null;
     }
 
     public long incrementMedicationAlarmRevision() {

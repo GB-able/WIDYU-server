@@ -701,9 +701,9 @@ class GoalHomeServiceTest {
     }
 
     @Test
-    @DisplayName("반 알약이 섞인 일정을 조회하면 보호자 목표 홈의 약 개수 합계를 0.5 단위까지 반환한다")
-    void 반_알약이_섞인_일정의_약_개수_합계를_잘라내지_않는다() {
-        // given: 2.5정 일정은 인증했고 1정 일정은 아직 인증하지 않았다
+    @DisplayName("2.5정과 1정 알람 중 하나를 인증하면 보호자 목표 홈은 복용 횟수 1/2와 0.5 단위 약별 개수를 반환한다")
+    void 보호자_목표_홈은_복용_횟수를_알람_수로_센다() {
+        // given: 알약 개수 합(3.5)이 아니라 알람 수(2)로 세고, 약별 개수는 0.5 단위를 잘라내지 않는다 (#1021, #1007)
         Member senior = member(21L, MemberType.SENIOR);
         LocalDate today = NOW.toLocalDate();
         MedicineSchedule morning = dosedSchedule(senior, 1L, LocalTime.of(8, 0), 2.5);
@@ -718,10 +718,35 @@ class GoalHomeServiceTest {
         GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
 
         // then
-        assertThat(response.medicine().totalCount()).isEqualTo(3.5);
-        assertThat(response.medicine().takenCount()).isEqualTo(2.5);
-        assertThat(response.medicine().medicineSchedules().getFirst().medicines().getFirst().count())
-                .isEqualTo(2.5);
+        assertThat(response.medicine().totalCount()).isEqualTo(2);
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+        assertThat(response.medicine().medicineSchedules())
+                .extracting(schedule -> schedule.medicines().getFirst().count())
+                .containsExactly(2.5, 1.0);
+    }
+
+    @Test
+    @DisplayName("1정과 2정 알람을 모두 인증하면 보호자 목표 홈은 복용 횟수 2/2를 반환한다")
+    void 보호자_목표_홈은_모두_인증하면_알람_수만큼_센다() {
+        // given
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = dosedSchedule(senior, 1L, LocalTime.of(8, 0), 1.0);
+        MedicineSchedule night = dosedSchedule(senior, 2L, LocalTime.of(9, 0), 2.0);
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning, night));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(
+                        proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/m.jpg"),
+                        proof(night, senior, today.atTime(9, 5), "https://cdn.widyu.shop/n.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().totalCount()).isEqualTo(2);
+        assertThat(response.medicine().takenCount()).isEqualTo(2);
     }
 
     @Test

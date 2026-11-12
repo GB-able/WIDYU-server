@@ -710,6 +710,7 @@ public interface GuardianAuthDocs {
                     현재 로그인된 사용자의 계정을 탈퇴처리합니다. 연동된 모든 소셜 계정도 함께 탈퇴됩니다.
                     카카오의 경우 앱 어드민 키를 사용하므로 액세스 토큰이 불필요합니다.
                     애플, 네이버의 경우 로그인 시 저장된 리프레시 토큰을 자동으로 사용합니다.
+                    보호자만 부를 수 있습니다. 어르신은 `POST /api/v1/members/seniors/me/withdrawal-requests`로 탈퇴를 요청합니다.
                     """
     )
     @ApiResponse(
@@ -757,6 +758,23 @@ public interface GuardianAuthDocs {
                                     {
                                       "code": "AUTH_4010",
                                       "message": "인증이 필요합니다.",
+                                      "data": null
+                                    }
+                                    """
+                    )
+            )
+    )
+    @ApiResponse(
+            responseCode = "403",
+            description = "보호자가 아닌 회원의 탈퇴 시도",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(
+                            name = "보호자 아님",
+                            value = """
+                                    {
+                                      "code": "AUTH_4030",
+                                      "message": "접근 권한이 없습니다.",
                                       "data": null
                                     }
                                     """

@@ -455,6 +455,48 @@ class WalkServiceTest {
     }
 
     @Test
+    @DisplayName("목표를 오늘 바꾼 뒤 어제 걸음 수를 처음 연동하면 어제 기록은 바꾸기 전 목표로 만든다")
+    void 목표를_바꾼_뒤_어제_걸음수를_처음_연동하면_바꾸기_전_목표로_기록한다() {
+        // given: 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(7000);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(senior, yesterday))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now(), 5000)));
+        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
+            Walk saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9L);
+            return saved;
+        });
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, yesterday));
+
+        // then
+        assertThat(response.achieved()).isTrue();
+        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
+        then(walkRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
+    }
+
+    @Test
+    @DisplayName("목표를 정한 적 없는 시니어가 걸음 수를 연동하면 BAD_REQUEST 예외가 발생한다")
+    void 목표를_정한_적_없으면_걸음수_연동은_BAD_REQUEST_예외가_발생한다() {
+        // given
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> walkService.updateSteps(new UpdateStepsRequest(6000, LocalDate.now())))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+    }
+
+    @Test
     @DisplayName("시니어 프로필이 없어도 걸음 수는 갱신되고 포인트는 지급되지 않는다")
     void 프로필이_없으면_걸음수만_갱신하고_포인트는_지급하지_않는다() {
         // given

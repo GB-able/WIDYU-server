@@ -42,9 +42,10 @@
 ### `pay` — 결제·포인트
 - **불변식**: 결제는 포인트를 충전·환수하지 않는다(ADR-0029). 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동
 - 결제 트랜잭션 경계·멱등성은 → LLD-0003·0015·0016·0017, ADR-0012
+- 앨범 해제는 `READ_COMMITTED`에서 시니어 포인트 행을 먼저 잠그고(`refresh(..., PESSIMISTIC_WRITE)`) 중복을 확인한다. 같은 시니어의 동시 해제가 교착(503) 대신 `ALBUM_UNLOCK_4001`로 끝난다 → LLD-0069 (#1025)
 
 ### `goal` — 건강 목표
-- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`: 500~10,000보, 정한 적 없으면 null #1003), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
 - **목표 캘린더 월 범위**: 약 복용·걷기 월간과 건강 일정 캘린더는 이번 달(KST) 기준 앞뒤 12개월만 조회한다(400 `GOAL_4000`). 보호자의 약 복용 월간은 미래 달도 400(`GOAL_4001`). 검사는 `GoalMonthValidator` 한 곳이다(#1005)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. → LLD-0007·0008·0009
 
@@ -59,6 +60,7 @@
 - **위급 사이클**: 위험 감지 후 5분 유지, 그 안에 재감지되면 마지막 감지 기준 연장. "마지막 감지 + 5분" == "최근 5분 내 감지 존재"이므로 상태를 저장하지 않고 조회 윈도우로만 판정. **그래프 조회 범위 산정에만 사용**하며, `/emergency/recent`는 사이클과 무관하게 최근 15분 내 기록 유무만 반환
 - **조회 범위 규칙**: 그래프는 응급 화면이므로 events·max·min·firstEmergency가 **진행 중인 사이클 시작 5분 전 ~ 현재**. 사이클 없으면 빈 배열. `emergencyHistory`의 count·events는 전체 기간이지만 `totalDuration`은 현재 사이클 지속 시간(첫 감지~마지막 감지, 분). 갱신(`/graph/refresh`)은 `since` 지정 시 그 이후 신규 이벤트만, 미지정 시 최근 5개
 - 수신한 단건 심박은 AI 판정 후 즉시 최신값에 반영한다.
+- **「지금」의 심박은 최근 30초 안에 잰 값뿐이다**(`HeartRateFreshness`). 홈 카드 착용 여부, `/heart-rate/status`, 그래프 `current`가 같은 기준을 쓰고 그보다 오래되면 `UNKNOWN`·값 null이다. 위급 이력·그래프 이벤트·단건 전송 응답은 이 기준을 적용하지 않는다(#1023)
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 
 ### `location` — 실시간 위치

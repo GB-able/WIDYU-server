@@ -98,7 +98,7 @@ class HeartRateServiceTest {
     @DisplayName("최근 심박수 조회 시 최신 결과가 없으면 마지막 이벤트 값을 반환한다")
     void 최근심박수_조회시_최신결과가_없으면_마지막이벤트를_반환한다() {
         Long memberId = 1L;
-        LocalDateTime measuredAt = LocalDateTime.now().minusSeconds(31);
+        LocalDateTime measuredAt = LocalDateTime.now().minusSeconds(5);
         HeartRateEvent latestEvent = heartRateEvent(78, measuredAt, HeartRateStatus.NORMAL);
 
         given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
@@ -114,12 +114,74 @@ class HeartRateServiceTest {
     }
 
     @Test
+    @DisplayName("마지막 측정이 30초보다 오래됐으면 심박 상태 조회는 위급이었어도 UNKNOWN과 빈 심박수를 반환한다")
+    void 마지막_측정이_30초보다_오래됐으면_상태조회는_UNKNOWN을_반환한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime staleAt = LocalDateTime.now().minusMonths(3);
+        given(heartRateResultRepository.findByMemberId(memberId))
+                .willReturn(Optional.of(HeartRateResult.of(memberId, HeartRateStatus.EMERGENCY, 176, staleAt)));
+
+        // when
+        HeartRateStatusResponse response = heartRateService.getHeartRateStatus(memberId);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(memberId);
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.UNKNOWN);
+        assertThat(response.heartRate()).isNull();
+        assertThat(response.measuredAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("저장소 최신값이 없고 마지막 이벤트도 30초보다 오래됐으면 심박 상태 조회는 UNKNOWN을 반환한다")
+    void 마지막_이벤트가_30초보다_오래됐으면_상태조회는_UNKNOWN을_반환한다() {
+        // given
+        Long memberId = 1L;
+        HeartRateEvent staleEvent = heartRateEvent(176, LocalDateTime.now().minusSeconds(31), HeartRateStatus.EMERGENCY);
+        given(heartRateResultRepository.findByMemberId(memberId)).willReturn(Optional.empty());
+        given(heartRateEventRepository.findFirstByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(Optional.of(staleEvent));
+
+        // when
+        HeartRateStatusResponse response = heartRateService.getHeartRateStatus(memberId);
+
+        // then
+        assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.UNKNOWN);
+        assertThat(response.heartRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("마지막 측정이 30초보다 오래됐으면 그래프 current는 UNKNOWN이고 위급 이력은 그대로 반환한다")
+    void 마지막_측정이_30초보다_오래됐으면_그래프_current는_UNKNOWN이고_위급이력은_유지한다() {
+        // given
+        Long memberId = 1L;
+        LocalDateTime staleAt = LocalDateTime.now().minusMonths(3);
+        given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
+                .willReturn(List.of(heartRateEmergency(176, staleAt)));
+        given(heartRateResultRepository.findByMemberId(memberId))
+                .willReturn(Optional.of(HeartRateResult.of(memberId, HeartRateStatus.EMERGENCY, 176, staleAt)));
+
+        // when
+        HeartGraphPageResponse initial = heartRateService.getHeartGraph(memberId);
+        HeartGraphPageResponse refresh = heartRateService.getHeartGraphRefresh(memberId, null);
+
+        // then
+        assertThat(initial.heartGraph().current().status()).isEqualTo(HeartRateStatus.UNKNOWN);
+        assertThat(initial.heartGraph().current().heartRate()).isNull();
+        assertThat(initial.heartGraph().current().measuredAt()).isNull();
+        assertThat(refresh.heartGraph().current().status()).isEqualTo(HeartRateStatus.UNKNOWN);
+        assertThat(refresh.heartGraph().current().heartRate()).isNull();
+        assertThat(initial.emergencyHistory().emergencyCount()).isEqualTo(1);
+        assertThat(initial.emergencyHistory().events()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("진행 중인 위급 사이클이 없으면 그래프 최초 조회는 빈 이벤트를 반환한다")
     void 위급사이클이_없으면_그래프최초조회는_빈_이벤트를_반환한다() {
         // given
         Long memberId = 1L;
         LocalDateTime expiredAt = LocalDateTime.now().minusMinutes(30);
-        HeartRateEvent latestEvent = heartRateEvent(82, LocalDateTime.now().minusSeconds(31), HeartRateStatus.NORMAL);
+        HeartRateEvent latestEvent = heartRateEvent(82, LocalDateTime.now().minusSeconds(5), HeartRateStatus.NORMAL);
 
         given(heartRateEmergencyRepository.findByMemberIdOrderByMeasuredAtDesc(memberId))
                 .willReturn(List.of(heartRateEmergency(170, expiredAt)));
@@ -215,7 +277,7 @@ class HeartRateServiceTest {
         // given
         Long memberId = 1L;
         LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
-        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(31);
+        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(5);
         HeartRateEvent firstEvent = heartRateEvent(75, LocalDateTime.now().minusSeconds(45), HeartRateStatus.NORMAL);
         HeartRateEvent latestEvent = heartRateEvent(82, lastMeasuredAt, HeartRateStatus.EMERGENCY);
 
@@ -319,7 +381,7 @@ class HeartRateServiceTest {
         Long memberId = 1L;
         LocalDateTime cycleStart = LocalDateTime.now().minusMinutes(2);
         LocalDateTime firstMeasuredAt = LocalDateTime.now().minusSeconds(45);
-        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(31);
+        LocalDateTime lastMeasuredAt = LocalDateTime.now().minusSeconds(5);
         HeartRateEvent firstEvent = heartRateEvent(75, firstMeasuredAt, HeartRateStatus.NORMAL);
         HeartRateEvent latestEvent = heartRateEvent(82, lastMeasuredAt, HeartRateStatus.ANOMALY);
 
