@@ -90,6 +90,7 @@ class RealtimeLocationServiceTest {
     @Mock private PlatformTransactionManager transactionManager;
     // 실제 제약(memberId @NotNull)을 그대로 태운다. 목이면 검증이 통째로 비어 버린다.
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
 
     @InjectMocks
     private RealtimeLocationService realtimeLocationService;

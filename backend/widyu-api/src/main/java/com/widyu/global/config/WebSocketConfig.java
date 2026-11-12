@@ -66,6 +66,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // 클라이언트가 메시지 전송할 때 사용할 prefix
         registry.setApplicationDestinationPrefixes("/app");
+        // 응답 실행기(4스레드)는 같은 세션의 메시지도 순서 없이 보낸다. 회원별로 측정 시각 순서대로 만든 위치 방송이
+        // 보호자에게 뒤바뀌어 도착하지 않도록 세션마다 보낸 순서를 지킨다(LLD-0139).
+        registry.setPreservePublishOrder(true);
     }
 
     @Override

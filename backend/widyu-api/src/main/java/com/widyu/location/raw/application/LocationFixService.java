@@ -7,6 +7,7 @@ import com.widyu.global.error.ErrorCode;
 import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.application.CollectionRunService;
 import java.security.MessageDigest;
@@ -37,6 +38,7 @@ public class LocationFixService {
 
     private final LocationFixRepository locationFixRepository;
     private final CollectionRunService collectionRunService;
+    private final SeniorProfileRepository seniorProfileRepository;
 
     /**
      * v2 페이로드 검증. 실시간 경로보다 먼저 호출해 잘못된 좌표를 브로드캐스트하지 않는다(LLD-0048 6절).
@@ -60,6 +62,27 @@ public class LocationFixService {
     }
 
     /**
+     * 앱이 실어 보낸 회차가 이 회원, 이 기기의 것인지 실시간 처리 전에 확인한다(LLD-0139). 원본 저장 때 확인하면
+     * 거절될 위치가 이미 방송, 안전구역 판정을 거친 뒤다. 회차를 싣지 않은 위치는 저장 때 서버가 찾으므로 거절할 일이 없다.
+     */
+    public void verifyAttribution(Long memberId, LocationUpdateRequest request) {
+        if (request.runId() != null) {
+            collectionRunService.requireAttributableRun(
+                    request.runId(), memberId, request.deviceId(), request.tsMs());
+        }
+    }
+
+    /**
+     * 같은 멱등 키의 원본이 있는지. 유일 키 충돌 뒤 중복인지 확인할 때 쓴다(LLD-0139). 호출자는 트랜잭션이 없는 구간이라
+     * 자기 트랜잭션에서 끝내 커넥션을 바로 돌려준다. 그렇지 않으면 요청이 끝날 때까지 커넥션을 쥔다.
+     */
+    @Transactional(readOnly = true)
+    public boolean exists(LocationUpdateRequest request) {
+        return locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(
+                request.deviceId(), request.sessionId(), request.seq());
+    }
+
+    /**
      * 원문 1건 저장. 실시간 경로는 이미 끝났으므로 저장 실패가 그 경로를 되돌리지 않도록
      * 자기 트랜잭션에서 돈다(LLD-0048 5.3).
      *
@@ -68,6 +91,11 @@ public class LocationFixService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean store(Long memberId, LocationUpdateRequest request, byte[] payload,
                          long serverReceivedAtMs, long acceptedAtMs) {
+        // 15분 넘은 위치나 최신보다 먼저 잰 위치는 실시간 경로의 프로필 조회를 거치지 않으므로 여기서 본다(LLD-0139).
+        // 실시간 경로 앞에서 조회하면 트랜잭션 없는 구간의 EntityManager가 요청 끝까지 커넥션을 쥔다(LLD-0114).
+        if (!seniorProfileRepository.existsByMemberId(memberId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다.");
+        }
         if (locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(
                 request.deviceId(), request.sessionId(), request.seq())) {
             log.info("위치 원본 중복 수신: memberId={}, seq={}", memberId, request.seq());
