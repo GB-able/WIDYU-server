@@ -728,7 +728,7 @@ class SensorBatchServiceTest {
 
         // when
         service(SensorConfigFixture.propertiesWithDefaultMode("research"))
-                .ingest(MEMBER_ID, researchBatch.getBytes(UTF_8));
+                .ingest(MEMBER_ID, researchBatch.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(savedBatch().getConfigMismatch()).isFalse();
@@ -743,7 +743,7 @@ class SensorBatchServiceTest {
 
         // when
         service(SensorConfigFixture.propertiesWithDefaultMode("research"))
-                .ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+                .ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(savedBatch().getConfigMismatch()).isTrue();
