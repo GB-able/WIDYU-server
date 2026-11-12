@@ -3,6 +3,7 @@ package com.widyu.sensor.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -15,10 +16,12 @@ import com.widyu.sensor.ActivityWindow;
 import com.widyu.sensor.SensorBatch;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.repository.ActivityWindowRepository;
+import com.widyu.sensor.repository.SensorBatchRepository;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.LongFunction;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,11 +32,12 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /** 손목 움직임 5초 구간 상태의 계산, 저장, 심박 시각 조회(LLD-0138 7절). 실제 JPA와 H2로 잠금 조회까지 돈다. */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({JpaAuditingConfig.class, ActivityStateService.class})
+@Import(JpaAuditingConfig.class)
 @DisplayName("ActivityStateService 테스트")
 class ActivityStateServiceTest {
 
@@ -47,12 +51,20 @@ class ActivityStateServiceTest {
     private static final SensorProperties.Activity ACTIVITY =
             new SensorProperties.Activity(5, 4, 0.04, 0.20, 600, 20, 60, 50);
 
-    @Autowired private ActivityStateService service;
     @Autowired private ActivityWindowRepository windows;
     @Autowired private LocationFixRepository fixes;
+    @Autowired private SensorBatchRepository sensorBatches;
+    @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private SensorProperties sensorProperties;
+    // 다른 리포지토리 테스트와 같은 컨텍스트를 쓰도록 서비스는 빈으로 등록하지 않고 직접 만든다(CI 테스트 힙 1g)
     @MockBean private JPAQueryFactory jpaQueryFactory;
+    private final SensorProperties sensorProperties = mock(SensorProperties.class);
+    private ActivityStateService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ActivityStateService(windows, sensorBatches, fixes, sensorProperties, transactionManager);
+    }
 
     @ParameterizedTest(name = "{1}mg·{2}mg 교대면 {3}")
     @CsvSource({
