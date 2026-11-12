@@ -30,9 +30,12 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.CollectionRunStatus;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorBatchRejection;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import com.widyu.sensor.repository.SensorBatchRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.security.MessageDigest;
@@ -63,6 +66,8 @@ class SensorBatchServiceTest {
     @Mock private MemberRepository memberRepository;
     @Mock private S3Service s3Service;
     @Mock private SensorDroppedRangeService sensorDroppedRangeService;
+    @Mock private SensorBatchRejectionRecorder rejectionRecorder;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @Test
     @DisplayName("stream이 imu_dropped이면 버린 구간 저장으로 넘기고 그 결과를 돌려주며 배치는 저장하지 않는다")
@@ -77,7 +82,7 @@ class SensorBatchServiceTest {
                 .willReturn(SensorBatchResultResponse.of(null, null, SensorBatchResult.STORED));
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
 
         // then
         assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
@@ -96,7 +101,7 @@ class SensorBatchServiceTest {
         String expectedKey = expectedKey(payload);
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
 
         // then
         assertThat(response)
@@ -151,7 +156,7 @@ class SensorBatchServiceTest {
         long processingStart = System.currentTimeMillis();
 
         // when
-        service().ingest(MEMBER_ID, payload, receivedAtMs);
+        service().ingest(MEMBER_ID, payload, receivedAtMs, SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -167,7 +172,7 @@ class SensorBatchServiceTest {
         givenMemberExists();
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -190,7 +195,7 @@ class SensorBatchServiceTest {
 
         // when
         SensorBatchResultResponse response = service().ingest(
-                MEMBER_ID, batch(ACC, "null", trigger, "false", "null", "null").getBytes(UTF_8));
+                MEMBER_ID, batch(ACC, "null", trigger, "false", "null", "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(response).isEqualTo(SensorBatchResultResponse.of(BATCH_ID, SEQ, SensorBatchResult.STORED));
@@ -205,7 +210,7 @@ class SensorBatchServiceTest {
         givenMemberExists();
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, GYRO).getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, GYRO).getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -226,7 +231,7 @@ class SensorBatchServiceTest {
                 .willReturn(Optional.of(storedBatchWithHash(payload)));
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
 
         // then
         assertThat(response)
@@ -245,7 +250,7 @@ class SensorBatchServiceTest {
                 .willReturn(Optional.of(storedBatchWithHash("different".getBytes(UTF_8))));
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -263,8 +268,8 @@ class SensorBatchServiceTest {
                 .getBytes(UTF_8);
 
         // when
-        service().ingest(MEMBER_ID, first);
-        service().ingest(MEMBER_ID, second);
+        service().ingest(MEMBER_ID, first, SensorIngestChannel.REST);
+        service().ingest(MEMBER_ID, second, SensorIngestChannel.REST);
 
         // then
         ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
@@ -296,7 +301,7 @@ class SensorBatchServiceTest {
                 .willThrow(new DataIntegrityViolationException("uk_sensor_batch_batch_id"));
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
 
         // then
         assertThat(response)
@@ -313,7 +318,7 @@ class SensorBatchServiceTest {
                 .willThrow(new DataIntegrityViolationException("fk_sensor_batch_member"));
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -477,7 +482,7 @@ class SensorBatchServiceTest {
                 .replace("\"run_id\": null", "\"run_id\": \"run-01\"");
 
         // when
-        service().ingest(MEMBER_ID, payload.getBytes(UTF_8));
+        service().ingest(MEMBER_ID, payload.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -523,7 +528,7 @@ class SensorBatchServiceTest {
 
         // when
         service().ingest(MEMBER_ID,
-                batch(ACC, "null", "null", "false", "null", nullRunLineage).getBytes(UTF_8));
+                batch(ACC, "null", "null", "false", "null", nullRunLineage).getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(savedBatch().getOriginalRunId()).isNull();
@@ -573,7 +578,7 @@ class SensorBatchServiceTest {
         byte[] oversized = new byte[32_769];
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, oversized))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, oversized, SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_TOO_LARGE);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -589,7 +594,7 @@ class SensorBatchServiceTest {
                 .given(clockMappingService).register(any(), anyString(), anyLong(), anyLong());
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_CLOCK_MAPPING_CONFLICT);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -604,7 +609,7 @@ class SensorBatchServiceTest {
         given(sensorBatchRepository.findByBatchId(BATCH_ID)).willReturn(Optional.empty());
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, GYRO).getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, GYRO).getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         ArgumentCaptor<Long> minNs = ArgumentCaptor.forClass(Long.class);
@@ -635,7 +640,7 @@ class SensorBatchServiceTest {
                 .willReturn(Optional.of(run));
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -657,7 +662,7 @@ class SensorBatchServiceTest {
         String payload = batch(ACC, "null")
                 .replace("\"study_id\": null", "\"study_id\": \"요청이-주장한-연구\"")
                 .replace("\"participation_id\": null", "\"participation_id\": \"요청이-주장한-참여\"");
-        service().ingest(MEMBER_ID, payload.getBytes(UTF_8));
+        service().ingest(MEMBER_ID, payload.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -677,7 +682,7 @@ class SensorBatchServiceTest {
         // when
         String payload = batch(ACC, "null", "null", "false", "null", RESEND)
                 .replace("\"run_id\": null", "\"run_id\": \"run-01\"");
-        service().ingest(MEMBER_ID, payload.getBytes(UTF_8));
+        service().ingest(MEMBER_ID, payload.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         // 늦게 도착한 자료를 나중 참가자·나중 회차에 붙이면 안 된다(지시서 B4).
@@ -706,7 +711,7 @@ class SensorBatchServiceTest {
         given(sensorBatchRepository.findByBatchId(BATCH_ID)).willReturn(Optional.empty());
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(savedBatch().getConfigMismatch()).isFalse();
@@ -723,7 +728,7 @@ class SensorBatchServiceTest {
                 .replace("\"fs_hz_requested\": 50", "\"fs_hz_requested\": 25");
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, batch(slowerAcc, "null").getBytes(UTF_8));
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, batch(slowerAcc, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         // 거부하지 않는다. 설정이 적용되지 않은 채 도는 상황을 표시만 한다(지시서 B12).
@@ -740,7 +745,7 @@ class SensorBatchServiceTest {
         String triggerMode = batch(ACC, "null").replace("\"gyro_mode\": \"continuous\"", "\"gyro_mode\": \"trigger\"");
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, triggerMode.getBytes(UTF_8));
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, triggerMode.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
@@ -764,7 +769,7 @@ class SensorBatchServiceTest {
                 .willReturn(Optional.of(researchRun));
 
         // when
-        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8));
+        service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -789,7 +794,7 @@ class SensorBatchServiceTest {
                 eq("run-0f3a"), eq(MEMBER_ID), eq("gw-3f2a"), anyLong())).willReturn(researchRun);
 
         // when
-        service().ingest(MEMBER_ID, researchBatchWithRunId("run-0f3a").getBytes(UTF_8));
+        service().ingest(MEMBER_ID, researchBatchWithRunId("run-0f3a").getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         SensorBatch saved = savedBatch();
@@ -809,7 +814,7 @@ class SensorBatchServiceTest {
 
         // when
         assertThatThrownBy(() -> service().ingest(
-                MEMBER_ID, researchBatchWithRunId("run-unknown").getBytes(UTF_8)))
+                MEMBER_ID, researchBatchWithRunId("run-unknown").getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RUN_NOT_FOUND);
     }
@@ -826,7 +831,7 @@ class SensorBatchServiceTest {
         byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload);
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
 
         // then
         assertThat(response).isEqualTo(SensorBatchResultResponse.of(
@@ -873,7 +878,7 @@ class SensorBatchServiceTest {
                 .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"WORN_INVALID\"");
 
         // when
-        SensorBatchResultResponse response = service().ingest(MEMBER_ID, withWearState.getBytes(UTF_8));
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, withWearState.getBytes(UTF_8), SensorIngestChannel.REST);
 
         // then
         assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
@@ -889,7 +894,7 @@ class SensorBatchServiceTest {
                 .replace("\"on_body\": true", "\"on_body\": true, \"wear_state\": \"MAYBE_WORN\"");
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, invalidWearState.getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, invalidWearState.getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -950,7 +955,7 @@ class SensorBatchServiceTest {
                 .replace("\"on_body\": true", "\"location\": \"서울시\", \"on_body\": true");
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, withLocation.getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, withLocation.getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -966,7 +971,7 @@ class SensorBatchServiceTest {
                 .replace("\"stream\": \"hr\"", "\"stream\": \"ecg\"");
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, unknownStream.getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, unknownStream.getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -981,7 +986,7 @@ class SensorBatchServiceTest {
                 .given(s3Service).uploadBytes(anyString(), any(), anyString());
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_UPLOAD_FAILED);
         then(sensorBatchRepository).should(never()).save(any());
@@ -994,11 +999,251 @@ class SensorBatchServiceTest {
         given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, batch(ACC, "null").getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
         then(sensorBatchRepository).should(never()).save(any());
+    }
+
+    // ── 수신 경로와 거절 기록(LLD-0128) ─────────────────────────────────────
+
+    @Test
+    @DisplayName("REST로 처음 저장한 IMU 묶음은 경로를 REST로 남기고 STORED로 센다")
+    void REST로_처음_저장한_IMU_묶음은_경로를_REST로_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(received("REST", "imu_watch", "STORED")).isEqualTo(1.0);
+        then(rejectionRecorder).should(never()).record(any());
+    }
+
+    @Test
+    @DisplayName("WebSocket으로 처음 저장한 심박 묶음은 경로를 WS로 남기고 STORED로 센다")
+    void WebSocket으로_처음_저장한_심박_묶음은_경로를_WS로_남긴다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
+        given(heartRateBatchService.storeAndAssess(
+                any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
+                .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
+        byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, 1_760_000_000_500L, SensorIngestChannel.WS);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.WS);
+        assertThat(received("WS", "hr", "STORED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("WebSocket으로 처음 저장한 IMU 묶음은 경로를 WS로 남긴다")
+    void WebSocket으로_처음_저장한_IMU_묶음은_경로를_WS로_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, 1_760_000_000_500L, SensorIngestChannel.WS);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.WS);
+        assertThat(received("WS", "imu_watch", "STORED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("REST로 처음 저장한 심박 묶음은 경로를 REST로 남긴다")
+    void REST로_처음_저장한_심박_묶음은_경로를_REST로_남긴다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(SensorBatchFixture.HR_BATCH_ID)).willReturn(Optional.empty());
+        given(heartRateBatchService.storeAndAssess(
+                any(), eq(SensorBatchFixture.HR_BATCH_ID), any(), any(), any(), any(), anyLong()))
+                .willReturn(new com.widyu.heart.application.HeartRateBatchService.BatchOutcome(3, 0, 1));
+        byte[] payload = SensorBatchFixture.heartRateBatch(SensorBatchFixture.HR_SAMPLES).getBytes(UTF_8);
+
+        // when
+        service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
+
+        // then
+        assertThat(savedBatch().getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(received("REST", "hr", "STORED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("이미 저장된 묶음이 다른 경로로 다시 오면 행을 새로 쓰지 않고 DUPLICATE로 센다")
+    void 이미_저장된_묶음이_다른_경로로_다시_오면_행을_새로_쓰지_않는다() {
+        // given
+        givenMemberExists();
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+        given(sensorBatchRepository.findByBatchId(BATCH_ID))
+                .willReturn(Optional.of(storedBatchWithHash(payload)));
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.DUPLICATE);
+        then(sensorBatchRepository).should(never()).save(any());
+        assertThat(received("REST", "imu_watch", "DUPLICATE")).isEqualTo(1.0);
+        then(rejectionRecorder).should(never()).record(any());
+    }
+
+    @Test
+    @DisplayName("공백뿐인 본문이 오면 형식 오류로 거절하고 거절 기록을 남긴다")
+    void 공백뿐인_본문이_오면_형식_오류로_거절하고_거절_기록을_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = "   ".getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_PAYLOAD_INVALID);
+        assertThat(recordedRejection().getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(received("REST", "unknown", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("검증에 실패하면 식별자와 오류 코드를 담은 거절 기록을 남기고 원래 예외를 던진다")
+    void 검증에_실패하면_식별자와_오류_코드를_담은_거절_기록을_남긴다() {
+        // given
+        givenMemberExists();
+        long receivedAtMs = 1_760_000_000_500L;
+        byte[] payload = batch(ACC, "null").replace("\"v\": 2", "\"v\": 3").getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, receivedAtMs, SensorIngestChannel.WS))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        SensorBatchRejection rejection = recordedRejection();
+        assertThat(rejection.getMemberId()).isEqualTo(MEMBER_ID);
+        assertThat(rejection.getDeviceId()).isEqualTo(SensorBatchFixture.DEVICE_ID);
+        assertThat(rejection.getStream()).isEqualTo("imu_watch");
+        assertThat(rejection.getBatchId()).isEqualTo(BATCH_ID);
+        assertThat(rejection.getSessionId()).isEqualTo(SensorBatchFixture.SESSION_ID);
+        assertThat(rejection.getSeq()).isEqualTo(SEQ);
+        assertThat(rejection.getErrorCode()).isEqualTo("SENSOR_4003");
+        assertThat(rejection.getIngestChannel()).isEqualTo(SensorIngestChannel.WS);
+        assertThat(rejection.getReceivedAtMs()).isEqualTo(receivedAtMs);
+        assertThat(received("WS", "imu_watch", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("시계 매핑이 충돌하면 충돌 코드로 거절 기록을 남긴다")
+    void 시계_매핑이_충돌하면_충돌_코드로_거절_기록을_남긴다() {
+        // given
+        givenMemberExists();
+        willThrow(new BusinessException(ErrorCode.SENSOR_CLOCK_MAPPING_CONFLICT))
+                .given(clockMappingService).register(any(), anyString(), anyLong(), anyLong());
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_CLOCK_MAPPING_CONFLICT);
+        SensorBatchRejection rejection = recordedRejection();
+        assertThat(rejection.getErrorCode()).isEqualTo("SENSOR_4090");
+        assertThat(rejection.getIngestChannel()).isEqualTo(SensorIngestChannel.REST);
+        assertThat(rejection.getBatchId()).isEqualTo(BATCH_ID);
+    }
+
+    @Test
+    @DisplayName("본문을 읽지 못하면 식별자 없이 거절 기록을 남기고 stream은 unknown으로 센다")
+    void 본문을_읽지_못하면_식별자_없이_거절_기록을_남긴다() {
+        // given
+        givenMemberExists();
+        byte[] payload = "not-json".getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_PAYLOAD_INVALID);
+        SensorBatchRejection rejection = recordedRejection();
+        assertThat(rejection.getMemberId()).isEqualTo(MEMBER_ID);
+        assertThat(rejection.getStream()).isNull();
+        assertThat(rejection.getBatchId()).isNull();
+        assertThat(rejection.getSeq()).isNull();
+        assertThat(rejection.getErrorCode()).isEqualTo("SENSOR_4002");
+        assertThat(received("REST", "unknown", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("거절된 본문의 식별자 형식이 틀리면 그 칸만 비워 거절 기록을 남긴다")
+    void 거절된_본문의_식별자_형식이_틀리면_그_칸만_비운다() {
+        // given
+        givenMemberExists();
+        byte[] payload = """
+                {"v":2,"stream":"imu_unknown","batch_id":"bad\\nINFO 가짜 로그","device_id":"%s",
+                 "session_id":"%s","seq":"12"}""".formatted("x".repeat(65), SensorBatchFixture.SESSION_ID)
+                .getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.WS))
+                .isInstanceOf(BusinessException.class);
+        SensorBatchRejection rejection = recordedRejection();
+        assertThat(rejection.getStream()).isEqualTo("imu_unknown");
+        assertThat(rejection.getBatchId()).isNull();
+        assertThat(rejection.getDeviceId()).isNull();
+        assertThat(rejection.getSessionId()).isEqualTo(SensorBatchFixture.SESSION_ID);
+        assertThat(rejection.getSeq()).isNull();
+        assertThat(received("WS", "unknown", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("거절 기록 저장이 실패해도 원래 거절 예외를 같은 오류 코드로 던진다")
+    void 거절_기록_저장이_실패해도_원래_거절_예외를_던진다() {
+        // given
+        givenMemberExists();
+        willThrow(new IllegalStateException("기록 DB 실패")).given(rejectionRecorder).record(any());
+        byte[] payload = batch(ACC, "null").replace("\"v\": 2", "\"v\": 3").getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_BATCH_INVALID);
+        assertThat(received("REST", "imu_watch", "REJECTED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("S3 업로드가 실패하면 거절 기록 없이 FAILED로 센다")
+    void S3_업로드가_실패하면_거절_기록_없이_FAILED로_센다() {
+        // given
+        givenMemberExists();
+        willThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED))
+                .given(s3Service).uploadBytes(anyString(), any(), anyString());
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.WS))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_UPLOAD_FAILED);
+        then(rejectionRecorder).should(never()).record(any());
+        assertThat(received("WS", "imu_watch", "FAILED")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("DB 저장이 실패하면 거절 기록 없이 FAILED로 센다")
+    void DB_저장이_실패하면_거절_기록_없이_FAILED로_센다() {
+        // given
+        givenMemberExists();
+        given(sensorBatchRepository.findByBatchId(BATCH_ID)).willReturn(Optional.empty());
+        given(sensorBatchRepository.save(any(SensorBatch.class)))
+                .willThrow(new DataIntegrityViolationException("fk_sensor_batch_member"));
+        byte[] payload = batch(ACC, "null").getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        then(rejectionRecorder).should(never()).record(any());
+        assertThat(received("REST", "imu_watch", "FAILED")).isEqualTo(1.0);
     }
 
     private SensorBatchService service() {
@@ -1013,7 +1258,20 @@ class SensorBatchServiceTest {
                 VALIDATOR,
                 SensorConfigFixture.properties(),
                 new ObjectMapper(),
-                sensorDroppedRangeService);
+                sensorDroppedRangeService,
+                rejectionRecorder,
+                meterRegistry);
+    }
+
+    private double received(String channel, String stream, String result) {
+        return meterRegistry.counter(SensorBatchService.RECEIVED_METRIC,
+                "channel", channel, "stream", stream, "result", result).count();
+    }
+
+    private SensorBatchRejection recordedRejection() {
+        ArgumentCaptor<SensorBatchRejection> recorded = ArgumentCaptor.forClass(SensorBatchRejection.class);
+        then(rejectionRecorder).should().record(recorded.capture());
+        return recorded.getValue();
     }
 
     private String researchBatchWithRunId(String runId) {
@@ -1025,7 +1283,7 @@ class SensorBatchServiceTest {
     /** 심박 검증 실패는 S3·DB·샘플 저장에 아무것도 남기지 않아야 한다. */
     private void assertHeartRateRejected(String samples, ErrorCode expected) {
         byte[] payload = SensorBatchFixture.heartRateBatch(samples).getBytes(UTF_8);
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, payload, SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", expected);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());
@@ -1046,7 +1304,7 @@ class SensorBatchServiceTest {
 
     /** 검증 실패는 S3·DB에 아무것도 남기지 않아야 한다. */
     private void assertRejected(String json, ErrorCode expected) {
-        assertThatThrownBy(() -> service().ingest(MEMBER_ID, json.getBytes(UTF_8)))
+        assertThatThrownBy(() -> service().ingest(MEMBER_ID, json.getBytes(UTF_8), SensorIngestChannel.REST))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", expected);
         then(s3Service).should(never()).uploadBytes(anyString(), any(), anyString());

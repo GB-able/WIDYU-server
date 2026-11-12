@@ -841,6 +841,7 @@ erDiagram
 | `StudyParticipationStatus` | `ACTIVE`, `ENDED`, `WITHDRAWN` |
 | `WithdrawalScope` | `ALL`, `SELECTED_CONSENTS` |
 | `StudyParticipationHistoryType` | `REGISTERED`, `RETENTION_CHANGED`, `WITHDRAWN`, `DELETION_PROCESSED` |
+| `SensorIngestChannel` | `WS`, `REST` (VARCHAR 매핑, `sensor_batch.ingest_channel`·`sensor_batch_rejection.ingest_channel`) |
 | `AdminAction` | `ADMIN_LOGIN`, `MEMBER_STATUS_CHANGE`, `FCM_TEST_SEND`, `COLLECTION_RUN_OPEN`, `COLLECTION_RUN_CLOSE`, `STUDY_PARTICIPATION_REGISTER`, `STUDY_PARTICIPATION_PERIOD_CHANGE`, `STUDY_PARTICIPATION_WITHDRAW`, `STUDY_PARTICIPATION_DELETION_PROCESSED` |
 
 ## 주요 인덱스
@@ -866,6 +867,7 @@ erDiagram
 | `sensor_batch` | `idx_sensor_batch_run` | `(run_id)` | 회차별 조회 (B8 후속) |
 | `sensor_dropped_range` | UK `uk_sensor_dropped_range` | `(member_id, session_id, from_seq)` | 워치가 같은 구간을 다시 보내도 한 행 (LLD-0124) |
 | `sensor_dropped_range` | `idx_sensor_dropped_range_member_time` | `(member_id, ts_ms)` | 참가자별 시각순 조회 |
+| `sensor_batch_rejection` | `idx_sensor_batch_rejection_member_time` | `(member_id, received_at_ms)` | 회원별 거절 기록 수신 시각순 조회 (LLD-0128) |
 | `clock_mapping` | UK `uk_clock_mapping_id` | `(clock_mapping_id)` | 한 식별자의 다섯 값은 불변. 다르면 409 (LLD-0044) |
 | `clock_mapping` | `idx_clock_mapping_device` | `(device_id)` | 기기별 매핑 조회 |
 | `collection_run` | UK `uk_collection_run_run_id` | `(run_id)` | 서버 발급 회차 식별자 |
@@ -943,6 +945,8 @@ erDiagram
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
 | 2026-11-09 | `device_event` | 신규 테이블 (LLD-0129). 실험 모드 기기 상태 바뀜의 종류·바뀐 시각·종류별 값과 항목 원문 JSON. `source`·`kind`는 VARCHAR | `scripts/mysql/create_device_event.sql` |
+| 2026-11-09 | `sensor_batch_rejection` | 신규 테이블 (LLD-0128). 서버가 거절한 센서 묶음의 식별자·오류 코드·경로·수신 시각, 원문 없음, member FK 없음 | `scripts/mysql/create_sensor_batch_rejection.sql` |
+| 2026-11-09 | `sensor_batch` | `ingest_channel VARCHAR(8) NULL` 추가 (LLD-0128). 최초 저장 경로 `WS`·`REST`, 기존 행 NULL | `scripts/mysql/add_sensor_batch_ingest_channel.sql` |
 | 2026-11-05 | `sensor_dropped_range` | 신규 테이블 (LLD-0124). 워치 IMU 큐가 넘쳐 버린 구간과 원문 JSON | `scripts/mysql/create_sensor_dropped_range.sql` |
 | 2026-10-26 | `member_notification_setting` | 시니어 `GENERAL=false`를 `ALBUM/GOAL/HOME/ETC=false` 네 행으로 이행하고 시니어 `GENERAL` 행 제거 (LLD-0095) | `scripts/mysql/migrate_senior_notification_settings.sql` |
 | 2026-10-13 | `incident` | 확인 화면 수신 시각·기기 `prompt_displayed_at_ms`·`prompt_displayed_via` 추가 (LLD-0085) | `scripts/mysql/alter_incident_prompt_displayed.sql` |
