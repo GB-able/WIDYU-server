@@ -69,7 +69,6 @@ public class SensorBatchService {
             Set.of("HIGH", "MEDIUM", "LOW", "UNRELIABLE", "UNKNOWN");
     private static final String SOURCE_WATCH = "watch";
     private static final String SOURCE_PHONE = "phone";
-    private static final String MODE_PRODUCT = "product";
     private static final int FORMAT_VERSION = 2;
     private static final int MAX_SAMPLES = 1000;
     private static final int AXIS_COLUMNS = 3;
@@ -647,13 +646,14 @@ public class SensorBatchService {
     }
 
     /**
-     * 기준 수집 모드. 회차가 없으면 평시이므로 product다. 회차는 정해졌는데 그 값을 모르면
+     * 기준 수집 모드. 회차가 없으면 서버가 내려 준 기본 모드다(운영 product, 개발 서버 research, #989).
+     * 회차는 정해졌는데 그 값을 모르면
      * (앱이 {@code run_id}를 실어 보냈거나 재전송이라 서버가 회차를 조회하지 않은 경우)
      * 배치당 한 번 조회한다. 모르는 회차면 기준이 없어 비워 둔다.
      */
     private Optional<String> baselineCollectionMode(RunAttribution attribution) {
         if (attribution.runId() == null) {
-            return Optional.of(MODE_PRODUCT);
+            return Optional.of(sensorProperties.config().defaultCollectionMode());
         }
         if (attribution.collectionMode() != null) {
             return Optional.of(attribution.collectionMode());

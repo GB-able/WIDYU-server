@@ -73,7 +73,7 @@
 - S3 PUT은 처리 스레드에서 동기(`apiCallTimeout` 5s), 인덱스 INSERT는 그 뒤. WebSocket 경로의 처리 스레드는 센서 전용 실행기다(LLD-0091). 서비스에 `@Transactional` 없음. 무결성 예외는 `findByBatchId` 재조회 후 원문 해시까지 같을 때만 `DUPLICATE`
 - **원시 센서값을 어떤 로그 레벨에도 남기지 않는다** (정책 1.6.7). memberId·stream·seq·accN·gyroN·result만
 - 시계 매핑은 `clock_mapping` 테이블(기기 단위 UK `clock_mapping_id`). 같은 id에 다른 다섯 값·다른 기기면 409(`SENSOR_4090`). 등록은 S3 PUT 앞, 자기 트랜잭션 → LLD-0044
-- **수집 설정 하달**: `GET /api/v1/sensor/config`가 설정 전체와 호출자 기준 `collectionMode`를 준다. 모드는 **열린 회차 유무**로 정하고(있으면 research) 회차 열기·닫기가 곧 전환 수단이라 변경 API가 없다. 배치가 실어 보낸 `collection_mode`·`gyro_mode`·`fs_hz_requested`가 지시값과 다르면 `config_mismatch=true`로 표시만 하고 **거부하지 않는다** → LLD-0046
+- **수집 설정 하달**: `GET /api/v1/sensor/config`가 설정 전체와 호출자 기준 `collectionMode`를 준다. 모드는 **열린 회차**로 정하고(있으면 그 회차의 `collection_mode`, 없으면 `sensor.config.default-collection-mode`) 회차 열기·닫기가 곧 전환 수단이라 변경 API가 없다. 배치가 실어 보낸 `collection_mode`·`gyro_mode`·`fs_hz_requested`가 지시값과 다르면 `config_mismatch=true`로 표시만 하고 **거부하지 않는다** → LLD-0046
 - 본문 상한은 `sensor.max-payload-bytes`(기본 32768, `application-sensor.yml`)
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`

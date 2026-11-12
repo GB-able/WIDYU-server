@@ -1,12 +1,14 @@
 package com.widyu.global.properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
@@ -87,6 +89,19 @@ class SensorPropertiesBindingTest {
 
         // then
         assertThat(properties.medication().onTimePush()).isFalse();
+    }
+
+    @Test
+    @DisplayName("기본 수집 모드 환경변수를 빈 값으로 두면 product로 바꾸지 않고 바인딩 예외가 발생한다")
+    void 기본_수집_모드_환경변수가_빈_값이면_바인딩_예외가_발생한다() throws IOException {
+        // given
+        Binder binder = binderOf("application-sensor.yml",
+                Map.of("SENSOR_DEFAULT_COLLECTION_MODE", ""));
+
+        // when & then
+        assertThatThrownBy(() -> binder.bind("sensor", SensorProperties.class))
+                .isInstanceOf(BindException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class);
     }
 
     private Binder binderOf(String classpathLocation) throws IOException {
