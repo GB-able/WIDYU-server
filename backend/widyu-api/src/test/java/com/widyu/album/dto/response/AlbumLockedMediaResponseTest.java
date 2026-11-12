@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.widyu.album.Album;
+import com.widyu.album.AlbumComment;
 import com.widyu.album.dto.FamilyAlbumResponse;
 import com.widyu.home.dto.response.SeniorHomeCardsResponse;
 import com.widyu.member.Member;
@@ -96,6 +97,26 @@ class AlbumLockedMediaResponseTest {
         assertThat(response.mediaUrls()).containsExactly(VIDEO_URL, PHOTO_URL);
         assertThat(response.thumbnailUrls()).containsExactly(VIDEO_THUMB, PHOTO_URL);
         assertThat(response.isUnlocked()).isTrue();
+    }
+
+    @Test
+    @DisplayName("잠금 전 앨범 상세 응답은 댓글 목록을 비우고 좋아요 수와 댓글 수는 그대로 담는다")
+    void 잠금_전_앨범_상세는_댓글_목록을_비우고_수는_그대로_담는다() {
+        // given
+        Album album = videoAndPhotoAlbum();
+        ReflectionTestUtils.setField(album, "likeCount", 2);
+        ReflectionTestUtils.setField(album, "commentCount", 1);
+        List<AlbumComment> comments = List.of(AlbumComment.createComment(album, album.getMember(), "댓글"));
+
+        // when
+        AlbumDetailResponse locked = AlbumDetailResponse.from(album, 99L, List.of(), comments, false);
+        AlbumDetailResponse unlocked = AlbumDetailResponse.from(album, 99L, List.of(), comments, true);
+
+        // then
+        assertThat(locked.comments()).isEmpty();
+        assertThat(locked.likeCount()).isEqualTo(2);
+        assertThat(locked.commentCount()).isEqualTo(1);
+        assertThat(unlocked.comments()).extracting(AlbumDetailResponse.CommentInfo::content).containsExactly("댓글");
     }
 
     @Test

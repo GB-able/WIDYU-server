@@ -460,6 +460,7 @@ public interface AlbumDocs {
                     **기능:**
                     - 좋아요를 누르지 않은 앨범에만 좋아요 추가 가능
                     - 이미 좋아요한 앨범에는 에러 반환
+                    - 잠금을 해제하지 않은 앨범에는 에러 반환 (시니어가 보호자 앨범을 해금하기 전)
                     - 자동으로 좋아요 수 증가
                     """
     )
@@ -490,6 +491,22 @@ public interface AlbumDocs {
                                             {
                                               "code": "ALBUM_4001",
                                               "message": "이미 좋아요한 앨범입니다.",
+                                              "data": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "잠금을 해제하지 않은 앨범",
+                    content = @Content(
+                            examples = @ExampleObject(
+                                    name = "잠긴 앨범",
+                                    value = """
+                                            {
+                                              "code": "ALBUM_UNLOCK_4031",
+                                              "message": "잠금을 해제한 뒤 이용할 수 있습니다.",
                                               "data": null
                                             }
                                             """
@@ -659,6 +676,7 @@ public interface AlbumDocs {
                     - `mediaTypes`는 `mediaUrls`와 순서가 같은 미디어별 타입(`PHOTO`/`VIDEO`)입니다. 잠금 전에는 대표 썸네일과 같은 첫 미디어의 타입 하나만 담깁니다.
                     - 사진은 썸네일이 원본과 같은 URL이라 대표 썸네일이 사진이면 그 한 장은 잠금 전에도 보입니다.
                     - 해금하지 않은 상태의 조회는 조회 기록(조회수·조회자)에 남지 않습니다.
+                    - 해금하지 않은 앨범의 `comments`는 빈 배열입니다. `likeCount`·`commentCount`는 실제 값을 담습니다. 해금 전에는 좋아요·댓글 작성도 403 `ALBUM_UNLOCK_4031`로 거부됩니다.
                     - 가족 외 앨범은 403 `AUTH_4030`입니다.
 
                     **포함 정보:**

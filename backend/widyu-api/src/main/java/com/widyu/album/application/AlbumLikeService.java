@@ -34,6 +34,7 @@ public class AlbumLikeService {
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
         albumPermissionService.checkFamilyAccess(album, currentMember);
+        albumPermissionService.checkUnlocked(album, currentMember);
 
         if (albumLikeRepository.existsByAlbumAndMember(album, currentMember)) {
             throw new BusinessException(ErrorCode.ALBUM_ALREADY_LIKED);

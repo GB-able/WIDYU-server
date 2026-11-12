@@ -52,6 +52,7 @@ public interface AlbumCommentDocs {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "댓글 생성 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청 (기존 댓글 불일치, 깊이 초과)"),
+            @ApiResponse(responseCode = "403", description = "잠금을 해제하지 않은 앨범 (ALBUM_UNLOCK_4031) 또는 가족 외 앨범 (AUTH_4030)"),
             @ApiResponse(responseCode = "404", description = "앨범 또는 댓글을 찾을 수 없음")
     })
     ApiResponseTemplate<AlbumCommentResponse> createComment(
