@@ -105,9 +105,12 @@ class AlbumCommentServiceTest {
         given(albumRepository.findByIdAndStatus(10L, Status.ACTIVE)).willReturn(Optional.of(album));
         allowFamilyAccess(album, currentMember);
 
+        Member parentAuthor = mock(Member.class);
+        given(parentAuthor.getId()).willReturn(3L);
         AlbumComment parentComment = mock(AlbumComment.class);
         given(parentComment.getAlbum()).willReturn(album);
         given(parentComment.getDepth()).willReturn(0);
+        given(parentComment.getMember()).willReturn(parentAuthor);
         given(albumCommentRepository.findByIdAndStatus(50L, Status.ACTIVE)).willReturn(Optional.of(parentComment));
 
         AlbumComment savedReply = mock(AlbumComment.class);
@@ -130,6 +133,7 @@ class AlbumCommentServiceTest {
         then(eventPublisher).should().publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().commentId()).isEqualTo(101L);
         assertThat(eventCaptor.getValue().parentCommentId()).isEqualTo(50L);
+        assertThat(eventCaptor.getValue().parentCommentAuthorId()).isEqualTo(3L);
     }
 
     @Test

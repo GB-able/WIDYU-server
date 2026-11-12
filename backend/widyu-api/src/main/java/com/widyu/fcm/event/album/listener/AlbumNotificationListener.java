@@ -29,6 +29,7 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -165,23 +166,30 @@ public class AlbumNotificationListener {
     public void handleAlbumCommented(AlbumCommentedEvent event) {
         Member commenter = memberRepository.findById(event.commenterMemberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
-        Member writer = memberRepository.findById(event.albumAuthorId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
-        if (commenter.getId().equals(writer.getId())) {
+        if (event.parentCommentId() == null) {
+            notifyComment(event.albumAuthorId(), commenter, NotificationType.ALBUM_COMMENTED, "A03", event);
             return;
         }
-        NotificationType type = NotificationType.ALBUM_COMMENTED;
-        String code = "A03";
-        if (event.parentCommentId() != null) {
-            type = NotificationType.ALBUM_REPLIED;
-            code = "A04";
+        // A04는 원댓글 작성자와 게시물 작성자(알림 문구표 A04 수신자)에게 보낸다. 같은 사람이면 한 번만 보낸다.
+        Set<Long> recipientIds = new LinkedHashSet<>(List.of(event.parentCommentAuthorId(), event.albumAuthorId()));
+        for (Long recipientId : recipientIds) {
+            notifyComment(recipientId, commenter, NotificationType.ALBUM_REPLIED, "A04", event);
         }
+    }
+
+    private void notifyComment(Long recipientId, Member commenter, NotificationType type, String code,
+            AlbumCommentedEvent event) {
+        if (commenter.getId().equals(recipientId)) {
+            return;
+        }
+        Member recipient = memberRepository.findById(recipientId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_MEMBER_NOT_FOUND));
         NotificationCopy copy = NotificationCopy.of(type, code, Map.of("작성자 이름", commenter.getName()));
         String albumId = event.albumId().toString();
         String commentId = event.commentId().toString();
         String deepLink = null;
         Long seniorId = null;
-        if (writer.getType() == MemberType.GUARDIAN) {
+        if (recipient.getType() == MemberType.GUARDIAN) {
             deepLink = GuardianDeepLinks.postComment(albumId, commentId);
             if (commenter.getType() == MemberType.SENIOR) {
                 seniorId = commenter.getId();
@@ -190,7 +198,7 @@ public class AlbumNotificationListener {
         FcmSendDto dto = FcmSendDto.of(type, copy, albumId, deepLink,
                 commenter.getId(), seniorId, commenter.getProfileImage())
                 .withData(Map.of("commentId", commentId));
-        send(writer.getId(), dto);
+        send(recipient.getId(), dto);
     }
 
     @EventListener

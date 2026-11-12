@@ -38,6 +38,7 @@ public class AlbumCommentService {
         albumPermissionService.checkUnlocked(album, currentMember);
 
         AlbumComment comment;
+        Long parentCommentAuthorId = null;
         if (request.parentCommentId() != null) {
             AlbumComment parentComment = albumCommentRepository.findByIdAndStatus(request.parentCommentId(), Status.ACTIVE)
                     .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_COMMENT_NOT_FOUND));
@@ -51,6 +52,7 @@ public class AlbumCommentService {
             }
 
             comment = AlbumComment.createReply(album, currentMember, parentComment, request.content());
+            parentCommentAuthorId = parentComment.getMember().getId();
         } else {
             comment = AlbumComment.createComment(album, currentMember, request.content());
         }
@@ -66,7 +68,8 @@ public class AlbumCommentService {
                 currentMember.getId(),
                 album.getMember().getId(),
                 savedComment.getId(),
-                request.parentCommentId()
+                request.parentCommentId(),
+                parentCommentAuthorId
         ));
 
         return AlbumCommentResponse.fromWithoutReplies(savedComment);
