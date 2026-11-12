@@ -174,6 +174,13 @@ public interface MedicineScheduleDocs {
                     - 이전 달 / 현재 달(또는 요청 달) 목표 달성 통계
                     - 일별 목표 달성률 배열 반환
 
+                    **상단 두 달 비교(comparison):**
+                    - right는 항상 이번 달, left는 요청 달이 이번 달이면 지난달이고 아니면 요청 달
+                    - achieved는 복용한 횟수, total은 예정 복용 횟수(알람 1개 = 1회), rate는 achieved ÷ total 정수 퍼센트(반올림)
+                    - 이번 달은 1일~오늘, 지난 달은 1일~말일을 셈. 이번 달 이후 달은 total 0, rate null
+                    - "15/30회"는 achieved/total, "67%"는 rate로 표시
+                    - lastMonthAchieveCount, currentMonthAchieveCount(모두 먹은 날 수)는 폐기 예정
+
                     **권한:**
                     - memberId가 null → 본인의 약 복용 통계 조회
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 약 복용 통계 조회
@@ -204,7 +211,11 @@ public interface MedicineScheduleDocs {
                                                   1.0, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0,
                                                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                                   0.0, 0.0
-                                                ]
+                                                ],
+                                                "comparison": {
+                                                  "left": {"year": 2026, "month": 10, "achieved": 20, "total": 31, "rate": 65},
+                                                  "right": {"year": 2026, "month": 11, "achieved": 5, "total": 11, "rate": 45}
+                                                }
                                               }
                                             }
                                             """
