@@ -149,7 +149,7 @@ public class SeniorHomeService {
         }
 
         SeniorProfile seniorProfile = member.getSeniorProfile();
-        if (seniorProfile != null) {
+        if (seniorProfile != null && seniorProfile.hasDefaultWalkGoal()) {
             return SeniorHomeCardsResponse.WalkInfo.withDefaultGoal(seniorProfile.getDefaultWalkGoal());
         }
 

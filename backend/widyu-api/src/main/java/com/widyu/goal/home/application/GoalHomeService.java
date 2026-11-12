@@ -249,8 +249,8 @@ public class GoalHomeService {
             return SeniorGoalHomeResponse.StepsInfo.of(walk.getActualSteps(), walk.getGoalSteps());
         }
 
-        // 기록이 없으면 기본 목표(정한 적 없으면 5,000보)
-        if (member.getSeniorProfile() != null) {
+        // 기본 목표가 있으면 반환
+        if (member.getSeniorProfile() != null && member.getSeniorProfile().hasDefaultWalkGoal()) {
             return SeniorGoalHomeResponse.StepsInfo.of(0, member.getSeniorProfile().getDefaultWalkGoal());
         }
 
@@ -381,17 +381,16 @@ public class GoalHomeService {
     }
 
     /**
-     * 기록 없는 날에도 걷기 목표가 있었다고 볼 첫 날짜. 목표를 정하는 날에는 그날 기록이 생기므로
-     * 첫 기록 날짜부터이고, 기록이 없으면 오늘(기본 5,000보)부터다. 시니어 프로필이 없으면 null이다
-     * (WalkService 월별 조회와 같은 기준).
+     * 기록 없는 날에도 걷기 목표가 있었다고 볼 첫 날짜. 목표를 처음 설정하는 날에는 그날 기록이 생기므로
+     * 첫 기록 날짜부터이며, 기본 목표가 없으면 null이다(WalkService 월별 조회와 같은 기준).
      */
     private LocalDate defaultWalkGoalStart(Member member) {
-        if (member.getSeniorProfile() == null) {
+        if (member.getSeniorProfile() == null || !member.getSeniorProfile().hasDefaultWalkGoal()) {
             return null;
         }
         return walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
                 .map(Walk::getWalkDate)
-                .orElse(LocalDate.now());
+                .orElse(null);
     }
 
     private GuardianGoalHomeResponse.MedicineInfo getGuardianMedicineInfo(Member member, LocalDate today) {
@@ -464,8 +463,8 @@ public class GoalHomeService {
             return GuardianGoalHomeResponse.StepsInfo.of(walk.getActualSteps(), walk.getGoalSteps());
         }
 
-        // 기록이 없으면 기본 목표(정한 적 없으면 5,000보)
-        if (member.getSeniorProfile() != null) {
+        // 기본 목표가 있으면 반환
+        if (member.getSeniorProfile() != null && member.getSeniorProfile().hasDefaultWalkGoal()) {
             return GuardianGoalHomeResponse.StepsInfo.of(0, member.getSeniorProfile().getDefaultWalkGoal());
         }
 

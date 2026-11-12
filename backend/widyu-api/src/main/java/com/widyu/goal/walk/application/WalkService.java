@@ -76,8 +76,9 @@ public class WalkService {
             return WalkDetailResponse.from(walk);
         }
 
-        // Walk 기록이 없으면 기본 목표(정한 적 없으면 5,000보)
-        if (targetMember.getSeniorProfile() != null) {
+        // Walk 기록이 없으면 defaultWalkGoal 확인
+        if (targetMember.getSeniorProfile() != null &&
+            targetMember.getSeniorProfile().hasDefaultWalkGoal()) {
             return WalkDetailResponse.withDefault(
                     targetMember.getSeniorProfile().getDefaultWalkGoal()
             );
@@ -92,6 +93,10 @@ public class WalkService {
         if (targetMember.getSeniorProfile() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "시니어 프로필이 없습니다.");
+        }
+
+        if (!targetMember.getSeniorProfile().hasDefaultWalkGoal()) {
+            return null;
         }
 
         return UpcomingGoalResponse.of(
@@ -111,10 +116,25 @@ public class WalkService {
         LocalDate today = LocalDate.now();
         Integer previousDefaultGoal = targetMember.getSeniorProfile().getDefaultWalkGoal();
 
-        // 목표 수정: 오늘은 기존 목표 유지, 내일부터 새 목표 적용.
-        // 정한 적 없는 어르신도 오늘 5,000보가 적용 중이므로 처음 정할 때도 같다(#1003).
-        if (!walkRepository.existsByMemberAndWalkDate(targetMember, today)) {
-            // 오늘 Walk 기록이 없으면 기존 목표로 생성
+        // 오늘 날짜의 Walk 기록 확인
+        boolean todayWalkExists = walkRepository.existsByMemberAndWalkDate(targetMember, today);
+
+        if (previousDefaultGoal == null) {
+            // 처음 목표 설정: 오늘부터 적용
+            if (!todayWalkExists) {
+                Walk todayWalk = Walk.createWithGoal(targetMember, today, request.steps());
+                walkRepository.save(todayWalk);
+            }
+            targetMember.getSeniorProfile().updateDefaultWalkGoal(request.steps());
+            log.info("걷기 목표 설정 (처음): memberId={}, defaultWalkGoal={}, 오늘부터 적용",
+                    targetMember.getId(), request.steps());
+            publishGuardianChange(targetMember, request.steps());
+            return;
+        }
+
+        // 목표 수정: 오늘은 기존 목표 유지, 내일부터 새 목표 적용
+        if (!todayWalkExists) {
+            // 오늘 Walk 기록이 없으면 기존 defaultWalkGoal로 생성
             Walk todayWalk = Walk.createWithGoal(targetMember, today, previousDefaultGoal);
             walkRepository.save(todayWalk);
         }
@@ -145,7 +165,8 @@ public class WalkService {
 
         Walk walk = walkRepository.findByMemberAndWalkDateForUpdate(currentMember, syncDate)
                 .orElseGet(() -> {
-                    if (currentMember.getSeniorProfile() != null) {
+                    if (currentMember.getSeniorProfile() != null &&
+                        currentMember.getSeniorProfile().hasDefaultWalkGoal()) {
                         Walk newWalk = Walk.createWithGoal(
                                 currentMember,
                                 syncDate,
@@ -229,24 +250,26 @@ public class WalkService {
     }
 
     /**
-     * 걸음 기록은 없지만 걷기 목표가 있던 날(첫 기록 이후, 오늘까지)의 수.
-     * 목표를 정하는 날에는 그날 기록이 생기므로 첫 기록 날짜가 목표가 생긴 날이다(일별 데이터와 같은 기준).
-     * 기록이 하나도 없으면 오늘의 기본 목표(정한 적 없으면 5,000보)만 있다.
+     * 걸음 기록은 없지만 걷기 목표가 있던 날(첫 기록 이후이고 기본 목표가 있음, 오늘까지)의 수.
+     * 목표를 처음 설정하는 날에는 그날 기록이 생기므로 첫 기록 날짜가 목표가 생긴 날이다(일별 데이터와 같은 기준).
      */
     private long countMissingGoalDays(Member member, LocalDate startDate, LocalDate endDate) {
-        if (member.getSeniorProfile() == null) {
+        if (member.getSeniorProfile() == null || !member.getSeniorProfile().hasDefaultWalkGoal()) {
             return 0;
         }
-        LocalDate today = LocalDate.now();
         LocalDate firstWalkDate = walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
                 .map(Walk::getWalkDate)
-                .orElse(today);
+                .orElse(null);
+        if (firstWalkDate == null) {
+            return 0;
+        }
 
         LocalDate from = startDate;
         if (firstWalkDate.isAfter(from)) {
             from = firstWalkDate;
         }
         LocalDate to = endDate;
+        LocalDate today = LocalDate.now();
         if (today.isBefore(to)) {
             to = today;
         }
@@ -273,7 +296,7 @@ public class WalkService {
                 .collect(Collectors.toMap(Walk::getWalkDate, walk -> walk));
 
         Integer defaultWalkGoal = null;
-        if (member.getSeniorProfile() != null) {
+        if (member.getSeniorProfile() != null && member.getSeniorProfile().hasDefaultWalkGoal()) {
             defaultWalkGoal = member.getSeniorProfile().getDefaultWalkGoal();
         }
 

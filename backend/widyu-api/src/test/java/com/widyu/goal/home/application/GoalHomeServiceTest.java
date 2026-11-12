@@ -185,6 +185,7 @@ class GoalHomeServiceTest {
         given(memberRepository.findById(11L)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(11L);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
+        given(seniorProfile.hasDefaultWalkGoal()).willReturn(true);
         given(firstWalk.getWalkDate()).willReturn(lastWeekStart.minusDays(10));
         given(walkRepository.findFirstByMemberOrderByWalkDateAsc(member)).willReturn(Optional.of(firstWalk));
         given(schedule.getId()).willReturn(1L);
@@ -224,6 +225,7 @@ class GoalHomeServiceTest {
         given(memberRepository.findById(11L)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(11L);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
+        given(seniorProfile.hasDefaultWalkGoal()).willReturn(true);
         given(firstWalk.getWalkDate()).willReturn(thisWeekEnd.plusDays(1));
         given(walkRepository.findFirstByMemberOrderByWalkDateAsc(member)).willReturn(Optional.of(firstWalk));
         given(schedule.getId()).willReturn(1L);

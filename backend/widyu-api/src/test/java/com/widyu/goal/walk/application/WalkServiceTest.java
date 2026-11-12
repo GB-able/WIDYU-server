@@ -18,9 +18,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.event.GuardianGoalChangedEvent;
 import com.widyu.goal.walk.dto.request.SetGoalRequest;
 import com.widyu.goal.walk.dto.request.UpdateStepsRequest;
-import com.widyu.goal.walk.dto.response.UpcomingGoalResponse;
 import com.widyu.goal.walk.dto.response.UpdateStepsResponse;
-import com.widyu.goal.walk.dto.response.WalkDetailResponse;
 import com.widyu.goal.walk.dto.response.WalkMonthlyResponse;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.member.Family;
@@ -61,8 +59,8 @@ class WalkServiceTest {
     @InjectMocks private WalkService walkService;
 
     @Test
-    @DisplayName("보호자가 시니어 걷기 목표를 처음 설정하면 오늘은 기본 5000보를 유지하고 W02 이벤트를 한 번 발행한다")
-    void 보호자가_걷기_목표를_처음_설정하면_오늘은_기본_목표를_유지하고_W02_이벤트를_발행한다() {
+    @DisplayName("보호자가 시니어 걷기 목표를 처음 설정하면 W02 이벤트를 한 번 발행한다")
+    void 보호자가_걷기_목표를_처음_설정하면_W02_이벤트를_발행한다() {
         // given
         Member guardian = member(1L, MemberType.GUARDIAN);
         Member senior = member(2L, MemberType.SENIOR);
@@ -75,9 +73,6 @@ class WalkServiceTest {
 
         // then
         assertThat(profile.getDefaultWalkGoal()).isEqualTo(7000);
-        ArgumentCaptor<Walk> todayWalk = ArgumentCaptor.forClass(Walk.class);
-        then(walkRepository).should(times(1)).save(todayWalk.capture());
-        assertThat(todayWalk.getValue().getGoalSteps()).isEqualTo(5000);
         ArgumentCaptor<GuardianGoalChangedEvent> events = ArgumentCaptor.forClass(GuardianGoalChangedEvent.class);
         then(eventPublisher).should(times(1)).publishEvent(events.capture());
         assertThat(events.getValue().seniorId()).isEqualTo(2L);
@@ -139,7 +134,7 @@ class WalkServiceTest {
     }
 
     @Test
-    @DisplayName("기록 없이 현재 월을 조회하면 모든 날짜를 0걸음으로 채우고 기본 목표는 오늘부터 적용해 오늘 하루를 센다")
+    @DisplayName("현재 월을 조회하면 모든 날짜를 0걸음으로 채우고 기본 목표는 오늘부터 적용한다")
     void 기록이_없는_과거_날짜는_기본_목표를_소급하지_않는다() {
         // given
         Long memberId = 1L;
@@ -148,6 +143,7 @@ class WalkServiceTest {
         given(memberRepository.findById(memberId)).willReturn(Optional.of(member));
         given(member.getId()).willReturn(memberId);
         given(member.getSeniorProfile()).willReturn(seniorProfile);
+        given(seniorProfile.hasDefaultWalkGoal()).willReturn(true);
         given(seniorProfile.getDefaultWalkGoal()).willReturn(5000);
         given(walkRepository.countAchievedGoals(anyLong(), any(), any())).willReturn(0L);
         given(walkRepository.countTotalRecords(anyLong(), any(), any())).willReturn(0L);
@@ -175,7 +171,7 @@ class WalkServiceTest {
                 assertThat(daily.goal()).isEqualTo(5000);
             }
         });
-        assertThat(response.summary().current().total()).isEqualTo(1);
+        assertThat(response.summary().current().total()).isZero();
     }
 
     @Test
@@ -315,7 +311,7 @@ class WalkServiceTest {
 
     @ParameterizedTest
     @CsvSource({"2024, 2, 29", "2025, 2, 28", "2025, 4, 30", "2025, 10, 31"})
-    @DisplayName("목표를 정한 적 없고 기록이 없는 지난 월을 조회하면 월 길이만큼 0걸음과 미설정 목표를 반환한다")
+    @DisplayName("기록과 기본 목표가 없는 월을 조회하면 월 길이만큼 0걸음과 미설정 목표를 반환한다")
     void 기록과_기본_목표가_없어도_월_전체_날짜를_반환한다(int year, int month, int days) {
         // given
         Member senior = member(2L, MemberType.SENIOR);
@@ -356,30 +352,11 @@ class WalkServiceTest {
     }
 
     @Test
-    @DisplayName("목표를 정한 시니어가 미래 월을 조회하면 모든 날짜를 기본 목표와 0걸음으로 반환한다")
+    @DisplayName("미래 월을 조회하면 모든 날짜를 기본 목표와 0걸음으로 반환한다")
     void 미래_월은_기본_목표와_0걸음으로_채운다() {
         // given
         Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior).updateDefaultWalkGoal(7000);
-        given(memberUtil.getCurrentMember()).willReturn(senior);
-        YearMonth month = YearMonth.now().plusMonths(1);
-
-        // when
-        WalkMonthlyResponse response = walkService.getMonthlyStats(month.getYear(), month.getMonthValue(), null);
-
-        // then
-        assertThat(response.dailyData()).hasSize(month.lengthOfMonth()).allSatisfy(daily -> {
-            assertThat(daily.actual()).isZero();
-            assertThat(daily.goal()).isEqualTo(7000);
-        });
-    }
-
-    @Test
-    @DisplayName("목표를 정한 적 없는 시니어가 미래 월을 조회하면 모든 날짜를 5000보 목표로 반환한다")
-    void 목표를_정한_적_없으면_미래_월은_5000보_목표로_채운다() {
-        // given
-        Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior);
+        seniorProfile(senior).updateDefaultWalkGoal(5000);
         given(memberUtil.getCurrentMember()).willReturn(senior);
         YearMonth month = YearMonth.now().plusMonths(1);
 
@@ -391,90 +368,6 @@ class WalkServiceTest {
             assertThat(daily.actual()).isZero();
             assertThat(daily.goal()).isEqualTo(5000);
         });
-    }
-
-    @Test
-    @DisplayName("목표를 오늘 바꾼 뒤 어제 걸음 수를 처음 연동하면 어제 기록은 바꾸기 전 목표로 만든다")
-    void 목표를_바꾼_뒤_어제_걸음수를_처음_연동하면_바꾸기_전_목표로_기록한다() {
-        // given: 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
-        Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior).updateDefaultWalkGoal(7000);
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
-        given(walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(senior, yesterday))
-                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now(), 5000)));
-        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
-            Walk saved = invocation.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 9L);
-            return saved;
-        });
-
-        // when
-        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, yesterday));
-
-        // then
-        assertThat(response.achieved()).isTrue();
-        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
-        then(walkRepository).should().save(saved.capture());
-        assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
-    }
-
-    @Test
-    @DisplayName("목표를 정한 적 없는 시니어의 오늘 걷기 상세를 조회하면 5000보 목표를 반환한다")
-    void 목표를_정한_적_없으면_오늘_걷기_상세는_5000보다() {
-        // given
-        Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior);
-        given(memberUtil.getCurrentMember()).willReturn(senior);
-
-        // when
-        WalkDetailResponse response = walkService.getWalkDetail(null);
-
-        // then
-        assertThat(response).isEqualTo(new WalkDetailResponse(5000, 0, 0));
-    }
-
-    @Test
-    @DisplayName("목표를 정한 적 없는 시니어의 다음 날 목표를 조회하면 5000보를 반환한다")
-    void 목표를_정한_적_없으면_다음_날_목표는_5000보다() {
-        // given
-        Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior);
-        given(memberUtil.getCurrentMember()).willReturn(senior);
-
-        // when
-        UpcomingGoalResponse response = walkService.getUpcomingGoal(null);
-
-        // then
-        assertThat(response.steps()).isEqualTo(5000);
-    }
-
-    @Test
-    @DisplayName("목표를 정한 적 없는 시니어가 오늘 처음 걸음 수를 연동하면 5000보 목표로 기록하고 달성 포인트를 지급한다")
-    void 목표를_정한_적_없어도_걸음수를_연동하면_5000보_목표로_기록하고_포인트를_지급한다() {
-        // given
-        Member senior = member(2L, MemberType.SENIOR);
-        seniorProfile(senior);
-        given(memberUtil.getCurrentMember()).willReturn(senior);
-        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.empty());
-        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
-            Walk saved = invocation.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 9L);
-            return saved;
-        });
-
-        // when
-        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(5000, LocalDate.now()));
-
-        // then
-        assertThat(response.achieved()).isTrue();
-        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
-        then(walkRepository).should().save(saved.capture());
-        assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
-        assertThat(saved.getValue().isRewarded()).isTrue();
-        then(seniorProfileService).should(times(1))
-                .addGoalRewardPoints(eq(2L), eq(25L), eq("걷기 목표 달성"), startsWith("WALK_REWARD:"));
     }
 
     @Test
@@ -538,6 +431,48 @@ class WalkServiceTest {
         assertThat(walk.getActualSteps()).isEqualTo(9000);
         then(seniorProfileService).should(times(1))
                 .addGoalRewardPoints(eq(memberId), eq(25L), eq("걷기 목표 달성"), startsWith("WALK_REWARD:"));
+    }
+
+    @Test
+    @DisplayName("목표를 오늘 바꾼 뒤 어제 걸음 수를 처음 연동하면 어제 기록은 바꾸기 전 목표로 만든다")
+    void 목표를_바꾼_뒤_어제_걸음수를_처음_연동하면_바꾸기_전_목표로_기록한다() {
+        // given: 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(7000);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(senior, yesterday))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now(), 5000)));
+        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
+            Walk saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9L);
+            return saved;
+        });
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(6000, yesterday));
+
+        // then
+        assertThat(response.achieved()).isTrue();
+        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
+        then(walkRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
+    }
+
+    @Test
+    @DisplayName("목표를 정한 적 없는 시니어가 걸음 수를 연동하면 BAD_REQUEST 예외가 발생한다")
+    void 목표를_정한_적_없으면_걸음수_연동은_BAD_REQUEST_예외가_발생한다() {
+        // given
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(any(), any())).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> walkService.updateSteps(new UpdateStepsRequest(6000, LocalDate.now())))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
     }
 
     @Test
