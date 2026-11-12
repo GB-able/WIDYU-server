@@ -654,6 +654,19 @@ erDiagram
         LocalDateTime notifiedAt "통보 FCM enqueue 시각. NULL이면 미통보"
     }
 
+    DataPurgeLog {
+        Long data_purge_log_id PK
+        String runId "한 번의 실행을 묶는 UUID"
+        String target "대상 테이블 이름"
+        boolean dryRun "지우지 않고 세기만 했는지 (1단계는 항상 true)"
+        LocalDateTime cutoffAt "이 시각보다 앞선 행이 대상"
+        Long targetRows "nullable. 조건에 맞는 행 수(참가자 제외 뒤)"
+        Long exemptRows "nullable. 실증 참가자라 뺀 행 수"
+        String errorType "nullable. 예외 클래스 이름"
+        LocalDateTime startedAt
+        LocalDateTime finishedAt
+    }
+
     MemberNotificationSetting {
         Long id PK
         Long member_id FK
@@ -920,6 +933,7 @@ erDiagram
 | `study_participation_history` | `idx_study_participation_history_participation` | `(study_participation_id, created_at)` | 참여 기록의 변경 이력 시각순 조회 |
 | `admin_access_log` | `idx_admin_access_log_admin_time` | `(admin_id, accessed_at)` | 관리자별 접속기록 조회 (LLD-0057) |
 | `admin_access_log` | `idx_admin_access_log_time` | `(accessed_at)` | 기간 조회 |
+| `data_purge_log` | `idx_data_purge_log_started` | `(started_at)` | 날짜별 정리 작업 기록 조회 (LLD-0136). 회원 칸이 없다 |
 
 ## 도메인별 조회 기준
 
@@ -944,6 +958,7 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-12 | `data_purge_log` | 신규 테이블 (LLD-0136). 보관 기간 정리 작업의 날짜·테이블별 대상 건수·참가자 제외 건수. 회원 ID 없음. 운영 구축 때 적용 | `scripts/mysql/create_data_purge_log.sql` |
 | 2026-11-09 | `device_event` | 신규 테이블 (LLD-0129). 실험 모드 기기 상태 바뀜의 종류·바뀐 시각·종류별 값과 항목 원문 JSON. `source`·`kind`는 VARCHAR | `scripts/mysql/create_device_event.sql` |
 | 2026-11-09 | `sensor_batch_rejection` | 신규 테이블 (LLD-0128). 서버가 거절한 센서 묶음의 식별자·오류 코드·경로·수신 시각, 원문 없음, member FK 없음 | `scripts/mysql/create_sensor_batch_rejection.sql` |
 | 2026-11-09 | `sensor_batch` | `ingest_channel VARCHAR(8) NULL` 추가 (LLD-0128). 최초 저장 경로 `WS`·`REST`, 기존 행 NULL | `scripts/mysql/add_sensor_batch_ingest_channel.sql` |
