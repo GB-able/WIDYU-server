@@ -68,9 +68,9 @@ public interface MedicineScheduleDocs {
                                                 "revision": 42,
                                                 "timeZone": "Asia/Seoul",
                                                 "schedules": [
-                                                  {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
-                                                  {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2, "effectiveFrom": "2026-10-15", "effectiveTo": null},
-                                                  {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2, "effectiveFrom": "2026-11-10", "effectiveTo": null}
+                                                  {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1.0, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
+                                                  {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2.0, "effectiveFrom": "2026-10-15", "effectiveTo": null},
+                                                  {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2.0, "effectiveFrom": "2026-11-10", "effectiveTo": null}
                                                 ],
                                                 "completed": ["15:2026-11-09"]
                                               }
@@ -120,31 +120,31 @@ public interface MedicineScheduleDocs {
                                                 "medicineSchedules": [
                                                   {
                                                     "medicineScheduleId": 1,
-                                                    "totalCount": 3,
+                                                    "totalCount": 3.0,
                                                     "alarmTime": "08:00",
                                                     "status": "DONE",
                                                     "proofImageUrl": "https://www.widyu.shop/proof/1.jpg",
                                                     "medicines": [
                                                       {
                                                         "name": "타이레놀",
-                                                        "count": 1
+                                                        "count": 1.0
                                                       },
                                                       {
                                                         "name": "비타민C",
-                                                        "count": 2
+                                                        "count": 2.0
                                                       }
                                                     ]
                                                   },
                                                   {
                                                     "medicineScheduleId": 2,
-                                                    "totalCount": 1,
+                                                    "totalCount": 1.0,
                                                     "alarmTime": "20:00",
                                                     "status": "UPCOMING",
                                                     "proofImageUrl": null,
                                                     "medicines": [
                                                       {
                                                         "name": "오메가3",
-                                                        "count": 1
+                                                        "count": 1.0
                                                       }
                                                     ]
                                                   }
@@ -174,9 +174,20 @@ public interface MedicineScheduleDocs {
                     - 이전 달 / 현재 달(또는 요청 달) 목표 달성 통계
                     - 일별 목표 달성률 배열 반환
 
+                    **상단 두 달 비교(comparison):**
+                    - right는 항상 이번 달, left는 요청 달이 이번 달이면 지난달이고 아니면 요청 달
+                    - achieved는 복용한 횟수, total은 예정 복용 횟수(알람 1개 = 1회), rate는 achieved ÷ total 정수 퍼센트(반올림)
+                    - 이번 달은 1일~오늘, 지난 달은 1일~말일을 셈. 이번 달 이후 달은 total 0, rate null
+                    - "15/30회"는 achieved/total, "67%"는 rate로 표시
+                    - lastMonthAchieveCount, currentMonthAchieveCount(모두 먹은 날 수)는 폐기 예정
+
                     **권한:**
                     - memberId가 null → 본인의 약 복용 통계 조회
                     - memberId가 있음 → 보호자가 가족으로 연결된 시니어의 약 복용 통계 조회
+
+                    **조회 가능한 달 (한국 시간 기준):**
+                    - 이번 달 기준 지난 12개월부터 앞으로 12개월까지, 벗어나면 400 GOAL_4000
+                    - 보호자는 이번 달 이후를 조회할 수 없음, 요청하면 400 GOAL_4001
                     """
     )
     @ApiResponses({
@@ -200,13 +211,18 @@ public interface MedicineScheduleDocs {
                                                   1.0, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0,
                                                   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                                   0.0, 0.0
-                                                ]
+                                                ],
+                                                "comparison": {
+                                                  "left": {"year": 2026, "month": 10, "achieved": 20, "total": 31, "rate": 65},
+                                                  "right": {"year": 2026, "month": 11, "achieved": 5, "total": 11, "rate": 45}
+                                                }
                                               }
                                             }
                                             """
                             )
                     )
             ),
+            @ApiResponse(responseCode = "400", description = "조회할 수 없는 달 (GOAL_4000, 보호자의 미래 달 GOAL_4001)"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음")
     })
@@ -255,27 +271,27 @@ public interface MedicineScheduleDocs {
                                                 "medicineSchedules": [
                                                   {
                                                     "medicineScheduleId": 1,
-                                                    "totalCount": 3,
+                                                    "totalCount": 3.0,
                                                     "alarmTime": "08:00",
                                                     "medicines": [
                                                       {
                                                         "name": "타이레놀",
-                                                        "count": 1
+                                                        "count": 1.0
                                                       },
                                                       {
                                                         "name": "비타민C",
-                                                        "count": 2
+                                                        "count": 2.0
                                                       }
                                                     ]
                                                   },
                                                   {
                                                     "medicineScheduleId": 2,
-                                                    "totalCount": 1,
+                                                    "totalCount": 1.0,
                                                     "alarmTime": "20:00",
                                                     "medicines": [
                                                       {
                                                         "name": "오메가3",
-                                                        "count": 1
+                                                        "count": 1.0
                                                       }
                                                     ]
                                                   }
@@ -392,7 +408,7 @@ public interface MedicineScheduleDocs {
                                                   "medicines": [
                                                     {
                                                       "itemName": "이노엔비타메진캡슐",
-                                                      "dose": 1,
+                                                      "dose": 1.5,
                                                       "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/1OSm8xoWGbV",
                                                       "usage": "성인은 1회 2캡슐씩, 1일 1~2회 복용합니다.\\n",
                                                       "efficacy": "이 약은 육체피로, 임신ㆍ수유기, 병중ㆍ병후(병을 앓는 동안이나 회복 후)의 체력 저하 시 비타민 B1, B6의 보급과 신경통, 근육통, 관절통(요통, 어깨결림 등), 각기, 눈의 피로, 구각염(입꼬리염), 구순염(입술염), 구내염(입안염), 설염(혀염), 습진, 피부염 증상의 완화에 사용합니다.\\n"
@@ -472,7 +488,7 @@ public interface MedicineScheduleDocs {
                                                   "medicines": [
                                                     {
                                                       "itemName": "이노엔비타메진캡슐",
-                                                      "dose": 2,
+                                                      "dose": 2.5,
                                                       "itemImage": "https://nedrug.mfds.go.kr/pbp/cmn/itemImageDownload/1OSm8xoWGbV",
                                                       "usage": "성인은 1회 2캡슐씩, 1일 1~2회 복용합니다.\\n",
                                                       "efficacy": "이 약은 육체피로, 임신ㆍ수유기, 병중ㆍ병후(병을 앓는 동안이나 회복 후)의 체력 저하 시 비타민 B1, B6의 보급과 신경통, 근육통, 관절통(요통, 어깨결림 등), 각기, 눈의 피로, 구각염(입꼬리염), 구순염(입술염), 구내염(입안염), 설염(혀염), 습진, 피부염 증상의 완화에 사용합니다.\\n"

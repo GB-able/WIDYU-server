@@ -28,6 +28,9 @@ import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -383,6 +386,51 @@ class HealthScheduleServiceTest {
         // then
         then(healthScheduleRepository).should().delete(schedule);
         then(eventPublisher).should(never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("보호자가 13개월 전 건강 일정 캘린더를 조회하면 GOAL_MONTH_OUT_OF_RANGE 예외가 발생한다")
+    void 보호자가_13개월_전_캘린더를_조회하면_예외가_발생한다() {
+        // given
+        YearMonth month = YearMonth.now(ZoneId.of("Asia/Seoul")).minusMonths(13);
+
+        // when & then
+        assertThatThrownBy(() -> healthScheduleService.getHealthScheduleCalendarForSenior(
+                2L, month.getYear(), month.getMonthValue()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GOAL_MONTH_OUT_OF_RANGE);
+        then(healthScheduleRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("시니어가 13개월 뒤 건강 일정 캘린더를 조회하면 GOAL_MONTH_OUT_OF_RANGE 예외가 발생한다")
+    void 시니어가_13개월_뒤_캘린더를_조회하면_예외가_발생한다() {
+        // given
+        YearMonth month = YearMonth.now(ZoneId.of("Asia/Seoul")).plusMonths(13);
+
+        // when & then
+        assertThatThrownBy(() -> healthScheduleService.getHealthScheduleCalendarForMe(
+                month.getYear(), month.getMonthValue()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.GOAL_MONTH_OUT_OF_RANGE);
+        then(healthScheduleRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("시니어가 12개월 뒤 건강 일정 캘린더를 조회하면 그 달 일정을 반환한다")
+    void 시니어가_12개월_뒤_캘린더를_조회하면_일정을_반환한다() {
+        // given
+        YearMonth month = YearMonth.now(ZoneId.of("Asia/Seoul")).plusMonths(12);
+        Member senior = member(1L, MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(healthScheduleRepository.findByMemberIdAndYearMonth(any(), any(), any()))
+                .willReturn(List.of(schedule(senior)));
+
+        // when
+        var response = healthScheduleService.getHealthScheduleCalendarForMe(month.getYear(), month.getMonthValue());
+
+        // then
+        assertThat(response).hasSize(1);
     }
 
     private HealthScheduleCreateForSeniorRequest createRequest(Long memberId) {

@@ -22,9 +22,9 @@ class MedicationAlarmSyncResponseJsonTest {
     void 응답을_직렬화하면_유효_기간을_날짜_문자열로_싣고_끝나는_날이_없으면_null로_싣는다() throws Exception {
         // given: 앱은 이 형식으로 날짜마다 알람을 걸지 정한다(LLD-0125)
         MedicationAlarmSyncResponse response = new MedicationAlarmSyncResponse(45L, "Asia/Seoul", List.of(
-                new MedicationAlarmSyncResponse.Schedule(15L, "08:00", 1,
+                new MedicationAlarmSyncResponse.Schedule(15L, "08:00", 1.0,
                         LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 9)),
-                new MedicationAlarmSyncResponse.Schedule(21L, "20:00", 2, LocalDate.of(2026, 11, 10), null)),
+                new MedicationAlarmSyncResponse.Schedule(21L, "20:00", 2.5, LocalDate.of(2026, 11, 10), null)),
                 List.of("15:2026-11-09"));
 
         // when
@@ -35,5 +35,7 @@ class MedicationAlarmSyncResponseJsonTest {
         assertThat(content).extractingJsonPathStringValue("$.schedules[0].effectiveTo").isEqualTo("2026-11-09");
         assertThat(content).extractingJsonPathStringValue("$.schedules[1].effectiveFrom").isEqualTo("2026-11-10");
         assertThat(content.getJson()).contains("\"effectiveTo\":null");
+        // 반 알약 복용량은 소수로, 정수 복용량도 1.0으로 싣는다 (#1001)
+        assertThat(content.getJson()).contains("\"doseCount\":1.0").contains("\"doseCount\":2.5");
     }
 }

@@ -24,14 +24,7 @@ public interface LocationAccessLogRepository extends JpaRepository<LocationAcces
     List<LocationAccessLog> findBySeniorMemberIdAndAccessedAtBetweenOrderByAccessedAtAscIdAsc(
             Long seniorMemberId, LocalDateTime from, LocalDateTime to);
 
-    /**
-     * 쿨다운 안에 같은 보호자에게 이미 통보했는지 본다(LLD-0056 5.3).
-     * 방금 넣은 행은 {@code notified_at}이 비어 있어 자기 자신에 걸리지 않는다.
-     */
-    boolean existsBySeniorMemberIdAndViewerMemberIdAndNotifiedAtAfter(
-            Long seniorMemberId, Long viewerMemberId, LocalDateTime notifiedAfter);
-
-    /** 다이제스트 대상 시니어. 즉시 모드에서 쿨다운으로 합쳐진 행도 여기 들어온다(LLD-0056 5.4). */
+    /** 다이제스트 대상 시니어. 즉시 통보 FCM 등록이 실패해 롤백되지 않은 채 남은 옛 행 등(LLD-0130 5.3). */
     @Query("select distinct l.seniorMemberId from LocationAccessLog l where l.notifiedAt is null")
     List<Long> findSeniorIdsWithUnnotified();
 

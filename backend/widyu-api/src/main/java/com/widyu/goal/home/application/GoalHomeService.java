@@ -15,6 +15,8 @@ import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.goal.rate.GoalRateCalculator;
+import com.widyu.goal.rate.GoalTally;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.goal.DailyGoalStatus;
 import com.widyu.healthschedule.HealthSchedule;
@@ -148,11 +150,12 @@ public class GoalHomeService {
         LocalDate thisWeekEnd = thisWeekStart.plusDays(6);
         GoalPeriodData periodData = getGoalPeriodData(targetMember, lastWeekStart, thisWeekEnd);
 
-        List<Double> lastWeekGoalRates = calculateDailyGoalRates(periodData, lastWeekStart, lastWeekEnd);
-        Double lastWeekGoalRate = calculateWeeklyGoalRate(lastWeekGoalRates, lastWeekStart, today);
+        // 지난주는 7일 합계로 항목별 달성률을 구해 평균한다(일별 달성률의 평균이 아니다)
+        Double lastWeekGoalRate = GoalRateCalculator.toRatio(
+                GoalRateCalculator.averagePercent(sumTallies(periodData, lastWeekStart, lastWeekEnd).categories()));
 
         // 이번주 일별 달성률
-        List<Double> thisWeekGoalRates = calculateDailyGoalRates(periodData, thisWeekStart, thisWeekEnd);
+        List<Double> thisWeekGoalRates = calculateDailyGoalRates(periodData, thisWeekStart, thisWeekEnd, today);
         // 오늘 달성률 (일요일=0 인덱스)
         Double todayGoalRate = thisWeekGoalRates.get(today.getDayOfWeek().getValue() % 7);
 
@@ -285,79 +288,85 @@ public class GoalHomeService {
             return DailyGoalStatus.NOT_STARTED;
         }
 
-        GoalCounts goalCounts = calculateGoalCounts(periodData, date);
-        if (goalCounts.total() == 0) {
+        // 일별 달성률(항목별 평균)에서 상태를 정한다. 반올림 전 값으로 판정해 99.6%가 완료로 보이지 않게 한다.
+        List<GoalTally> targeted = calculateDailyTallies(periodData, date).categories().stream()
+                .filter(GoalTally::hasTarget)
+                .toList();
+        if (targeted.isEmpty()) {
             return DailyGoalStatus.NOT_STARTED; // 목표가 없으면 시작 전
         }
 
-        // 상태 결정
-        if (goalCounts.completed() == goalCounts.total()) {
+        // 상태 결정: 100%면 완료, 지난 날은 실패, 오늘은 0%보다 크면 진행 중
+        if (targeted.stream().allMatch(GoalTally::isComplete)) {
             return DailyGoalStatus.COMPLETED;
         }
         if (date.isBefore(today)) {
             return DailyGoalStatus.FAILED;
         }
-        if (goalCounts.completed() > 0) {
+        if (targeted.stream().anyMatch(tally -> tally.done() > 0)) {
             return DailyGoalStatus.IN_PROGRESS;
         }
         return DailyGoalStatus.NOT_STARTED;
     }
 
-    private GoalCounts calculateGoalCounts(GoalPeriodData periodData, LocalDate date) {
+    /**
+     * 그날의 항목별 완수·목표 수: 건강방문(방문 수), 의약품(복용 횟수), 걷기(달성 여부 1일).
+     * 오늘은 아직 오지 않은 시각의 복용·방문도 분모에 넣는다. 오늘 달성률은 하루 진행률이다.
+     */
+    private CategoryTallies calculateDailyTallies(GoalPeriodData periodData, LocalDate date) {
+        List<HealthSchedule> visits = periodData.healthSchedules().stream()
+                .filter(schedule -> schedule.getScheduledAt().toLocalDate().equals(date))
+                .toList();
+        long visited = visits.stream()
+                .filter(schedule -> schedule.getProgressStatus() == ProgressStatus.COMPLETED)
+                .count();
+
         List<MedicineSchedule> schedules = periodData.schedules().stream()
                 .filter(schedule -> schedule.isEffectiveOn(date))
                 .toList();
         Set<Long> verifiedScheduleIds = periodData.verifiedScheduleIdsByDate().getOrDefault(date, Set.of());
-        Walk walk = periodData.walksByDate().get(date);
-
-        int totalGoals = schedules.size();
-        if (walk != null || periodData.hasDefaultWalkGoalOn(date)) {
-            totalGoals++;
-        }
-
-        int completedGoals = (int) schedules.stream()
+        long taken = schedules.stream()
                 .filter(schedule -> verifiedScheduleIds.contains(schedule.getId()))
                 .count();
+
+        Walk walk = periodData.walksByDate().get(date);
+        GoalTally walkTally = GoalTally.NONE;
         if (walk != null && walk.isGoalAchieved()) {
-            completedGoals++;
+            walkTally = GoalTally.of(1, 1);
+        } else if (walk != null || periodData.hasDefaultWalkGoalOn(date)) {
+            walkTally = GoalTally.of(0, 1);
         }
 
-        return new GoalCounts(totalGoals, completedGoals);
+        return new CategoryTallies(GoalTally.of(visited, visits.size()), GoalTally.of(taken, schedules.size()),
+                walkTally);
     }
 
+    /** 기간의 항목별 합계. */
+    private CategoryTallies sumTallies(GoalPeriodData periodData, LocalDate startDate, LocalDate endDate) {
+        CategoryTallies sums = CategoryTallies.NONE;
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            sums = sums.plus(calculateDailyTallies(periodData, date));
+        }
+        return sums;
+    }
+
+    /** 일별 달성률(0.0~1.0). 오늘 이후 날짜는 지나지 않았으므로 0.0이다. */
     private List<Double> calculateDailyGoalRates(
             GoalPeriodData periodData,
             LocalDate startDate,
-            LocalDate endDate
+            LocalDate endDate,
+            LocalDate today
     ) {
         List<Double> dailyGoalRates = new ArrayList<>();
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            GoalCounts goalCounts = calculateGoalCounts(periodData, date);
-            dailyGoalRates.add(goalCounts.rate());
+            if (date.isAfter(today)) {
+                dailyGoalRates.add(0.0);
+                continue;
+            }
+            dailyGoalRates.add(GoalRateCalculator.toRatio(
+                    GoalRateCalculator.averagePercent(calculateDailyTallies(periodData, date).categories())));
         }
         return dailyGoalRates;
-    }
-
-    private Double calculateWeeklyGoalRate(List<Double> dailyGoalRates, LocalDate startDate, LocalDate today) {
-        int totalDays = 0;
-        int completedDays = 0;
-        LocalDate date = startDate;
-
-        for (Double dailyGoalRate : dailyGoalRates) {
-            if (date.isAfter(today)) {
-                break;
-            }
-            totalDays++;
-            if (dailyGoalRate >= 1.0) {
-                completedDays++;
-            }
-            date = date.plusDays(1);
-        }
-
-        if (totalDays == 0) {
-            return 0.0;
-        }
-        return (double) completedDays / totalDays;
     }
 
     private GoalPeriodData getGoalPeriodData(Member member, LocalDate startDate, LocalDate endDate) {
@@ -377,7 +386,11 @@ public class GoalHomeService {
                 .stream()
                 .collect(Collectors.toMap(Walk::getWalkDate, walk -> walk));
 
-        return new GoalPeriodData(schedules, verifiedScheduleIdsByDate, walksByDate, defaultWalkGoalStart(member));
+        List<HealthSchedule> healthSchedules = healthScheduleRepository.findByMemberIdAndWeek(
+                member.getId(), startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
+
+        return new GoalPeriodData(schedules, verifiedScheduleIdsByDate, walksByDate, defaultWalkGoalStart(member),
+                healthSchedules);
     }
 
     /**
@@ -414,13 +427,13 @@ public class GoalHomeService {
                         BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
-        int totalCount = 0;
-        int takenCount = 0;
+        double totalCount = 0;
+        double takenCount = 0;
 
         List<GuardianGoalHomeResponse.ScheduleItem> scheduleItems = new ArrayList<>();
 
         for (MedicineSchedule schedule : schedules) {
-            int scheduleTotal = schedule.getTotalCount();
+            double scheduleTotal = schedule.getTotalCount();
             totalCount += scheduleTotal;
 
             MedicationProof proof = proofMap.get(schedule.getId());
@@ -510,7 +523,8 @@ public class GoalHomeService {
             List<MedicineSchedule> schedules,
             Map<LocalDate, Set<Long>> verifiedScheduleIdsByDate,
             Map<LocalDate, Walk> walksByDate,
-            LocalDate defaultWalkGoalStart
+            LocalDate defaultWalkGoalStart,
+            List<HealthSchedule> healthSchedules
     ) {
 
         /** 걸음 기록이 없는 날에도 걷기 목표가 있었는지. 미수신이면 미달성으로 센다. */
@@ -519,13 +533,17 @@ public class GoalHomeService {
         }
     }
 
-    private record GoalCounts(int total, int completed) {
+    /** 항목별 완수·목표 수. 건강방문은 방문 수, 의약품은 복용 횟수, 걷기는 달성한 날 수다. */
+    private record CategoryTallies(GoalTally visit, GoalTally medicine, GoalTally walk) {
 
-        private double rate() {
-            if (total == 0) {
-                return 0.0;
-            }
-            return (double) completed / total;
+        private static final CategoryTallies NONE = new CategoryTallies(GoalTally.NONE, GoalTally.NONE, GoalTally.NONE);
+
+        private CategoryTallies plus(CategoryTallies other) {
+            return new CategoryTallies(visit.plus(other.visit), medicine.plus(other.medicine), walk.plus(other.walk));
+        }
+
+        private List<GoalTally> categories() {
+            return List.of(visit, medicine, walk);
         }
     }
 }

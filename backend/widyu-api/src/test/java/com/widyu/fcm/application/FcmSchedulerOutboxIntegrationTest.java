@@ -15,6 +15,7 @@ import com.widyu.global.util.SecurityUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.healthschedule.HealthSchedule;
+import com.widyu.member.application.FamilyAccessService;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
@@ -70,6 +71,7 @@ class FcmSchedulerOutboxIntegrationTest {
     @MockBean JPAQueryFactory queryFactory;
     @MockBean MemberUtil memberUtil;
     @MockBean SecurityUtil securityUtil;
+    @MockBean FamilyAccessService familyAccessService;
 
     @AfterEach
     void cleanup() {

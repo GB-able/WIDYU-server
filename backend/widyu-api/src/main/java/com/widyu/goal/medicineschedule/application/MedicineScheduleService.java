@@ -19,10 +19,14 @@ import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleIdResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.dto.response.MedicineScheduleDailyResponse;
 import com.widyu.goal.medicineschedule.dto.response.MedicineSearchResponse;
+import com.widyu.goal.rate.GoalRateCalculator;
+import com.widyu.goal.rate.GoalTally;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.goal.validator.GoalMonthValidator;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.Medicine;
@@ -35,6 +39,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,16 +113,47 @@ public class MedicineScheduleService {
     }
 
     public MedicineMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {
+        // 보호자 약 복용 홈은 미래 달을 열람하지 않는다(#1005)
+        boolean allowFuture = memberUtil.getCurrentMember().getType() != MemberType.GUARDIAN;
+        YearMonth requestedMonth = GoalMonthValidator.validate(year, month, allowFuture);
         Member targetMember = getMember(memberId);
-        YearMonth requestedMonth = YearMonth.of(year, month);
         YearMonth previousMonth = requestedMonth.minusMonths(1);
 
-        List<Double> monthlyGoalRates = calculateMonthlyGoalRates(targetMember.getId(), requestedMonth);
+        LocalDate today = LocalDate.now(clock);
+        YearMonth currentMonth = YearMonth.from(today);
+        YearMonth leftMonth = GoalRateCalculator.comparisonLeftMonth(requestedMonth, currentMonth);
+        // 같은 달을 두 번 조회하지 않는다. 요청 달·전달은 기존 필드, 왼쪽 달·이번 달은 비교 박스에 쓴다.
+        Map<YearMonth, List<GoalTally>> dosesByMonth = new HashMap<>();
+        for (YearMonth neededMonth : List.of(requestedMonth, previousMonth, leftMonth, currentMonth)) {
+            dosesByMonth.computeIfAbsent(neededMonth, key -> calculateDailyDoses(targetMember.getId(), key));
+        }
+        List<GoalTally> requestedDays = dosesByMonth.get(requestedMonth);
 
-        int lastMonthCount = countAchievedInMonth(targetMember.getId(), previousMonth);
-        int currentMonthCount = countFullyAchievedDays(monthlyGoalRates);
+        List<Double> monthlyGoalRates = requestedDays.stream()
+                .map(day -> GoalRateCalculator.toRatio(GoalRateCalculator.percent(day)))
+                .toList();
+        int lastMonthCount = countFullyAchievedDays(dosesByMonth.get(previousMonth));
+        int currentMonthCount = countFullyAchievedDays(requestedDays);
 
-        return MedicineMonthlyResponse.of(lastMonthCount, currentMonthCount, monthlyGoalRates);
+        MedicineMonthlyResponse.MonthComparison comparison = MedicineMonthlyResponse.MonthComparison.of(
+                MedicineMonthlyResponse.MonthProgress.of(leftMonth,
+                        sumUntil(dosesByMonth.get(leftMonth), leftMonth, today)),
+                MedicineMonthlyResponse.MonthProgress.of(currentMonth,
+                        sumUntil(dosesByMonth.get(currentMonth), currentMonth, today)));
+
+        return MedicineMonthlyResponse.of(lastMonthCount, currentMonthCount, monthlyGoalRates, comparison);
+    }
+
+    /** 그 달 1일부터 오늘까지(지난 달은 말일까지) 복용 횟수 합계. 이번 달 이후 날짜는 세지 않는다. */
+    private GoalTally sumUntil(List<GoalTally> dailyDoses, YearMonth month, LocalDate today) {
+        GoalTally sum = GoalTally.NONE;
+        for (int day = 1; day <= dailyDoses.size(); day++) {
+            if (month.atDay(day).isAfter(today)) {
+                break;
+            }
+            sum = sum.plus(dailyDoses.get(day - 1));
+        }
+        return sum;
     }
 
     public MedicineHomeResponse getHomeSchedules(Long memberId) {
@@ -184,7 +220,7 @@ public class MedicineScheduleService {
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue()
+                        medicineItem.dose()
                 );
                 category.addMedicine(detail);
             }
@@ -291,7 +327,7 @@ public class MedicineScheduleService {
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue()
+                        medicineItem.dose()
                 );
                 category.addMedicine(detail);
             }
@@ -404,19 +440,16 @@ public class MedicineScheduleService {
     }
 
     // 그날 유효했던 스케줄을 모두 인증한 날만 달성일로 센다
-    private int countAchievedInMonth(Long memberId, YearMonth month) {
-        return countFullyAchievedDays(calculateMonthlyGoalRates(memberId, month));
-    }
-
-    private int countFullyAchievedDays(List<Double> dailyRates) {
-        return (int) dailyRates.stream()
-                .filter(rate -> rate >= 1.0)
+    private int countFullyAchievedDays(List<GoalTally> dailyDoses) {
+        return (int) dailyDoses.stream()
+                .filter(GoalTally::isComplete)
                 .count();
     }
 
-    private List<Double> calculateMonthlyGoalRates(Long memberId, YearMonth month) {
+    /** 날짜별 복용 횟수(인증 수 / 그날 유효했던 스케줄 수). 1일부터 말일까지 순서대로다. */
+    private List<GoalTally> calculateDailyDoses(Long memberId, YearMonth month) {
         int daysInMonth = month.lengthOfMonth();
-        List<Double> rates = new ArrayList<>();
+        List<GoalTally> doses = new ArrayList<>();
 
         Member member = getMember(memberId);
 
@@ -429,9 +462,9 @@ public class MedicineScheduleService {
 
         if (schedules.isEmpty()) {
             for (int i = 0; i < daysInMonth; i++) {
-                rates.add(0.0);
+                doses.add(GoalTally.NONE);
             }
-            return rates;
+            return doses;
         }
 
         // 한 달치 MedicationProof를 한 번에 조회
@@ -445,33 +478,23 @@ public class MedicineScheduleService {
                         Collectors.mapping(p -> p.getMedicineSchedule().getId(), Collectors.toSet())
                 ));
 
-        // 각 날짜별 달성률 계산 (분모 = 그날 유효했던 스케줄 수)
+        // 각 날짜별 복용 횟수 (분모 = 그날 유효했던 스케줄 수)
         for (int day = 1; day <= daysInMonth; day++) {
             LocalDate date = month.atDay(day);
-
-            long totalForDay = schedules.stream()
-                    .filter(schedule -> schedule.isEffectiveOn(date))
-                    .count();
-
-            if (totalForDay == 0) {
-                rates.add(0.0);
-                continue;
-            }
 
             Set<Long> effectiveScheduleIds = schedules.stream()
                     .filter(schedule -> schedule.isEffectiveOn(date))
                     .map(MedicineSchedule::getId)
                     .collect(Collectors.toSet());
-            int achievedCount = (int) scheduleIdsByDate
+            long achievedCount = scheduleIdsByDate
                     .getOrDefault(date, Set.of())
                     .stream()
                     .filter(effectiveScheduleIds::contains)
                     .count();
 
-            double rate = (double) achievedCount / totalForDay;
-            rates.add(rate);
+            doses.add(GoalTally.of(achievedCount, effectiveScheduleIds.size()));
         }
 
-        return rates;
+        return doses;
     }
 }

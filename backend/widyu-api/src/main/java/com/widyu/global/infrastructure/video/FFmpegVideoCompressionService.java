@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
     private final FFprobe ffprobe;
 
     private static final long TARGET_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
-    private static final int MAX_DURATION_SECONDS = 180; // 3분
+    private static final int MAX_DURATION_SECONDS = 60; // 1분 (#1010)
 
     @Override
     public File compressVideo(MultipartFile inputFile) throws IOException {
@@ -118,14 +119,7 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
     @Override
     public int extractDuration(File inputFile) throws IOException {
         try {
-            FFmpegProbeResult probeResult = ffprobe.probe(inputFile.getAbsolutePath());
-            double durationSeconds = probeResult.getStreams().stream()
-                    .filter(s -> s.codec_type == FFmpegStream.CodecType.VIDEO)
-                    .findFirst()
-                    .map(this::nonNegativeDuration)
-                    .orElse(0.0);
-
-            int duration = (int) Math.round(durationSeconds);
+            int duration = (int) Math.round(probeDurationSeconds(inputFile));
             log.info("동영상 길이 추출 완료: duration={}초", duration);
             return duration;
 
@@ -134,6 +128,43 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
         } catch (Exception e) {
             log.error("동영상 길이 추출 실패: {}", e.getMessage());
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "동영상 길이 추출 중 오류가 발생했습니다.");
+        }
+    }
+
+    /**
+     * 최대 길이를 넘는 영상의 앞부분만 남긴다. 재인코딩 없이 스트림을 복사하므로 화질이 그대로이고 빠르다.
+     * 압축 경로는 압축할 때 같은 상한을 적용하므로, 이 메서드는 압축하지 않는 영상의 상한을 맡는다.
+     */
+    @Override
+    public Optional<File> trimToMaxDuration(File inputFile) throws IOException {
+        File trimmedFile = null;
+        try {
+            // 반올림한 정수 길이로 비교하면 60.4초 같은 영상이 빠지므로 실제 길이로 판단한다.
+            // 길이를 알 수 없으면(0) 자른다. -t 60은 60초 이하 영상을 그대로 둔다.
+            double durationSeconds = probeDurationSeconds(inputFile);
+            if (durationSeconds > 0 && durationSeconds <= MAX_DURATION_SECONDS) {
+                return Optional.empty();
+            }
+
+            trimmedFile = createTempOutputFile("trimmed", "." + getFileExtension(inputFile.getName()));
+            FFmpegBuilder builder = new FFmpegBuilder()
+                    .setInput(inputFile.getAbsolutePath())
+                    .overrideOutputFiles(true)
+                    .addOutput(trimmedFile.getAbsolutePath())
+                    // 출력 빌더의 인자라 `-i <입력> -c copy -t 60 <출력>` 순서가 된다 (FFmpegVideoTrimTest로 실제 실행 확인)
+                    .addExtraArgs("-c", "copy")
+                    .addExtraArgs("-t", String.valueOf(MAX_DURATION_SECONDS))
+                    .done();
+
+            new FFmpegExecutor(ffmpeg, ffprobe).createJob(builder).run();
+
+            log.info("동영상 길이 자르기 완료: 원본={}초, 상한={}초", durationSeconds, MAX_DURATION_SECONDS);
+            return Optional.of(trimmedFile);
+
+        } catch (Exception e) {
+            deleteSilently(trimmedFile);
+            log.error("동영상 길이 자르기 실패: errorType={}", e.getClass().getSimpleName());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "동영상 길이를 줄이지 못했습니다.");
         }
     }
 
@@ -293,6 +324,23 @@ public class FFmpegVideoCompressionService implements VideoCompressionService {
 
     private int alignTo8(int value) {
         return (value / 8) * 8;
+    }
+
+    private double probeDurationSeconds(File inputFile) throws IOException {
+        FFmpegProbeResult probeResult = ffprobe.probe(inputFile.getAbsolutePath());
+        double streamDuration = probeResult.getStreams().stream()
+                .filter(s -> s.codec_type == FFmpegStream.CodecType.VIDEO)
+                .findFirst()
+                .map(this::nonNegativeDuration)
+                .orElse(0.0);
+        if (streamDuration > 0) {
+            return streamDuration;
+        }
+        // MKV, WebM은 비디오 스트림에 길이를 기록하지 않기도 해서 컨테이너 길이로 읽는다
+        if (probeResult.getFormat() != null && probeResult.getFormat().duration > 0) {
+            return probeResult.getFormat().duration;
+        }
+        return 0.0;
     }
 
     private double nonNegativeDuration(FFmpegStream stream) {

@@ -89,7 +89,7 @@ public record SeniorHomeCardsResponse(
             Integer todayTotalCount,
 
             @Schema(description = "다음 복용 예정 정제 수", example = "4")
-            Integer nextDoseCount,
+            Double nextDoseCount,
 
             @Schema(description = "다음 알람 시간 (HH:mm)", example = "14:00")
             String nextAlarmTime,

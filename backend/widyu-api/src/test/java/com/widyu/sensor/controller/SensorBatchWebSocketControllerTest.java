@@ -21,6 +21,7 @@ import com.widyu.global.security.PrincipalDetails;
 import com.widyu.global.websocket.WebSocketExceptionHandler;
 import com.widyu.global.websocket.WebSocketWorkDispatcher;
 import com.widyu.member.MemberRole;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.application.SensorBatchService;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
@@ -67,6 +68,7 @@ class SensorBatchWebSocketControllerTest {
 
     @Mock private SensorBatchService sensorBatchService;
     @Mock private SimpMessagingTemplate messagingTemplate;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @Test
     @DisplayName("유효한 배치를 전송하면 서비스가 반환한 저장 결과를 그대로 ACK로 응답한다")
@@ -74,7 +76,7 @@ class SensorBatchWebSocketControllerTest {
         // given
         Long memberId = 42L;
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
-        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong()))
+        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong(), eq(SensorIngestChannel.WS)))
                 .willReturn(SensorBatchResultResponse.of(BATCH_ID, SEQ, SensorBatchResult.STORED));
 
         // when
@@ -93,7 +95,7 @@ class SensorBatchWebSocketControllerTest {
         Long memberId = 42L;
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.SENSOR_BATCH_INVALID))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
 
         // when
         SensorBatchResultResponse response = controller().process(memberId, payload, RECEIVED_AT_MS);
@@ -114,7 +116,7 @@ class SensorBatchWebSocketControllerTest {
         String json = "{\"v\":2,\"stream\":\"imu_watch\",\"batch_id\":\"bad\\nINFO 가짜 로그\",\"seq\":" + SEQ + "}";
         byte[] payload = json.getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.SENSOR_BATCH_INVALID))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
 
         // when
         SensorBatchResultResponse response = controller().process(42L, payload, RECEIVED_AT_MS);
@@ -132,7 +134,7 @@ class SensorBatchWebSocketControllerTest {
         // given
         byte[] payload = "{\"v\":2,\"stream\":\"imu_unknown\"}".getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.SENSOR_BATCH_INVALID))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
 
         // when & then
         assertThatThrownBy(() -> controller().process(42L, payload, RECEIVED_AT_MS))
@@ -147,7 +149,7 @@ class SensorBatchWebSocketControllerTest {
         Long memberId = 42L;
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
 
         // when & then
         assertThatThrownBy(() -> controller().process(memberId, payload, RECEIVED_AT_MS))
@@ -157,13 +159,29 @@ class SensorBatchWebSocketControllerTest {
     }
 
     @Test
+    @DisplayName("공백뿐인 원문이 거절되면 ACK 없이 원래 예외를 그대로 전파한다")
+    void 공백뿐인_원문이_거절되면_원래_예외를_전파한다() {
+        // given
+        Long memberId = 42L;
+        byte[] payload = "   ".getBytes(StandardCharsets.UTF_8);
+        willThrow(new BusinessException(ErrorCode.SENSOR_PAYLOAD_INVALID))
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
+
+        // when & then
+        assertThatThrownBy(() -> controller().process(memberId, payload, RECEIVED_AT_MS))
+                .isInstanceOf(BusinessException.class)
+                .extracting(thrown -> ((BusinessException) thrown).getErrorCode())
+                .isEqualTo(ErrorCode.SENSOR_PAYLOAD_INVALID);
+    }
+
+    @Test
     @DisplayName("검증에 실패한 원문이 JSON이 아니면 ACK 없이 예외를 그대로 전파한다")
     void 검증에_실패한_원문이_JSON이_아니면_예외를_전파한다() {
         // given
         Long memberId = 42L;
         byte[] payload = "not-json".getBytes(StandardCharsets.UTF_8);
         willThrow(new BusinessException(ErrorCode.SENSOR_PAYLOAD_INVALID))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
 
         // when & then
         assertThatThrownBy(() -> controller().process(memberId, payload, RECEIVED_AT_MS))
@@ -192,7 +210,8 @@ class SensorBatchWebSocketControllerTest {
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
         PrincipalDetails principal = new PrincipalDetails(memberId, MemberRole.USER);
         SensorBatchResultResponse stored = SensorBatchResultResponse.of(BATCH_ID, SEQ, SensorBatchResult.STORED);
-        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong())).willReturn(stored);
+        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong(), eq(SensorIngestChannel.WS)))
+                .willReturn(stored);
         ArgumentCaptor<Map<String, Object>> headers = ArgumentCaptor.captor();
 
         // when
@@ -212,7 +231,7 @@ class SensorBatchWebSocketControllerTest {
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
         PrincipalDetails principal = new PrincipalDetails(memberId, MemberRole.USER);
         willThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED))
-                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong());
+                .given(sensorBatchService).ingest(any(Long.class), any(byte[].class), anyLong(), any());
         ArgumentCaptor<Object> body = ArgumentCaptor.captor();
 
         // when
@@ -234,7 +253,7 @@ class SensorBatchWebSocketControllerTest {
         Long memberId = 42L;
         byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
         PrincipalDetails principal = new PrincipalDetails(memberId, MemberRole.USER);
-        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong()))
+        given(sensorBatchService.ingest(eq(memberId), same(payload), anyLong(), eq(SensorIngestChannel.WS)))
                 .willReturn(SensorBatchResultResponse.of(BATCH_ID, SEQ, SensorBatchResult.STORED));
         List<Runnable> queued = new ArrayList<>();
         SensorBatchWebSocketController controller = controller(queued::add);
@@ -248,7 +267,8 @@ class SensorBatchWebSocketControllerTest {
 
         // then: 작업 시작 시각에 잡았다면 dispatchedAt + 대기 시간 이후 값이 넘어간다
         ArgumentCaptor<Long> receivedAt = ArgumentCaptor.forClass(Long.class);
-        then(sensorBatchService).should().ingest(eq(memberId), same(payload), receivedAt.capture());
+        then(sensorBatchService).should()
+                .ingest(eq(memberId), same(payload), receivedAt.capture(), eq(SensorIngestChannel.WS));
         assertThat(receivedAt.getValue()).isBetween(beforeReceive, dispatchedAt);
     }
 
@@ -279,6 +299,22 @@ class SensorBatchWebSocketControllerTest {
     }
 
     @Test
+    @DisplayName("본문 상한을 넘는 배치를 받으면 거절 기록 없이 WS 경로의 REJECTED로 센다")
+    void 본문_상한을_넘는_배치를_받으면_WS_경로의_REJECTED로_센다() {
+        // given
+        byte[] payload = oversized(BATCH_JSON);
+        PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
+
+        // when
+        controller(new ArrayList<Runnable>()::add).ingestBatch(message(payload), headerAccessor(principal));
+
+        // then: 서비스 밖 거절이라 서비스(거절 기록)를 부르지 않는다(LLD-0128 5.3)
+        verifyNoInteractions(sensorBatchService);
+        assertThat(meterRegistry.counter(SensorBatchService.RECEIVED_METRIC,
+                "channel", "WS", "stream", "unknown", "result", "REJECTED").count()).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("본문 상한을 넘는 배치에 식별자가 없으면 센서 실행기에 넘기지 않고 예외가 발생한다")
     void 본문_상한을_넘는_배치에_식별자가_없으면_실행기에_넘기지_않고_예외가_발생한다() {
         // given
@@ -300,11 +336,11 @@ class SensorBatchWebSocketControllerTest {
     }
 
     private SensorBatchWebSocketController controller(TaskExecutor executor) {
-        SimpleMeterRegistry registry = new SimpleMeterRegistry();
         WebSocketWorkDispatcher dispatcher =
-                new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), registry);
+                new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), meterRegistry);
         SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null);
-        return new SensorBatchWebSocketController(sensorBatchService, new ObjectMapper(), dispatcher, executor, properties);
+        return new SensorBatchWebSocketController(
+                sensorBatchService, new ObjectMapper(), dispatcher, executor, properties, meterRegistry);
     }
 
     /** 본문 상한을 1바이트 넘는 배치. 식별자 뒤를 JSON 공백으로 채운다. */

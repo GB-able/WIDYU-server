@@ -35,6 +35,7 @@ public class AlbumCommentService {
         Album album = albumRepository.findByIdAndStatus(albumId, Status.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
         albumPermissionService.checkFamilyAccess(album, currentMember);
+        albumPermissionService.checkUnlocked(album, currentMember);
 
         AlbumComment comment;
         if (request.parentCommentId() != null) {

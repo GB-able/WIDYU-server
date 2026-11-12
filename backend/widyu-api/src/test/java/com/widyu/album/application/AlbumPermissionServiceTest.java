@@ -116,4 +116,59 @@ class AlbumPermissionServiceTest {
         assertThat(albumPermissionService.isUnlockedFor(unlocked, senior)).isTrue();
         assertThat(albumPermissionService.isUnlockedFor(locked, senior)).isFalse();
     }
+
+    @Test
+    @DisplayName("시니어가 해금하지 않은 보호자 앨범에 좋아요·댓글을 하려 하면 ALBUM_LOCKED 예외가 발생한다")
+    void 해금하지_않은_보호자_앨범은_ALBUM_LOCKED_예외가_발생한다() {
+        // given
+        Member senior = mock(Member.class);
+        given(senior.getType()).willReturn(MemberType.SENIOR);
+        Album album = mock(Album.class);
+        given(album.requiresUnlock()).willReturn(true);
+        given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> albumPermissionService.checkUnlocked(album, senior))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
+    }
+
+    @Test
+    @DisplayName("시니어가 해금한 보호자 앨범은 좋아요·댓글을 허용한다")
+    void 해금한_보호자_앨범은_좋아요_댓글을_허용한다() {
+        // given
+        Member senior = mock(Member.class);
+        given(senior.getType()).willReturn(MemberType.SENIOR);
+        Album album = mock(Album.class);
+        given(album.requiresUnlock()).willReturn(true);
+        given(albumUnlockService.isAlbumUnlocked(album, senior)).willReturn(true);
+
+        // when & then
+        assertThatNoException().isThrownBy(() -> albumPermissionService.checkUnlocked(album, senior));
+    }
+
+    @Test
+    @DisplayName("보호자는 해금 기록 없이 좋아요·댓글을 허용한다")
+    void 보호자는_해금_없이_좋아요_댓글을_허용한다() {
+        // given
+        Member guardian = mock(Member.class);
+        given(guardian.getType()).willReturn(MemberType.GUARDIAN);
+
+        // when & then
+        assertThatNoException().isThrownBy(() -> albumPermissionService.checkUnlocked(mock(Album.class), guardian));
+        then(albumUnlockService).should(never()).isAlbumUnlocked(any(), any());
+    }
+
+    @Test
+    @DisplayName("시니어가 올린 앨범은 해금 기록 없이 좋아요·댓글을 허용한다")
+    void 시니어가_올린_앨범은_해금_없이_좋아요_댓글을_허용한다() {
+        // given
+        Member senior = mock(Member.class);
+        given(senior.getType()).willReturn(MemberType.SENIOR);
+        Album album = mock(Album.class);
+        given(album.requiresUnlock()).willReturn(false);
+
+        // when & then
+        assertThatNoException().isThrownBy(() -> albumPermissionService.checkUnlocked(album, senior));
+    }
 }

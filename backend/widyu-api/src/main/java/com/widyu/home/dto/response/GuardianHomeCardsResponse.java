@@ -25,7 +25,7 @@ public record GuardianHomeCardsResponse(
         @Schema(description = "약 복용 카드")
         MedicineInfo medicine,
 
-        @Schema(description = "추억 앨범 카드 (최대 3장, 점수 기반 추천)")
+        @Schema(description = "추억 앨범 카드 (가족 앨범 최신 10개, 최신순)")
         List<AlbumInfo> albums,
 
         @Schema(description = "건강달력 카드의 다음 일정 (현재 시각 이후 가장 가까운 일정). null이면 일정 추가 요청 컴포넌트를 표시합니다.")
