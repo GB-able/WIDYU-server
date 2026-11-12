@@ -42,6 +42,7 @@
 ### `pay` — 결제·포인트
 - **불변식**: 결제는 포인트를 충전·환수하지 않는다(ADR-0029). 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동
 - 결제 트랜잭션 경계·멱등성은 → LLD-0003·0015·0016·0017, ADR-0012
+- 앨범 해제는 `READ_COMMITTED`에서 시니어 포인트 행을 먼저 잠그고(`refresh(..., PESSIMISTIC_WRITE)`) 중복을 확인한다. 같은 시니어의 동시 해제가 교착(503) 대신 `ALBUM_UNLOCK_4001`로 끝난다 → LLD-0069 (#1025)
 
 ### `goal` — 건강 목표
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`: 500~10,000보, 정한 적 없으면 null #1003), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
