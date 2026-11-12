@@ -1,6 +1,8 @@
 package com.widyu.album.application;
 
 import com.widyu.album.Album;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.application.FamilyAccessService;
@@ -32,5 +34,12 @@ public class AlbumPermissionService {
             return true;
         }
         return albumUnlockService.isAlbumUnlocked(album, me);
+    }
+
+    // 잠금 해제 전에는 좋아요·댓글을 남길 수 없다
+    public void checkUnlocked(Album album, Member me) {
+        if (!isUnlockedFor(album, me)) {
+            throw new BusinessException(ErrorCode.ALBUM_LOCKED);
+        }
     }
 }

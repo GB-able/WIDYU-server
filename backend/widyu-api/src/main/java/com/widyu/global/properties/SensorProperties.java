@@ -18,6 +18,9 @@ public record SensorProperties(
     /**
      * 워치에 내려보내는 수집 설정(지시서 B12, 정책 1.6.4).
      * 참가자별 값이 아니라 실증 프로토콜 단위 운영값이다.
+     *
+     * <p>{@code defaultCollectionMode}는 열린 회차가 없을 때의 수집 모드다(#989). 운영은 {@code product},
+     * 시험을 늘 실험 모드로 하는 개발 서버는 {@code research}로 둔다. 다른 값이면 기동하지 않는다.
      */
     public record Config(
             String gyroMode,
@@ -30,8 +33,21 @@ public record SensorProperties(
             int locationMoveSec,
             int locationKeepaliveSec,
             int heartbeatSec,
-            int refreshSec
-    ) {}
+            int refreshSec,
+            String defaultCollectionMode
+    ) {
+
+        public Config {
+            if (defaultCollectionMode == null) {
+                defaultCollectionMode = "product";
+            }
+            if (!"product".equals(defaultCollectionMode) && !"research".equals(defaultCollectionMode)) {
+                throw new IllegalArgumentException(
+                        "sensor.config.default-collection-mode는 product 또는 research여야 합니다: "
+                                + defaultCollectionMode);
+            }
+        }
+    }
 
     /** 내보내기 설정(LLD-0050 4절). 값 집합이 미정인 상수(X1·X8·X9)를 여기에 모은다. */
     public record Export(

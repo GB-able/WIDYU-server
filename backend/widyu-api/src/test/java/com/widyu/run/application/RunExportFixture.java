@@ -313,7 +313,7 @@ final class RunExportFixture {
         return new com.widyu.global.properties.SensorProperties(
                 32_768,
                 new com.widyu.global.properties.SensorProperties.Config(
-                        "continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60),
+                        "continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60, "product"),
                 new com.widyu.global.properties.SensorProperties.Export(
                         5000L,
                         900_000L,

@@ -18,6 +18,7 @@
 - #659: `study_participation`과 `collection_run.study_participation_id`
 - #669: `decision_record`, `fcm_outbox.decision_id`, `fcm_notification.decision_id`
 - #674: `incident`. 아직 배포 전이면 아래 SQL에서 `incident` 캡처·삭제·검증만 건너뛴다
+- #987: `sensor_batch_rejection`. 아직 배포 전이면 거절 기록 캡처·삭제·검증만 건너뛴다
 
 열이나 테이블이 없는데 SQL을 그대로 실행하지 않는다. `SHOW TABLES`와 `SHOW COLUMNS`로 실제 운영 스키마를 확인하고 결과를 대장에 남긴다.
 
@@ -66,6 +67,7 @@ POST /api/v1/admin/studies/participations/{participationId}/withdrawal
 | MySQL `sensor_batch` | IMU·심박·ECG 배치 인덱스 | `run_id` |
 | S3 `sensor/...` | 배치 원문 | 삭제 전 캡처한 `sensor_batch.s3_key` |
 | MySQL `heart_rate_event`, `heart_rate_emergency` | 배치 심박·위급 | 삭제 전 캡처한 `batch_id`, 회원·측정시각 |
+| MySQL `sensor_batch_rejection` | 서버가 받고 거절한 묶음 기록(#987). 원문·센서값은 없지만 회원·기기·묶음 식별자(`member_id`, `device_id`, `batch_id`, `session_id`, `seq`)와 수신 시각이 있다 | `run_id`가 없으므로 회원과 회차 기간의 수신 시각, 또는 캡처한 회원·`batch_id` |
 | MySQL `location_fix`, `device_heartbeat`, `device_event` | 위치·기기 상태·기기 상태 바뀜 | `run_id` |
 | MySQL `clock_mapping`, `run_marker`, `run_device_assignment` | 시계 기준점·마커·배정 | 삭제 전 캡처한 ID. 다른 회차가 공유하는 시계 기준점은 보존 |
 | MySQL `decision_record`, `incident` | 판정·본인확인·사후 판정 | `run_id`, `decision_id` |
@@ -92,7 +94,7 @@ WHERE p.participation_id = :pid;
 
 -- 전체 철회용 배치. 일부 ECG 철회면 마지막 조건을 AND b.stream = 'ecg'로 좁힌다.
 CREATE TEMPORARY TABLE wd_batches AS
-SELECT b.batch_id, b.s3_key, b.clock_mapping_id
+SELECT b.batch_id, b.member_id, b.s3_key, b.clock_mapping_id
 FROM sensor_batch b JOIN wd_runs r ON r.run_id = b.run_id;
 
 CREATE TEMPORARY TABLE wd_heart_events AS
@@ -131,6 +133,20 @@ CREATE TEMPORARY TABLE wd_device_events AS
 SELECT e.device_event_id
 FROM device_event e JOIN wd_runs r ON r.run_id = e.run_id;
 
+-- 거절 기록에는 run_id가 없다. 회차 기간에 받은 그 회원의 거절과, 회원과 batch_id가 회차 배치와 같은 거절(회차가 닫힌 뒤 재전송이 거절된 경우)을 함께 잡는다.
+-- 일부 ECG 철회면 두 SELECT 모두에 AND j.stream = 'ecg'를 붙인다.
+CREATE TEMPORARY TABLE wd_batch_rejections AS
+SELECT j.sensor_batch_rejection_id
+FROM sensor_batch_rejection j
+JOIN collection_run r ON r.member_id = j.member_id
+JOIN wd_runs w ON w.collection_run_id = r.id
+WHERE j.received_at_ms >= r.started_at_ms
+  AND j.received_at_ms <= COALESCE(r.ended_at_ms, UNIX_TIMESTAMP(NOW(3)) * 1000)
+UNION
+SELECT j.sensor_batch_rejection_id
+FROM sensor_batch_rejection j
+JOIN wd_batches b ON b.batch_id = j.batch_id AND b.member_id = j.member_id;
+
 CREATE TEMPORARY TABLE wd_markers AS
 SELECT m.id, m.clock_mapping_id
 FROM run_marker m JOIN wd_runs r ON r.collection_run_id = m.run_id;
@@ -152,7 +168,7 @@ SELECT f.id FROM fcm_notification f JOIN wd_decisions d ON d.decision_id = f.dec
 
 `clock_mapping`은 다른 배치나 마커가 같은 값을 참조하면 공유 자료이므로 삭제 대상에서 제외한다. 대상 배치·마커를 지운 뒤 `wd_clock_candidates` 중 남은 참조가 0인 값만 삭제한다.
 
-일부 위치 철회는 `location_fix` PK와 `run_export`만 캡처한다. 일부 ECG 철회는 `stream='ecg'`인 배치·S3 키와 `run_export`만 캡처한다. 위 전체 철회용 심박·판정·인시던트 캡처 SQL을 실행하지 않는다.
+일부 위치 철회는 `location_fix` PK와 `run_export`만 캡처한다. 일부 ECG 철회는 `stream='ecg'`인 배치·S3 키, `stream='ecg'`인 거절 기록과 `run_export`만 캡처한다. 위 전체 철회용 심박·판정·인시던트 캡처 SQL을 실행하지 않는다.
 
 ## 4. 외부 사본 삭제
 
@@ -175,9 +191,10 @@ S3 삭제가 일부 실패하면 `sensor_batch`와 `run_export` 인덱스 행을
 5. `heart_rate_event` — `wd_heart_events.heart_rate_event_id`
 6. `sensor_batch` — `wd_batches.batch_id`
 7. `location_fix`, `device_heartbeat`, `device_event`, `run_marker`, `run_device_assignment` — 각각 `wd_location_fixes`, `wd_heartbeats`, `wd_device_events`, `wd_markers`, `wd_assignments`의 PK
-8. `clock_mapping` — 캡처한 후보 중 다른 `sensor_batch`·`run_marker`가 더 이상 참조하지 않는 행만
-9. `run_export` — `wd_exports.id`
-10. `collection_run` — `wd_runs.run_id` (`ALL`일 때만)
+8. `sensor_batch_rejection` — `wd_batch_rejections.sensor_batch_rejection_id`(#987 배포 시)
+9. `clock_mapping` — 캡처한 후보 중 다른 `sensor_batch`·`run_marker`가 더 이상 참조하지 않는 행만
+10. `run_export` — `wd_exports.id`
+11. `collection_run` — `wd_runs.run_id` (`ALL`일 때만)
 
 일부 철회에서는 0.2절 대응표의 자료와 기존 내보내기만 지운다. 참여 기록·회차와 다른 스트림은 유지한다.
 
@@ -200,6 +217,8 @@ SELECT COUNT(*) FROM incident i JOIN wd_incidents w ON w.incident_id = i.inciden
 SELECT COUNT(*) FROM location_fix l JOIN wd_location_fixes w ON w.location_fix_id = l.location_fix_id;
 SELECT COUNT(*) FROM device_heartbeat h JOIN wd_heartbeats w ON w.device_heartbeat_id = h.device_heartbeat_id;
 SELECT COUNT(*) FROM device_event e JOIN wd_device_events w ON w.device_event_id = e.device_event_id;
+-- #987이 배포된 경우
+SELECT COUNT(*) FROM sensor_batch_rejection j JOIN wd_batch_rejections w ON w.sensor_batch_rejection_id = j.sensor_batch_rejection_id;
 SELECT COUNT(*) FROM run_marker m JOIN wd_markers w ON w.id = m.id;
 SELECT COUNT(*) FROM run_device_assignment a JOIN wd_assignments w ON w.id = a.id;
 SELECT COUNT(*) FROM collection_run r JOIN wd_runs w ON w.collection_run_id = r.id;

@@ -20,8 +20,11 @@ import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorBatchRejection;
 import com.widyu.sensor.SensorDroppedRange;
+import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.dto.response.SensorWindowExportFile;
+import com.widyu.sensor.repository.SensorBatchRejectionRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
 import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import java.io.ByteArrayInputStream;
@@ -54,6 +57,7 @@ class SensorWindowExportServiceTest {
     @Mock private DeviceEventRepository deviceEventRepository;
     @Mock private SensorBatchRepository sensorBatchRepository;
     @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
+    @Mock private SensorBatchRejectionRepository sensorBatchRejectionRepository;
     @Mock private S3Service s3Service;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private SensorWindowExportService service;
@@ -72,6 +76,7 @@ class SensorWindowExportServiceTest {
         given(deviceHeartbeatRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(28L, startMs, endMs))
                 .willReturn(List.of());
         SensorBatch heart = batch("h1", "hr", "sensor/h1.json");
+        given(heart.getIngestChannel()).willReturn(SensorIngestChannel.WS);
         SensorBatch brokenImu = batch("i1", "imu_watch", "sensor/i1.json");
         given(sensorBatchRepository.findMemberWindowBatches(28L, startMs, endMs))
                 .willReturn(List.of(heart, brokenImu));
@@ -83,6 +88,11 @@ class SensorWindowExportServiceTest {
                 .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").fromSeq(10L)
                         .toSeq(15L).reason("queue_overflow").tsMs(FROM_MS + 120_000)
                         .serverReceivedAtMs(FROM_MS + 125_000).build()));
+        given(sensorBatchRejectionRepository.findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc(
+                28L, startMs, endMs))
+                .willReturn(List.of(SensorBatchRejection.builder().memberId(28L).deviceId("gw-1").stream("hr")
+                        .batchId("01j8zk3v9x2q4m7n8p1r5s6t7u").sessionId("s-01").seq(12L).errorCode("SENSOR_4001")
+                        .ingestChannel(SensorIngestChannel.REST).receivedAtMs(FROM_MS + 180_000).build()));
 
         // when
         SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
@@ -91,7 +101,14 @@ class SensorWindowExportServiceTest {
         Map<String, String> entries = unzip(file.bytes());
         assertThat(file.fileName()).isEqualTo("sensor_member28_20261030T0900-20261030T0938.zip");
         assertThat(entries).containsOnlyKeys("location.csv", "sensor_batches.csv", "device_heartbeat.csv",
-                "device_events.csv", "dropped_ranges.csv", "hr.csv", "imu.csv", "summary.csv");
+                "device_events.csv", "dropped_ranges.csv", "rejections.csv", "hr.csv", "imu.csv", "summary.csv");
+        assertThat(entries.get("sensor_batches.csv").lines().findFirst().orElseThrow())
+                .endsWith(",server_received_at_ms,ingest_channel");
+        assertThat(entries.get("sensor_batches.csv")).contains(",h1,").contains(",WS\n");
+        assertThat(entries.get("rejections.csv").lines()).containsExactly(
+                "phase,ts_kst,ts_ms,stream,device_id,batch_id,session_id,seq,error_code,ingest_channel",
+                "during,2026-10-30 09:13:00.000," + (FROM_MS + 180_000)
+                        + ",hr,gw-1,01j8zk3v9x2q4m7n8p1r5s6t7u,s-01,12,SENSOR_4001,REST");
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
                 "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms",
                 "during,2026-10-30 09:12:00.000," + (FROM_MS + 120_000) + ",s-01,10,15,queue_overflow,"
@@ -104,11 +121,12 @@ class SensorWindowExportServiceTest {
                 .contains("rows:location.csv,1")
                 .contains("rows:hr.csv,1")
                 .contains("rows:dropped_ranges.csv,1")
+                .contains("rows:rejections.csv,1")
                 .contains("skipped_batch,i1 원문 해석 불가");
     }
 
     @Test
-    @DisplayName("구간에 버린 묶음 기록이 없으면 헤더만 있는 dropped_ranges.csv가 들어간다")
+    @DisplayName("구간에 버린 묶음과 거절 기록이 없으면 헤더만 있는 dropped_ranges.csv와 rejections.csv가 들어간다")
     void 버린_묶음_기록이_없으면_헤더만_있는_파일이_들어간다() throws Exception {
         // given
         given(memberRepository.existsById(28L)).willReturn(true);
@@ -121,6 +139,9 @@ class SensorWindowExportServiceTest {
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
                 "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms");
         assertThat(entries.get("summary.csv")).contains("rows:dropped_ranges.csv,0");
+        assertThat(entries.get("rejections.csv").lines()).containsExactly(
+                "phase,ts_kst,ts_ms,stream,device_id,batch_id,session_id,seq,error_code,ingest_channel");
+        assertThat(entries.get("summary.csv")).contains("rows:rejections.csv,0");
     }
 
     @Test

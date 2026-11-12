@@ -138,15 +138,19 @@ finally:
 2. videoCompressionService.needsCompression(file)
    - true: compressVideo(MultipartFile) → tempCompressedFile
    - false: toTempFile(file) → sourceFile
-3. extractDuration(sourceFile)
+3. trimToMaxDuration(sourceFile) (#1010)
+   - 반올림 전 실제 길이 60초 이하: 그대로 진행
+   - 60초 초과: 스트림 복사(-c copy -t 60)로 앞 60초만 남긴 tempTrimmedFile을 이후 단계에 쓴다
+   - 압축 여부와 관계없이 모든 영상에 같은 상한이 걸린다
+4. extractDuration(최종 영상 파일)
    - File을 직접 FFprobe로 분석 (추가 복사 없음)
-4. generateThumbnail(sourceFile, duration)
+5. generateThumbnail(최종 영상 파일, duration)
    - seekSeconds = max(1.0, duration * 0.1)
-5. S3 업로드
+6. S3 업로드
    - albums/videos/{memberId}/...
    - albums/thumbnails/{memberId}/...
-6. VideoUploadResult(videoUrl, thumbnailUrl, duration) 반환
-7. finally: 압축 파일, 썸네일 파일, 소유한 sourceFile 삭제
+7. VideoUploadResult(videoUrl, thumbnailUrl, duration) 반환
+8. finally: 압축 파일, 자른 파일, 썸네일 파일, 소유한 sourceFile 삭제
 ```
 
 ### 5-4. FFmpeg 처리 (`FFmpegVideoCompressionService`)
@@ -156,11 +160,18 @@ compressVideo:
   1. MultipartFile → temp input File
   2. FFprobe로 비디오 스트림 검증
   3. 500MB 이하가 될 때까지 최대 5회 압축
-  4. 3분 초과 영상은 -t 180 적용
+  4. 1분 초과 영상은 -t 60 적용
+
+trimToMaxDuration (#1010):
+  1. FFprobe로 첫 VIDEO stream 길이를 반올림 없이 읽어 60초 이하면 빈 값
+     - stream 길이가 없으면(MKV, WebM 등) 컨테이너(format) 길이로 읽는다. extractDuration도 같은 규칙이다
+     - 둘 다 없으면 자르기를 실행한다 (-t 60은 60초 이하 영상을 그대로 둔다)
+  2. 입력과 같은 확장자의 임시 파일로 -c copy -t 60 (재인코딩 없음)
+  3. 실패하면 FILE_UPLOAD_FAILED (async 경로에서는 앨범 DELETED)
 
 extractDuration:
   1. File path를 FFprobe로 직접 분석
-  2. 첫 번째 VIDEO stream duration을 round
+  2. 첫 번째 VIDEO stream duration을 round (없으면 컨테이너 duration, #1010)
 
 generateThumbnail:
   1. File path를 FFmpeg input으로 사용
@@ -192,6 +203,7 @@ HTTP 202 이후 async 실패는 클라이언트 요청에 직접 예외로 반�
 - [x] async 완료 전까지 영상 URL/썸네일/길이는 placeholder로 저장된다
 - [x] 압축 완료 File은 길이 추출과 썸네일 생성에 직접 전달되어 추가 복사를 만들지 않는다
 - [x] 썸네일은 영상 길이의 10% 지점, 최소 1초에서 추출된다
+- [x] 60초를 넘는 영상은 압축 여부와 관계없이 앞 60초만 저장되고, 저장 길이와 썸네일도 자른 영상 기준이다 (#1010)
 - [x] async 실패 시 처리 중 앨범은 삭제 상태가 된다
 - [x] async 처리 후 임시 파일은 finally에서 삭제된다
 - [x] Swagger에 202 Accepted 응답이 반영된다
@@ -218,6 +230,6 @@ HTTP 202 이후 async 실패는 클라이언트 요청에 직접 예외로 반�
 - `AlbumFacadeImpl.java`: 접수 후 async 처리 분기
 - `AlbumFileService.java`: 이미지 즉시 업로드, 영상 준비/처리
 - `AlbumVideoProcessingService.java`: `@Async @Transactional` 영상 처리
-- `FFmpegVideoCompressionService.java`: 압축, 길이 추출, 썸네일 생성
+- `FFmpegVideoCompressionService.java`: 압축, 길이 추출, 1분 초과 영상 자르기, 썸네일 생성
 - `Album.java` (widyu-domain): PROCESSING/ACTIVE 상태 전환
 - `apiDocs/api/album/video-benchmark-results.md`: 영상 처리 벤치마크

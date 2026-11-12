@@ -420,14 +420,14 @@ class CollectionRunServiceTest {
     }
 
     @Test
-    @DisplayName("회원에게 열린 회차가 있는지 조회하면 저장소 결과를 그대로 반환한다")
-    void 회원에게_열린_회차가_있는지_조회하면_저장소_결과를_그대로_반환한다() {
+    @DisplayName("회원의 열린 회차 수집 모드를 조회하면 저장소 결과를 그대로 반환한다")
+    void 회원의_열린_회차_수집_모드를_조회하면_저장소_결과를_그대로_반환한다() {
         // given
-        given(collectionRunRepository.existsByMemberIdAndStatus(MEMBER_ID, CollectionRunStatus.OPEN))
-                .willReturn(true);
+        given(collectionRunRepository.findCollectionModeByMemberIdAndStatus(MEMBER_ID, CollectionRunStatus.OPEN))
+                .willReturn(Optional.of("product"));
 
         // when & then
-        assertThat(collectionRunService.hasOpenRun(MEMBER_ID)).isTrue();
+        assertThat(collectionRunService.findOpenRunCollectionMode(MEMBER_ID)).contains("product");
     }
 
     private void givenEmptyRunContents(CollectionRun run) {

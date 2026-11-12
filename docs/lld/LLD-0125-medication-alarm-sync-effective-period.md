@@ -52,9 +52,9 @@
     "revision": 45,
     "timeZone": "Asia/Seoul",
     "schedules": [
-      {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
-      {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2, "effectiveFrom": "2026-10-15", "effectiveTo": null},
-      {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2, "effectiveFrom": "2026-11-10", "effectiveTo": null}
+      {"scheduleId": 15, "alarmTime": "08:00", "doseCount": 1.0, "effectiveFrom": "2026-10-01", "effectiveTo": "2026-11-09"},
+      {"scheduleId": 17, "alarmTime": "19:27", "doseCount": 2.0, "effectiveFrom": "2026-10-15", "effectiveTo": null},
+      {"scheduleId": 21, "alarmTime": "20:00", "doseCount": 2.0, "effectiveFrom": "2026-11-10", "effectiveTo": null}
     ],
     "completed": ["15:2026-11-09"]
   }
@@ -63,6 +63,7 @@
 
 | 필드 | 타입 | 뜻 |
 | --- | --- | --- |
+| `doseCount` | 소수 | 이 시각에 먹을 약 개수(정 수) 합. 0.5정 단위라 `2.5`가 올 수 있고 정수도 `2.0`으로 실린다 (#1001) |
 | `effectiveFrom` | `yyyy-MM-dd` | 이 버전이 유효한 첫날(`timeZone` 기준). 서버 시작 시 비어 있는 행을 생성일로 채우므로(`MedicineScheduleEffectivePeriodInitializer`) 실제로는 비어 있지 않다 |
 | `effectiveTo` | `yyyy-MM-dd` 또는 `null` | 유효한 마지막 날. `null`이면 끝나는 날이 없다. 항상 키가 실린다 |
 

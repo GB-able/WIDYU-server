@@ -26,7 +26,7 @@
 - 사진/영상 CRUD + S3. `AlbumLike`·`AlbumComment`(댓글+답글 2단계)·`AlbumView`·`AlbumUnlock`
 - **불변식**: Feed 쿼리는 `status=ACTIVE`만 (PROCESSING 자동 제외). Status enum: ACTIVE/INACTIVE/DELETED/PROCESSING
 - 비동기 업로드: 사진 즉시(sync) → 영상 `@Async`(FFmpeg 썸네일→S3→ACTIVE, 실패 시 DELETED). → LLD-0006·0012·0013, ADR-0004·0010·0011
-- 잠금해제: 50포인트, `AlbumUnlock`, 이후 영구 접근
+- 잠금해제: 50포인트, `AlbumUnlock`, 이후 영구 접근. 잠금 판정은 `AlbumPermissionService.isUnlockedFor` 하나다(보호자가 조회하는 경우와 시니어가 작성한 앨범은 잠기지 않음. 잠기는 것은 시니어가 보호자 작성 앨범을 볼 때). 잠금 전에는 좋아요·댓글 작성이 403 `ALBUM_UNLOCK_4031`이고 상세 `comments`가 빈 배열이다 → LLD-0021
 
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
@@ -40,6 +40,7 @@
 
 ### `goal` — 건강 목표
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
+- **목표 캘린더 월 범위**: 약 복용·걷기 월간과 건강 일정 캘린더는 이번 달(KST) 기준 앞뒤 12개월만 조회한다(400 `GOAL_4000`). 보호자의 약 복용 월간은 미래 달도 400(`GOAL_4001`). 검사는 `GoalMonthValidator` 한 곳이다(#1005)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. 회원당 종료되지 않은 알람은 최대 6개(생성 시 회원 행 잠금 뒤 검사, #932). 같은 시각의 종료되지 않은 알람은 하나만 둔다(생성, 시각을 바꾸는 수정 시 409 `MEDICINE_SCHEDULE_4090`, #982). → LLD-0007·0008·0009
 
 ### `heart` — 심박수 (독립 도메인)
@@ -73,7 +74,7 @@
 - S3 PUT은 처리 스레드에서 동기(`apiCallTimeout` 5s), 인덱스 INSERT는 그 뒤. WebSocket 경로의 처리 스레드는 센서 전용 실행기다(LLD-0091). 서비스에 `@Transactional` 없음. 무결성 예외는 `findByBatchId` 재조회 후 원문 해시까지 같을 때만 `DUPLICATE`
 - **원시 센서값을 어떤 로그 레벨에도 남기지 않는다** (정책 1.6.7). memberId·stream·seq·accN·gyroN·result만
 - 시계 매핑은 `clock_mapping` 테이블(기기 단위 UK `clock_mapping_id`). 같은 id에 다른 다섯 값·다른 기기면 409(`SENSOR_4090`). 등록은 S3 PUT 앞, 자기 트랜잭션 → LLD-0044
-- **수집 설정 하달**: `GET /api/v1/sensor/config`가 설정 전체와 호출자 기준 `collectionMode`를 준다. 모드는 **열린 회차 유무**로 정하고(있으면 research) 회차 열기·닫기가 곧 전환 수단이라 변경 API가 없다. 배치가 실어 보낸 `collection_mode`·`gyro_mode`·`fs_hz_requested`가 지시값과 다르면 `config_mismatch=true`로 표시만 하고 **거부하지 않는다** → LLD-0046
+- **수집 설정 하달**: `GET /api/v1/sensor/config`가 설정 전체와 호출자 기준 `collectionMode`를 준다. 모드는 **열린 회차**로 정하고(있으면 그 회차의 `collection_mode`, 없으면 `sensor.config.default-collection-mode`) 회차 열기·닫기가 곧 전환 수단이라 변경 API가 없다. 배치가 실어 보낸 `collection_mode`·`gyro_mode`·`fs_hz_requested`가 지시값과 다르면 `config_mismatch=true`로 표시만 하고 **거부하지 않는다** → LLD-0046
 - 본문 상한은 `sensor.max-payload-bytes`(기본 32768, `application-sensor.yml`)
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`
@@ -104,6 +105,7 @@
 - **119는 서버가 신고하지 않는다**. 보호자가 신고 시각을 입력하고 서버는 그 사실만 적는다
 - 응답 DTO에 bpm·판정 사유·좌표를 싣지 않고 로그에는 식별자와 건수만 남긴다
 - 내보내기 `streams/incidents.jsonl`(기기 무관, 형식서 §3.7). 0건이면 파일을 만들지 않고 `streams_absent`에 `NO_DATA_IN_THIS_RUN`으로 신고한다
+- **알림 기록 CSV**: 관리자 `GET /api/v1/admin/alert-records?from=&to=`(한국 시간, 최대 31일)가 심박·낙상 사건 한 건을 한 줄로, 그 사건을 연 판정 기록의 근거(심박·사유)와 판정 묶음의 착용 값을 left join해 내보낸다. 회차 없는 알림은 근거 칸이 빈다. 로그에는 행 수만 → LLD-0131
 
 ### `study` — 실증 참여 기록 (연구 동의·보관 정책의 정본)
 
@@ -147,9 +149,9 @@
 - **STOMP는 구독 시점에 한 번**만 기록한다. 그 뒤 흘러가는 위치 메시지는 같은 열람이다
 - **본인 조회는 기록하지 않는다.** `viewerId == seniorId`면 아무것도 하지 않는다
 - 기록은 `REQUIRES_NEW`이고 **호출부가 `try/catch(Exception)`으로 감싸 WARN만 남긴다**. 프록시가 커밋 시점에 던지는 예외는 서비스 메서드 안에서 잡을 수 없어 훅마다 감싼다. 기록 실패가 위치 조회를 막지 않는다
-- **통보는 두 방식**이다. `ConsentService.isGranted(seniorId, LOCATION_NOTICE_BATCHED)`가 true면 `LocationAccessDigestScheduler`가 하루 한 번 요약 FCM, 아니면 건마다 FCM이되 같은 보호자의 반복 조회는 `location-access.immediate-cooldown-min`(기본 10분) 안에서 합친다
-- 다이제스트는 시니어별 `LocationAccessDigestSender` 트랜잭션에서 미통보 행 선점과 FCM enqueue를 함께 처리한다. enqueue 실패 시 선점도 롤백되어 다음 실행에서 재시도한다
-- **합쳐진 건은 `notified_at`을 비워 둔다.** 다이제스트가 `notified_at IS NULL` 전체를 묶으므로 즉시 모드에서 빠진 건도 결국 알린다
+- **통보는 열람마다 즉시**다(위치정보법 매회 즉시 통보, LLD-0130). `LOCATION_NOTICE_BATCHED` 동의는 기록만 하고 통보 방식에 쓰지 않는다. 같은 보호자 반복 조회를 합치던 쿨다운 설정(`immediate-cooldown-min`)과 그 판정·시니어 행 잠금은 지웠다. 환경변수가 남아 있어도 적용되지 않는다
+- 정기 요약 `LocationAccessDigestScheduler`의 cron(`location-access.digest-cron`)은 기본 `-`(꺼짐)다. 대신 서버 시작 1분 뒤 한 번(`flushOnStartup`) `notified_at IS NULL` 행을 시니어별 요약 1건으로 보낸다. 시니어별 `LocationAccessDigestSender` 트랜잭션이 미통보 행 선점과 FCM enqueue를 함께 처리하고, enqueue 실패 시 선점도 롤백되어 다음 시작 때 재시도한다
+- 열람 기록은 저장과 같은 트랜잭션에서 `notified_at`을 채운다. 비어 있는 행은 LLD-0130 이전에 쌓인 옛 기록뿐이다
 - `FcmCategory.LOCATION_NOTICE`는 알림 설정 그룹에 없다 — 법 요건이라 끄지 않는다(미등록 카테고리는 기본 허용)
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
 - 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132
@@ -170,6 +172,11 @@
 
 ### `admin` — 관리자
 - **접속기록**: `AdminAccessLogInterceptor`(`WebMvcConfig` 등록)가 `/api/v1/admin/**`·`/api/v1/auth/admin/**` 전 요청을 `admin_access_log`에 남긴다. 요청 본문·Authorization 헤더는 기록하지 않고, 삭제 스케줄러 없이 최소 2년 보관한다. 업무 행위 기록인 `admin_audit_log`와 역할이 다르다 → LLD-0057, ADR-0036
+
+### `retention` — 처리방침 보관 기간 정리
+- 매일 03:30 `RetentionPurgeScheduler`가 대상 11개 테이블의 기간 지난 행을 센다. **1단계(#1015)는 아무것도 지우지 않고** 테이블별 대상 건수·참가자 제외 건수를 `data_purge_log`에 남긴다. 실제 삭제(2단계)와 S3 원문 삭제(3단계)는 다음 PR이다 → ADR-0043, LLD-0136
+- 테이블별 기준 시각 칸·보관 기간·추가 조건·참가자 제외는 `RetentionTarget` 한 곳에 둔다. 건수와 삭제가 같은 조건을 써야 하므로 다른 곳에 조건을 복제하지 않는다
+- 기준 시각 인덱스가 없다. 기준 시각이 PK와 함께 늘어나는 점을 써서 PK 이분 탐색으로 경계를 찾고 `pk < 경계` 범위만 읽는다. 새 대상 테이블도 서버가 채우는 생성 시각 칸이어야 한다
 
 ## Redis 임시 데이터
 

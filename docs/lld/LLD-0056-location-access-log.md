@@ -54,6 +54,8 @@
 
 설정 `location-access`(새 `LocationAccessProperties`, `application.yml`): `immediate-cooldown-min`(`${LOCATION_ACCESS_IMMEDIATE_COOLDOWN_MIN:10}`), `digest-cron`(`${LOCATION_ACCESS_DIGEST_CRON:0 0 9 * * *}`).
 
+> **LLD-0130으로 대체됨(2026-11-10):** `immediate-cooldown-min`과 `LocationAccessProperties`는 삭제됐고 `digest-cron` 기본값은 `-`(꺼짐)다. 아래 5.2~5.4와 7절의 쿨다운·모아서 모드·아침 요약은 이 LLD 작성 당시의 설계 기록이다.
+
 ## 5. 처리 흐름
 
 ### 5.1 기록 — `LocationAccessLogService.record(viewerId, seniorId, path)`
@@ -72,6 +74,8 @@
 | `HOME_OUTING` | `GuardianHomeService`가 `getOutingStatus`를 부르는 곳 — 시니어마다 1행 |
 
 ### 5.2 통보 방식 결정
+> **LLD-0130으로 대체됨(2026-11-10):** 5.2~5.4는 현재 동작이 아니다. 동의와 관계없이 열람마다 즉시 통보하고, 쿨다운 설정·판정과 시니어 행 잠금은 삭제됐다. 정기 요약은 끄고 서버 시작 시 한 번만 남은 미통보 기록을 보낸다(선점·롤백 로직은 5.4 그대로 재사용). 아래는 당시 설계 기록이다.
+
 `consentService.isGranted(seniorId, ConsentKey.LOCATION_NOTICE_BATCHED)`가 true면 「모아서」, 아니면 「즉시」.
 
 ### 5.3 즉시 모드
@@ -104,8 +108,8 @@
 
 - [ ] `getLastLocation`·`getLocationTrail`·`getTrackedSeniors`·홈 카드·STOMP 구독 각각에서 행이 생긴다(경로 값 확인). 본인 조회는 행이 없다.
 - [ ] 기록 서비스가 예외를 던져도 위치 응답은 정상이다.
-- [ ] 즉시 모드: 첫 조회에 FCM 1건과 `notified_at`, 쿨다운 안 재조회는 FCM 없음·`notified_at` null, 쿨다운 뒤 재조회는 FCM.
-- [ ] 모아서 모드: 조회 시 FCM 없음, 다이제스트가 미통보 행을 묶어 시니어당 FCM 1건과 `notified_at` 갱신. FCM enqueue 실패 시 선점이 롤백되어 다음 실행에서 재시도한다.
+- [ ] ~~즉시 모드: 첫 조회에 FCM 1건과 `notified_at`, 쿨다운 안 재조회는 FCM 없음·`notified_at` null, 쿨다운 뒤 재조회는 FCM.~~ LLD-0130으로 대체: 열람마다 FCM 1건과 `notified_at`.
+- [ ] ~~모아서 모드: 조회 시 FCM 없음,~~ (LLD-0130으로 대체: 모아서 모드 없음) 다이제스트가 미통보 행을 묶어 시니어당 FCM 1건과 `notified_at` 갱신. FCM enqueue 실패 시 선점이 롤백되어 다음 실행에서 재시도한다.
 - [ ] 시니어 조회 API가 기간·페이지로 자기 기록만 준다. 다른 회원 기록은 보이지 않는다.
 - [ ] 응답에 좌표가 없다.
 - [ ] `JwtChannelInterceptorTest` 기존 회귀 유지.
@@ -157,7 +161,7 @@ ERD(`ERD-0001` 엔티티·인덱스 표·조회 기준), `backend/CLAUDE.md`의 
 
 ## 9. 미결정 사항 (Open Questions)
 
-- 없음. 쿨다운은 설정값이며 법무 검토가 「건마다」를 요구하면 0으로 둔다(ADR-0036).
+- 없음. (당시 기록: 쿨다운은 설정값이며 법무 검토가 「건마다」를 요구하면 0으로 둔다. LLD-0130에서 쿨다운 자체를 삭제했다.)
 
 ## 10. 참고
 `RealtimeLocationRestController`·`RealtimeLocationService`, `JwtChannelInterceptor.handleSubscribe`, `GuardianHomeService`, `FamilyAccessService.verifyFamilyAccess`, `WalkNotificationListener`(일일 cron 선례), `SafeZoneNotificationListener`(FcmSendDto 조립), `FcmService.sendMessageToUser`, LLD-0055.

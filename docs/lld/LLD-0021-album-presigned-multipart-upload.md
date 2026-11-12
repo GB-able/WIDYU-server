@@ -214,7 +214,7 @@ AlbumUploadSessionFile {
 1. StagedVideoEntry(index, objectKey, originalFileName, contentType)별
    S3DirectUploadService.downloadToTempFile(objectKey) → File
 2. VideoEntry로 변환 후 기존 처리 코어 재사용 (processVideos 내부 메서드로 추출)
-   - uploadAlbumVideoWithThumbnail: 압축 → 길이 추출 → 썸네일 → 최종 prefix 업로드
+   - uploadAlbumVideoWithThumbnail: 압축 → 1분 초과 시 자르기(LLD-0006) → 길이 추출 → 썸네일 → 최종 prefix 업로드
    - album.completeVideoProcessing(...) → ACTIVE
    - AlbumCreatedEvent 발행
 3. 실패 시: 업로드된 최종 파일 정리 + 앨범 DELETED (기존 보상 정책 ADR-0010 재사용)
