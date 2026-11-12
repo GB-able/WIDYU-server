@@ -45,6 +45,8 @@ POST/PUT 요청 예시(기존 요청 DTO 구조):
 {"alarmTime":"08:00","categories":[{"name":"아침 약","medicines":[{"itemName":"등록된 약품명","dose":1}]}]}
 ```
 
+`dose`는 양수이면서 0.5의 배수여야 한다(예: `1`, `1.5`, `2.5`). 그 외 값은 400이다 (#1001).
+
 `data.scheduleRevision`은 해당 시니어의 `Member.medicationAlarmRevision`을 이번 명령에서 1 증가시킨 **그 값 그대로**이다. 새 revision 체계나 별도 증가는 없다. `data.effectiveFromDate`는 서버 기본 시간대(스케줄러와 동일 기준) 기준 내일(`YYYY-MM-DD`)이며 null이 아니다. `traceId`는 기존 래퍼 규칙을 따른다.
 
 | 메서드 | 성공 코드 | `data` (모든 필드 non-null) |

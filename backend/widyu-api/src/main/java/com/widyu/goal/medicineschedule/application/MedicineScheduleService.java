@@ -184,7 +184,7 @@ public class MedicineScheduleService {
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue()
+                        medicineItem.dose()
                 );
                 category.addMedicine(detail);
             }
@@ -291,7 +291,7 @@ public class MedicineScheduleService {
 
                 MedicineScheduleDetail detail = MedicineScheduleDetail.create(
                         medicine,
-                        medicineItem.dose().intValue()
+                        medicineItem.dose()
                 );
                 category.addMedicine(detail);
             }

@@ -13,7 +13,7 @@ public record MedicineHomeResponse(
 
     public record ScheduleItem(
             Long medicineScheduleId,
-            Integer totalCount,
+            Double totalCount,
             String alarmTime,
             List<MedicineItem> medicines
     ) {
@@ -37,9 +37,9 @@ public record MedicineHomeResponse(
 
     public record MedicineItem(
             String name,
-            Integer count
+            Double count
     ) {
-        public static MedicineItem of(String name, Integer count) {
+        public static MedicineItem of(String name, Double count) {
             return new MedicineItem(name, count);
         }
     }

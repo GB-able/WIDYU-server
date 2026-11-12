@@ -172,7 +172,7 @@ erDiagram
         Long id PK
         Long medicine_category_id FK
         Long medicine_id FK
-        Integer dose
+        Double dose "0.5정 단위 (#1001)"
     }
 
     MedicationProof {

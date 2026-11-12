@@ -414,13 +414,13 @@ public class GoalHomeService {
                         BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
                 ));
 
-        int totalCount = 0;
-        int takenCount = 0;
+        double totalCount = 0;
+        double takenCount = 0;
 
         List<GuardianGoalHomeResponse.ScheduleItem> scheduleItems = new ArrayList<>();
 
         for (MedicineSchedule schedule : schedules) {
-            int scheduleTotal = schedule.getTotalCount();
+            double scheduleTotal = schedule.getTotalCount();
             totalCount += scheduleTotal;
 
             MedicationProof proof = proofMap.get(schedule.getId());

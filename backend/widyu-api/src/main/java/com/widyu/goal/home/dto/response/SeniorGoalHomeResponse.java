@@ -45,7 +45,7 @@ public record SeniorGoalHomeResponse(
             Integer totalCount,
 
             @Schema(description = "다음 복용 예정 개수", example = "4")
-            Integer nextDoseCount,
+            Double nextDoseCount,
 
             @Schema(description = "다음 알람 시간", example = "17:00")
             String nextAlarmTime,
@@ -84,7 +84,7 @@ public record SeniorGoalHomeResponse(
             String doseTime,
 
             @Schema(description = "이 시각에 복용할 개수", example = "1")
-            Integer doseCount,
+            Double doseCount,
 
             @Schema(description = "오늘 복용 인증 여부", example = "true")
             boolean taken,
