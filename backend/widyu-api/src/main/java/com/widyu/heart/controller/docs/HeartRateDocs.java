@@ -27,6 +27,10 @@ public interface HeartRateDocs {
                     2. 분석 결과가 만료·부재 시: 가장 최근 심박수 이벤트(DB) 값으로 대체 반환
                     3. 이벤트도 없으면 `UNKNOWN` 반환
 
+                    **고른 값의 측정 시각이 최근 30초 밖이면 미착용으로 보고 `UNKNOWN`, `heartRate: null`,
+                    `measuredAt: null`을 반환합니다.** 홈 카드의 착용 판정과 같은 기준입니다.
+                    오래전 위급 값이 지금의 상태로 보이지 않게 하기 위해서입니다.
+
                     **접근 권한**:
                     - memberId 미입력 시: 본인의 심박수 조회
                     - memberId 입력 시: 가족 관계가 있는 경우에만 조회 가능
@@ -36,7 +40,7 @@ public interface HeartRateDocs {
                     - `CAUTION`: 주의
                     - `EMERGENCY`: 긴급
                     - `ANOMALY`: 기존 이상 상태 데이터
-                    - `UNKNOWN`: 판별 불가 (데이터 없음)
+                    - `UNKNOWN`: 판별 불가 (데이터 없음, 최근 30초 측정 없음)
                     """
     )
     @ApiResponse(
@@ -174,6 +178,9 @@ public interface HeartRateDocs {
                     **진행 중인 사이클이 없으면 `events`는 빈 배열이고 `firstEmergency`·최대/최소는 null입니다.**
                     이 경우에도 `current`의 현재 심박수와 상태는 채워집니다.
 
+                    **`current`는 지금의 값입니다.** 최근 30초 안에 잰 값이 없으면 `status: UNKNOWN`,
+                    `heartRate`·`measuredAt`은 null입니다(홈 카드와 같은 기준). 위급 이력과 이벤트는 과거 기록이라 그대로 반환합니다.
+
                     `heartGraph`의 이벤트·최대/최소·최초 이상치는 모두 사이클 범위 기준입니다.
                     `emergencyHistory`의 `emergencyCount`·`events`는 기간 제한 없는 전체 위급상황 이력이라
                     사이클과 무관하게 항상 반환됩니다.
@@ -206,7 +213,7 @@ public interface HeartRateDocs {
 
                     **진행 중인 위급 사이클이 없으면 `events`는 빈 배열입니다.** 최초 조회와 동일한 규칙입니다.
 
-                    `current.measuredAt`은 갱신 응답에도 포함됩니다.
+                    `current.measuredAt`은 갱신 응답에도 포함됩니다. 최근 30초 안에 잰 값이 없으면 `current`는 `UNKNOWN`입니다.
 
                     **접근 권한**:
                     - memberId 미입력 시: 본인 조회

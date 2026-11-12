@@ -59,6 +59,7 @@
 - **위급 사이클**: 위험 감지 후 5분 유지, 그 안에 재감지되면 마지막 감지 기준 연장. "마지막 감지 + 5분" == "최근 5분 내 감지 존재"이므로 상태를 저장하지 않고 조회 윈도우로만 판정. **그래프 조회 범위 산정에만 사용**하며, `/emergency/recent`는 사이클과 무관하게 최근 15분 내 기록 유무만 반환
 - **조회 범위 규칙**: 그래프는 응급 화면이므로 events·max·min·firstEmergency가 **진행 중인 사이클 시작 5분 전 ~ 현재**. 사이클 없으면 빈 배열. `emergencyHistory`의 count·events는 전체 기간이지만 `totalDuration`은 현재 사이클 지속 시간(첫 감지~마지막 감지, 분). 갱신(`/graph/refresh`)은 `since` 지정 시 그 이후 신규 이벤트만, 미지정 시 최근 5개
 - 수신한 단건 심박은 AI 판정 후 즉시 최신값에 반영한다.
+- **「지금」의 심박은 최근 30초 안에 잰 값뿐이다**(`HeartRateFreshness`). 홈 카드 착용 여부, `/heart-rate/status`, 그래프 `current`가 같은 기준을 쓰고 그보다 오래되면 `UNKNOWN`·값 null이다. 위급 이력·그래프 이벤트·단건 전송 응답은 이 기준을 적용하지 않는다(#1023)
 - AI: Docker `ryuchanghoon/widyu-ai-ver7:latest` port 5000, multi-arch. → LLD-0010·0019·0020, ADR-0008·0013·0014
 
 ### `location` — 실시간 위치
