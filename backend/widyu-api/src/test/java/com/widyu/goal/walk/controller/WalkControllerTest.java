@@ -2,6 +2,7 @@ package com.widyu.goal.walk.controller;
 
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,9 +11,12 @@ import com.widyu.goal.walk.application.WalkService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -41,5 +45,28 @@ class WalkControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("year는 2000 이상 2100 이하여야 합니다 (year)"));
         verifyNoInteractions(walkService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {499, 10001})
+    @DisplayName("걷기 목표를 500보 미만이나 10000보 초과로 설정하면 400을 반환한다")
+    void 걷기_목표가_범위를_벗어나면_400을_반환한다(int steps) throws Exception {
+        // when & then
+        mockMvc().perform(post("/api/v1/goals/walks/goal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"steps\":" + steps + "}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(walkService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {500, 10000})
+    @DisplayName("걷기 목표를 500보나 10000보로 설정하면 200을 반환한다")
+    void 걷기_목표가_경계값이면_200을_반환한다(int steps) throws Exception {
+        // when & then
+        mockMvc().perform(post("/api/v1/goals/walks/goal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"steps\":" + steps + "}"))
+                .andExpect(status().isOk());
     }
 }

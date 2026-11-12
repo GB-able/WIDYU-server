@@ -230,7 +230,7 @@ public class WalkService {
                         Walk newWalk = Walk.createWithGoal(
                                 currentMember,
                                 syncDate,
-                                currentMember.getSeniorProfile().getDefaultWalkGoal()
+                                goalForNewRecord(currentMember, syncDate, today)
                         );
                         return walkRepository.save(newWalk);
                     }
@@ -256,6 +256,21 @@ public class WalkService {
                 currentMember.getId(), syncDate, request.steps(), achieved);
 
         return UpdateStepsResponse.of(achieved);
+    }
+
+    /**
+     * 기록이 없던 날의 목표. 지난 날은 그날 뒤 첫 기록의 목표다. 목표를 바꾸는 날에는 기존 목표로 그날 기록이
+     * 생기므로(setOrUpdateGoal) 바뀌기 전 날짜는 바뀌기 전 목표를 받는다(월별 조회의 미수신 날짜와 같은 기준).
+     * 뒤에 기록이 없거나 오늘이면 기본 목표다.
+     */
+    private Integer goalForNewRecord(Member member, LocalDate date, LocalDate today) {
+        Integer defaultGoal = member.getSeniorProfile().getDefaultWalkGoal();
+        if (!date.isBefore(today)) {
+            return defaultGoal;
+        }
+        return walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(member, date)
+                .map(Walk::getGoalSteps)
+                .orElse(defaultGoal);
     }
 
     private void validateSyncDate(LocalDate syncDate, LocalDate today) {
