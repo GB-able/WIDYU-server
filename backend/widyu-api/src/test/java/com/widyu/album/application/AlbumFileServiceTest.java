@@ -1,5 +1,6 @@
 package com.widyu.album.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -17,9 +18,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -119,6 +122,37 @@ class AlbumFileServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_UPLOAD_FAILED);
         then(s3Service).should().deleteFile("https://cdn/video.mp4");
+    }
+
+    @Test
+    @DisplayName("압축하지 않는 영상이 1분을 넘으면 자른 영상과 자른 길이를 저장한다")
+    void 압축하지_않는_영상이_1분을_넘으면_자른_영상을_저장한다() throws IOException {
+        // given
+        MultipartFile video = videoFile();
+        File trimmed = Files.createTempFile("trimmed_", ".mp4").toFile();
+        Files.writeString(trimmed.toPath(), "trimmed-video");
+        File thumbnail = Files.createTempFile("thumbnail_", ".jpg").toFile();
+        Files.writeString(thumbnail.toPath(), "thumbnail");
+
+        given(videoCompressionService.needsCompression(video)).willReturn(false);
+        given(videoCompressionService.trimToMaxDuration(any(File.class))).willReturn(Optional.of(trimmed));
+        given(videoCompressionService.extractDuration(trimmed)).willReturn(60);
+        given(videoCompressionService.generateThumbnail(trimmed, 60.0)).willReturn(thumbnail);
+        given(s3Service.generateFilePath(anyString(), anyString()))
+                .willReturn("albums/videos/1/video.mp4")
+                .willReturn("albums/thumbnails/1/video_thumbnail.jpg");
+        ArgumentCaptor<MultipartFile> uploaded = ArgumentCaptor.forClass(MultipartFile.class);
+        given(s3Service.uploadFile(uploaded.capture(), anyString()))
+                .willReturn("https://cdn/video.mp4")
+                .willReturn("https://cdn/video_thumbnail.jpg");
+
+        // when
+        AlbumFileService.VideoUploadResult result = albumFileService.uploadAlbumVideoWithThumbnail(video, 1L);
+
+        // then
+        assertThat(result.duration()).isEqualTo(60);
+        assertThat(new String(uploaded.getAllValues().getFirst().getBytes())).isEqualTo("trimmed-video");
+        then(videoCompressionService).should().cleanupTempFile(trimmed);
     }
 
     @Test

@@ -9,12 +9,22 @@ final class SensorConfigFixture {
     }
 
     static SensorProperties properties() {
-        return new SensorProperties(32_768, config(), export(), fallAi(), heartAi(), incident(),
+        return properties(config());
+    }
+
+    /** 회차가 없을 때의 기본 수집 모드만 바꾼 설정(#989). */
+    static SensorProperties propertiesWithDefaultMode(String defaultCollectionMode) {
+        return properties(new SensorProperties.Config(
+                "continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60, defaultCollectionMode));
+    }
+
+    private static SensorProperties properties(SensorProperties.Config config) {
+        return new SensorProperties(32_768, config, export(), fallAi(), heartAi(), incident(),
                 new SensorProperties.Followup(false, false), new SensorProperties.Medication(true));
     }
 
     static SensorProperties.Config config() {
-        return new SensorProperties.Config("continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60);
+        return new SensorProperties.Config("continuous", 50, 1, 1.8, 2, 10, 1, 5, 60, 60, 60, "product");
     }
 
     /** 내보내기 설정. `application-sensor.yml`의 기본값과 같다. */

@@ -4,6 +4,8 @@ import com.widyu.global.entity.BaseTimeEntity;
 import com.widyu.member.Member;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,6 +19,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 원시 센서 배치 1건의 인덱스 행(ADR-0030 v2, LLD-0041 4.2).
@@ -212,6 +216,15 @@ public class SensorBatch extends BaseTimeEntity {
     @Column(name = "config_mismatch", nullable = false)
     private Boolean configMismatch;
 
+    /**
+     * 처음 저장된 경로(LLD-0128). 중복 수신은 기존 행을 돌려주므로 수신 시도 전체가 아니다.
+     * 이 칸이 생기기 전에 저장된 행은 null이며 백필하지 않는다.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "ingest_channel", length = 8)
+    private SensorIngestChannel ingestChannel;
+
     @Builder
     private SensorBatch(
             String batchId, Member member, String stream, String source,
@@ -230,7 +243,8 @@ public class SensorBatch extends BaseTimeEntity {
             Boolean gyroBackfill, String backfillFor,
             Boolean isResend, String originalBatchId, Long originalSeq,
             String originalRunId, String originalSessionId, Long resentAtMs,
-            String s3Key, Integer byteSize, String payloadSha256, Boolean configMismatch
+            String s3Key, Integer byteSize, String payloadSha256, Boolean configMismatch,
+            SensorIngestChannel ingestChannel
     ) {
         this.batchId = batchId;
         this.member = member;
@@ -284,5 +298,6 @@ public class SensorBatch extends BaseTimeEntity {
         this.byteSize = byteSize;
         this.payloadSha256 = payloadSha256;
         this.configMismatch = configMismatch;
+        this.ingestChannel = ingestChannel;
     }
 }

@@ -110,13 +110,13 @@ public interface GoalHomeDocs {
                                                   "medicineScheduleId": 1,
                                                   "takenCount": 2,
                                                   "totalCount": 3,
-                                                  "nextDoseCount": 4,
+                                                  "nextDoseCount": 4.0,
                                                   "nextAlarmTime": "17:00",
                                                   "proofImageUrl": "https://www.widyu.shop/img",
                                                   "scheduleStatuses": [
-                                                    { "medicineScheduleId": 3, "doseTime": "08:00", "doseCount": 1, "taken": true, "proofImageUrl": "https://www.widyu.shop/img" },
-                                                    { "medicineScheduleId": 2, "doseTime": "12:30", "doseCount": 1, "taken": true, "proofImageUrl": "https://www.widyu.shop/img2" },
-                                                    { "medicineScheduleId": 1, "doseTime": "17:00", "doseCount": 4, "taken": false, "proofImageUrl": null }
+                                                    { "medicineScheduleId": 3, "doseTime": "08:00", "doseCount": 1.0, "taken": true, "proofImageUrl": "https://www.widyu.shop/img" },
+                                                    { "medicineScheduleId": 2, "doseTime": "12:30", "doseCount": 1.0, "taken": true, "proofImageUrl": "https://www.widyu.shop/img2" },
+                                                    { "medicineScheduleId": 1, "doseTime": "17:00", "doseCount": 4.0, "taken": false, "proofImageUrl": null }
                                                   ]
                                                 },
                                                 "steps": {
@@ -164,7 +164,7 @@ public interface GoalHomeDocs {
                     - **FAILED**: 기한 내 완료 X (기한이 지났지만 미완료 또는 일부만 완료)
 
                     **참고:**
-                    - 약 복용과 걸음 수 목표를 모두 고려하여 상태 계산
+                    - 그날 달성률(건강방문, 약 복용, 걸음 수 항목별 평균, 보호자 현황과 같은 계산)로 상태를 정함: 100%면 COMPLETED, 지난 날은 FAILED, 오늘은 0%보다 크면 IN_PROGRESS
                     - 걸음 수를 받지 못한 날도 걷기 목표가 있었으면(첫 걸음 기록 이후이고 기본 목표가 있음) 걷기 목표를 미달성으로 포함
                     - 미래 날짜는 NOT_STARTED로 표시
                     - 오늘 날짜에 일부 목표만 완료한 경우 IN_PROGRESS
@@ -212,12 +212,17 @@ public interface GoalHomeDocs {
 
                     **반환 정보:**
                     - **지난주 목표 달성률**: 지난주(일~토) 전체 달성률
-                    - **오늘 목표 달성률**: 오늘 목표(약 복용·걸음 수) 중 달성한 비율
-                    - **이번주 일별 달성률**: 일요일부터 토요일까지 각 날짜의 달성률 배열
+                    - **오늘 목표 달성률**: 오늘 하루의 달성률(아래 계산법)
+                    - **이번주 일별 달성률**: 일요일부터 토요일까지 각 날짜의 달성률 배열, 오늘 이후는 0.0
 
-                    **달성률 계산:**
-                    - 약 복용과 걸음 수 목표를 모두 달성한 날의 비율
-                    - 0.0 ~ 1.0 사이의 값 (예: 0.80 = 80%)
+                    **달성률 계산 (Figma 목표 홈_주간 달성률):**
+                    - 기간 안에 목표가 있는 항목마다 완수 ÷ 목표를 구해 평균하고 정수 퍼센트로 반올림
+                    - 건강방문은 방문 횟수(완료 처리된 일정), 약 복용은 복용 횟수(알람 1개 = 1회), 걸음 수는 목표를 채운 날 수
+                    - 목표가 없는 항목은 평균에서 뺌. 모든 항목에 목표가 없으면 0.0
+                    - 예: 건강방문 3회 중 2회, 약 30회 중 20회, 걷기 30일 중 15일 → (66.7 + 66.7 + 50.0) ÷ 3 = 61% → 0.61
+                    - 지난주 달성률은 지난주 7일의 항목별 합계로 같은 계산을 함(일별 달성률의 평균이 아님)
+                    - 오늘은 아직 알람·일정 시각이 오지 않은 복용·방문도 분모에 넣음(하루 진행률)
+                    - 0.0 ~ 1.0 사이의 값이며 반올림한 퍼센트를 100으로 나눈 값 (예: 0.61 = 61%)
                     - 걸음 수를 받지 못한 날도 걷기 목표가 있었으면(첫 걸음 기록 이후이고 기본 목표가 있음) 걷기 목표를 미달성으로 포함
 
                     **권한:**
@@ -308,7 +313,7 @@ public interface GoalHomeDocs {
                                                       "medicines": [
                                                         {
                                                           "name": "위염약",
-                                                          "count": 5
+                                                          "count": 5.0
                                                         }
                                                       ]
                                                     }

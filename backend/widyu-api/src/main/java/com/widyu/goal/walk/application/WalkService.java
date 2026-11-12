@@ -6,6 +6,7 @@ import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.event.GuardianGoalChangedEvent;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
+import com.widyu.goal.validator.GoalMonthValidator;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.application.SeniorProfileService;
@@ -18,6 +19,8 @@ import com.widyu.goal.walk.dto.response.UpcomingGoalResponse;
 import com.widyu.goal.walk.dto.response.WalkDetailResponse;
 import com.widyu.goal.walk.dto.response.WalkMonthlyResponse;
 import com.widyu.goal.walk.repository.WalkRepository;
+import com.widyu.goal.rate.GoalRateCalculator;
+import com.widyu.goal.rate.GoalTally;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
@@ -46,8 +49,8 @@ public class WalkService {
     private final ApplicationEventPublisher eventPublisher;
 
     public WalkMonthlyResponse getMonthlyStats(int year, int month, Long memberId) {
+        YearMonth requestedMonth = GoalMonthValidator.validate(year, month, true);
         Member targetMember = getMember(memberId);
-        YearMonth requestedMonth = YearMonth.of(year, month);
         YearMonth currentMonth = YearMonth.now();
 
         // Summary 계산
@@ -63,7 +66,64 @@ public class WalkService {
                 requestedMonth
         );
 
-        return WalkMonthlyResponse.of(summary, dailyData);
+        return WalkMonthlyResponse.of(summary, dailyData,
+                calculateComparison(targetMember, requestedMonth, currentMonth, dailyData));
+    }
+
+    /** 상단 두 달 비교 박스. 오른쪽은 항상 이번 달, 왼쪽은 보는 달이 이번 달이면 지난달이고 아니면 보는 달이다. */
+    private WalkMonthlyResponse.MonthComparison calculateComparison(
+            Member member,
+            YearMonth requestedMonth,
+            YearMonth currentMonth,
+            List<WalkMonthlyResponse.WalkDaily> requestedDailyData
+    ) {
+        LocalDate today = LocalDate.now();
+        YearMonth leftMonth = GoalRateCalculator.comparisonLeftMonth(requestedMonth, currentMonth);
+        return WalkMonthlyResponse.MonthComparison.of(
+                monthProgress(leftMonth, dailyDataOf(member, leftMonth, requestedMonth, requestedDailyData), today),
+                monthProgress(currentMonth,
+                        dailyDataOf(member, currentMonth, requestedMonth, requestedDailyData), today));
+    }
+
+    private List<WalkMonthlyResponse.WalkDaily> dailyDataOf(
+            Member member,
+            YearMonth month,
+            YearMonth requestedMonth,
+            List<WalkMonthlyResponse.WalkDaily> requestedDailyData
+    ) {
+        if (month.equals(requestedMonth)) {
+            return requestedDailyData;
+        }
+        return getDailyDataForMonth(member, month);
+    }
+
+    /**
+     * 1일부터 오늘까지(지난 달은 말일까지) 목표가 있던 날의 걸음 합계. 하루 걸음은 그날 목표까지만 센다.
+     * 일별 데이터와 같은 날짜별 목표를 쓰므로 미수신 날도 0걸음으로 분모에 들어간다.
+     */
+    private WalkMonthlyResponse.MonthProgress monthProgress(
+            YearMonth month,
+            List<WalkMonthlyResponse.WalkDaily> dailyData,
+            LocalDate today
+    ) {
+        GoalTally steps = GoalTally.NONE;
+        GoalTally days = GoalTally.NONE;
+        for (int day = 1; day <= dailyData.size(); day++) {
+            WalkMonthlyResponse.WalkDaily daily = dailyData.get(day - 1);
+            if (month.atDay(day).isAfter(today)) {
+                break;
+            }
+            if (daily.goal() == null) {
+                continue;
+            }
+            steps = steps.plus(GoalTally.of(Math.min(daily.actual(), daily.goal()), daily.goal()));
+            long achievedDay = 0;
+            if (daily.actual() >= daily.goal()) {
+                achievedDay = 1;
+            }
+            days = days.plus(GoalTally.of(achievedDay, 1));
+        }
+        return WalkMonthlyResponse.MonthProgress.of(month, steps, days);
     }
 
     public WalkDetailResponse getWalkDetail(Long memberId) {

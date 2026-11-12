@@ -13,7 +13,7 @@ public record MedicineScheduleDailyResponse(
 
     public record ScheduleItem(
             Long medicineScheduleId,
-            Integer totalCount,
+            Double totalCount,
             String alarmTime,
             MedicationStatus status,
             String proofImageUrl,
@@ -41,9 +41,9 @@ public record MedicineScheduleDailyResponse(
 
     public record MedicineItem(
             String name,
-            Integer count
+            Double count
     ) {
-        public static MedicineItem of(String name, Integer count) {
+        public static MedicineItem of(String name, Double count) {
             return new MedicineItem(name, count);
         }
     }

@@ -77,7 +77,7 @@ public class GuardianHomeService {
                 realtimeLocationService.getOutingStatus(senior.getId()),
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
-                getScoredAlbums(senior, today),
+                getLatestAlbums(senior),
                 getHealthScheduleInfo(senior, now),
                 getTodayHealthSchedules(senior, now),
                 getWalkInfo(senior, today)
@@ -177,8 +177,8 @@ public class GuardianHomeService {
         return GuardianHomeCardsResponse.MedicineInfo.of(totalCount, latestProofImageUrl, scheduleStatuses);
     }
 
-    private List<GuardianHomeCardsResponse.AlbumInfo> getScoredAlbums(Member senior, LocalDate today) {
-        return albumRecommendationService.recommendAlbums(senior, today).stream()
+    private List<GuardianHomeCardsResponse.AlbumInfo> getLatestAlbums(Member senior) {
+        return albumRecommendationService.findLatestAlbums(senior).stream()
                 .map(GuardianHomeCardsResponse.AlbumInfo::from)
                 .toList();
     }

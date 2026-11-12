@@ -80,9 +80,9 @@ public record GuardianGoalHomeResponse(
             String name,
 
             @Schema(description = "복용 개수", example = "5")
-            Integer count
+            Double count
     ) {
-        public static MedicineItem of(String name, Integer count) {
+        public static MedicineItem of(String name, Double count) {
             return new MedicineItem(name, count);
         }
     }

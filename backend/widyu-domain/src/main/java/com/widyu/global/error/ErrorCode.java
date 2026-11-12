@@ -87,6 +87,10 @@ public enum ErrorCode {
     HEALTH_SCHEDULE_EDIT_LOCKED(HttpStatus.CONFLICT, "HEALTH_SCHEDULE_4090", "방문 인증을 마친 건강 일정은 수정하거나 삭제할 수 없습니다."),
     MEDICINE_SCHEDULE_TIME_DUPLICATED(HttpStatus.CONFLICT, "MEDICINE_SCHEDULE_4090", "같은 시각에 이미 약 알람이 있습니다."),
 
+    // 목표 캘린더 월 조회 범위 (#1005)
+    GOAL_MONTH_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "GOAL_4000", "지난 12개월부터 앞으로 12개월까지의 달만 조회할 수 있습니다."),
+    GOAL_FUTURE_MONTH_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "GOAL_4001", "보호자는 이번 달 이후의 약 복용 현황을 조회할 수 없습니다."),
+
     // fcm 관련
     FCM_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4040", "FCM 토큰이 존재하지 않습니다."),
     FCM_NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "FCM_4041", "FCM 알림이 존재하지 않습니다."),
@@ -119,6 +123,7 @@ public enum ErrorCode {
     ALBUM_ALREADY_UNLOCKED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4001", "이미 해금된 앨범입니다."),
     ALBUM_UNLOCK_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4002", "본인의 앨범은 해금할 수 없습니다."),
     ALBUM_UNLOCK_SENIOR_ONLY(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4030", "시니어 회원만 앨범을 해금할 수 있습니다."),
+    ALBUM_LOCKED(HttpStatus.FORBIDDEN, "ALBUM_UNLOCK_4031", "잠금을 해제한 뒤 이용할 수 있습니다."),
     ALBUM_UNLOCK_INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4003", "포인트가 부족하여 해금할 수 없습니다."),
     ALBUM_UNLOCK_NOT_REQUIRED(HttpStatus.BAD_REQUEST, "ALBUM_UNLOCK_4004", "해금이 필요하지 않은 앨범입니다."),
 

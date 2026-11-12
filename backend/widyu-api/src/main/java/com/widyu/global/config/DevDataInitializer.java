@@ -209,14 +209,14 @@ public class DevDataInitializer implements CommandLineRunner {
     private void seedMedicineSchedules(Member senior, Medicine medicine1, Medicine medicine2) {
         MedicineSchedule morning = MedicineSchedule.create(senior, LocalTime.of(8, 0));
         MedicineCategory morningCategory = MedicineCategory.create("아침");
-        morningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1));
-        morningCategory.addMedicine(MedicineScheduleDetail.create(medicine2, 2));
+        morningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1.0));
+        morningCategory.addMedicine(MedicineScheduleDetail.create(medicine2, 2.0));
         morning.addCategory(morningCategory);
         saveUnlessTimeTaken(morning);
 
         MedicineSchedule evening = MedicineSchedule.create(senior, LocalTime.of(20, 0));
         MedicineCategory eveningCategory = MedicineCategory.create("저녁");
-        eveningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1));
+        eveningCategory.addMedicine(MedicineScheduleDetail.create(medicine1, 1.0));
         evening.addCategory(eveningCategory);
         saveUnlessTimeTaken(evening);
     }

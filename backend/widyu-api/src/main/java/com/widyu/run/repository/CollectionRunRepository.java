@@ -21,4 +21,9 @@ public interface CollectionRunRepository extends JpaRepository<CollectionRun, Lo
 
     /** B12(서버 결정 수집 모드)가 「이 회원이 연구 중인가」를 물을 때 쓴다. */
     boolean existsByMemberIdAndStatus(Long memberId, CollectionRunStatus status);
+
+    /** B12 수집 설정 하달이 회원의 열린 회차 수집 모드를 읽는다. 열린 회차는 회원당 하나다(UK). */
+    @Query("SELECT run.collectionMode FROM CollectionRun run"
+            + " WHERE run.member.id = :memberId AND run.status = :status")
+    Optional<String> findCollectionModeByMemberIdAndStatus(Long memberId, CollectionRunStatus status);
 }

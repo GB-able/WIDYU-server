@@ -245,10 +245,10 @@ public class CollectionRunService {
         return run;
     }
 
-    /** B12(서버 결정 수집 모드)가 쓸 조회. */
+    /** B12(서버 결정 수집 모드)가 쓸 조회. 열린 회차가 없으면 비어 있다. */
     @Transactional(readOnly = true)
-    public boolean hasOpenRun(Long memberId) {
-        return collectionRunRepository.existsByMemberIdAndStatus(memberId, CollectionRunStatus.OPEN);
+    public Optional<String> findOpenRunCollectionMode(Long memberId) {
+        return collectionRunRepository.findCollectionModeByMemberIdAndStatus(memberId, CollectionRunStatus.OPEN);
     }
 
     /** 연구 회차는 대상 회원의 ACTIVE 참여 기록 없이 열 수 없다(LLD-0052 5절). */
