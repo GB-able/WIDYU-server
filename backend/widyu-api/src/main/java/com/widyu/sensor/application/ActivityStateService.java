@@ -59,16 +59,13 @@ public class ActivityStateService {
             return;
         }
         try {
-            // 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹친다. 계보에서 가장 먼저 저장된 묶음만 더한다.
-            if (earlierInLineage(memberId, batchId, resend)) {
-                return;
-            }
+            String rootBatchId = rootBatchId(batchId, resend);
             Map<Long, long[]> sums = sumByWindow(clock, acc);
             try {
-                write(memberId, sums);
+                write(memberId, batchId, rootBatchId, sums);
             } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
                 // 같은 새 구간을 두 묶음이 동시에 INSERT했다. 다시 하면 잠금 조회로 합친다.
-                write(memberId, sums);
+                write(memberId, batchId, rootBatchId, sums);
             }
         } catch (Exception e) {
             log.warn("활동 상태 저장 실패: memberId={}, errorType={}", memberId, e.getClass().getSimpleName());
@@ -158,17 +155,12 @@ public class ActivityStateService {
                 && fix.getSpeedMps() != null && !Boolean.TRUE.equals(fix.getIsMock());
     }
 
-    /**
-     * 계보는 원 묶음과 그 재전송들이다. 묶음은 이 호출 전에 저장돼 PK가 정해졌으므로, 도착 순서나 동시 저장과 무관하게
-     * 계보에서 PK가 가장 작은 묶음 하나만 더한다. 원 묶음이 자기 자신이면 재전송이 아닌 것으로 본다.
-     * ponytail: 작은 PK 쪽 INSERT가 커밋되기 전 순간에 큰 쪽이 조회하면 둘 다 더한다. 생기면 묶음별 합산 기록을 둔다.
-     */
-    private boolean earlierInLineage(Long memberId, String batchId, SensorBatchRequest.Resend resend) {
-        String rootBatchId = batchId;
+    /** 계보는 원 묶음과 그 재전송들이다. 재전송이면 원 묶음, 아니면 자기 자신이 뿌리다. */
+    private static String rootBatchId(String batchId, SensorBatchRequest.Resend resend) {
         if (resend != null && Boolean.TRUE.equals(resend.isResend()) && resend.originalBatchId() != null) {
-            rootBatchId = resend.originalBatchId();
+            return resend.originalBatchId();
         }
-        return sensorBatchRepository.existsEarlierInLineage(memberId, rootBatchId, batchId);
+        return batchId;
     }
 
     /** 샘플 배열을 한 번 돈다. 시각은 SensorBatchService와 같은 환산식(LLD-0041 4.3)이다. */
@@ -197,9 +189,17 @@ public class ActivityStateService {
         return sums;
     }
 
-    private void write(Long memberId, Map<Long, long[]> sums) {
+    /**
+     * 새 batch_id로 다시 보낸 묶음은 원 묶음과 샘플이 겹치므로 계보에서 PK가 가장 작은 묶음 하나만 더한다.
+     * 묶음은 이 호출 전에 저장돼 PK가 정해졌다. 선행 묶음 조회는 공유 잠금이라 아직 커밋되지 않은 계보 행의 커밋을
+     * 기다리므로, 도착 순서나 동시 저장과 무관하게 한 묶음만 더한다.
+     */
+    private void write(Long memberId, String batchId, String rootBatchId, Map<Long, long[]> sums) {
         long windowMs = sensorProperties.activity().windowSec() * 1000L;
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            if (!sensorBatchRepository.findEarlierInLineageForShare(memberId, rootBatchId, batchId).isEmpty()) {
+                return;
+            }
             for (Map.Entry<Long, long[]> entry : sums.entrySet()) {
                 long start = entry.getKey();
                 long[] sum = entry.getValue();

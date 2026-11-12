@@ -3,6 +3,8 @@ package com.widyu.sensor.repository;
 import com.widyu.sensor.SensorBatch;
 import java.util.Optional;
 import java.util.Collection;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,17 +16,18 @@ public interface SensorBatchRepository extends JpaRepository<SensorBatch, Long> 
     Optional<SensorBatch> findByBatchId(String batchId);
 
     /**
-     * 같은 회원의 같은 계보(원 묶음과 그 재전송들)에 이 묶음보다 먼저 저장된 묶음이 있는지(LLD-0138 5.1).
-     * 계보에서 저장 순서(PK)가 가장 앞선 묶음만 활동 구간에 더한다.
+     * 같은 회원의 같은 계보(원 묶음과 그 재전송들)에서 이 묶음보다 먼저 저장된 묶음(LLD-0138 5.1).
+     * 공유 잠금 조회라 다른 요청이 넣고 아직 커밋하지 않은 계보 행이 있으면 그 커밋을 기다려 본다.
      */
+    @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("""
-            SELECT COUNT(batch) > 0 FROM SensorBatch batch
+            SELECT batch FROM SensorBatch batch
              WHERE batch.member.id = :memberId
                AND (batch.batchId = :rootBatchId
                     OR (batch.isResend = true AND batch.originalBatchId = :rootBatchId))
                AND batch.id < (SELECT self.id FROM SensorBatch self WHERE self.batchId = :batchId)
             """)
-    boolean existsEarlierInLineage(
+    java.util.List<SensorBatch> findEarlierInLineageForShare(
             @Param("memberId") Long memberId,
             @Param("rootBatchId") String rootBatchId,
             @Param("batchId") String batchId);
