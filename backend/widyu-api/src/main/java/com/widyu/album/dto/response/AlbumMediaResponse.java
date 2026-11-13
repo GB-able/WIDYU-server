@@ -75,7 +75,7 @@ public record AlbumMediaResponse(
     private static boolean isImageUrl(String url) {
         if (url == null) return false;
         String extension = getFileExtension(url).toLowerCase();
-        return extension.matches("jpg|jpeg|png|gif|webp|bmp|svg");
+        return extension.matches("jpg|jpeg|png|gif|webp|bmp|svg|heic|heif");
     }
     
     private static String getFileExtension(String url) {
