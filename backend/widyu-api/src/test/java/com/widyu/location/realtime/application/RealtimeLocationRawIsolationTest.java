@@ -79,8 +79,15 @@ class RealtimeLocationRawIsolationTest {
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
     @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("최신 위치를 읽다 Redis 장애가 나도 원본은 저장하고 ACK 없이 예외를 전달하며 방송하지 않는다")
@@ -91,7 +98,7 @@ class RealtimeLocationRawIsolationTest {
         given(storeCall(payload)).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(RedisConnectionFailureException.class);
         then(locationFixService).should().store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
@@ -107,7 +114,7 @@ class RealtimeLocationRawIsolationTest {
         given(storeCall(payload)).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(org.springframework.dao.QueryTimeoutException.class);
         then(locationFixService).should().store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
@@ -125,11 +132,11 @@ class RealtimeLocationRawIsolationTest {
                 .willReturn(null)
                 .given(seniorLocationRepository).save(any(SeniorLocation.class));
         given(storeCall(payload)).willReturn(true, false);
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(RedisConnectionFailureException.class);
 
         // when
-        LocationAckResponse resent = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse resent = ingestService().receive(payload, 1L);
 
         // then
         assertThat(resent.result()).isEqualTo(LocationAckResult.DUPLICATE);
@@ -149,7 +156,7 @@ class RealtimeLocationRawIsolationTest {
                 .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -162,7 +169,7 @@ class RealtimeLocationRawIsolationTest {
                 .given(locationFixService).verifyAttribution(eq(1L), any(LocationUpdateRequest.class));
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -179,7 +186,7 @@ class RealtimeLocationRawIsolationTest {
         byte[] payload = payload(2L, System.currentTimeMillis());
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -199,7 +206,7 @@ class RealtimeLocationRawIsolationTest {
                 .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -217,7 +224,7 @@ class RealtimeLocationRawIsolationTest {
         given(locationFixService.exists(any(LocationUpdateRequest.class))).willReturn(true);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.DUPLICATE);
@@ -235,7 +242,7 @@ class RealtimeLocationRawIsolationTest {
         given(locationFixService.exists(any(LocationUpdateRequest.class))).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -248,7 +255,7 @@ class RealtimeLocationRawIsolationTest {
         given(storeCall(payload)).willReturn(true);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response).isNull();
@@ -266,7 +273,7 @@ class RealtimeLocationRawIsolationTest {
         given(storeCall(payload)).willReturn(true);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.STORED);
@@ -288,7 +295,7 @@ class RealtimeLocationRawIsolationTest {
         given(storeCall(payload)).willReturn(true);
 
         // when
-        realtimeLocationService.updateAndBroadcast(payload, 1L);
+        ingestService().receive(payload, 1L);
 
         // then
         org.mockito.ArgumentCaptor<Long> orderAt = org.mockito.ArgumentCaptor.forClass(Long.class);

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.global.infrastructure.s3.S3Service;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationIngestService;
 import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
@@ -91,7 +91,7 @@ class LocationBurstConnectionPoolMySqlTest {
     @MockBean private net.bramp.ffmpeg.FFmpeg ffmpeg;
     @MockBean private net.bramp.ffmpeg.FFprobe ffprobe;
 
-    @Autowired private RealtimeLocationService realtimeLocationService;
+    @Autowired private LocationIngestService locationIngestService;
     @Autowired private MemberRepository memberRepository;
     @Autowired private FamilyRepository familyRepository;
     @Autowired private SeniorProfileRepository seniorProfileRepository;
@@ -173,7 +173,7 @@ class LocationBurstConnectionPoolMySqlTest {
             futures.add(pool.submit(() -> {
                 start.await();
                 try {
-                    return "ACK:" + realtimeLocationService.updateAndBroadcast(payload, memberId).result();
+                    return "ACK:" + locationIngestService.receive(payload, memberId).result();
                 } catch (Exception e) {
                     return e.getClass().getSimpleName();
                 }
@@ -332,7 +332,7 @@ class LocationBurstConnectionPoolMySqlTest {
             futures.add(pool.submit(() -> {
                 start.await();
                 try {
-                    LocationAckResponse ack = realtimeLocationService.updateAndBroadcast((byte[]) item[1], (Long) item[0]);
+                    LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
                     if (ack == null) {
                         return "ACK:NONE";
                     }
@@ -346,7 +346,7 @@ class LocationBurstConnectionPoolMySqlTest {
         long startedAt = System.nanoTime();
         Map<String, Integer> acks = new TreeMap<>();
         for (Object[] item : newest) {
-            LocationAckResponse ack = realtimeLocationService.updateAndBroadcast((byte[]) item[1], (Long) item[0]);
+            LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
             acks.merge("first:" + ack.result(), 1, Integer::sum);
         }
         start.countDown();

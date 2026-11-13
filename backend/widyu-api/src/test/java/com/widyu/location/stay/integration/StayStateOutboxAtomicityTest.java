@@ -13,7 +13,10 @@ import com.widyu.global.entity.Status;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationIngestService;
+import com.widyu.location.realtime.application.LocationJudgeService;
+import com.widyu.location.realtime.application.LocationMaintenanceService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
@@ -92,7 +95,10 @@ class StayStateOutboxAtomicityTest {
     @SpyBean(name = "redisTemplate") private RedisTemplate<String, Object> redisTemplate;
     @SpyBean private FcmOutboxService fcmOutboxService;
 
-    @Autowired private RealtimeLocationService realtimeLocationService;
+    @Autowired private LocationIngestService ingestService;
+    @Autowired private LocationJudgeService judgeService;
+    @Autowired private LocationQueryService queryService;
+    @Autowired private LocationMaintenanceService maintenanceService;
     @Autowired private SeniorStayStateRepository stayStateRepository;
     @Autowired private MemberRepository memberRepository;
     @Autowired private FamilyRepository familyRepository;
@@ -114,13 +120,13 @@ class StayStateOutboxAtomicityTest {
     void 나갔다_돌아오면_상태와_알림이_한_번씩_저장된다() {
         // given
         Long seniorId = seniorWithGuardianAndHome();
-        LocationUpdateResponse atHome = realtimeLocationService.updateAndBroadcast(request(seniorId, HOME_LAT), seniorId);
+        LocationUpdateResponse atHome = ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
 
         // when
         LocationUpdateResponse stillHome =
-                realtimeLocationService.updateAndBroadcast(request(seniorId, NEAR_HOME_LAT), seniorId);
-        realtimeLocationService.updateAndBroadcast(request(seniorId, AWAY_LAT), seniorId);
-        LocationUpdateResponse back = realtimeLocationService.updateAndBroadcast(request(seniorId, HOME_LAT), seniorId);
+                ingestService.applyRealtime(request(seniorId, NEAR_HOME_LAT), seniorId);
+        ingestService.applyRealtime(request(seniorId, AWAY_LAT), seniorId);
+        LocationUpdateResponse back = ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
 
         // then
         assertThat(stillHome.stayStartTime()).isEqualTo(atHome.stayStartTime());
@@ -129,7 +135,7 @@ class StayStateOutboxAtomicityTest {
         assertThat(alerts(seniorId, "SAFE_ZONE_ENTERED")).isEqualTo(1);
         SeniorStayState state = stayStateRepository.findById(seniorId).orElseThrow();
         assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.RETURNED);
-        assertThat(realtimeLocationService.getOutingStatus(seniorId)).isFalse();
+        assertThat(queryService.getOutingStatus(seniorId)).isFalse();
     }
 
     @Test
@@ -137,18 +143,18 @@ class StayStateOutboxAtomicityTest {
     void 알림_저장이_실패하면_상태도_롤백되고_재전송으로_복구된다() {
         // given
         Long seniorId = seniorWithGuardianAndHome();
-        realtimeLocationService.updateAndBroadcast(request(seniorId, HOME_LAT), seniorId);
+        ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
         willThrow(new IllegalStateException("Outbox 저장 실패"))
                 .willCallRealMethod()
                 .given(fcmOutboxService).enqueue(any(), any(FcmSendDto.class));
 
         // when
         LocationUpdateRequest away = request(seniorId, AWAY_LAT);
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(away, seniorId))
+        assertThatThrownBy(() -> ingestService.applyRealtime(away, seniorId))
                 .isInstanceOf(IllegalStateException.class);
         SeniorStayState afterRollback = stayStateRepository.findById(seniorId).orElseThrow();
         int alertsAfterRollback = alerts(seniorId, "SAFE_ZONE_EXITED");
-        realtimeLocationService.updateAndBroadcast(away, seniorId);
+        ingestService.applyRealtime(away, seniorId);
 
         // then
         assertThat(afterRollback.getLocationType()).isEqualTo("HOME");
@@ -165,16 +171,16 @@ class StayStateOutboxAtomicityTest {
     void 커밋_뒤_최신_위치_저장이_실패해도_재전송에서_알림이_중복되지_않는다() {
         // given
         Long seniorId = seniorWithGuardianAndHome();
-        realtimeLocationService.updateAndBroadcast(request(seniorId, HOME_LAT), seniorId);
+        ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
         willThrow(new RedisConnectionFailureException("down"))
                 .willReturn(null)
                 .given(seniorLocationRepository).save(any(SeniorLocation.class));
 
         // when
         LocationUpdateRequest away = request(seniorId, AWAY_LAT);
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(away, seniorId))
+        assertThatThrownBy(() -> ingestService.applyRealtime(away, seniorId))
                 .isInstanceOf(RedisConnectionFailureException.class);
-        realtimeLocationService.updateAndBroadcast(away, seniorId);
+        ingestService.applyRealtime(away, seniorId);
 
         // then
         assertThat(alerts(seniorId, "SAFE_ZONE_EXITED")).isEqualTo(1);
@@ -183,7 +189,7 @@ class StayStateOutboxAtomicityTest {
     }
 
     @Test
-    @DisplayName("같은 회원의 첫 상태를 두 요청이 동시에 만들어도 상태 행은 하나이고 실패한 요청은 상태와 알림을 남기지 않는다")
+    @DisplayName("회원 순서 잠금을 거치지 않는 두 판정(다른 인스턴스)이 같은 회원의 첫 상태를 동시에 만들어도 PK가 행 하나만 남기고 진 쪽은 상태와 알림을 남기지 않는다")
     void 첫_상태를_동시에_만들어도_행은_하나다() throws Exception {
         // given
         Long seniorId = seniorWithGuardianAndHome();
@@ -194,7 +200,7 @@ class StayStateOutboxAtomicityTest {
             results.add(pool.submit(() -> {
                 start.await();
                 try {
-                    realtimeLocationService.updateAndBroadcast(request(seniorId, latitude), seniorId);
+                    judgeService.judge(request(seniorId, latitude), System.currentTimeMillis());
                     return "ok";
                 } catch (RuntimeException e) {
                     return e.getClass().getSimpleName();
@@ -214,7 +220,7 @@ class StayStateOutboxAtomicityTest {
         Integer rows = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM senior_stay_state WHERE member_id = ?", Integer.class, seniorId);
         assertThat(rows).isEqualTo(1);
-        assertThat(outcomes).contains("ok");
+        assertThat(outcomes).containsExactlyInAnyOrder("ok", "DataIntegrityViolationException");
         assertThat(alerts(seniorId, "SAFE_ZONE_EXITED") + alerts(seniorId, "SAFE_ZONE_ENTERED")).isZero();
     }
 
@@ -224,12 +230,12 @@ class StayStateOutboxAtomicityTest {
         // given
         Long inactive = seniorWithGuardianAndHome();
         Long active = seniorWithGuardianAndHome();
-        realtimeLocationService.updateAndBroadcast(request(inactive, HOME_LAT), inactive);
-        realtimeLocationService.updateAndBroadcast(request(active, HOME_LAT), active);
+        ingestService.applyRealtime(request(inactive, HOME_LAT), inactive);
+        ingestService.applyRealtime(request(active, HOME_LAT), active);
         jdbc.update("UPDATE member SET status = 'INACTIVE' WHERE id = ?", inactive);
 
         // when
-        realtimeLocationService.refreshLocationTtl();
+        maintenanceService.refreshLocationTtl();
 
         // then
         assertThat(stayStateRepository.existsById(inactive)).isFalse();

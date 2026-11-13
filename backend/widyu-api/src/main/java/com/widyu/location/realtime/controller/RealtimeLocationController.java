@@ -1,7 +1,7 @@
 package com.widyu.location.realtime.controller;
 
 import com.widyu.global.security.PrincipalDetails;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationIngestService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Controller;
 @RequiredArgsConstructor
 public class RealtimeLocationController {
 
-    private final RealtimeLocationService realtimeLocationService;
+    private final LocationIngestService locationIngestService;
 
     /**
      * 시니어가 위치 업데이트를 전송하는 엔드포인트
@@ -36,7 +36,7 @@ public class RealtimeLocationController {
         Long authenticatedMemberId = resolveMemberId(headerAccessor.getUser());
         log.info("위치 업데이트 수신 - authenticatedMemberId: {}", authenticatedMemberId);
 
-        return realtimeLocationService.updateAndBroadcast(message.getPayload(), authenticatedMemberId);
+        return locationIngestService.receive(message.getPayload(), authenticatedMemberId);
     }
 
     /**

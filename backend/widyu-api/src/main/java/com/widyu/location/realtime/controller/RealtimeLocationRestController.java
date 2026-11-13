@@ -2,7 +2,7 @@ package com.widyu.location.realtime.controller;
 
 import com.widyu.global.response.ApiResponseTemplate;
 import com.widyu.global.util.SecurityUtil;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.location.realtime.controller.docs.RealtimeLocationDocs;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/location/realtime")
 public class RealtimeLocationRestController implements RealtimeLocationDocs {
 
-    private final RealtimeLocationService realtimeLocationService;
+    private final LocationQueryService locationQueryService;
     private final SecurityUtil securityUtil;
 
     /**
@@ -28,7 +28,7 @@ public class RealtimeLocationRestController implements RealtimeLocationDocs {
     @GetMapping("/seniors")
     public ApiResponseTemplate<List<TrackedSeniorResponse>> getTrackedSeniors() {
         Long guardianId = securityUtil.getCurrentMemberId();
-        List<TrackedSeniorResponse> response = realtimeLocationService.getTrackedSeniors(guardianId);
+        List<TrackedSeniorResponse> response = locationQueryService.getTrackedSeniors(guardianId);
 
         return ApiResponseTemplate.ok()
                 .code("LOC_1000")
@@ -44,7 +44,7 @@ public class RealtimeLocationRestController implements RealtimeLocationDocs {
             @PathVariable Long memberId
     ) {
         Long guardianId = securityUtil.getCurrentMemberId();
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(memberId, guardianId);
+        LocationUpdateResponse response = locationQueryService.getLastLocation(memberId, guardianId);
 
         return ApiResponseTemplate.ok()
                 .code("LOC_2000")
@@ -60,7 +60,7 @@ public class RealtimeLocationRestController implements RealtimeLocationDocs {
             @PathVariable Long memberId
     ) {
         Long guardianId = securityUtil.getCurrentMemberId();
-        LocationTrailResponse response = realtimeLocationService.getLocationTrail(memberId, guardianId);
+        LocationTrailResponse response = locationQueryService.getLocationTrail(memberId, guardianId);
 
         return ApiResponseTemplate.ok()
                 .code("LOC_2001")

@@ -74,7 +74,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("RealtimeLocationService 예외 처리 단위 테스트")
+@DisplayName("실시간 위치 수신, 판정, 반영, 조회, 유지관리 단위 테스트")
 class RealtimeLocationServiceTest {
 
     @Mock private SeniorLocationRepository seniorLocationRepository;
@@ -96,14 +96,21 @@ class RealtimeLocationServiceTest {
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
     @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("탈퇴 회원의 위치를 지우면 Redis 현재 위치, 이동 경로, 예전 체류 키와 MySQL 체류 상태를 모두 삭제한다")
     void 탈퇴_회원의_위치를_지우면_Redis_위치_키를_모두_삭제한다() {
         // when
-        realtimeLocationService.deleteLocation(7L);
+        maintenanceService.deleteLocation(7L);
 
         // then
         then(seniorLocationRepository).should().deleteById(7L);
@@ -121,7 +128,7 @@ class RealtimeLocationServiceTest {
         given(memberRepository.findActiveIdsIn(java.util.List.of(1L, 2L))).willReturn(java.util.Set.of(1L));
 
         // when
-        realtimeLocationService.refreshLocationTtl();
+        maintenanceService.refreshLocationTtl();
 
         // then
         then(redisTemplate).should().expire("senior_location:1", 300L, TimeUnit.SECONDS);
@@ -139,7 +146,7 @@ class RealtimeLocationServiceTest {
         willThrow(new QueryTimeoutException("redis down")).given(seniorLocationRepository).deleteById(7L);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.deleteLocation(7L))
+        assertThatThrownBy(() -> maintenanceService.deleteLocation(7L))
                 .isInstanceOf(QueryTimeoutException.class);
         assertThat(stayStateService.states).doesNotContainKey(7L);
     }
@@ -154,7 +161,7 @@ class RealtimeLocationServiceTest {
         given(seniorLocationRepository.findAll()).willReturn(java.util.List.of());
 
         // when
-        realtimeLocationService.refreshLocationTtl();
+        maintenanceService.refreshLocationTtl();
 
         // then
         assertThat(stayStateService.states).containsOnlyKeys(4L);
@@ -176,7 +183,7 @@ class RealtimeLocationServiceTest {
         LocationUpdateRequest request = LocationUpdateRequest.of(2L, 37.5, 127.0, null);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+        assertThatThrownBy(() -> ingestService().applyRealtime(request, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("본인의 위치만 업데이트할 수 있습니다.");
@@ -191,7 +198,7 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+        assertThatThrownBy(() -> ingestService().applyRealtime(request, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST)
                 .hasMessageContaining("존재하지 않는 시니어입니다.");
@@ -211,7 +218,7 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+        LocationUpdateResponse response = ingestService().applyRealtime(request, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(1L);
@@ -235,7 +242,7 @@ class RealtimeLocationServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.getLastLocation(2L, 1L))
+        assertThatThrownBy(() -> queryService.getLastLocation(2L, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("해당 시니어의 위치를 조회할 권한이 없습니다.");
@@ -251,7 +258,7 @@ class RealtimeLocationServiceTest {
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.getLastLocation(2L, 1L))
+        assertThatThrownBy(() -> queryService.getLastLocation(2L, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOT_FOUND)
                 .hasMessageContaining("최근 위치 정보가 없습니다.");
@@ -264,7 +271,7 @@ class RealtimeLocationServiceTest {
         stayStateService.states.put(1L, SeniorStayState.start(1L, 37.5, 127.0, LocalDateTime.now(), null, null));
 
         // when
-        Boolean isOuting = realtimeLocationService.getOutingStatus(1L);
+        Boolean isOuting = queryService.getOutingStatus(1L);
 
         // then
         assertThat(isOuting).isTrue();
@@ -282,7 +289,7 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        realtimeLocationService.updateAndBroadcast(request, 1L);
+        ingestService().applyRealtime(request, 1L);
 
         // then
         then(stayStateService).should().lockForChange(1L);
@@ -303,7 +310,7 @@ class RealtimeLocationServiceTest {
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse response = queryService.getLastLocation(2L, 1L);
 
         // then
         assertThat(response.stayStartTime()).isEqualTo(stayStartedAt);
@@ -327,7 +334,7 @@ class RealtimeLocationServiceTest {
                 SeniorLocation.of(2L, 37.5, 127.0, tenHoursAgo, tenHoursAgo, tenHoursAgo + 2_000L)));
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse response = queryService.getLastLocation(2L, 1L);
 
         // then
         assertThat(response.locationSource()).isEqualTo(LocationSource.LATEST);
@@ -352,8 +359,8 @@ class RealtimeLocationServiceTest {
                 .willReturn(Optional.of(SeniorLocation.of(2L, 37.5, 127.0)));
 
         // when
-        LocationUpdateResponse beforeField = realtimeLocationService.getLastLocation(2L, 1L);
-        LocationUpdateResponse legacy = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse beforeField = queryService.getLastLocation(2L, 1L);
+        LocationUpdateResponse legacy = queryService.getLastLocation(2L, 1L);
 
         // then
         assertThat(beforeField.measuredAtMs()).isEqualTo(earlier);
@@ -375,8 +382,8 @@ class RealtimeLocationServiceTest {
 
         // when
         LocationUpdateResponse response =
-                realtimeLocationService.updateAndBroadcast(LocationUpdateRequest.of(1L, 37.5, 127.0, null), 1L);
-        realtimeLocationService.updateAndBroadcast(rawFixPayload(oneHourLater).getBytes(UTF_8), 1L);
+                ingestService().applyRealtime(LocationUpdateRequest.of(1L, 37.5, 127.0, null), 1L);
+        ingestService().receive(rawFixPayload(oneHourLater).getBytes(UTF_8), 1L);
 
         // then
         assertThat(response.measuredAtMs()).isNull();
@@ -401,7 +408,7 @@ class RealtimeLocationServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.getLocationTrail(2L, 1L))
+        assertThatThrownBy(() -> queryService.getLocationTrail(2L, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("해당 시니어의 위치를 조회할 권한이 없습니다.");
@@ -423,7 +430,7 @@ class RealtimeLocationServiceTest {
                 .willReturn(true);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.location().memberId()).isEqualTo(1L);
@@ -456,7 +463,7 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.location().latitude()).isEqualTo(37.5);
@@ -486,7 +493,7 @@ class RealtimeLocationServiceTest {
                 .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(IllegalStateException.class);
         then(messagingTemplate).should()
                 .convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
@@ -505,7 +512,7 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        realtimeLocationService.updateAndBroadcast(payload, 1L);
+        ingestService().receive(payload, 1L);
 
         // then
         InOrder order = inOrder(transactionManager, locationFixService);
@@ -521,7 +528,7 @@ class RealtimeLocationServiceTest {
         byte[] payload = rawFixPayload(sixteenMinutesAgo).getBytes(UTF_8);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.location().latitude()).isEqualTo(37.5551);
@@ -544,7 +551,7 @@ class RealtimeLocationServiceTest {
         byte[] payload = rawFixPayload(now - 60_000L).getBytes(UTF_8);
 
         // when
-        realtimeLocationService.updateAndBroadcast(payload, 1L);
+        ingestService().receive(payload, 1L);
 
         // then
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
@@ -565,12 +572,12 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
         long oneDayLater = System.currentTimeMillis() + 86_400_000L;
         ArgumentCaptor<SeniorLocation> saved = ArgumentCaptor.forClass(SeniorLocation.class);
-        realtimeLocationService.updateAndBroadcast(rawFixPayload(oneDayLater).getBytes(UTF_8), 1L);
+        ingestService().receive(rawFixPayload(oneDayLater).getBytes(UTF_8), 1L);
         then(seniorLocationRepository).should().save(saved.capture());
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.of(saved.getValue()));
 
         // when
-        realtimeLocationService.updateAndBroadcast(
+        ingestService().receive(
                 rawFixPayload(System.currentTimeMillis() + 1_000L).getBytes(UTF_8), 1L);
 
         // then
@@ -587,7 +594,7 @@ class RealtimeLocationServiceTest {
         byte[] payload = rawFixPayload(System.currentTimeMillis() - 16 * 60_000L).getBytes(UTF_8);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 2L);
+        LocationAckResponse response = ingestService().receive(payload, 2L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -608,7 +615,7 @@ class RealtimeLocationServiceTest {
                 .willReturn(false);
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.DUPLICATE);
@@ -626,7 +633,7 @@ class RealtimeLocationServiceTest {
                 .given(locationFixService).validate(any(LocationUpdateRequest.class));
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -651,7 +658,7 @@ class RealtimeLocationServiceTest {
                 .store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
 
         // when
-        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+        LocationAckResponse response = ingestService().receive(payload, 1L);
 
         // then
         assertThat(response.result()).isEqualTo(LocationAckResult.REJECTED);
@@ -665,7 +672,7 @@ class RealtimeLocationServiceTest {
         byte[] payload = "{\"memberId\":1,\"latitude\":37.5}".getBytes(UTF_8);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.LOCATION_FIX_INVALID);
     }
@@ -677,7 +684,7 @@ class RealtimeLocationServiceTest {
         byte[] payload = "not-json".getBytes(UTF_8);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.LOCATION_FIX_INVALID);
     }
@@ -693,7 +700,7 @@ class RealtimeLocationServiceTest {
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse response = queryService.getLastLocation(2L, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(2L);
@@ -709,7 +716,7 @@ class RealtimeLocationServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.getLastLocation(2L, 1L))
+        assertThatThrownBy(() -> queryService.getLastLocation(2L, 1L))
                 .isInstanceOf(BusinessException.class);
         then(locationAccessLogService).should(never())
                 .record(anyLong(), anyLong(), org.mockito.ArgumentMatchers.any(LocationAccessPath.class));
@@ -728,7 +735,7 @@ class RealtimeLocationServiceTest {
                 .given(locationAccessLogService).record(1L, 2L, LocationAccessPath.REST_LAST);
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse response = queryService.getLastLocation(2L, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(2L);
@@ -746,7 +753,7 @@ class RealtimeLocationServiceTest {
         given(listOperations.range("location:trail:2", 0, 899)).willReturn(java.util.List.of());
 
         // when
-        realtimeLocationService.getLocationTrail(2L, 1L);
+        queryService.getLocationTrail(2L, 1L);
 
         // then
         then(locationAccessLogService).should().record(1L, 2L, LocationAccessPath.REST_TRAIL);
@@ -764,7 +771,7 @@ class RealtimeLocationServiceTest {
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        realtimeLocationService.updateAndBroadcast(request, 1L);
+        ingestService().applyRealtime(request, 1L);
 
         // then
         then(listOperations).should().trim("location:trail:1", 0, 899);
@@ -785,7 +792,7 @@ class RealtimeLocationServiceTest {
         given(listOperations.range("location:trail:2", 0, 899)).willReturn(java.util.List.of(newer, older));
 
         // when
-        LocationTrailResponse response = realtimeLocationService.getLocationTrail(2L, 1L);
+        LocationTrailResponse response = queryService.getLocationTrail(2L, 1L);
 
         // then
         assertThat(response.trail()).containsExactly(older, newer);
@@ -808,7 +815,7 @@ class RealtimeLocationServiceTest {
                 .willReturn(java.util.List.of(recent, stale, legacyRecent, legacyStale));
 
         // when
-        LocationTrailResponse response = realtimeLocationService.getLocationTrail(2L, 1L);
+        LocationTrailResponse response = queryService.getLocationTrail(2L, 1L);
 
         // then
         assertThat(response.trail()).containsExactly(legacyRecent, recent);
@@ -829,7 +836,7 @@ class RealtimeLocationServiceTest {
                 .willReturn(java.util.List.of(SeniorLocation.of(2L, 37.5, 127.0)));
 
         // when
-        realtimeLocationService.getTrackedSeniors(1L);
+        queryService.getTrackedSeniors(1L);
 
         // then
         then(locationAccessLogService).should().record(1L, 2L, LocationAccessPath.REST_FAMILY);
@@ -844,7 +851,7 @@ class RealtimeLocationServiceTest {
         willThrow(new QueryTimeoutException("DB timeout")).given(stayStateService).find(1L);
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+        assertThatThrownBy(() -> ingestService().applyRealtime(request, 1L))
                 .isInstanceOf(QueryTimeoutException.class);
         then(transactionManager).should(never()).commit(any());
         then(safeZoneAlertService).should(never()).handleSafeZoneTransition(any(), any(), any(), any());
@@ -864,7 +871,7 @@ class RealtimeLocationServiceTest {
         given(redisTemplate.opsForList()).willReturn(listOperations);
 
         // when
-        realtimeLocationService.updateAndBroadcast(request, 1L);
+        ingestService().applyRealtime(request, 1L);
 
         // then
         InOrder order = inOrder(stayStateService, transactionManager, seniorLocationRepository, listOperations,
@@ -892,7 +899,7 @@ class RealtimeLocationServiceTest {
                 .given(seniorLocationRepository).save(any(SeniorLocation.class));
 
         // when & then
-        assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
+        assertThatThrownBy(() -> ingestService().applyRealtime(request, 1L))
                 .isInstanceOf(QueryTimeoutException.class);
         then(transactionManager).should().commit(any());
         then(redisTemplate).should(never()).opsForList();
@@ -912,7 +919,7 @@ class RealtimeLocationServiceTest {
                 .willThrow(new QueryTimeoutException("Redis command timed out"));
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+        LocationUpdateResponse response = ingestService().applyRealtime(request, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(1L);
@@ -933,7 +940,7 @@ class RealtimeLocationServiceTest {
                 .given(messagingTemplate).convertAndSend(eq("/topic/location/senior/1"), any(Object.class));
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+        LocationUpdateResponse response = ingestService().applyRealtime(request, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(1L);
@@ -952,7 +959,7 @@ class RealtimeLocationServiceTest {
                 .given(eventPublisher).publishEvent(any(SeniorLocationUpdatedEvent.class));
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+        LocationUpdateResponse response = ingestService().applyRealtime(request, 1L);
 
         // then
         assertThat(response.memberId()).isEqualTo(1L);

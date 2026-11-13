@@ -59,8 +59,15 @@ class RealtimeLocationTtlRaceTest {
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
     @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("TTL 갱신이 위치를 읽은 뒤 새 위치가 저장돼도 갱신이 끝나면 최신 위치는 새 위치다")
@@ -85,7 +92,7 @@ class RealtimeLocationTtlRaceTest {
         lenient().when(redisTemplate.expire(anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         // when
-        realtimeLocationService.refreshLocationTtl();
+        maintenanceService.refreshLocationTtl();
 
         // then
         assertThat(redis.get(1L).getMeasuredAtMs()).isEqualTo(later);

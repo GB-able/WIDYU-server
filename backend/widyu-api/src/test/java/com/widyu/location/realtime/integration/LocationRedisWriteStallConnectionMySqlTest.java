@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.global.infrastructure.s3.S3Service;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationIngestService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -92,7 +92,7 @@ class LocationRedisWriteStallConnectionMySqlTest {
     @MockBean private net.bramp.ffmpeg.FFmpeg ffmpeg;
     @MockBean private net.bramp.ffmpeg.FFprobe ffprobe;
 
-    @Autowired private RealtimeLocationService realtimeLocationService;
+    @Autowired private LocationIngestService locationIngestService;
     @Autowired private MemberRepository memberRepository;
     @Autowired private FamilyRepository familyRepository;
     @Autowired private SeniorProfileRepository seniorProfileRepository;
@@ -119,7 +119,7 @@ class LocationRedisWriteStallConnectionMySqlTest {
         List<Long> memberIds = new ArrayList<>();
         for (int i = 0; i < REQUESTS; i++) {
             Long memberId = saveSenior();
-            realtimeLocationService.updateAndBroadcast(payload(memberId), memberId);  // 체류 정보를 먼저 만든다
+            locationIngestService.receive(payload(memberId), memberId);  // 체류 정보를 먼저 만든다
             memberIds.add(memberId);
         }
         HikariPoolMXBean pool = dataSource.unwrap(HikariDataSource.class).getHikariPoolMXBean();
@@ -136,7 +136,7 @@ class LocationRedisWriteStallConnectionMySqlTest {
                 start.await();
                 entered.countDown();
                 try {
-                    realtimeLocationService.updateAndBroadcast(payload(memberId), memberId);
+                    locationIngestService.receive(payload(memberId), memberId);
                     return null;
                 } catch (Exception e) {
                     return e.getClass().getSimpleName();

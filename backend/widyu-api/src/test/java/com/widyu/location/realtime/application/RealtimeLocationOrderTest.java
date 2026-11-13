@@ -80,8 +80,15 @@ class RealtimeLocationOrderTest {
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
     @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("같은 회원의 새 위치와 옛 위치가 동시에 처리돼도 최신 위치와 마지막 방송은 나중에 잰 위치다")
@@ -114,12 +121,13 @@ class RealtimeLocationOrderTest {
         }).given(seniorLocationRepository).save(any(SeniorLocation.class));
 
         // when
+        LocationIngestService ingestService = ingestService();
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<?> newer = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 1, 37.60, newerTs), 1L));
+                    ingestService.receive(payload(1L, 1, 37.60, newerTs), 1L));
             Future<?> older = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 2, 37.50, olderTs), 1L));
+                    ingestService.receive(payload(1L, 2, 37.50, olderTs), 1L));
             newer.get(5, TimeUnit.SECONDS);
             older.get(5, TimeUnit.SECONDS);
         } finally {
@@ -152,13 +160,14 @@ class RealtimeLocationOrderTest {
         given(seniorLocationRepository.findById(2L)).willReturn(Optional.empty());
 
         // when
+        LocationIngestService ingestService = ingestService();
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<?> blocked = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 1, 37.5, now), 1L));
+                    ingestService.receive(payload(1L, 1, 37.5, now), 1L));
             assertThat(firstEntered.await(2, TimeUnit.SECONDS)).isTrue();
             Future<?> other = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(2L, 1, 37.5, now), 2L));
+                    ingestService.receive(payload(2L, 1, 37.5, now), 2L));
             other.get(2, TimeUnit.SECONDS);
 
             // then

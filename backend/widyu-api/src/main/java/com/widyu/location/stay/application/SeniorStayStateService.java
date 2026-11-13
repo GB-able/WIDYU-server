@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 체류와 안전구역 판정 상태의 읽기, 잠금, 삭제(LLD-0141). 판정 자체는 위치 처리 트랜잭션 안에서 {@code RealtimeLocationService}가
+ * 체류와 안전구역 판정 상태의 읽기, 잠금, 삭제(LLD-0141). 판정 자체는 위치 처리 트랜잭션 안에서 {@code LocationJudgeService}가
  * 하고, 이 서비스는 그 트랜잭션에 참여해 행을 읽거나 잠근다.
  */
 @Service

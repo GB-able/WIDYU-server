@@ -16,7 +16,7 @@ import com.widyu.heart.HeartRateStatus;
 import com.widyu.heart.application.HeartRateService;
 import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.heart.dto.response.HeartRateStatusResponse;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationIngestService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.member.MemberRole;
@@ -118,7 +118,7 @@ class WebSocketSessionAckIntegrationTest {
     @MockBean private WsTokenService wsTokenService;
     @MockBean private ActiveMemberValidator activeMemberValidator;
     @MockBean private HeartRateService heartRateService;
-    @MockBean private RealtimeLocationService realtimeLocationService;
+    @MockBean private LocationIngestService locationIngestService;
     @MockBean private SensorBatchService sensorBatchService;
 
     @Autowired private JwtTokenProvider jwtTokenProvider;
@@ -305,7 +305,7 @@ class WebSocketSessionAckIntegrationTest {
     /** 업무 서비스 대역이 받은 회원 ID. 컨트롤러가 어느 회원으로 요청을 처리했는지 보여준다. */
     private List<Long> processedMemberIds() {
         List<Long> memberIds = new ArrayList<>();
-        for (Object service : List.of(heartRateService, realtimeLocationService, sensorBatchService)) {
+        for (Object service : List.of(heartRateService, locationIngestService, sensorBatchService)) {
             Mockito.mockingDetails(service).getInvocations().forEach(invocation -> {
                 for (Object argument : invocation.getArguments()) {
                     if (argument instanceof Long id) {
@@ -329,7 +329,7 @@ class WebSocketSessionAckIntegrationTest {
                     return HeartRateStatusResponse.of(invocation.getArgument(0), HeartRateStatus.NORMAL,
                             request.heartRate(), request.measuredAt());
                 });
-        given(realtimeLocationService.updateAndBroadcast(any(byte[].class), anyLong()))
+        given(locationIngestService.receive(any(byte[].class), anyLong()))
                 .willAnswer(invocation -> {
                     String tag = JSON.readTree(invocation.getArgument(0, byte[].class)).get("tag").asText();
                     return LocationAckResponse.legacy(LocationUpdateResponse.of(invocation.getArgument(1), tag, null,
