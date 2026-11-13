@@ -10,7 +10,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 
 import com.widyu.global.error.BusinessException;
@@ -118,7 +117,9 @@ class RealtimeLocationRawIsolationTest {
     void 원본_저장_뒤_실시간_실패는_재전송으로_복구된다() {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
-        stubSenior(1L);
+        Member member = stubSenior(1L);
+        given(parentLocationRepository.findAllByMember(member)).willReturn(List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
         given(valueOperations.get("location:stay:1")).willReturn(null);
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
         willThrow(new RedisConnectionFailureException("down"))
@@ -284,7 +285,9 @@ class RealtimeLocationRawIsolationTest {
         willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get())
                 .given(sequencer).run(eq(1L), any(), any(), any());
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
-        stubSenior(1L);
+        Member member = stubSenior(1L);
+        given(parentLocationRepository.findAllByMember(member)).willReturn(List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
         given(valueOperations.get("location:stay:1")).willReturn(null);
         given(storeCall(payload)).willReturn(true);
 
@@ -304,16 +307,15 @@ class RealtimeLocationRawIsolationTest {
         return locationFixService.store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
     }
 
-    private void stubSenior(Long memberId) {
+    private Member stubSenior(Long memberId) {
         Member member = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
         ReflectionTestUtils.setField(member, "id", memberId);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
                 member, Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
         ReflectionTestUtils.setField(member, "seniorProfile", seniorProfile);
         given(seniorProfileRepository.findByMemberId(memberId)).willReturn(Optional.of(seniorProfile));
-        lenient().when(parentLocationRepository.findAllByMember(member)).thenReturn(List.of());
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        lenient().when(redisTemplate.opsForList()).thenReturn(listOperations);
+        return member;
     }
 
     private static byte[] payload(Long memberId, long tsMs) {

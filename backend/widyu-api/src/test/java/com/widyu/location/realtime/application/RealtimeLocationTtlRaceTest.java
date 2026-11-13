@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
-import static org.mockito.Mockito.lenient;
 
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.application.LocationAccessLogService;
@@ -43,12 +42,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 @DisplayName("위치 TTL 갱신과 위치 수신 경쟁")
 class RealtimeLocationTtlRaceTest {
 
-    @Mock private SeniorLocationRepository seniorLocationRepository;
+    @Mock(strictness = Mock.Strictness.LENIENT) private SeniorLocationRepository seniorLocationRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private ParentLocationRepository parentLocationRepository;
     @Mock private SimpMessagingTemplate messagingTemplate;
-    @Mock private RedisTemplate<String, Object> redisTemplate;
+    @Mock(strictness = Mock.Strictness.LENIENT) private RedisTemplate<String, Object> redisTemplate;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private SafeZoneAlertService safeZoneAlertService;
     @Mock private LocationFixService locationFixService;
@@ -75,13 +74,13 @@ class RealtimeLocationTtlRaceTest {
             redis.put(1L, SeniorLocation.of(1L, 37.60, 127.0, later));
             return snapshot;
         }).given(seniorLocationRepository).findAll();
-        lenient().when(seniorLocationRepository.save(any(SeniorLocation.class))).thenAnswer(invocation -> {
+        given(seniorLocationRepository.save(any(SeniorLocation.class))).willAnswer(invocation -> {
             SeniorLocation location = invocation.getArgument(0);
             redis.put(location.getSeniorId(), location);
             return location;
         });
         given(memberRepository.findActiveIdsIn(List.of(1L))).willReturn(Set.of(1L));
-        lenient().when(redisTemplate.expire(anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        given(redisTemplate.expire(anyString(), anyLong(), any(TimeUnit.class))).willReturn(true);
 
         // when
         realtimeLocationService.refreshLocationTtl();
