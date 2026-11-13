@@ -213,7 +213,7 @@ public class Album extends BaseTimeEntity {
     private boolean isPhotoUrl(String url) {
         if (url == null) return false;
         String extension = getFileExtension(url).toLowerCase();
-        return extension.matches("jpg|jpeg|png|gif|webp|bmp|svg");
+        return extension.matches("jpg|jpeg|png|gif|webp|bmp|svg|heic|heif");
     }
 
     private boolean isVideoUrl(String url) {
