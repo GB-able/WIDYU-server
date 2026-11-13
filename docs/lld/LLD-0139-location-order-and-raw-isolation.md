@@ -66,6 +66,7 @@ STOMP 경로와 본문 형식은 바뀌지 않는다. `SEND /app/location/update
 - `com.widyu.location.realtime.application.MemberLocationSequencer`(widyu-api, `@Component`): 회원 ID별 `{공정 ReentrantLock, 사용자 수}`를 `ConcurrentHashMap`에 둔다. 마지막 사용자가 나가면 항목을 지운다.
 - `com.widyu.location.realtime.application.LocationSequenceBusyException`(widyu-api): `RuntimeException`. 업무 예외가 아니다(업무 예외면 `REJECTED`가 되어 앱이 지운다).
 - 설정(`application.yml`): `location.realtime.sequencer.max-waiting`(기본 4, `LOCATION_SEQUENCER_MAX_WAITING`), `location.realtime.sequencer.wait-timeout-ms`(기본 3000, `LOCATION_SEQUENCER_WAIT_TIMEOUT_MS`)
+- 두 설정은 0 이상이어야 한다. 음수는 시작 시 `IllegalArgumentException`으로 거절한다. 0은 대기하지 않는 설정이며, 비어 있는 잠금의 즉시 처리는 허용한다(PR #1040 리뷰 반영).
 - `LocationFixService.verifyAttribution(memberId, request)`, `LocationFixService.exists(request)`(`@Transactional(readOnly = true)`) 추가. `LocationFixService.store`가 `SeniorProfileRepository.existsByMemberId`로 시니어인지 확인한다(원본 저장당 SELECT 1건 증가)
 
 ## 5. 처리 흐름
@@ -119,6 +120,7 @@ STOMP 경로와 본문 형식은 바뀌지 않는다. `SEND /app/location/update
 - [x] 같은 회원의 새 위치와 옛 위치가 동시에 처리돼 둘 다 옛 최신값을 읽을 수 있는 상황에서, 최신 위치와 마지막 방송은 나중에 잰 위치다. 수정 전 코드에서는 이 테스트가 실패한다(`RealtimeLocationOrderTest`, 10절)
 - [x] 한 회원의 실시간 처리가 멈춰 있어도 다른 회원의 위치는 기다리지 않고 처리, 방송된다(`RealtimeLocationOrderTest`)
 - [x] 같은 회원 대기 수가 상한을 넘으면 바로, 대기 시간을 넘기면 실행 없이 대기 초과가 나고, 끝나면 회원 항목이 남지 않는다(`MemberLocationSequencerTest`)
+- [x] 음수 대기 설정은 시작 시 거절하고, 대기 수와 시간이 0이어도 비어 있는 잠금은 처리한다. 대기 상한 테스트는 대기 스레드의 실제 진입을 확인한 뒤 검사한다.
 - [x] 최신 위치 조회 또는 체류 조회에서 Redis 장애가 나도 원본 저장을 시도하고, ACK 없이 예외를 전달하며 방송하지 않는다(`RealtimeLocationRawIsolationTest`)
 - [x] 원본을 저장한 뒤 실시간 처리만 실패한 위치를 다시 보내면 실시간 처리가 다시 평가돼 최신 위치 저장과 방송이 되고 `DUPLICATE` ACK가 나간다
 - [x] 원본 저장이 실패하면 성공 ACK 없이 예외를 전달한다

@@ -28,6 +28,12 @@ public class MemberLocationSequencer {
             @Value("${location.realtime.sequencer.max-waiting:4}") int maxWaiting,
             @Value("${location.realtime.sequencer.wait-timeout-ms:3000}") long waitTimeoutMs
     ) {
+        if (maxWaiting < 0) {
+            throw new IllegalArgumentException("location.realtime.sequencer.max-waiting must be non-negative");
+        }
+        if (waitTimeoutMs < 0) {
+            throw new IllegalArgumentException("location.realtime.sequencer.wait-timeout-ms must be non-negative");
+        }
         this.maxWaiting = maxWaiting;
         this.waitTimeoutMs = waitTimeoutMs;
     }
