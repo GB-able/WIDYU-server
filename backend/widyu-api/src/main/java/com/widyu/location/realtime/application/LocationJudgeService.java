@@ -42,6 +42,14 @@ public class LocationJudgeService {
     private final SeniorStayStateService stayStateService;
     private final SafeZoneAlertService safeZoneAlertService;
 
+    /** 실시간에 반영하지 않은 위치도 시니어가 보낸 것인지 확인한다. 짧은 읽기 트랜잭션에서 끝낸다(LLD-0143). */
+    @Transactional(readOnly = true)
+    public void requireSenior(Long memberId) {
+        if (!seniorProfileRepository.existsByMemberId(memberId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다.");
+        }
+    }
+
     @Transactional
     public LocationUpdateResponse judge(LocationUpdateRequest request, long receivedAtMs) {
         Long memberId = request.memberId();

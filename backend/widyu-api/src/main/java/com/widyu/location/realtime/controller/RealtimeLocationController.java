@@ -24,8 +24,8 @@ public class RealtimeLocationController {
      * 시니어가 위치 업데이트를 전송하는 엔드포인트
      * 클라이언트는 /app/location/update 로 메시지 전송
      *
-     * <p>본문을 DTO가 아니라 원문 바이트로 받는다. v2 페이로드는 원문 그대로 보관해야 하므로
-     * (LLD-0048 3절) 재직렬화 지점을 두지 않는다. 파싱·검증은 서비스가 한다.
+     * <p>본문을 원문 바이트로 받아 서비스가 구형과 v2를 가려 파싱, 검증한다. 위치 원본은 저장하지 않는다(LLD-0143).
+     * ACK 결과는 실시간 처리 결과({@code APPLIED}, {@code SKIPPED}, {@code REJECTED})다.
      */
     @MessageMapping("/location/update")
     @SendToUser(destinations = "/queue/location/ack", broadcast = false)

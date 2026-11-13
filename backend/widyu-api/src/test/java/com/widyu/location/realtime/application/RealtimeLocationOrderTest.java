@@ -13,7 +13,6 @@ import static org.mockito.Mockito.timeout;
 
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
@@ -72,7 +71,6 @@ class RealtimeLocationOrderTest {
     @Mock private ListOperations<String, Object> listOperations;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private SafeZoneAlertService safeZoneAlertService;
-    @Mock private LocationFixService locationFixService;
     @Mock private LocationAccessLogService locationAccessLogService;
     @Mock private MemberRepository memberRepository;
     @Mock private PlatformTransactionManager transactionManager;
@@ -86,7 +84,7 @@ class RealtimeLocationOrderTest {
     @InjectMocks private LocationMaintenanceService maintenanceService;
 
     private LocationIngestService ingestService() {
-        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+        return LocationServiceFixture.ingest(validator, sequencer, judgeService, projectionService,
                 transactionManager);
     }
 

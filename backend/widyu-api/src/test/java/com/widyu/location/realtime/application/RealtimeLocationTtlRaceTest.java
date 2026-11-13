@@ -10,7 +10,6 @@ import static org.mockito.Mockito.lenient;
 
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.repository.FamilyMembershipRepository;
@@ -51,7 +50,6 @@ class RealtimeLocationTtlRaceTest {
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private SafeZoneAlertService safeZoneAlertService;
-    @Mock private LocationFixService locationFixService;
     @Mock private LocationAccessLogService locationAccessLogService;
     @Mock private MemberRepository memberRepository;
     @Mock private PlatformTransactionManager transactionManager;
@@ -65,7 +63,7 @@ class RealtimeLocationTtlRaceTest {
     @InjectMocks private LocationMaintenanceService maintenanceService;
 
     private LocationIngestService ingestService() {
-        return LocationServiceFixture.ingest(validator, locationFixService, sequencer, judgeService, projectionService,
+        return LocationServiceFixture.ingest(validator, sequencer, judgeService, projectionService,
                 transactionManager);
     }
 

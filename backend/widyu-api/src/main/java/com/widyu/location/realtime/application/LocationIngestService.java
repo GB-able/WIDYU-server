@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
-import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationAckResult;
 import com.widyu.location.realtime.dto.LocationFreshness;
@@ -18,27 +17,25 @@ import java.time.Duration;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 시니어 위치 수신의 조율자(LLD-0142). 파싱, 검증, 회원별 순서 제어, 실시간 처리와 원본 저장의 실패 분리, ACK 결정을 맡는다.
+ * 시니어 위치 수신의 조율자(LLD-0142, LLD-0143). 파싱, 검증, 회원별 순서 제어, ACK 결정을 맡는다.
  * 판정({@link LocationJudgeService})과 Redis 반영, 방송({@link LocationProjectionService})은 다른 빈이 한다.
+ * 위치 원본은 더 저장하지 않는다(LLD-0143). 과거 {@code location_fix} 행은 남아 있고 내보내기가 그대로 읽는다.
  *
  * <p>처리 순서:
  * <pre>
- * receive ─ 파싱, 검증, 본인, 회차 ─ applyRealtime ─ 회원 잠금 ┬ 최신 비교
- *                                                              ├ judge (자기 트랜잭션, 반환 때 커밋)
- *                                                              └ project (최신 위치 필수, 나머지 실패 허용)
- *         └ storeRaw (원본 저장, 자기 트랜잭션, 실시간 실패에도 시도) ─ ACK 결정
+ * receive ─ 파싱, 검증, 본인 ─ applyRealtime ─ 회원 잠금 ┬ 최신 비교
+ *                                                        ├ judge (자기 트랜잭션, 반환 때 커밋)
+ *                                                        └ project (최신 위치 필수, 나머지 실패 허용)
+ *         └ 반영하지 않은 위치면 시니어 확인 ─ ACK 결정(APPLIED, SKIPPED, REJECTED)
  * </pre>
  *
- * <p>트랜잭션을 열지 않는다(LLD-0114). 실시간 트랜잭션이 커넥션을 쥔 채 원본 저장(REQUIRES_NEW)이 커넥션을 하나 더 요청하면,
- * 재연결 직후 위치가 몰릴 때 풀 전체가 두 번째 커넥션을 기다리며 막힌다. 회원 잠금도 커넥션 없이 기다린다.
- * 이 클래스에서 트랜잭션 없는 JPA 조회를 하지 않는다. {@code NOT_SUPPORTED} 범위에서 그런 조회가 묶은 EntityManager는 메서드가
- * 끝날 때까지 커넥션을 쥔다(LLD-0139).
+ * <p>트랜잭션을 열지 않는다. 회원 잠금은 커넥션 없이 기다린다(LLD-0114). 이 클래스에서 트랜잭션 없는 JPA 조회를 하지 않는다.
+ * {@code NOT_SUPPORTED} 범위에서 그런 조회가 묶은 EntityManager는 메서드가 끝날 때까지 커넥션을 쥔다(LLD-0139).
  */
 @Slf4j
 @Service
@@ -46,11 +43,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class LocationIngestService {
 
+    private static final Set<String> REASONS = Set.of("move", "keepalive", "incident");
+    private static final double MAX_LATITUDE = 90.0;
+    private static final double MAX_LONGITUDE = 180.0;
     // 응급 이동 경로는 최근 15분만 보여 준다. 그보다 오래 전에 잰 위치는 실시간 경로에 반영하지 않는다(LLD-0114).
     private static final long REALTIME_MAX_AGE_MS = Duration.ofMinutes(15).toMillis();
 
     private final Validator validator;
-    private final LocationFixService locationFixService;
     private final MemberLocationSequencer sequencer;
     private final LocationJudgeService judgeService;
     private final LocationProjectionService projectionService;
@@ -60,17 +59,17 @@ public class LocationIngestService {
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     /**
-     * 원문 바이트를 받아 실시간 경로를 돌리고, v2 페이로드면 원본을 남긴다(LLD-0048 5절).
-     * 검증은 브로드캐스트 앞에 둔다. 잘못된 좌표를 보호자에게 흘리지 않기 위해서다.
+     * 원문 바이트를 받아 실시간 경로를 돌린다. 검증은 브로드캐스트 앞에 둔다. 잘못된 좌표를 보호자에게 흘리지 않기 위해서다.
      *
-     * <p>v2 위치의 ACK는 "앱이 큐에서 지워도 된다"는 뜻이다(LLD-0123, LLD-0139). 원본이 저장됐고(또는 이미 있었고)
-     * 실시간 처리가 끝났거나 필요 없을 때만 {@code STORED}, {@code DUPLICATE}를, 요청 자체가 잘못됐으면 {@code REJECTED}를
-     * 돌려준다. 원본 저장이 실패하면 예외를 그대로 던져 ACK를 보내지 않는다.
-     *
-     * <p>실시간 처리가 기술 오류(Redis, DB 장애)로 실패해도 원본 저장은 시도한다(LLD-0139). 저장한 뒤 실시간 오류를
-     * 던져 ACK를 보내지 않으므로 앱이 같은 위치를 다시 보내고, 그때 원본은 {@code DUPLICATE}이며 실시간 처리는
-     * 최신 시각 비교로 다시 평가된다. 같은 회원 위치가 너무 몰려 실시간 차례를 얻지 못하면 경고만 남기고 ACK 없이
-     * {@code null}을 돌려준다(컨트롤러가 아무것도 보내지 않는다).
+     * <p>v2 위치의 ACK는 "서버가 이 위치의 처리를 끝냈다"는 뜻이다(LLD-0143). 보호자가 받았다는 뜻은 아니다.
+     * <ul>
+     *   <li>{@code APPLIED}: 판정을 커밋하고 Redis 최신 위치에 반영했다(경로, 방송은 실패해도 로그만 남긴다).</li>
+     *   <li>{@code SKIPPED}: 정상 요청이지만 반영할 필요가 없다. 15분 넘게 지났거나, 최신 위치보다 먼저 잰 위치(같은 위치의
+     *   재전송 포함)이거나, 더 늦게 잰 위치가 반영됐다.</li>
+     *   <li>{@code REJECTED}: 요청 자체가 잘못됐다(입력, 본인 아님, 시니어 아님). 다시 보내도 같다.</li>
+     * </ul>
+     * 판정, 최신 위치 저장이 기술 오류(DB, Redis)로 실패하면 ACK 없이 오류를 보내 재전송을 받는다. 같은 회원 위치가 너무
+     * 몰려 차례를 얻지 못하면 경고만 남기고 ACK 없이 {@code null}을 돌려준다(컨트롤러가 아무것도 보내지 않는다).
      */
     public LocationAckResponse receive(byte[] payload, Long authenticatedMemberId) {
         long serverReceivedAtMs = System.currentTimeMillis();
@@ -81,50 +80,30 @@ public class LocationIngestService {
             return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, serverReceivedAtMs));
         }
 
-        long acceptedAtMs;
+        LocationUpdateResponse response;
         try {
-            // 잘못된 요청, 남의 위치, 남의 회차는 실시간 부수효과(방송, 안전구역 판정)가 생기기 전에 거절한다.
+            // 잘못된 요청, 남의 위치는 실시간 부수효과(방송, 안전구역 판정)가 생기기 전에 거절한다.
             validate(request);
-            acceptedAtMs = System.currentTimeMillis();
-            locationFixService.validate(request);
-            verifySelf(request.memberId(), authenticatedMemberId);
-            locationFixService.verifyAttribution(authenticatedMemberId, request);
-        } catch (BusinessException e) {
-            return rejected(request, authenticatedMemberId, e);
-        }
-
-        LocationUpdateResponse response = null;
-        RuntimeException realtimeFailure = null;
-        try {
+            validateFix(request);
             response = applyRealtime(request, authenticatedMemberId, serverReceivedAtMs);
-        } catch (BusinessException e) {
-            // 실시간 경로의 업무 예외(시니어 아님)는 부수효과 전에 난다. 다시 보내도 같으므로 원본도 남기지 않는다.
-            return rejected(request, authenticatedMemberId, e);
-        } catch (RuntimeException e) {
-            realtimeFailure = e;
-        }
-
-        boolean stored;
-        try {
-            stored = storeRaw(authenticatedMemberId, request, payload, serverReceivedAtMs, acceptedAtMs);
+            if (!isApplied(response)) {
+                // 반영하지 않은 위치는 판정(시니어 확인)을 거치지 않았다. 시니어가 아니면 생략이 아니라 거절이다.
+                judgeService.requireSenior(request.memberId());
+            }
         } catch (BusinessException e) {
             return rejected(request, authenticatedMemberId, e);
-        }
-
-        if (realtimeFailure instanceof LocationSequenceBusyException) {
-            log.warn("위치 원본 저장, 실시간 처리 대기 초과로 ACK 보류: memberId={}, seq={}",
-                    authenticatedMemberId, request.seq());
+        } catch (LocationSequenceBusyException e) {
+            log.warn("위치 실시간 처리 대기 초과로 ACK 보류: memberId={}, seq={}", authenticatedMemberId, request.seq());
             return null;
+        } catch (RuntimeException e) {
+            log.warn("위치 실시간 처리 실패로 ACK 보류: memberId={}, seq={}, cause={}",
+                    authenticatedMemberId, request.seq(), e.getClass().getSimpleName());
+            throw e;
         }
-        if (realtimeFailure != null) {
-            log.warn("위치 원본 저장, 실시간 처리 실패로 ACK 보류: memberId={}, seq={}, cause={}",
-                    authenticatedMemberId, request.seq(), realtimeFailure.getClass().getSimpleName());
-            throw realtimeFailure;
+        if (isApplied(response)) {
+            return LocationAckResponse.of(response, request, LocationAckResult.APPLIED);
         }
-        if (stored) {
-            return LocationAckResponse.of(response, request, LocationAckResult.STORED);
-        }
-        return LocationAckResponse.of(response, request, LocationAckResult.DUPLICATE);
+        return LocationAckResponse.of(response, request, LocationAckResult.SKIPPED);
     }
 
     /** 이미 파싱, 검증한 위치의 실시간 처리. {@link #receive}의 구형 위치와 v2 위치가 같은 경로를 탄다. */
@@ -158,7 +137,7 @@ public class LocationIngestService {
         }, () -> superseded(request, serverReceivedAtMs));
     }
 
-    /** 이 경로의 업무 예외는 요청 자체의 문제(좌표, 필드 검증, 본인 아님, 시니어 아님, 남의 회차)라 다시 보내도 같다. */
+    /** 이 경로의 업무 예외는 요청 자체의 문제(좌표, 필드 검증, 본인 아님, 시니어 아님)라 다시 보내도 같다. */
     private LocationAckResponse rejected(LocationUpdateRequest request, Long authenticatedMemberId, BusinessException e) {
         log.warn("위치 거절: memberId={}, seq={}, code={}",
                 authenticatedMemberId, request.seq(), e.getErrorCode().getCode());
@@ -166,24 +145,7 @@ public class LocationIngestService {
     }
 
     /**
-     * 같은 원본이 거의 동시에 두 번 오면 둘 다 존재 확인을 통과하고 한쪽이 유일 키에서 실패한다. 그 행이 이제 있으면
-     * 이미 저장된 위치이므로 {@code DUPLICATE}로 본다. 없으면 다른 무결성 오류라 그대로 던진다.
-     */
-    private boolean storeRaw(Long memberId, LocationUpdateRequest request, byte[] payload,
-                             long serverReceivedAtMs, long acceptedAtMs) {
-        try {
-            return locationFixService.store(memberId, request, payload, serverReceivedAtMs, acceptedAtMs);
-        } catch (DataIntegrityViolationException e) {
-            if (locationFixService.exists(request)) {
-                log.info("위치 원본 동시 중복 수신: memberId={}, seq={}", memberId, request.seq());
-                return false;
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * 같은 회원의 더 늦게 잰 위치가 실시간에 반영돼 이 위치의 실시간 처리는 할 필요가 없다(LLD-0140). 원본 저장 결과로
+     * 같은 회원의 더 늦게 잰 위치가 실시간에 반영돼 이 위치의 실시간 처리는 할 필요가 없다(LLD-0140). {@code SKIPPED}로
      * ACK한다. 더 최근 위치가 실패하면 순서 잠금이 과부하 예외를 던져 이 위치도 ACK를 받지 못한다.
      */
     private LocationUpdateResponse superseded(LocationUpdateRequest request, long serverReceivedAtMs) {
@@ -196,7 +158,7 @@ public class LocationIngestService {
         return requestOnly(request, serverReceivedAtMs);
     }
 
-    /** 실시간에 반영하지 않은 위치의 ACK. 이 요청의 좌표와 측정 시각만 담는다. */
+    /** 실시간에 반영하지 않은 위치의 ACK. 이 요청의 좌표와 측정 시각만 담고 출처는 {@code REQUEST}다. */
     private static LocationUpdateResponse requestOnly(LocationUpdateRequest request, long serverReceivedAtMs) {
         return LocationUpdateResponse.received(request.memberId(), request.resolvedLatitude(),
                 request.resolvedLongitude(), LocationFreshness.of(request.tsMs(), serverReceivedAtMs,
@@ -247,6 +209,28 @@ public class LocationIngestService {
             return payloadMapper.readValue(payload, LocationUpdateRequest.class);
         } catch (IOException e) {
             // 예외 메시지에 좌표가 섞일 수 있어 어떤 레벨에도 남기지 않는다(LLD-0029).
+            throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
+        }
+    }
+
+    /** 판정이 커밋되고 최신 위치에 반영됐는지. 반영하지 않은 위치의 응답은 출처가 {@code REQUEST}다. */
+    private static boolean isApplied(LocationUpdateResponse response) {
+        return response.locationSource() == LocationSource.LATEST;
+    }
+
+    /**
+     * v2 위치 검증(LLD-0048 6절의 입력 규칙 그대로). {@code session_id}, {@code seq}는 ACK가 요청을 가리키는 식별자라
+     * 함께 본다. 원본을 저장하지 않게 된 뒤에도 같은 입력을 받는다(LLD-0143).
+     */
+    private void validateFix(LocationUpdateRequest request) {
+        if (request.tsMs() == null || request.sessionId() == null || request.seq() == null) {
+            throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
+        }
+        if (!REASONS.contains(request.reason())) {
+            throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
+        }
+        if (Math.abs(request.resolvedLatitude()) > MAX_LATITUDE
+                || Math.abs(request.resolvedLongitude()) > MAX_LONGITUDE) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
     }

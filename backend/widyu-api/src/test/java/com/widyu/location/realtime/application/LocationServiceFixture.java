@@ -3,7 +3,6 @@ package com.widyu.location.realtime.application;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 
-import com.widyu.location.raw.application.LocationFixService;
 import jakarta.validation.Validator;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -21,11 +20,11 @@ final class LocationServiceFixture {
     private LocationServiceFixture() {
     }
 
-    static LocationIngestService ingest(Validator validator, LocationFixService locationFixService,
+    static LocationIngestService ingest(Validator validator,
                                         MemberLocationSequencer sequencer, LocationJudgeService judgeService,
                                         LocationProjectionService projectionService,
                                         PlatformTransactionManager transactionManager) {
-        return new LocationIngestService(validator, locationFixService, sequencer,
+        return new LocationIngestService(validator, sequencer,
                 transactional(judgeService, transactionManager), projectionService);
     }
 

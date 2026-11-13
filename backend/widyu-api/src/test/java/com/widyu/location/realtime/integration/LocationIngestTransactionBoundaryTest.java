@@ -52,9 +52,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
- * 수신 조율, 판정, 반영을 나눈 뒤에도 실제 Spring 프록시와 트랜잭션에서 경계가 그대로인지 본다(LLD-0142).
- * 판정 트랜잭션은 Redis 최신 위치 저장 전에 커밋되고 커넥션을 돌려주며, 판정이 기술 오류로 실패해도 원본은 자기
- * 트랜잭션에서 저장되고 성공 ACK는 나가지 않는다. Redis 최신 위치 저장소와 이동 경로 쓰기만 대역이다(H2).
+ * 수신 조율, 판정, 반영을 나눈 뒤에도 실제 Spring 프록시와 트랜잭션에서 경계가 그대로인지 본다(LLD-0142, LLD-0143).
+ * 판정 트랜잭션은 Redis 최신 위치 저장 전에 커밋되고 커넥션을 돌려주며, 판정이 기술 오류로 실패하면 성공 ACK가 나가지
+ * 않는다. 위치 원본은 새로 저장하지 않고 이미 있던 행은 그대로다. Redis 최신 위치 저장소와 이동 경로 쓰기만 대역이다(H2).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -105,6 +105,7 @@ class LocationIngestTransactionBoundaryTest {
     void 판정_트랜잭션은_최신_위치_저장_전에_커밋되고_커넥션을_돌려준다() throws Exception {
         // given
         Long seniorId = senior();
+        insertExistingFix(seniorId);
         List<Boolean> txActiveInJudge = new ArrayList<>();
         willAnswer(invocation -> {
             txActiveInJudge.add(TransactionSynchronizationManager.isActualTransactionActive());
@@ -122,16 +123,16 @@ class LocationIngestTransactionBoundaryTest {
         LocationAckResponse ack = ingestService.receive(payload(seniorId), seniorId);
 
         // then
-        assertThat(ack.result()).isEqualTo(LocationAckResult.STORED);
+        assertThat(ack.result()).isEqualTo(LocationAckResult.APPLIED);
         assertThat(txActiveInJudge).containsExactly(true);
         assertThat(atProjection).containsExactly(false, 0, 1);
-        assertThat(fixRows(seniorId)).isEqualTo(1);
-        assertThat(activeConnections()).isZero();
+        assertThat(fixRows(seniorId)).isEqualTo(1); // 이미 있던 행 하나 그대로, 새 행 없음
+        assertThat(activeConnectionsAfterAsync()).isZero();
     }
 
     @Test
-    @DisplayName("판정이 DB 기술 오류로 실패해도 원본은 자기 트랜잭션에서 저장되고, 상태와 최신 위치는 남지 않으며 성공 ACK 대신 오류가 난다")
-    void 판정이_기술_오류로_실패해도_원본은_저장하고_성공_ACK가_없다() throws Exception {
+    @DisplayName("판정이 DB 기술 오류로 실패하면 상태, 최신 위치, 위치 원본 어느 것도 남지 않고 성공 ACK 대신 오류가 나며 커넥션을 모두 돌려준다")
+    void 판정이_기술_오류로_실패하면_아무것도_남지_않고_ACK가_없다() throws Exception {
         // given
         Long seniorId = senior();
         willThrow(new QueryTimeoutException("DB timeout")).given(stayStateService).find(seniorId);
@@ -139,14 +140,14 @@ class LocationIngestTransactionBoundaryTest {
         // when & then
         assertThatThrownBy(() -> ingestService.receive(payload(seniorId), seniorId))
                 .isInstanceOf(QueryTimeoutException.class);
-        assertThat(fixRows(seniorId)).isEqualTo(1);
+        assertThat(fixRows(seniorId)).isZero();
         assertThat(stayRows(seniorId)).isZero();
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
         assertThat(activeConnections()).isZero();
     }
 
     @Test
-    @DisplayName("시니어가 아닌 회원의 위치는 판정 트랜잭션의 업무 거절이 그대로 전달돼 원본 없이 REJECTED ACK를 받는다")
+    @DisplayName("시니어가 아닌 회원의 위치는 판정 트랜잭션의 업무 거절이 그대로 전달돼 REJECTED ACK를 받는다")
     void 시니어가_아니면_원본_없이_REJECTED() throws Exception {
         // given
         int n = SEQ.incrementAndGet();
@@ -160,6 +161,42 @@ class LocationIngestTransactionBoundaryTest {
         assertThat(ack.result()).isEqualTo(LocationAckResult.REJECTED);
         assertThat(fixRows(guardian.getId())).isZero();
         assertThat(activeConnections()).isZero();
+    }
+
+    @Test
+    @DisplayName("시니어가 아닌 회원의 오래된 위치는 판정을 건너뛰어도 읽기 트랜잭션의 시니어 확인으로 REJECTED이고 커넥션을 돌려준다")
+    void 시니어가_아니면_오래된_위치도_REJECTED() throws Exception {
+        // given
+        int n = SEQ.incrementAndGet();
+        Member guardian = memberRepository.save(
+                Member.createMember(MemberType.GUARDIAN, "보호자" + n, "0177" + String.format("%07d", n)));
+        byte[] old = new String(payload(guardian.getId()), UTF_8)
+                .replaceFirst("\"ts_ms\":\\d+", "\"ts_ms\":" + (System.currentTimeMillis() - 20 * 60_000L))
+                .getBytes(UTF_8);
+
+        // when
+        LocationAckResponse ack = ingestService.receive(old, guardian.getId());
+
+        // then
+        assertThat(ack.result()).isEqualTo(LocationAckResult.REJECTED);
+        assertThat(activeConnections()).isZero();
+    }
+
+    /** 위치 원본을 저장하던 때 쌓인 과거 행. 신규 수신이 늘리지도 지우지도 않는지 본다(LLD-0143). */
+    private void insertExistingFix(Long memberId) {
+        jdbc.update("INSERT INTO location_fix (member_id, device_id, session_id, seq, ts_ms, lat, lon, is_mock, reason, "
+                        + "server_received_at_ms, accepted_at_ms, persisted_at_ms, payload, payload_sha256, created_at, "
+                        + "updated_at) VALUES (?, 'old-device', 'old-session', 1, 1, 37.5, 127.0, false, 'move', 1, 1, 1, "
+                        + "'{}', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                memberId, "0".repeat(64));
+    }
+
+    /** 위치 이벤트의 비동기 리스너(건강 일정 도착 처리)가 다른 스레드에서 잠깐 커넥션을 쓰므로 끝날 때까지 기다린다. */
+    private int activeConnectionsAfterAsync() throws Exception {
+        for (int i = 0; i < 100 && activeConnections() > 0; i++) {
+            Thread.sleep(20);
+        }
+        return activeConnections();
     }
 
     private int activeConnections() throws SQLException {

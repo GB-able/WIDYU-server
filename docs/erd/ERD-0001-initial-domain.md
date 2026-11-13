@@ -930,7 +930,7 @@ erDiagram
 | `incident` | `idx_incident_member_time` | `(member_id, opened_at_ms)` | 가족 조회·본인 대기 목록 |
 | `incident` | `idx_incident_run_time` | `(run_id, opened_at_ms)` | 회차 내보내기 |
 | `incident` | `idx_incident_state_deadline` | `(state, respond_by_ms)` | 무응답 스케줄러가 매 폴링마다 타는 경로 |
-| `location_fix` | UK `uk_location_fix_seq` | `(device_id, session_id, seq)` | 같은 fix 재전송 멱등 (LLD-0048) |
+| `location_fix` | UK `uk_location_fix_seq` | `(device_id, session_id, seq)` | 같은 fix 재전송 멱등 (LLD-0048). 2026-11-13 이후 새 행 없음, 과거 행 조회용(LLD-0143) |
 | `location_fix` | `idx_location_fix_member_time` | `(member_id, ts_ms)` | 참가자별 잰 시각순 조회·내보내기 |
 | `location_fix` | `idx_location_fix_run` | `(run_id)` | 회차별 위치 조회 |
 | `device_heartbeat` | UK `uk_device_heartbeat_ts` | `(device_id, session_id, ts_ms)` | seq 없는 하트비트 멱등 키 |
