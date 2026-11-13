@@ -9,6 +9,8 @@ import com.widyu.global.error.ErrorCode;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.multipart.MultipartFile;
 
 @DisplayName("AlbumMediaPolicy 예외 처리 단위 테스트")
@@ -36,6 +38,33 @@ class AlbumMediaPolicyTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_FILE_TYPE)
                 .hasMessageContaining("지원하지 않는 파일 형식입니다.");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"image/heic", "image/heif"})
+    @DisplayName("아이폰 HEIC, HEIF 사진을 올리면 멀티파트와 업로드 세션 검증을 모두 통과한다")
+    void 아이폰_HEIC_HEIF_사진을_올리면_검증을_통과한다(String contentType) {
+        // given
+        MultipartFile file = mockFile(contentType, 1024L);
+        List<AlbumMediaPolicy.MediaMetadata> metadata = List.of(new AlbumMediaPolicy.MediaMetadata(contentType, 1024L));
+
+        // when & then
+        org.assertj.core.api.Assertions.assertThatCode(() -> albumMediaPolicy.validate(List.of(file)))
+                .doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> albumMediaPolicy.validateMetadata(metadata))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("HEIC 사진도 10MB를 넘으면 FILE_TOO_LARGE 예외를 던진다")
+    void HEIC_사진도_10MB를_넘으면_예외가_발생한다() {
+        // given
+        MultipartFile file = mockFile("image/heic", AlbumMediaPolicy.MAX_PHOTO_BYTES + 1);
+
+        // when & then
+        assertThatThrownBy(() -> albumMediaPolicy.validate(List.of(file)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TOO_LARGE);
     }
 
     @Test

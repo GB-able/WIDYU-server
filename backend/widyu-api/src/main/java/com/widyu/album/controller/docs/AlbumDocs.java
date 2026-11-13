@@ -42,7 +42,7 @@ public interface AlbumDocs {
                     - 게시글 내용: 최대 2,200자 (공백 포함)
                     
                     **지원 파일 형식:**
-                    - 사진: JPG, JPEG, PNG, GIF, WEBP, BMP, SVG
+                    - 사진: JPG, JPEG, PNG, GIF, WEBP, BMP, SVG, HEIC, HEIF
                     - 동영상: MP4, MOV, AVI, MKV, WEBM, FLV, WMV
                     
                     **자동 처리 기능:**

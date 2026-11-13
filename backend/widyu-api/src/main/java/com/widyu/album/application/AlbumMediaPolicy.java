@@ -17,7 +17,8 @@ public class AlbumMediaPolicy {
     public static final long MAX_VIDEO_BYTES = 2L * 1024 * 1024 * 1024; // 2GB
 
     private static final Set<String> ALLOWED_IMAGES = Set.of(
-            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml"
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml",
+            "image/heic", "image/heif" // 아이폰 기본 카메라 형식(#1041)
     );
     private static final Set<String> ALLOWED_VIDEOS = Set.of(
             "video/mp4", "video/quicktime", "video/x-msvideo", "video/x-matroska",
