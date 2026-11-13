@@ -75,7 +75,7 @@ public class LocationIngestService {
         long serverReceivedAtMs = System.currentTimeMillis();
         LocationUpdateRequest request = parse(payload);
 
-        if (!request.isRawFix()) {
+        if (!request.isV2()) {
             validate(request);
             return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, serverReceivedAtMs));
         }
@@ -219,11 +219,12 @@ public class LocationIngestService {
     }
 
     /**
-     * v2 위치 검증(LLD-0048 6절의 입력 규칙 그대로). {@code session_id}, {@code seq}는 ACK가 요청을 가리키는 식별자라
-     * 함께 본다. 원본을 저장하지 않게 된 뒤에도 같은 입력을 받는다(LLD-0143).
+     * v2 위치 검증(LLD-0048 6절의 입력 규칙). {@code device_id}, {@code session_id}, {@code seq}는 ACK가 요청을 가리키는
+     * 식별자라 함께 본다. 예전에는 기기나 잰 시각이 빠진 v2를 구형으로 처리했지만, 이제 v2를 선언하면 입력 오류로 거절한다(LLD-0143).
      */
     private void validateFix(LocationUpdateRequest request) {
-        if (request.tsMs() == null || request.sessionId() == null || request.seq() == null) {
+        if (request.deviceId() == null || request.tsMs() == null || request.sessionId() == null
+                || request.seq() == null) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
         // Set.of는 null을 물으면 NPE를 던진다. 빠진 reason도 입력 오류로 거절한다.

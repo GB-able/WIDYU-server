@@ -162,7 +162,7 @@ class RealtimeLocationAckContractTest {
     }
 
     @Test
-    @DisplayName("reason이 없거나 정해진 세 값 밖이거나 위도가 ±90을 벗어나면 판정 없이 REJECTED다")
+    @DisplayName("v2를 선언하고 device_id나 reason이 없거나, reason이 정해진 세 값 밖이거나, 위도가 ±90을 벗어나면 판정 없이 REJECTED다")
     void 입력이_잘못되면_REJECTED() {
         // given
         byte[] badReason = """
@@ -179,12 +179,19 @@ class RealtimeLocationAckContractTest {
                  "lat":37.5,"lon":127.0,"is_mock":false,"ts_ms":%d}"""
                 .formatted(System.currentTimeMillis()).getBytes(UTF_8);
 
+        byte[] noDevice = """
+                {"v":2,"memberId":1,"session_id":"s-1","seq":7,
+                 "lat":37.5,"lon":127.0,"is_mock":false,"ts_ms":%d,"reason":"move"}"""
+                .formatted(System.currentTimeMillis()).getBytes(UTF_8);
+
         // when
+        LocationAckResponse withoutDevice = ingestService().receive(noDevice, 1L);
         LocationAckResponse missing = ingestService().receive(noReason, 1L);
         LocationAckResponse reason = ingestService().receive(badReason, 1L);
         LocationAckResponse latitude = ingestService().receive(badLatitude, 1L);
 
         // then
+        assertThat(withoutDevice.result()).isEqualTo(LocationAckResult.REJECTED);
         assertThat(missing.result()).isEqualTo(LocationAckResult.REJECTED);
         assertThat(reason.result()).isEqualTo(LocationAckResult.REJECTED);
         assertThat(latitude.result()).isEqualTo(LocationAckResult.REJECTED);

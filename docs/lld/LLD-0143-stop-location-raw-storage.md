@@ -42,6 +42,7 @@ ADR-0045. 위치 원본의 신규 영구 저장을 실증 회차까지 포함해
 | 판정 커밋, Redis 최신 위치 반영 | `STORED`(원본 새로 저장) 또는 `DUPLICATE` | `APPLIED` |
 | 15분 넘게 지남, 최신보다 먼저 잰 위치, 같은 위치 재전송, 더 늦은 위치가 반영됨 | 원본 저장 결과(`STORED`, `DUPLICATE`) | `SKIPPED` |
 | 입력 오류, 본인 아님, 시니어 아님 | `REJECTED` | `REJECTED` |
+| `v`=2인데 `device_id`나 `ts_ms`가 없음 | 구형으로 처리(식별자, 결과 null) | `REJECTED`(앱 모델은 두 필드가 필수) |
 | 남의 회차를 실어 보냄 | `REJECTED` | 회차를 쓰지 않으므로 실시간 결과(`APPLIED` 등) |
 | 판정, 최신 위치 저장 기술 오류 | ACK 없음(원본은 저장 시도) | ACK 없음, `/user/queue/errors` |
 | 회원 대기 초과 | ACK 없음(원본은 저장) | ACK 없음 |
@@ -58,7 +59,7 @@ ACK는 "서버가 이 위치의 처리를 끝냈다"는 뜻이다. 보호자가 
 ## 5. 처리 흐름
 
 ```
-receive ─ 파싱, 검증(구형: 좌표 / v2: ts_ms, session_id, seq, reason, 좌표 범위)
+receive ─ 파싱, 검증(구형: 좌표 / v2(`v`=2): device_id, ts_ms, session_id, seq, reason, 좌표 범위)
         ─ applyRealtime(본인, 15분, 회원 잠금 → 최신 비교 → judge → project)
         ─ 반영 안 했으면 judge.requireSenior (짧은 읽기 트랜잭션)
         ─ ACK: APPLIED / SKIPPED / REJECTED, 기술 오류는 던짐, 대기 초과는 null
