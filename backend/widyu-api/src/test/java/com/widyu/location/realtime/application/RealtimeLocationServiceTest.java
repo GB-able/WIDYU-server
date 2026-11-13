@@ -25,6 +25,9 @@ import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationAckResult;
+import com.widyu.location.realtime.dto.LocationSource;
+import com.widyu.location.stay.SeniorStayState;
+import java.time.LocalDateTime;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
@@ -91,12 +94,13 @@ class RealtimeLocationServiceTest {
     // 실제 제약(memberId @NotNull)을 그대로 태운다. 목이면 검증이 통째로 비어 버린다.
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
+    @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
     @InjectMocks
     private RealtimeLocationService realtimeLocationService;
 
     @Test
-    @DisplayName("탈퇴 회원의 위치를 지우면 현재 위치·이동 경로·체류 키를 모두 삭제한다")
+    @DisplayName("탈퇴 회원의 위치를 지우면 Redis 현재 위치, 이동 경로, 예전 체류 키와 MySQL 체류 상태를 모두 삭제한다")
     void 탈퇴_회원의_위치를_지우면_Redis_위치_키를_모두_삭제한다() {
         // when
         realtimeLocationService.deleteLocation(7L);
@@ -104,6 +108,7 @@ class RealtimeLocationServiceTest {
         // then
         then(seniorLocationRepository).should().deleteById(7L);
         then(redisTemplate).should().delete(java.util.List.of("location:trail:7", "location:stay:7"));
+        then(stayStateService).should().delete(7L);
     }
 
     @Test
@@ -124,6 +129,36 @@ class RealtimeLocationServiceTest {
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
         then(seniorLocationRepository).should().deleteById(2L);
         then(redisTemplate).should().delete(java.util.List.of("location:trail:2", "location:stay:2"));
+    }
+
+    @Test
+    @DisplayName("Redis 위치 삭제가 실패해도 MySQL 체류 상태는 지운다")
+    void Redis_삭제가_실패해도_체류_상태는_지운다() {
+        // given
+        stayStateService.create(SeniorStayState.start(7L, 37.5, 127.0, LocalDateTime.now(), null, null));
+        willThrow(new QueryTimeoutException("redis down")).given(seniorLocationRepository).deleteById(7L);
+
+        // when & then
+        assertThatThrownBy(() -> realtimeLocationService.deleteLocation(7L))
+                .isInstanceOf(QueryTimeoutException.class);
+        assertThat(stayStateService.states).doesNotContainKey(7L);
+    }
+
+    @Test
+    @DisplayName("최신 위치가 이미 만료된 비활성 회원도 TTL 갱신 때 MySQL 체류 상태를 지운다")
+    void 최신_위치가_없는_비활성_회원의_체류_상태도_지운다() {
+        // given
+        stayStateService.create(SeniorStayState.start(3L, 37.5, 127.0, LocalDateTime.now(), null, null));
+        stayStateService.create(SeniorStayState.start(4L, 37.5, 127.0, LocalDateTime.now(), null, null));
+        stayStateService.inactiveMemberIds.add(3L);
+        given(seniorLocationRepository.findAll()).willReturn(java.util.List.of());
+
+        // when
+        realtimeLocationService.refreshLocationTtl();
+
+        // then
+        assertThat(stayStateService.states).containsOnlyKeys(4L);
+        then(redisTemplate).should().delete(java.util.List.of("location:trail:3", "location:stay:3"));
     }
 
     // 실시간 반영 조건(LLD-0114)을 통과하도록 잰 시각을 지금으로 둔다.
@@ -173,8 +208,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
@@ -187,124 +220,10 @@ class RealtimeLocationServiceTest {
         then(seniorLocationRepository).should().save(any(SeniorLocation.class));
         then(eventPublisher).should().publishEvent(any(SeniorLocationUpdatedEvent.class));
         then(listOperations).should().leftPush(eq("location:trail:1"), any(LocationPoint.class));
-        then(valueOperations).should().set(eq("location:stay:1"), any(StayInfo.class), eq(86400L), eq(TimeUnit.SECONDS));
-        then(safeZoneAlertService).should().handleSafeZoneTransition(1L, null, null);
+        assertThat(stayStateService.states.get(1L).getLatitude()).isEqualTo(37.5);
+        then(safeZoneAlertService).should()
+                .handleSafeZoneTransition(any(SeniorStayState.class), eq(null), eq(null), any(LocalDateTime.class));
         then(messagingTemplate).should().convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
-    }
-
-    @Test
-    @DisplayName("이탈 이벤트를 발행하면 최신 체류 정보 저장 콜백이 먼저 등록된다")
-    void 이탈_이벤트를_발행하면_체류_저장_콜백이_먼저_등록된다() {
-        // given
-        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
-        Member member = member(1L);
-        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
-        given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
-        willAnswer(invocation -> {
-            assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
-            return null;
-        }).given(safeZoneAlertService).handleSafeZoneTransition(1L, null, null);
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            // when
-            realtimeLocationService.updateAndBroadcast(request, 1L);
-
-            // then
-            then(safeZoneAlertService).should().handleSafeZoneTransition(1L, null, null);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-    }
-
-    @Test
-    @DisplayName("위치 갱신 트랜잭션이 롤백되면 체류 정보를 저장하지 않는다")
-    void 위치_갱신_트랜잭션이_롤백되면_체류_정보를_저장하지_않는다() {
-        // given
-        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
-        Member member = member(1L);
-        SeniorProfile seniorProfile = seniorProfile(10L, member);
-
-        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
-        given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
-        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            realtimeLocationService.updateAndBroadcast(request, 1L);
-
-            // when
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(synchronization -> synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
-
-            // then
-            then(valueOperations).should(never()).set(eq("location:stay:1"), any(), eq(86400L), eq(TimeUnit.SECONDS));
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-    }
-
-    @Test
-    @DisplayName("위치 갱신 트랜잭션이 커밋되면 체류 정보를 저장한다")
-    void 위치_갱신_트랜잭션이_커밋되면_체류_정보를_저장한다() {
-        // given
-        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
-        Member member = member(1L);
-        SeniorProfile seniorProfile = seniorProfile(10L, member);
-
-        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
-        given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
-        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            realtimeLocationService.updateAndBroadcast(request, 1L);
-            then(valueOperations).should(never()).set(eq("location:stay:1"), any(), eq(86400L), eq(TimeUnit.SECONDS));
-
-            // when
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
-
-            // then
-            then(valueOperations).should().set(eq("location:stay:1"), any(StayInfo.class), eq(86400L), eq(TimeUnit.SECONDS));
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-    }
-
-    @Test
-    @DisplayName("커밋 후 체류 정보 저장이 실패해도 예외를 전달하지 않는다")
-    void 커밋_후_체류_정보_저장이_실패해도_예외를_전달하지_않는다() {
-        // given
-        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
-        Member member = member(1L);
-        SeniorProfile seniorProfile = seniorProfile(10L, member);
-
-        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
-        given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
-        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
-        willThrow(new IllegalStateException("Redis 연결 실패"))
-                .given(valueOperations).set(eq("location:stay:1"), any(StayInfo.class), eq(86400L), eq(TimeUnit.SECONDS));
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            realtimeLocationService.updateAndBroadcast(request, 1L);
-
-            // when & then
-            assertThatCode(() -> TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit))
-                    .doesNotThrowAnyException();
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
     }
 
     @Test
@@ -329,8 +248,6 @@ class RealtimeLocationServiceTest {
         SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
         given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:2")).willReturn(null);
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when & then
@@ -344,9 +261,7 @@ class RealtimeLocationServiceTest {
     @DisplayName("집 밖의 체류 위치이면 외출 중으로 반환한다")
     void 집_밖의_체류위치이면_외출중으로_반환한다() {
         // given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1"))
-                .willReturn(StayInfo.of(37.5, 127.0, null, null));
+        stayStateService.states.put(1L, SeniorStayState.start(1L, 37.5, 127.0, LocalDateTime.now(), null, null));
 
         // when
         Boolean isOuting = realtimeLocationService.getOutingStatus(1L);
@@ -356,98 +271,125 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("운영 Redis 직렬화기를 거친 집 체류 정보에서 밖으로 나가면 이전 위치 타입을 HOME으로 넘긴다")
-    void 직렬화된_집_체류_정보에서_밖으로_나가면_이전_위치_타입을_HOME으로_넘긴다() {
+    @DisplayName("집 체류 상태에서 30m 넘게 움직이면 행을 잠가 다시 읽고 이전 위치 타입을 HOME으로 넘긴다")
+    void 집_체류에서_밖으로_나가면_잠근_뒤_이전_위치_타입을_HOME으로_넘긴다() {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.6, 127.0, null);
         Member member = member(1L);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
         given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1"))
-                .willReturn(throughRedisSerializer(StayInfo.of(37.5, 127.0, "HOME", "집")));
+        stayStateService.states.put(1L, SeniorStayState.start(1L, 37.5, 127.0, LocalDateTime.now(), "HOME", "집"));
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
         realtimeLocationService.updateAndBroadcast(request, 1L);
 
         // then
-        then(safeZoneAlertService).should().handleSafeZoneTransition(1L, "HOME", null);
+        then(stayStateService).should().lockForChange(1L);
+        then(safeZoneAlertService).should()
+                .handleSafeZoneTransition(any(SeniorStayState.class), eq("HOME"), eq(null), any(LocalDateTime.class));
+        assertThat(stayStateService.states.get(1L).getLatitude()).isEqualTo(37.6);
     }
 
     @Test
-    @DisplayName("운영 Redis 직렬화기를 거친 체류 정보로 마지막 위치를 조회하면 체류 시작 시각과 위치 타입을 돌려준다")
-    void 직렬화된_체류_정보로_마지막_위치를_조회하면_체류_정보를_돌려준다() {
+    @DisplayName("최신 위치가 없으면 체류 상태 좌표로 답하되 출처를 STAY로, 측정 시각을 모름으로 표시한다")
+    void 최신_위치가_없으면_체류_좌표로_답하고_측정_시각은_모름이다() {
         // given
-        StayInfo stored = StayInfo.of(37.5, 127.0, "HOME", "집");
+        LocalDateTime stayStartedAt = LocalDateTime.now().minusHours(3);
+        stayStateService.states.put(2L, SeniorStayState.start(2L, 37.5, 127.0, stayStartedAt, "HOME", "집"));
         SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
         given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:2")).willReturn(throughRedisSerializer(stored));
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when
         LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
 
         // then
-        assertThat(response.stayStartTime()).isEqualTo(stored.startTime());
+        assertThat(response.stayStartTime()).isEqualTo(stayStartedAt);
         assertThat(response.locationType()).isEqualTo("HOME");
         assertThat(response.locationName()).isEqualTo("집");
         assertThat(response.latitude()).isEqualTo(37.5);
+        assertThat(response.locationSource()).isEqualTo(LocationSource.STAY);
+        assertThat(response.measuredAtMs()).isNull();
+        assertThat(response.ageSeconds()).isNull();
     }
 
     @Test
-    @DisplayName("Redis 시간 초과로 체류 정보를 읽지 못하면 키를 지우지 않고 외출 여부를 비워 둔다")
-    void Redis_시간_초과면_체류_정보_키를_지우지_않는다() {
+    @DisplayName("오래된 최신 위치를 조회하면 TTL이 남아 있어도 측정 시각과 경과 초로 오래됐음을 알리고 updatedAt과 구분한다")
+    void 오래된_최신_위치는_측정_시각과_경과로_알린다() {
         // given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willThrow(new QueryTimeoutException("Redis command timed out"));
+        long tenHoursAgo = System.currentTimeMillis() - 10 * 3_600_000L;
+        SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
+        given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.of(
+                SeniorLocation.of(2L, 37.5, 127.0, tenHoursAgo, tenHoursAgo, tenHoursAgo + 2_000L)));
 
         // when
-        Boolean isOuting = realtimeLocationService.getOutingStatus(1L);
+        LocationUpdateResponse response = realtimeLocationService.getLastLocation(2L, 1L);
 
         // then
-        assertThat(isOuting).isNull();
-        then(redisTemplate).should(never()).delete("location:stay:1");
+        assertThat(response.locationSource()).isEqualTo(LocationSource.LATEST);
+        assertThat(response.measuredAtMs()).isEqualTo(tenHoursAgo);
+        assertThat(response.receivedAtMs()).isEqualTo(tenHoursAgo + 2_000L);
+        assertThat(response.ageSeconds()).isBetween(35_999L, 36_001L);
+        assertThat(response.stayStartTime()).isNull();
+        assertThat(response.stayDurationMinutes()).isNull();
+        assertThat(response.updatedAt()).isAfter(LocalDateTime.now().minusMinutes(1));
     }
 
     @Test
-    @DisplayName("체류 정보 값을 읽을 수 없으면 키를 지우고 외출 여부를 비워 둔다")
-    void 체류_정보_값을_읽을_수_없으면_키를_지운다() {
+    @DisplayName("이 필드가 생기기 전 최신 위치는 순서 시각을 측정 시각으로 보여 주고, 시각이 전혀 없는 옛 형식은 측정 시각을 비운다")
+    void 예전_최신_위치는_순서_시각을_쓰고_시각이_없으면_비운다() {
         // given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willThrow(new SerializationException("Could not read JSON"));
+        long earlier = System.currentTimeMillis() - 60_000L;
+        SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
+        given(seniorLocationRepository.findBySeniorId(2L))
+                .willReturn(Optional.of(SeniorLocation.of(2L, 37.5, 127.0, earlier, null, null)))
+                .willReturn(Optional.of(SeniorLocation.of(2L, 37.5, 127.0)));
 
         // when
-        Boolean isOuting = realtimeLocationService.getOutingStatus(1L);
+        LocationUpdateResponse beforeField = realtimeLocationService.getLastLocation(2L, 1L);
+        LocationUpdateResponse legacy = realtimeLocationService.getLastLocation(2L, 1L);
 
         // then
-        assertThat(isOuting).isNull();
-        then(redisTemplate).should().delete("location:stay:1");
+        assertThat(beforeField.measuredAtMs()).isEqualTo(earlier);
+        assertThat(beforeField.receivedAtMs()).isNull();
+        assertThat(legacy.measuredAtMs()).isNull();
+        assertThat(legacy.ageSeconds()).isNull();
+        assertThat(legacy.locationSource()).isEqualTo(LocationSource.LATEST);
     }
 
     @Test
-    @DisplayName("좌표가 빠진 체류 정보가 저장돼 있으면 키를 지우고 이전 체류 없이 위치를 갱신한다")
-    void 좌표가_빠진_체류_정보면_키를_지우고_이전_체류_없이_갱신한다() {
+    @DisplayName("미래로 잰 위치를 반영하면 방송 응답에는 앱이 보낸 측정 시각을, 최신 위치에는 그 값과 수신 시각을 함께 남기고 경과는 0이다")
+    void 미래로_잰_위치는_원래_측정_시각과_수신_시각을_구분해_남긴다() {
         // given
-        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        long oneHourLater = System.currentTimeMillis() + 3_600_000L;
         Member member = member(1L);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
         given(redisTemplate.opsForList()).willReturn(listOperations);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        LinkedHashMap<String, Object> incomplete = new LinkedHashMap<>();
-        incomplete.put("locationType", "HOME");
-        given(valueOperations.get("location:stay:1")).willReturn(incomplete);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
-        LocationUpdateResponse response = realtimeLocationService.updateAndBroadcast(request, 1L);
+        LocationUpdateResponse response =
+                realtimeLocationService.updateAndBroadcast(LocationUpdateRequest.of(1L, 37.5, 127.0, null), 1L);
+        realtimeLocationService.updateAndBroadcast(rawFixPayload(oneHourLater).getBytes(UTF_8), 1L);
 
         // then
-        assertThat(response.locationType()).isNull();
-        then(redisTemplate).should().delete("location:stay:1");
-        then(safeZoneAlertService).should().handleSafeZoneTransition(1L, null, null);
+        assertThat(response.measuredAtMs()).isNull();
+        ArgumentCaptor<SeniorLocation> saved = ArgumentCaptor.forClass(SeniorLocation.class);
+        then(seniorLocationRepository).should(times(2)).save(saved.capture());
+        SeniorLocation future = saved.getAllValues().get(1);
+        assertThat(future.getDeviceMeasuredAtMs()).isEqualTo(oneHourLater);
+        assertThat(future.getMeasuredAtMs()).isLessThan(oneHourLater);
+        assertThat(future.getReceivedAtMs()).isEqualTo(future.getMeasuredAtMs());
+        ArgumentCaptor<LocationUpdateResponse> broadcast = ArgumentCaptor.forClass(LocationUpdateResponse.class);
+        then(messagingTemplate).should(times(2)).convertAndSend(eq("/topic/location/senior/1"), broadcast.capture());
+        assertThat(broadcast.getAllValues().get(1).measuredAtMs()).isEqualTo(oneHourLater);
+        assertThat(broadcast.getAllValues().get(1).ageSeconds()).isZero();
     }
 
     @Test
@@ -476,8 +418,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
         given(locationFixService.store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong()))
                 .willReturn(true);
@@ -513,8 +453,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
@@ -542,8 +480,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
         willThrow(new IllegalStateException("DB 장애"))
                 .given(locationFixService)
@@ -566,8 +502,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
@@ -628,8 +562,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(1L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
         long oneDayLater = System.currentTimeMillis() + 86_400_000L;
         ArgumentCaptor<SeniorLocation> saved = ArgumentCaptor.forClass(SeniorLocation.class);
@@ -757,8 +689,7 @@ class RealtimeLocationServiceTest {
         SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
         given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:2")).willReturn(StayInfo.of(37.5, 127.0, null, null));
+        stayStateService.states.put(2L, SeniorStayState.start(2L, 37.5, 127.0, LocalDateTime.now(), null, null));
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
 
         // when
@@ -791,8 +722,7 @@ class RealtimeLocationServiceTest {
         SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
         given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:2")).willReturn(StayInfo.of(37.5, 127.0, null, null));
+        stayStateService.states.put(2L, SeniorStayState.start(2L, 37.5, 127.0, LocalDateTime.now(), null, null));
         given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
         willThrow(new IllegalStateException("DB 장애"))
                 .given(locationAccessLogService).record(1L, 2L, LocationAccessPath.REST_LAST);
@@ -831,7 +761,6 @@ class RealtimeLocationServiceTest {
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class))).willReturn(901L);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
 
         // when
@@ -847,8 +776,9 @@ class RealtimeLocationServiceTest {
     void 이동_경로를_조회하면_최근_900점까지만_읽어_오래된_순으로_돌려준다() {
         // given
         SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
-        LocationPoint newer = LocationPoint.of(37.51, 127.0);
-        LocationPoint older = LocationPoint.of(37.50, 127.0);
+        long now = System.currentTimeMillis();
+        LocationPoint newer = LocationPoint.of(37.51, 127.0, now);
+        LocationPoint older = LocationPoint.of(37.50, 127.0, now - 60_000L);
         given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
         given(redisTemplate.opsForList()).willReturn(listOperations);
@@ -859,6 +789,29 @@ class RealtimeLocationServiceTest {
 
         // then
         assertThat(response.trail()).containsExactly(older, newer);
+    }
+
+    @Test
+    @DisplayName("이동 경로는 측정 시각 기준 최근 15분 점만 돌려주고, 측정 시각이 없는 예전 점은 저장 시각으로 거른다")
+    void 이동_경로는_측정_시각_기준_15분만_돌려준다() {
+        // given
+        long now = System.currentTimeMillis();
+        SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
+        LocationPoint recent = LocationPoint.of(37.52, 127.0, now - 60_000L);
+        LocationPoint stale = LocationPoint.of(37.51, 127.0, now - 16 * 60_000L);
+        LocationPoint legacyRecent = new LocationPoint(37.50, 127.0, LocalDateTime.now().minusMinutes(2), null);
+        LocationPoint legacyStale = new LocationPoint(37.49, 127.0, LocalDateTime.now().minusMinutes(20), null);
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        given(listOperations.range("location:trail:2", 0, 899))
+                .willReturn(java.util.List.of(recent, stale, legacyRecent, legacyStale));
+
+        // when
+        LocationTrailResponse response = realtimeLocationService.getLocationTrail(2L, 1L);
+
+        // then
+        assertThat(response.trail()).containsExactly(legacyRecent, recent);
     }
 
     @Test
@@ -883,19 +836,18 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 트랜잭션 안에서 체류 정보를 읽다 Redis 오류가 나면 예외를 던지고 최신 위치·이동 경로·방송·위치 이벤트를 남기지 않는다")
-    void 체류_정보_Redis_오류면_예외를_던지고_부수효과를_남기지_않는다() {
+    @DisplayName("실시간 트랜잭션 안에서 체류 상태를 읽다 DB 오류가 나면 예외를 던지고 최신 위치, 이동 경로, 방송, 위치 이벤트를 남기지 않는다")
+    void 체류_상태_DB_오류면_예외를_던지고_부수효과를_남기지_않는다() {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willThrow(new QueryTimeoutException("Redis command timed out"));
+        willThrow(new QueryTimeoutException("DB timeout")).given(stayStateService).find(1L);
 
         // when & then
         assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(request, 1L))
                 .isInstanceOf(QueryTimeoutException.class);
         then(transactionManager).should(never()).commit(any());
-        then(safeZoneAlertService).should(never()).handleSafeZoneTransition(anyLong(), any(), any());
+        then(safeZoneAlertService).should(never()).handleSafeZoneTransition(any(), any(), any(), any());
         then(seniorLocationRepository).should(never()).save(any());
         then(redisTemplate).should(never()).opsForList();
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
@@ -903,30 +855,30 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("같은 자리 위치는 트랜잭션 안에서 체류 정보만 읽고, 커밋한 뒤에 최신 위치·이동 경로·방송·위치 이벤트를 처리한다")
-    void 같은_자리_위치는_커밋한_뒤에_최신_위치와_방송을_처리한다() {
+    @DisplayName("같은 자리 위치는 체류 상태를 잠그지도 쓰지도 않고 읽기만 하며, 커밋한 뒤에 최신 위치, 이동 경로, 방송, 위치 이벤트를 처리한다")
+    void 같은_자리_위치는_상태를_잠그지_않고_커밋한_뒤에_최신_위치와_방송을_처리한다() {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1"))
-                .willReturn(throughRedisSerializer(StayInfo.of(37.5, 127.0, null, null)));
+        stayStateService.states.put(1L, SeniorStayState.start(1L, 37.5001, 127.0, LocalDateTime.now(), null, null));
         given(redisTemplate.opsForList()).willReturn(listOperations);
 
         // when
         realtimeLocationService.updateAndBroadcast(request, 1L);
 
         // then
-        InOrder order = inOrder(valueOperations, transactionManager, seniorLocationRepository, listOperations,
+        InOrder order = inOrder(stayStateService, transactionManager, seniorLocationRepository, listOperations,
                 messagingTemplate, eventPublisher);
-        order.verify(valueOperations).get("location:stay:1");
+        order.verify(stayStateService).find(1L);
         order.verify(transactionManager).commit(any());
         order.verify(seniorLocationRepository).save(any(SeniorLocation.class));
         order.verify(listOperations).leftPush(eq("location:trail:1"), any(LocationPoint.class));
         order.verify(messagingTemplate).convertAndSend(eq("/topic/location/senior/1"), any(LocationUpdateResponse.class));
         order.verify(eventPublisher).publishEvent(any(SeniorLocationUpdatedEvent.class));
+        then(stayStateService).should(never()).lockForChange(any());
+        then(stayStateService).should(never()).create(any());
         then(parentLocationRepository).should(never()).findAllByMember(any());
-        then(valueOperations).should(never()).set(any(), any(), anyLong(), any());
+        then(safeZoneAlertService).should(never()).handleSafeZoneTransition(any(), any(), any(), any());
     }
 
     @Test
@@ -935,8 +887,6 @@ class RealtimeLocationServiceTest {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
         willThrow(new QueryTimeoutException("Redis command timed out"))
                 .given(seniorLocationRepository).save(any(SeniorLocation.class));
@@ -956,8 +906,6 @@ class RealtimeLocationServiceTest {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
         given(redisTemplate.opsForList()).willReturn(listOperations);
         given(listOperations.leftPush(eq("location:trail:1"), any(LocationPoint.class)))
@@ -979,8 +927,6 @@ class RealtimeLocationServiceTest {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
         given(redisTemplate.opsForList()).willReturn(listOperations);
         willThrow(new IllegalStateException("outbound channel closed"))
@@ -1000,8 +946,6 @@ class RealtimeLocationServiceTest {
         // given
         LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
         given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member(1L))));
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(parentLocationRepository.findAllByMember(any())).willReturn(java.util.List.of());
         given(redisTemplate.opsForList()).willReturn(listOperations);
         willThrow(new IllegalStateException("event listener failed"))

@@ -2,7 +2,6 @@ package com.widyu.location.realtime.application;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.widyu.global.config.RedisConfig;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.GeoUtils;
@@ -12,7 +11,9 @@ import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationAckResult;
+import com.widyu.location.realtime.dto.LocationFreshness;
 import com.widyu.location.realtime.dto.LocationPoint;
+import com.widyu.location.realtime.dto.LocationSource;
 import com.widyu.location.realtime.dto.LocationTrailResponse;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
@@ -21,6 +22,8 @@ import com.widyu.location.realtime.dto.TrackedSeniorResponse;
 import com.widyu.location.realtime.event.SeniorLocationUpdatedEvent;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
+import com.widyu.location.stay.SeniorStayState;
+import com.widyu.location.stay.application.SeniorStayStateService;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
@@ -46,17 +49,13 @@ import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
@@ -79,26 +78,27 @@ public class RealtimeLocationService {
     private final Validator validator;
     private final PlatformTransactionManager transactionManager;
     private final MemberLocationSequencer sequencer;
+    private final SeniorStayStateService stayStateService;
     // 미지정 필드를 무시하고 페이로드를 읽는 전용 매퍼. 주입받지 않는 이유는 Redis·응답 직렬화와
     // 설정을 공유하면 안 되기 때문이다(초기화 필드라 생성자 주입 대상에서 빠진다).
     private final ObjectMapper payloadMapper = new ObjectMapper()
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    // Redis 값은 타입 정보 없이 저장돼 LinkedHashMap으로 읽힌다. 저장할 때와 같은 설정으로 되돌린다(LLD-0097).
-    private final ObjectMapper redisValueMapper = RedisConfig.redisObjectMapper();
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
     // @RedisHash 저장소가 쓰는 키 모양(keyspace:id)과 같아야 만료 연장이 그 위치에 걸린다.
     private static final String SENIOR_LOCATION_KEY_PREFIX = SeniorLocation.KEYSPACE + ":";
-    private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
+    // 체류 판정 상태는 MySQL(senior_stay_state)이 권위 있는 저장소다(LLD-0141). 이 키는 예전 값을 지울 때만 쓴다.
+    private static final String LEGACY_STAY_KEY_PREFIX = "location:stay:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
     // 이동 경로 점 상한. 초당 1건으로 보내도 15분을 담는다. 위치마다 TTL을 다시 걸어 키가 만료되지 않으므로
     // 자르지 않으면 리스트가 끝없이 커진다(LLD-0098).
     private static final long TRAIL_MAX_POINTS = 900;
-    private static final long STAY_TTL_SECONDS = 86400; // 24시간
     private static final double STAY_RADIUS_METERS = 30.0; // 30m 이내면 같은 위치
     private static final double SAFE_ZONE_RADIUS_METERS = 75.0; // 안전구역 반경 75m (지름 150m)
     // 응급 이동 경로는 최근 15분만 보여 준다. 그보다 오래 전에 잰 위치는 실시간 경로에 반영하지 않는다(LLD-0114).
     private static final long REALTIME_MAX_AGE_MS = Duration.ofMinutes(15).toMillis();
+    // 이동 경로로 돌려주는 기간. 측정 시각(순서 시각) 기준이다(LLD-0141).
+    private static final long TRAIL_WINDOW_MS = Duration.ofMinutes(15).toMillis();
 
     /**
      * 원문 바이트를 받아 실시간 경로를 돌리고, v2 페이로드면 원본을 남긴다(LLD-0048 5절).
@@ -205,7 +205,7 @@ public class RealtimeLocationService {
                                                  long serverReceivedAtMs) {
         verifySelf(request.memberId(), authenticatedMemberId);
         if (isTooOld(request)) {
-            return skipped(request);
+            return skipped(request, serverReceivedAtMs);
         }
         // 순서 판정, 최신값 비교, Redis 저장이 모두 이 한 값을 쓴다(LLD-0140). 시점마다 따로 "지금"으로 자르면 미래로 잰
         // 위치가 처리 중일 때 뒤에 온 정상 위치를 밀린 것으로 보거나 최신보다 먼저 잰 것으로 보고 반영 없이 ACK한다.
@@ -213,26 +213,31 @@ public class RealtimeLocationService {
         return sequencer.run(request.memberId(), orderAtMs, () -> {
             // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
             if (isTooOld(request) || !isNewerThanLatest(request.memberId(), orderAtMs)) {
-                return skipped(request);
+                return skipped(request, serverReceivedAtMs);
             }
-            return updateAndBroadcast(request, authenticatedMemberId, orderAtMs);
-        }, () -> superseded(request));
+            return updateAndBroadcast(request, authenticatedMemberId, orderAtMs, serverReceivedAtMs);
+        }, () -> superseded(request, serverReceivedAtMs));
     }
 
     /**
      * 같은 회원의 더 늦게 잰 위치가 실시간에 반영돼 이 위치의 실시간 처리는 할 필요가 없다(LLD-0140). 원본 저장 결과로
      * ACK한다. 더 최근 위치가 실패하면 순서 잠금이 과부하 예외를 던져 이 위치도 ACK를 받지 못한다.
      */
-    private LocationUpdateResponse superseded(LocationUpdateRequest request) {
+    private LocationUpdateResponse superseded(LocationUpdateRequest request, long serverReceivedAtMs) {
         log.info("위치 실시간 반영 생략(더 최근 위치 반영됨): memberId={}, seq={}", request.memberId(), request.seq());
-        return LocationUpdateResponse.received(
-                request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
+        return requestOnly(request, serverReceivedAtMs);
     }
 
-    private LocationUpdateResponse skipped(LocationUpdateRequest request) {
+    private LocationUpdateResponse skipped(LocationUpdateRequest request, long serverReceivedAtMs) {
         log.info("위치 실시간 반영 생략: memberId={}, seq={}", request.memberId(), request.seq());
-        return LocationUpdateResponse.received(
-                request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
+        return requestOnly(request, serverReceivedAtMs);
+    }
+
+    /** 실시간에 반영하지 않은 위치의 ACK. 이 요청의 좌표와 측정 시각만 담는다. */
+    private static LocationUpdateResponse requestOnly(LocationUpdateRequest request, long serverReceivedAtMs) {
+        return LocationUpdateResponse.received(request.memberId(), request.resolvedLatitude(),
+                request.resolvedLongitude(), LocationFreshness.of(request.tsMs(), serverReceivedAtMs,
+                        LocationSource.REQUEST, System.currentTimeMillis()));
     }
 
     /**
@@ -306,19 +311,21 @@ public class RealtimeLocationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
                                                       Long authenticatedMemberId) {
-        return updateAndBroadcast(request, authenticatedMemberId, orderAt(request.tsMs(), System.currentTimeMillis()));
+        long receivedAtMs = System.currentTimeMillis();
+        return updateAndBroadcast(request, authenticatedMemberId, orderAt(request.tsMs(), receivedAtMs), receivedAtMs);
     }
 
     private LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request, Long authenticatedMemberId,
-                                                      Long orderAtMs) {
+                                                      Long orderAtMs, long receivedAtMs) {
         LocationUpdateResponse response = new TransactionTemplate(transactionManager)
-                .execute(status -> decideInTransaction(request, authenticatedMemberId));
-        publishAfterTransaction(request, response, orderAtMs);
+                .execute(status -> decideInTransaction(request, authenticatedMemberId, receivedAtMs));
+        publishAfterTransaction(request, response, orderAtMs, receivedAtMs);
         return response;
     }
 
-    /** DB 트랜잭션 안에서 할 일: 프로필 조회, 체류·안전구역 판정(이탈 시 알림 예약), 응답 생성. */
-    private LocationUpdateResponse decideInTransaction(LocationUpdateRequest request, Long authenticatedMemberId) {
+    /** DB 트랜잭션 안에서 할 일: 프로필 조회, 체류, 안전구역 판정과 상태 저장(이탈 시 알림 예약), 응답 생성. */
+    private LocationUpdateResponse decideInTransaction(LocationUpdateRequest request, Long authenticatedMemberId,
+                                                       long receivedAtMs) {
         Long memberId = request.memberId();
         verifySelf(memberId, authenticatedMemberId);
 
@@ -326,9 +333,7 @@ public class RealtimeLocationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
         Member seniorMember = seniorProfile.getMember();
 
-        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
-        StayInfo stayInfo = calculateStayInfo(
-                stayKey, request.resolvedLatitude(), request.resolvedLongitude(), seniorMember);
+        StayInfo stayInfo = calculateStayInfo(request.resolvedLatitude(), request.resolvedLongitude(), seniorMember);
 
         return LocationUpdateResponse.of(
                 memberId,
@@ -338,7 +343,8 @@ public class RealtimeLocationService {
                 request.resolvedLongitude(),
                 stayInfo.startTime(),
                 stayInfo.locationType(),
-                stayInfo.locationName()
+                stayInfo.locationName(),
+                LocationFreshness.of(request.tsMs(), receivedAtMs, LocationSource.LATEST, System.currentTimeMillis())
         );
     }
 
@@ -348,20 +354,22 @@ public class RealtimeLocationService {
      * 오류를 돌려줘도 복구되지 않는다. 그래서 실패를 남기고 나머지를 계속한다.
      */
     private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response,
-                                         Long orderAtMs) {
+                                         Long orderAtMs, long receivedAtMs) {
         Long memberId = request.memberId();
         Double latitude = request.resolvedLatitude();
         Double longitude = request.resolvedLongitude();
-        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, orderAtMs));
-        appendTrailQuietly(memberId, latitude, longitude);
+        seniorLocationRepository.save(
+                SeniorLocation.of(memberId, latitude, longitude, orderAtMs, request.tsMs(), receivedAtMs));
+        appendTrailQuietly(memberId, latitude, longitude, orderAtMs);
         broadcastQuietly(memberId, response);
         publishLocationUpdatedQuietly(memberId, latitude, longitude);
     }
 
-    private void appendTrailQuietly(Long memberId, Double latitude, Double longitude) {
+    private void appendTrailQuietly(Long memberId, Double latitude, Double longitude, Long orderAtMs) {
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         try {
-            Long listSize = redisTemplate.opsForList().leftPush(trailKey, LocationPoint.of(latitude, longitude));
+            Long listSize = redisTemplate.opsForList()
+                    .leftPush(trailKey, LocationPoint.of(latitude, longitude, orderAtMs));
             redisTemplate.opsForList().trim(trailKey, 0, TRAIL_MAX_POINTS - 1);
             redisTemplate.expire(trailKey, TRAIL_TTL_SECONDS, TimeUnit.SECONDS);
             log.info("이동 경로 저장: memberId={}, pointCount={}", memberId, listSize);
@@ -412,21 +420,24 @@ public class RealtimeLocationService {
 
         recordAccessQuietly(guardianId, seniorMemberIds, LocationAccessPath.REST_FAMILY);
 
+        long nowMs = System.currentTimeMillis();
         return seniors.stream()
                 .map(senior -> {
                     Long memberId = senior.getMember().getId();
                     SeniorLocation location = locationMap.get(memberId);
 
                     if (location != null) {
-                        return TrackedSeniorResponse.of(senior, location.getLatitude(), location.getLongitude());
+                        return TrackedSeniorResponse.of(senior, location.getLatitude(), location.getLongitude(),
+                                freshnessOf(location, nowMs));
                     }
 
                     StayInfo stayInfo = getStayInfo(memberId);
                     if (stayInfo != null) {
-                        return TrackedSeniorResponse.of(senior, stayInfo.latitude(), stayInfo.longitude());
+                        return TrackedSeniorResponse.of(senior, stayInfo.latitude(), stayInfo.longitude(),
+                                LocationFreshness.unknown(LocationSource.STAY));
                     }
 
-                    return TrackedSeniorResponse.of(senior, null, null);
+                    return TrackedSeniorResponse.withoutLocation(senior);
                 })
                 .toList();
     }
@@ -458,29 +469,30 @@ public class RealtimeLocationService {
 
         Member seniorMember = seniorProfile.getMember();
 
-        // 체류 시간 및 위치 타입 정보 조회 (memberId 기준)
-        LocalDateTime stayStartTime = LocalDateTime.now();
+        // 체류 시작 시각과 위치 종류는 체류 상태(MySQL)에서 읽는다. 없으면 비운다(지금 시각으로 채우지 않는다).
+        LocalDateTime stayStartTime = null;
         String locationType = null;
-        StayInfo stayInfo = null;
-
-        stayInfo = getStayInfo(memberId);
+        StayInfo stayInfo = getStayInfo(memberId);
         if (stayInfo != null) {
             stayStartTime = stayInfo.startTime();
             locationType = stayInfo.locationType();
         }
 
-        // SeniorLocation(5분 TTL) 우선 조회, 만료 시 StayInfo(24시간 TTL)로 fallback
+        // Redis 최신 위치를 먼저 쓰고, 없으면 체류 지점 좌표를 쓴다. 체류 좌표는 마지막으로 잰 시각을 모른다.
         Optional<SeniorLocation> locationOpt = seniorLocationRepository.findBySeniorId(memberId);
 
         double latitude;
         double longitude;
+        LocationFreshness freshness;
 
         if (locationOpt.isPresent()) {
             latitude = locationOpt.get().getLatitude();
             longitude = locationOpt.get().getLongitude();
+            freshness = freshnessOf(locationOpt.get(), System.currentTimeMillis());
         } else if (stayInfo != null) {
             latitude = stayInfo.latitude();
             longitude = stayInfo.longitude();
+            freshness = LocationFreshness.unknown(LocationSource.STAY);
         } else {
             throw new BusinessException(ErrorCode.NOT_FOUND, "최근 위치 정보가 없습니다.");
         }
@@ -495,46 +507,24 @@ public class RealtimeLocationService {
                 longitude,
                 stayStartTime,
                 locationType,
-                locationName
+                locationName,
+                freshness
         );
     }
 
-    /**
-     * 조회 API용 체류 정보. Redis 연결·시간 초과는 체류 없음으로 넘긴다(화면이 비는 편이 오류보다 낫다).
-     * 안전구역 판정에는 쓰지 않는다. 판정에서 오류를 없음으로 바꾸면 이전 "안" 상태를 잃고 알림 없이 "밖"을 저장한다.
-     */
-    private StayInfo getStayInfo(Long memberId) {
-        try {
-            return readStay(memberId);
-        } catch (DataAccessException e) {
-            log.warn("체류 정보 조회 실패 - memberId: {}, cause: {}", memberId, e.getClass().getSimpleName());
-            return null;
-        }
+    private static LocationFreshness freshnessOf(SeniorLocation location, long nowMs) {
+        return LocationFreshness.of(location.displayMeasuredAtMs(), location.getReceivedAtMs(),
+                LocationSource.LATEST, nowMs);
     }
 
-    /**
-     * 체류 정보를 읽는 유일한 경로다(LLD-0097). 값이 깨졌을 때만 지운다. 연결·시간 초과에 지우면 정상 체류 정보를
-     * 잃어 다음 이탈을 놓친다. 연결·시간 초과는 호출한 쪽에 그대로 던진다(LLD-0121). Jackson 예외 메시지에는 원문
-     * 좌표가 섞일 수 있어 예외 이름만 남긴다(LLD-0029).
-     */
-    private StayInfo readStay(Long memberId) {
-        String stayKey = LOCATION_STAY_KEY_PREFIX + memberId;
-        try {
-            Object raw = redisTemplate.opsForValue().get(stayKey);
-            if (raw == null) {
-                return null;
-            }
-            StayInfo stay = redisValueMapper.convertValue(raw, StayInfo.class);
-            // 좌표·시작 시각이 빠진 값은 이후 거리 계산·체류 시간에서 null로 터지므로 깨진 값과 같이 처리한다.
-            if (stay.latitude() == null || stay.longitude() == null || stay.startTime() == null) {
-                throw new IllegalArgumentException("체류 정보 필수 값 누락");
-            }
-            return stay;
-        } catch (SerializationException | IllegalArgumentException e) {
-            log.warn("체류 정보를 읽을 수 없어 삭제 - stayKey: {}, cause: {}", stayKey, e.getClass().getSimpleName());
-            redisTemplate.delete(stayKey);
-        }
-        return null;
+    /** 조회 API용 체류 정보. 권위 있는 저장소인 MySQL 체류 상태에서 읽는다(LLD-0141). */
+    private StayInfo getStayInfo(Long memberId) {
+        return stayStateService.find(memberId).map(RealtimeLocationService::toStayInfo).orElse(null);
+    }
+
+    private static StayInfo toStayInfo(SeniorStayState state) {
+        return new StayInfo(state.getLatitude(), state.getLongitude(), state.getStayStartedAt(),
+                state.getLocationType(), state.getLocationName());
     }
 
     /**
@@ -560,20 +550,14 @@ public class RealtimeLocationService {
         String trailKey = LOCATION_TRAIL_KEY_PREFIX + memberId;
         List<Object> rawTrail = redisTemplate.opsForList().range(trailKey, 0, TRAIL_MAX_POINTS - 1);
 
-        // LocationPoint로 변환 (LinkedHashMap으로 역직렬화된 경우 처리)
+        // LocationPoint로 변환 (LinkedHashMap으로 역직렬화된 경우 처리). 최근 15분 안에 잰 점만 남긴다(LLD-0141).
+        long cutoffMs = System.currentTimeMillis() - TRAIL_WINDOW_MS;
         List<LocationPoint> trail = new ArrayList<>();
         if (rawTrail != null) {
             for (Object obj : rawTrail) {
-                if (obj instanceof LocationPoint point) {
+                LocationPoint point = toLocationPoint(obj);
+                if (point != null && isWithinTrailWindow(point, cutoffMs)) {
                     trail.add(point);
-                } else if (obj instanceof LinkedHashMap<?, ?> map) {
-                    // GenericJackson2JsonRedisSerializer로 역직렬화 시 LinkedHashMap으로 변환되는 경우
-                    Double lat = getDoubleOrNull(map.get("latitude"));
-                    Double lng = getDoubleOrNull(map.get("longitude"));
-                    LocalDateTime timestamp = parseTimestamp(map.get("timestamp"));
-                    if (lat != null && lng != null) {
-                        trail.add(new LocationPoint(lat, lng, timestamp));
-                    }
                 }
             }
         }
@@ -590,67 +574,88 @@ public class RealtimeLocationService {
         );
     }
 
-    /**
-     * 체류 정보 계산 (체류 시작 시간 + 위치 타입)
-     * - 이전 위치와 30m 이내면 기존 체류 정보 유지
-     * - 30m 초과 이동 시 새로운 체류 정보 설정
-     * - 안전구역(HOME, OTHER) 75m 반경 내면 해당 타입, 아니면 null
-     * - 안전구역 이탈 시 보호자에게 알림 전송
-     */
-    private StayInfo calculateStayInfo(String stayKey, Double newLat, Double newLng, Member member) {
-        // Redis 오류를 체류 없음으로 바꾸지 않는다. 판정을 멈추고 트랜잭션을 되돌려 다음 위치에서 다시 판정한다.
-        StayInfo previousStay = readStay(member.getId());
-        String previousLocationType = null;
-
-        if (previousStay != null) {
-            previousLocationType = previousStay.locationType();
-
-            boolean isSameLocation = GeoUtils.isWithinRadius(
-                    previousStay.latitude(), previousStay.longitude(),
-                    newLat, newLng,
-                    STAY_RADIUS_METERS
-            );
-
-            if (isSameLocation) {
-                log.debug("같은 위치 유지 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
-                        stayKey, previousStay.startTime(), previousStay.locationType());
-                return previousStay;
+    private LocationPoint toLocationPoint(Object obj) {
+        if (obj instanceof LocationPoint point) {
+            return point;
+        }
+        if (obj instanceof LinkedHashMap<?, ?> map) {
+            // GenericJackson2JsonRedisSerializer로 역직렬화 시 LinkedHashMap으로 변환되는 경우
+            Double lat = getDoubleOrNull(map.get("latitude"));
+            Double lng = getDoubleOrNull(map.get("longitude"));
+            if (lat == null || lng == null) {
+                return null;
             }
+            return new LocationPoint(lat, lng, parseTimestamp(map.get("timestamp")),
+                    getLongOrNull(map.get("measuredAtMs")));
+        }
+        return null;
+    }
+
+    /**
+     * 측정 시각(순서 시각) 기준으로 최근 15분 안의 점인지 본다. 측정 시각이 없는 예전 점은 저장 시각으로 본다.
+     * 위치마다 키 TTL을 15분으로 다시 걸어, 계속 움직이는 동안에는 오래된 점이 리스트에 남으므로 읽을 때 거른다.
+     */
+    private static boolean isWithinTrailWindow(LocationPoint point, long cutoffMs) {
+        if (point.measuredAtMs() != null) {
+            return point.measuredAtMs() >= cutoffMs;
+        }
+        if (point.timestamp() == null) {
+            return false;
+        }
+        return point.timestamp().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() >= cutoffMs;
+    }
+
+    private static Long getLongOrNull(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        return null;
+    }
+
+    /**
+     * 체류 정보 계산과 체류, 안전구역 상태 저장(LLD-0141). 위치 처리 DB 트랜잭션 안에서 돈다.
+     * - 체류 지점에서 30m 이내면 기존 체류를 유지하고 상태 행을 쓰지도 잠그지도 않는다.
+     * - 30m 넘게 움직였으면 행을 잠그고 최신 값으로 다시 판정한 뒤 새 체류로 바꾼다.
+     * - 안전구역(HOME, OTHER) 75m 반경 내면 해당 타입, 아니면 null.
+     * - 안전구역 이탈, 복귀 알림은 상태 행의 30분 묶음으로 정하고, 알림 Outbox는 같은 트랜잭션에 들어간다.
+     *
+     * <p>상태와 Outbox가 함께 커밋되거나 함께 롤백되므로 예전 Redis 표식의 롤백 보정이 필요 없다. 같은 회원의 처리는
+     * JVM 순서 잠금이 한 번에 하나씩 보내고, DB 행 잠금은 상태를 바꾸는 순간의 마지막 방어선이다.
+     */
+    private StayInfo calculateStayInfo(Double newLat, Double newLng, Member member) {
+        Long memberId = member.getId();
+        SeniorStayState current = stayStateService.find(memberId).orElse(null);
+        if (isSameStay(current, newLat, newLng)) {
+            log.debug("같은 위치 유지 - memberId: {}", memberId);
+            return toStayInfo(current);
         }
 
-        // 새로운 위치로 이동 → 안전구역 매칭
+        SeniorStayState locked = stayStateService.lockForChange(memberId).orElse(null);
+        if (isSameStay(locked, newLat, newLng)) {
+            return toStayInfo(locked);
+        }
+
         ParentLocation matchedZone = determineMatchingSafeZone(member, newLat, newLng);
         String locationType = getLocationTypeName(matchedZone);
         String locationName = getLocationName(matchedZone);
+        LocalDateTime now = LocalDateTime.now();
 
-        StayInfo newStay = StayInfo.of(newLat, newLng, locationType, locationName);
-        // 이탈 리스너보다 먼저 등록해 커밋 직후 리스너가 새 체류 정보를 읽게 한다.
-        saveStayAfterCommit(stayKey, newStay);
-        // 안전구역 전이 감지: 이탈 사건은 커밋 뒤 열고, 재진입은 열린 사건의 상황을 종료한다.
-        safeZoneAlertService.handleSafeZoneTransition(member.getId(), previousLocationType, locationType);
-        log.debug("새로운 위치로 이동 - stayKey: {}, 체류 시작: {}, 위치 타입: {}",
-                stayKey, newStay.startTime(), locationType);
-
-        return newStay;
+        String previousLocationType = null;
+        if (locked == null) {
+            locked = stayStateService.create(
+                    SeniorStayState.start(memberId, newLat, newLng, now, locationType, locationName));
+        } else {
+            previousLocationType = locked.getLocationType();
+            locked.moveTo(newLat, newLng, now, locationType, locationName);
+        }
+        safeZoneAlertService.handleSafeZoneTransition(locked, previousLocationType, locationType, now);
+        log.debug("새로운 위치로 이동 - memberId: {}, 위치 타입: {}", memberId, locationType);
+        return toStayInfo(locked);
     }
 
-    // 체류 정보는 안전구역 이탈 판정의 기준이다. 롤백된 갱신이 이를 바꾸면 같은 이탈을 다시 감지하지 못하므로 커밋 뒤에 저장한다 (LLD-0058)
-    private void saveStayAfterCommit(String stayKey, StayInfo stay) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            redisTemplate.opsForValue().set(stayKey, stay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                // afterCommit 예외는 이미 커밋된 요청을 실패로 돌려보낸다. 저장을 못 하면 다음 위치 갱신이 이전 체류 정보로 다시 판정한다
-                try {
-                    redisTemplate.opsForValue().set(stayKey, stay, STAY_TTL_SECONDS, TimeUnit.SECONDS);
-                } catch (RuntimeException e) {
-                    log.warn("커밋 후 체류 정보 저장 실패 - stayKey: {}", stayKey, e);
-                }
-            }
-        });
+    private static boolean isSameStay(SeniorStayState state, Double newLat, Double newLng) {
+        return state != null && GeoUtils.isWithinRadius(
+                state.getLatitude(), state.getLongitude(), newLat, newLng, STAY_RADIUS_METERS);
     }
 
     /**
@@ -752,16 +757,21 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)의 만료 시간을 늘려
-     * 시니어가 정지 중이어도 위치 데이터가 만료되지 않도록 유지한다.
+     * 4분마다 실행 — SeniorLocation(5분 TTL)의 만료 시간을 늘려 시니어가 정지 중이어도 마지막 위치가 사라지지 않게 한다.
+     * 마지막 위치를 남겨 두는 것이지 새 위치로 만드는 것이 아니다. 신선도는 응답의 측정 시각으로 판단한다(LLD-0141).
      * 활성 회원이 아니면 갱신하지 않고 지운다. → LLD-0059
      *
      * <p>위치 본문은 다시 저장하지 않고 만료 시간만 늘린다(LLD-0140). 읽어 둔 위치를 다시 저장하면, 읽은 뒤 위치 수신이
-     * 저장한 새 위치를 옛 위치로 덮는다. 이 작업은 회원별 순서 잠금을 거치지 않는다. 키가 이미 없으면(탈퇴 삭제, 만료)
-     * 만료 연장은 아무것도 하지 않으므로 지운 위치를 되살리지도 않는다.
+     * 저장한 새 위치를 옛 위치로 덮는다. 키가 이미 없으면(탈퇴 삭제, 만료) 만료 연장은 아무것도 하지 않는다.
+     *
+     * <p>체류 상태는 MySQL에 있어 만료가 없으므로 활성이 아닌 회원의 행을 여기서 함께 지운다. 활성 회원 조회는 짧은 읽기 트랜잭션에서 끝내 커넥션을 쥔 채 삭제
+     * 트랜잭션이 두 번째 커넥션을 기다리지 않게 한다.
      */
     @Scheduled(fixedRate = 240_000)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void refreshLocationTtl() {
+        // 최신 위치가 만료된 비활성 회원의 체류 상태 행도 지운다(Redis 키처럼 스스로 만료되지 않는다).
+        stayStateService.findInactiveMemberIds().forEach(this::deleteLocation);
         List<SeniorLocation> locations = new ArrayList<>();
         seniorLocationRepository.findAll().forEach(location -> {
             if (location != null) {
@@ -771,8 +781,10 @@ public class RealtimeLocationService {
         if (locations.isEmpty()) {
             return;
         }
-        Set<Long> activeMemberIds = memberRepository.findActiveIdsIn(
-                locations.stream().map(SeniorLocation::getSeniorId).toList());
+        List<Long> memberIds = locations.stream().map(SeniorLocation::getSeniorId).toList();
+        TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
+        readOnly.setReadOnly(true);
+        Set<Long> activeMemberIds = readOnly.execute(status -> memberRepository.findActiveIdsIn(memberIds));
         for (SeniorLocation location : locations) {
             if (!activeMemberIds.contains(location.getSeniorId())) {
                 deleteLocation(location.getSeniorId());
@@ -780,16 +792,21 @@ public class RealtimeLocationService {
             }
             redisTemplate.expire(SENIOR_LOCATION_KEY_PREFIX + location.getSeniorId(),
                     SeniorLocation.TTL_SECONDS, TimeUnit.SECONDS);
-            String stayKey = LOCATION_STAY_KEY_PREFIX + location.getSeniorId();
-            redisTemplate.expire(stayKey, STAY_TTL_SECONDS, TimeUnit.SECONDS);
         }
     }
 
     /**
-     * 탈퇴한 회원의 Redis 위치(현재 위치·이동 경로·체류)를 지운다. → LLD-0059
+     * 탈퇴하거나 활성이 아닌 회원의 위치를 지운다: Redis 현재 위치, 이동 경로, 예전 체류 키와 MySQL 체류 상태. → LLD-0059, LLD-0141
+     * 체류 상태 삭제는 자기 트랜잭션에서 끝난다(탈퇴 커밋 뒤 리스너에서도 부른다).
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deleteLocation(Long memberId) {
-        seniorLocationRepository.deleteById(memberId);
-        redisTemplate.delete(List.of(LOCATION_TRAIL_KEY_PREFIX + memberId, LOCATION_STAY_KEY_PREFIX + memberId));
+        try {
+            stayStateService.delete(memberId);
+        } finally {
+            // DB 삭제가 실패해도 Redis 위치는 지우고, Redis 삭제가 실패해도 DB 행은 이미 지웠다.
+            seniorLocationRepository.deleteById(memberId);
+            redisTemplate.delete(List.of(LOCATION_TRAIL_KEY_PREFIX + memberId, LEGACY_STAY_KEY_PREFIX + memberId));
+        }
     }
 }

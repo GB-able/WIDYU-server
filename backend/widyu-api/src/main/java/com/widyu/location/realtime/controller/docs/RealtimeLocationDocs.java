@@ -56,6 +56,11 @@ public interface RealtimeLocationDocs {
     @Operation(
             summary = "시니어 마지막 위치 조회",
             description = """
+            응답의 `updatedAt`은 이 응답을 만든 서버 시각이며 위치를 잰 시각이 아닙니다. 좌표가 언제 잰 것인지는
+            `measuredAtMs`(앱이 보낸 측정 시각, epoch ms), 서버가 받은 시각은 `receivedAtMs`, 출처는 `locationSource`
+            (`LATEST` Redis 최신 위치, `STAY` 체류 시작 지점이라 측정 시각을 모름), 측정 뒤 지난 시간은 `ageSeconds`로 판단합니다.
+            모르면 null입니다. 마지막 위치는 만료되지 않고 남을 수 있으므로 오래됐는지는 이 값으로 판단합니다(LLD-0141).
+
                     시니어의 마지막 위치와 체류 정보를 조회합니다.
 
                     **체류 시간**: 같은 위치(30m 반경 내)에 머문 시간을 분 단위로 제공합니다.
@@ -90,7 +95,11 @@ public interface RealtimeLocationDocs {
                         "stayStartTime": "2024-01-12T13:45:00",
                         "stayDurationMinutes": 45,
                         "locationType": "HOME",
-                        "locationName": "집"
+                        "locationName": "집",
+                        "measuredAtMs": 1705037340000,
+                        "receivedAtMs": 1705037341200,
+                        "locationSource": "LATEST",
+                        "ageSeconds": 60
                       }
                     }
                     """

@@ -333,7 +333,9 @@ class WebSocketSessionAckIntegrationTest {
                 .willAnswer(invocation -> {
                     String tag = JSON.readTree(invocation.getArgument(0, byte[].class)).get("tag").asText();
                     return LocationAckResponse.legacy(LocationUpdateResponse.of(invocation.getArgument(1), tag, null,
-                            37.5, 127.0, LocalDateTime.now(), "OTHER", null));
+                            37.5, 127.0, LocalDateTime.now(), "OTHER", null,
+                            com.widyu.location.realtime.dto.LocationFreshness.unknown(
+                                    com.widyu.location.realtime.dto.LocationSource.LATEST)));
                 });
         given(sensorBatchService.ingest(anyLong(), any(byte[].class), anyLong(), any()))
                 .willAnswer(invocation -> {

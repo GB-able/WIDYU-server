@@ -75,6 +75,10 @@ location:
       max-waiting: ${LOCATION_SEQUENCER_MAX_WAITING:4}
       # 차례를 기다리는 최대 시간. 정상 처리는 수 ms이고, Redis 명령 제한(3초, ADR-0040)과 커넥션 대기 한도(3초)에 맞췄다.
       wait-timeout-ms: ${LOCATION_SEQUENCER_WAIT_TIMEOUT_MS:3000}
+  stay-state:
+    # 서버가 뜰 때 예전 Redis 체류 키와 안전구역 알림 표식을 MySQL 체류 상태로 한 번 옮긴다(LLD-0141). DB 행이 있으면 두고
+    # Redis 키는 지우지 않는다. 옮긴 뒤에는 끄고 배포해도 된다.
+    import-legacy-redis: ${LOCATION_STAY_IMPORT_LEGACY_REDIS:true}
 
 # @Async 실행기 상한(LLD-0092). 운영 서버 1~2 vCPU, Hikari 커넥션 풀 기본 10 기준.
 async:

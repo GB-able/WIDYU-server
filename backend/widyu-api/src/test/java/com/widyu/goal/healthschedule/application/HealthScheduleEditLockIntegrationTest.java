@@ -137,7 +137,7 @@ class HealthScheduleEditLockIntegrationTest {
         SeniorLocationRepository locations = mock(SeniorLocationRepository.class);
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(locations.findBySeniorId(senior.getId())).willReturn(
-                Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0)));
+                Optional.of(currentLocation(senior.getId(), 37.5, 127.0)));
         HealthScheduleProgressService progress = new HealthScheduleProgressService(
                 schedules, locations, mock(SeniorProfileRepository.class),
                 mock(FamilyMembershipRepository.class), mock(SeniorProfileService.class),
@@ -151,5 +151,11 @@ class HealthScheduleEditLockIntegrationTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
         return new HealthScheduleService(schedules, members, mock(SeniorProfileRepository.class),
                 mock(FamilyMembershipRepository.class), memberUtil, mock(ApplicationEventPublisher.class));
+    }
+
+    /** 지금 잰 최신 위치. 방문 인증은 인증 가능 시간 안에 잰 위치만 쓴다(LLD-0141). */
+    private static SeniorLocation currentLocation(Long seniorId, double latitude, double longitude) {
+        long now = System.currentTimeMillis();
+        return SeniorLocation.of(seniorId, latitude, longitude, now, now, now);
     }
 }

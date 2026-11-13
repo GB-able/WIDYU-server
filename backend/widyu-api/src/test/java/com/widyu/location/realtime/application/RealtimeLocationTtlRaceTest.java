@@ -57,6 +57,7 @@ class RealtimeLocationTtlRaceTest {
     @Mock private PlatformTransactionManager transactionManager;
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
+    @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
     @InjectMocks
     private RealtimeLocationService realtimeLocationService;

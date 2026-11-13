@@ -77,6 +77,7 @@ class RealtimeLocationRawIsolationTest {
     @Mock private PlatformTransactionManager transactionManager;
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
+    @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
     @InjectMocks
     private RealtimeLocationService realtimeLocationService;
@@ -97,17 +98,17 @@ class RealtimeLocationRawIsolationTest {
     }
 
     @Test
-    @DisplayName("실시간 트랜잭션 안에서 체류 정보를 읽다 Redis 장애가 나도 원본은 저장하고 ACK 없이 예외를 전달한다")
-    void 체류_정보_Redis_장애에도_원본은_저장한다() {
+    @DisplayName("실시간 트랜잭션 안에서 체류 상태를 읽다 DB 오류가 나도 원본은 저장하고 ACK 없이 예외를 전달한다")
+    void 체류_상태_DB_오류에도_원본은_저장한다() {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
         stubSenior(1L);
-        given(valueOperations.get("location:stay:1")).willThrow(new RedisConnectionFailureException("down"));
+        willThrow(new org.springframework.dao.QueryTimeoutException("DB timeout")).given(stayStateService).find(1L);
         given(storeCall(payload)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> realtimeLocationService.updateAndBroadcast(payload, 1L))
-                .isInstanceOf(RedisConnectionFailureException.class);
+                .isInstanceOf(org.springframework.dao.QueryTimeoutException.class);
         then(locationFixService).should().store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
         then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
@@ -119,7 +120,6 @@ class RealtimeLocationRawIsolationTest {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
         stubSenior(1L);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
         willThrow(new RedisConnectionFailureException("down"))
                 .willReturn(null)
@@ -285,7 +285,6 @@ class RealtimeLocationRawIsolationTest {
                 .given(sequencer).run(eq(1L), any(), any(), any());
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
         stubSenior(1L);
-        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(storeCall(payload)).willReturn(true);
 
         // when
@@ -312,7 +311,6 @@ class RealtimeLocationRawIsolationTest {
         ReflectionTestUtils.setField(member, "seniorProfile", seniorProfile);
         given(seniorProfileRepository.findByMemberId(memberId)).willReturn(Optional.of(seniorProfile));
         lenient().when(parentLocationRepository.findAllByMember(member)).thenReturn(List.of());
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
         lenient().when(redisTemplate.opsForList()).thenReturn(listOperations);
     }
 

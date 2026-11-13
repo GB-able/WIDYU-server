@@ -131,13 +131,33 @@ class HealthScheduleProgressServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
         given(seniorLocationRepository.findBySeniorId(senior.getId()))
-                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0)));
+                .willReturn(Optional.of(currentLocation(senior.getId(), 37.5, 127.0)));
 
         // when
         healthScheduleProgressService.completeSchedule(scheduleId);
 
         // then
         assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("마지막 위치가 인증 가능 시간 전에 잰 것이면 TTL로 남아 있어도 방문 인증을 완료 처리하지 않는다")
+    void 인증_가능_시간_전에_잰_위치로는_방문_인증하지_않는다() {
+        // given
+        Long scheduleId = 1L;
+        Member senior = seniorMember();
+        HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
+        long yesterday = System.currentTimeMillis() - 86_400_000L;
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
+        given(seniorLocationRepository.findBySeniorId(senior.getId()))
+                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0, yesterday, yesterday, yesterday)));
+
+        // when & then
+        assertThatThrownBy(() -> healthScheduleProgressService.completeSchedule(scheduleId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("방문 인증 가능 시간 안에 잰 위치가 없습니다.");
+        assertThat(schedule.getProgressStatus()).isEqualTo(ProgressStatus.UPCOMING);
     }
 
     @Test
@@ -184,7 +204,7 @@ class HealthScheduleProgressServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
         given(seniorLocationRepository.findBySeniorId(senior.getId()))
-                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.0, 127.0)));
+                .willReturn(Optional.of(currentLocation(senior.getId(), 37.0, 127.0)));
 
         // when & then
         assertThatThrownBy(() -> healthScheduleProgressService.completeSchedule(scheduleId))
@@ -237,7 +257,7 @@ class HealthScheduleProgressServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
         given(seniorLocationRepository.findBySeniorId(senior.getId()))
-                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0)));
+                .willReturn(Optional.of(currentLocation(senior.getId(), 37.5, 127.0)));
 
         // when
         healthScheduleProgressService.completeSchedule(scheduleId);
@@ -287,7 +307,7 @@ class HealthScheduleProgressServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
         given(seniorLocationRepository.findBySeniorId(senior.getId()))
-                .willReturn(Optional.of(SeniorLocation.of(senior.getId(), 37.5, 127.0)));
+                .willReturn(Optional.of(currentLocation(senior.getId(), 37.5, 127.0)));
 
         // when
         healthScheduleProgressService.completeSchedule(scheduleId);
@@ -316,5 +336,11 @@ class HealthScheduleProgressServiceTest {
         assertThat(schedule.getIsReward()).isFalse();
         then(seniorProfileService).should(never())
                 .addGoalRewardPoints(anyLong(), anyLong(), anyString(), any());
+    }
+
+    /** 지금 잰 최신 위치. 방문 인증은 인증 가능 시간 안에 잰 위치만 쓴다(LLD-0141). */
+    private static SeniorLocation currentLocation(Long seniorId, double latitude, double longitude) {
+        long now = System.currentTimeMillis();
+        return SeniorLocation.of(seniorId, latitude, longitude, now, now, now);
     }
 }
