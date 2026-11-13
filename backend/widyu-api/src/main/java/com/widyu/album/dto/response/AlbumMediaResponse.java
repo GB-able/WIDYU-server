@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public record AlbumMediaResponse(
         Long id,
@@ -74,7 +75,7 @@ public record AlbumMediaResponse(
     
     private static boolean isImageUrl(String url) {
         if (url == null) return false;
-        String extension = getFileExtension(url).toLowerCase();
+        String extension = getFileExtension(url).toLowerCase(Locale.ROOT);
         return extension.matches("jpg|jpeg|png|gif|webp|bmp|svg|heic|heif");
     }
     

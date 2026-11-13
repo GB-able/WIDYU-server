@@ -8,6 +8,7 @@ import com.widyu.member.MemberType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -37,5 +38,31 @@ class AlbumMediaResponseTest {
         assertThat(responses).extracting(AlbumMediaResponse::duration).containsExactly(null, null);
         assertThat(album.getPhotoCount()).isEqualTo(2);
         assertThat(album.getVideoCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("서버 기본 로캘이 터키어여도 대문자 HEIC 확장자를 사진으로 판정한다")
+    void 서버_기본_로캘이_터키어여도_대문자_HEIC를_사진으로_판정한다() {
+        // given: 터키어 로캘의 toLowerCase()는 I를 점 없는 ı로 바꿔 HEIC가 heıc가 된다
+        Locale original = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+        try {
+            String heic = "https://cdn.widyu.shop/albums/photos/1/IMG_0001.HEIC";
+            Member author = Member.createMember(MemberType.GUARDIAN, "보호자", "01000000000");
+            ReflectionTestUtils.setField(author, "id", 1L);
+            Album album = Album.createAlbumWithMetadata(author, "내용",
+                    new ArrayList<>(List.of(heic)), new ArrayList<>(List.of(heic)),
+                    new ArrayList<>(Arrays.asList((Integer) null)));
+            ReflectionTestUtils.setField(album, "id", 11L);
+
+            // when
+            List<AlbumMediaResponse> responses = AlbumMediaResponse.fromAlbum(album, true);
+
+            // then
+            assertThat(responses).extracting(AlbumMediaResponse::type).containsExactly("image");
+            assertThat(album.getPhotoCount()).isEqualTo(1);
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 }
