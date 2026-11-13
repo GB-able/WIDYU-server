@@ -30,6 +30,7 @@ import com.widyu.incident.IncidentKind;
 import com.widyu.incident.application.IncidentService;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.sensor.application.ActivityStateService;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
@@ -63,6 +64,7 @@ class HeartRateBatchServiceTest {
     @Mock private HeartRatePersistenceService heartRatePersistenceService;
     @Mock private HeartRateEventRepository heartRateEventRepository;
     @Mock private DecisionRecordPersistenceService decisionRecordPersistenceService;
+    @Mock private ActivityStateService activityStateService;
 
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -298,7 +300,7 @@ class HeartRateBatchServiceTest {
                 null,
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true));
+                new SensorProperties.Medication(true), null);
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service(withoutHeartAi).storeAndAssess(
@@ -756,14 +758,115 @@ class HeartRateBatchServiceTest {
         logger.setLevel(null);
     }
 
+    // 활동 상태 전송 스위치 (LLD-0138)
+
+    @Test
+    @DisplayName("활동 상태 스위치가 꺼져 있으면 구간을 조회하지 않고 AI에 UNKNOWN을 보낸다")
+    void 활동_상태_스위치가_꺼져_있으면_구간을_조회하지_않고_UNKNOWN을_보낸다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), anyString()))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false, "NORMAL", null));
+
+        // when
+        service().storeAndAssess(member, BATCH_ID, RUN_ID, true, null, List.of(
+                sample(71, FIRST_TS_MS, "HIGH"),
+                sample(72, FIRST_TS_MS + 1000, "HIGH")), System.currentTimeMillis());
+
+        // then
+        ArgumentCaptor<String> context = ArgumentCaptor.forClass(String.class);
+        then(heartRateAnomalyDetector).should(times(2)).detect(eq(MEMBER_ID), any(), context.capture());
+        assertThat(context.getAllValues()).containsOnly("UNKNOWN");
+        then(activityStateService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("활동 상태 스위치를 켜면 샘플 측정 시각마다 그 시각의 활동 상태를 AI에 보낸다")
+    void 활동_상태_스위치를_켜면_샘플_측정_시각의_활동_상태를_AI에_보낸다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        given(activityStateService.contexts(MEMBER_ID, FIRST_TS_MS, FIRST_TS_MS + 1000))
+                .willReturn(tsMs -> {
+                    if (tsMs == FIRST_TS_MS) {
+                        return "REST";
+                    }
+                    return "RECOVERY";
+                });
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), anyString()))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false, "NORMAL", null));
+
+        // when: 역순으로 와도 측정 시각 순으로 판정한다
+        service(propertiesWithActivityContext()).storeAndAssess(member, BATCH_ID, RUN_ID, true, null, List.of(
+                sample(72, FIRST_TS_MS + 1000, "HIGH"),
+                sample(71, FIRST_TS_MS, "HIGH")), System.currentTimeMillis());
+
+        // then
+        ArgumentCaptor<String> context = ArgumentCaptor.forClass(String.class);
+        then(heartRateAnomalyDetector).should(times(2)).detect(eq(MEMBER_ID), any(), context.capture());
+        assertThat(context.getAllValues()).containsExactly("REST", "RECOVERY");
+    }
+
+    @Test
+    @DisplayName("활동 상태 조회가 실패하면 UNKNOWN으로 판정하고 심박은 그대로 저장한다")
+    void 활동_상태_조회가_실패하면_UNKNOWN으로_판정하고_심박은_저장한다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        willThrow(new DataAccessResourceFailureException("DB 연결 실패"))
+                .given(activityStateService).contexts(anyLong(), anyLong(), anyLong());
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), anyString()))
+                .willReturn(new DetectionResult(HeartRateStatus.NORMAL, false, "NORMAL", null));
+
+        // when
+        HeartRateBatchService.BatchOutcome outcome = service(propertiesWithActivityContext()).storeAndAssess(
+                member, BATCH_ID, RUN_ID, true, null, List.of(sample(71, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        assertThat(outcome.stored()).isEqualTo(1);
+        then(heartRateAnomalyDetector).should().detect(eq(MEMBER_ID), any(), eq("UNKNOWN"));
+    }
+
+    @Test
+    @DisplayName("AI가 flatline_arrest 사유로 위급을 내면 사유는 판정 기록에만 남고 심박 저장값에는 상태만 간다")
+    void AI가_flatline_arrest_사유로_위급을_내면_사유는_판정_기록에만_남는다() {
+        // given
+        Member member = member();
+        givenNoExistingSamples();
+        given(heartRateAnomalyDetector.detect(eq(MEMBER_ID), any(), anyString()))
+                .willReturn(new DetectionResult(HeartRateStatus.EMERGENCY, true, "EMERGENCY", "flatline_arrest"));
+
+        // when
+        service().storeAndAssess(member, BATCH_ID, RUN_ID, true, null, List.of(sample(22, FIRST_TS_MS, "HIGH")),
+                System.currentTimeMillis());
+
+        // then
+        // 보호자 조회·방송·푸시는 심박 행과 최신값(상태·bpm·시각)에서 만든다. 사유가 실릴 자리가 없다(ADR-0042 결정 5).
+        assertThat(decisionPassedToSave().getReason()).isEqualTo("flatline_arrest");
+        then(heartRatePersistenceService).should()
+                .updateLatestResult(eq(MEMBER_ID), eq(HeartRateStatus.EMERGENCY), eq(22), any());
+    }
+
+    private SensorProperties propertiesWithActivityContext() {
+        return new SensorProperties(
+                32_768, null, null,
+                new SensorProperties.FallAi(false, "/api/fall", 2, "widyu-server", "abstain-v1"),
+                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, true),
+                new SensorProperties.Incident(60, 5000L, false, 5, 90),
+                new SensorProperties.Followup(false, false),
+                new SensorProperties.Medication(true), null);
+    }
+
     private SensorProperties propertiesWithWearGate() {
         return new SensorProperties(
                 32_768, null, null,
                 new SensorProperties.FallAi(false, "/api/fall", 2, "widyu-server", "abstain-v1"),
-                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true),
+                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true, false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true));
+                new SensorProperties.Medication(true), null);
     }
 
     private HeartRateBatchService service() {
@@ -773,7 +876,7 @@ class HeartRateBatchServiceTest {
     private HeartRateBatchService service(SensorProperties sensorProperties) {
         return new HeartRateBatchService(
                 heartRateAnomalyDetector, heartRatePersistenceService, heartRateEventRepository,
-                decisionRecordPersistenceService, sensorProperties, meterRegistry);
+                decisionRecordPersistenceService, sensorProperties, meterRegistry, activityStateService);
     }
 
     /** 판정 행은 심박 저장과 한 트랜잭션에 묶이므로 saveBatchSample 인자로 건너간다. */
@@ -788,10 +891,10 @@ class HeartRateBatchServiceTest {
         return new SensorProperties(
                 32_768, null, null,
                 new SensorProperties.FallAi(false, "/api/fall", 2, "widyu-server", "abstain-v1"),
-                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false),
+                new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true));
+                new SensorProperties.Medication(true), null);
     }
 
     /** 저장 서비스는 받은 행을 그대로 돌려준다. 식별자는 서비스가 붙이므로 그대로 흘려보낸다. */

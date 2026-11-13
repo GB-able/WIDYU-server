@@ -338,7 +338,7 @@ class SensorBatchWebSocketControllerTest {
     private SensorBatchWebSocketController controller(TaskExecutor executor) {
         WebSocketWorkDispatcher dispatcher =
                 new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), meterRegistry);
-        SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null);
+        SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null, null);
         return new SensorBatchWebSocketController(
                 sensorBatchService, new ObjectMapper(), dispatcher, executor, properties, meterRegistry);
     }

@@ -9,6 +9,7 @@ import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
 import com.widyu.heart.dto.request.HeartRateMeasurement;
 import com.widyu.heart.repository.HeartRateEventRepository;
 import com.widyu.member.Member;
+import com.widyu.sensor.application.ActivityStateService;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongFunction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
@@ -39,6 +41,10 @@ import org.springframework.web.client.RestClientException;
  *
  * <p>착용이 확실하지 않은 배치는 저장만 하고 판정하지 않는다(LLD-0126). 스위치
  * {@code sensor.heart-ai.wear-gate-enabled}가 켜져 있을 때만이다.
+ *
+ * <p>AI {@code context}는 스위치 {@code sensor.heart-ai.activity-context-enabled}가 켜져 있을 때만 샘플 측정 시각의
+ * 활동 상태를 보내고, 꺼져 있으면 {@code UNKNOWN}이다(LLD-0138). 지금 AI는 {@code REST}에서 고정 기준을 끄므로
+ * 노션 3-1 배포와 검증 전에는 켜지 않는다.
  *
  * <p>심박 수치·판정 상태·판정 사유·AI 응답은 <b>어떤 로그 레벨에도 남기지 않는다</b>(#639).
  * 사유와 심박 값이 사는 곳은 판정 기록 행뿐이다.
@@ -68,6 +74,7 @@ public class HeartRateBatchService {
     private final DecisionRecordPersistenceService decisionRecordPersistenceService;
     private final SensorProperties sensorProperties;
     private final MeterRegistry meterRegistry;
+    private final ActivityStateService activityStateService;
 
     /** 저장 건수·스킵 건수·AI를 거치지 않은 건수. 로그에 쓴다(값은 담지 않는다). */
     public record BatchOutcome(int stored, int skipped, int aiSkipped) {}
@@ -76,6 +83,7 @@ public class HeartRateBatchService {
             Member member, String batchId, String runId, Boolean onBody, String wearState,
             List<HeartRateBatchRequest.Sample> samples, long serverReceivedAtMs) {
         boolean wearUncertain = isWearUncertain(onBody, wearState);
+        LongFunction<String> aiContext = aiContext(member.getId(), samples, wearUncertain);
         boolean aiAvailable = true;
         boolean aiCalled = false;
         int stored = 0;
@@ -104,7 +112,8 @@ public class HeartRateBatchService {
                 aiCalled = true;
                 try {
                     DetectionResult detected = heartRateAnomalyDetector.detect(
-                            member.getId(), HeartRateMeasurement.of(sample.bpm(), measuredAt), AI_CONTEXT);
+                            member.getId(), HeartRateMeasurement.of(sample.bpm(), measuredAt),
+                            aiContext.apply(sample.tsMs()));
                     status = detected.status();
                     emergency = detected.emergency();
                     assessed = true;
@@ -322,6 +331,27 @@ public class HeartRateBatchService {
             }
         }
         return false;
+    }
+
+    /**
+     * 샘플 측정 시각마다 AI에 보낼 활동 상태. 스위치가 꺼져 있거나 AI를 부르지 않는 배치면 조회 없이 {@code UNKNOWN}이다.
+     * 조회가 실패해도 심박 저장과 판정을 막지 않고 {@code UNKNOWN}으로 보낸다(LLD-0138 6절).
+     */
+    private LongFunction<String> aiContext(
+            Long memberId, List<HeartRateBatchRequest.Sample> samples, boolean wearUncertain) {
+        LongFunction<String> unknown = tsMs -> AI_CONTEXT;
+        if (wearUncertain || sensorProperties.heartAi() == null
+                || !sensorProperties.heartAi().activityContextEnabled()) {
+            return unknown;
+        }
+        List<HeartRateBatchRequest.Sample> sorted = sortedByMeasuredTime(samples);
+        try {
+            return activityStateService.contexts(
+                    memberId, sorted.get(0).tsMs(), sorted.get(sorted.size() - 1).tsMs());
+        } catch (Exception e) {
+            log.warn("활동 상태 조회 실패: memberId={}, errorType={}", memberId, e.getClass().getSimpleName());
+            return unknown;
+        }
     }
 
     /**

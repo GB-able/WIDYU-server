@@ -877,7 +877,7 @@ class IncidentServiceTest {
                 new SensorProperties(32_768, null, null, null, null,
                         new SensorProperties.Incident(60, 5000L, false, 5, 90),
                         new SensorProperties.Followup(false, false),
-                        new SensorProperties.Medication(true)), memberRepository,
+                        new SensorProperties.Medication(true), null), memberRepository,
                 incidentEscalation, outboxService, null, seniorProfileRepository,
                 familyMembershipRepository, followupCardService, entityManager);
     }

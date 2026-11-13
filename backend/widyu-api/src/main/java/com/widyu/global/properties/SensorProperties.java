@@ -11,7 +11,8 @@ public record SensorProperties(
         HeartAi heartAi,
         Incident incident,
         Followup followup,
-        Medication medication
+        Medication medication,
+        Activity activity
 ) {
 
     /**
@@ -84,11 +85,16 @@ public record SensorProperties(
      *
      * <p>{@code wearGateEnabled}는 착용이 확실하지 않은 심박을 판정하지 않는 스위치다(LLD-0126). 워치가 다시 찬 뒤에도
      * 미착용을 보내는 문제(앱 #109)가 실기기에서 확인되기 전에는 꺼 둔다. 먼저 켜면 정상 착용 심박까지 판정에서 빠진다.
+     *
+     * <p>{@code activityContextEnabled}는 손목 움직임으로 정한 활동 상태를 AI {@code context}로 보내는 스위치다(LLD-0138).
+     * 꺼져 있으면 지금처럼 {@code UNKNOWN}을 보낸다. 지금 AI는 {@code REST}가 오면 고정 기준(40 이하, 150 이상)을 끄므로,
+     * AI가 「고정 기준은 어떤 상태에서도 유지」(노션 3-1)를 배포하고 ADR-0042 결정 4의 검증을 마치기 전에는 켜지 않는다.
      */
     public record HeartAi(
             String deciderId,
             String deciderVersion,
-            boolean wearGateEnabled
+            boolean wearGateEnabled,
+            boolean activityContextEnabled
     ) {}
 
     /** 본인확인 마감·순서 전환·상황 창(LLD-0070), 확인 화면 수신 대기(LLD-0085). */
@@ -105,4 +111,20 @@ public record SensorProperties(
 
     /** 앱 기기 알람 배포 전 정각 서버 푸시를 유지한다(LLD-0080). */
     public record Medication(boolean onTimePush) {}
+
+    /**
+     * 손목 움직임 활동 상태(LLD-0138, ADR-0042 결정 6). 숫자는 연구팀 후보 값이라 규칙 문서가 오면 바꾼다.
+     * 움직임 크기는 구간 안 (가속도 벡터 크기 - 1g)의 표준편차(g)다. {@code restMaxG} 미만이면 REST,
+     * {@code activeMinG} 이상이면 ACTIVE, 그 사이는 LOW. 샘플이 {@code minWindowSamples}보다 적은 구간은 상태를 정하지 않는다.
+     */
+    public record Activity(
+            int windowSec,
+            int minWindowSamples,
+            double restMaxG,
+            double activeMinG,
+            int recoverySec,
+            double vehicleSpeedKmh,
+            int vehicleSec,
+            double vehicleMaxAccuracyM
+    ) {}
 }
