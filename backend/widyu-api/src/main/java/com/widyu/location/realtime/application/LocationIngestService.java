@@ -226,7 +226,8 @@ public class LocationIngestService {
         if (request.tsMs() == null || request.sessionId() == null || request.seq() == null) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
-        if (!REASONS.contains(request.reason())) {
+        // Set.of는 null을 물으면 NPE를 던진다. 빠진 reason도 입력 오류로 거절한다.
+        if (request.reason() == null || !REASONS.contains(request.reason())) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
         if (Math.abs(request.resolvedLatitude()) > MAX_LATITUDE
