@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
@@ -244,7 +245,7 @@ class RealtimeLocationRawIsolationTest {
     void 실시간_대기_초과면_원본만_저장하고_ACK가_없다() {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
-        willThrow(new LocationSequenceBusyException()).given(sequencer).run(eq(1L), any());
+        willThrow(new LocationSequenceBusyException()).given(sequencer).run(eq(1L), any(), any(), any());
         given(storeCall(payload)).willReturn(true);
 
         // when
@@ -254,6 +255,52 @@ class RealtimeLocationRawIsolationTest {
         assertThat(response).isNull();
         then(locationFixService).should().store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("같은 회원의 더 늦게 잰 위치가 처리 중이라 밀린 위치는 실시간 처리 없이 원본 저장 결과로 ACK를 돌려준다")
+    void 더_최근_위치에_밀린_위치는_원본_저장_결과로_ACK한다() {
+        // given
+        byte[] payload = payload(1L, System.currentTimeMillis());
+        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(3)).get())
+                .given(sequencer).run(eq(1L), any(), any(), any());
+        given(storeCall(payload)).willReturn(true);
+
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.STORED);
+        assertThat(response.seq()).isEqualTo(7L);
+        then(seniorLocationRepository).should(never()).findById(any());
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("미래로 잰 위치는 서버 수신 시각으로 한 번 자른 같은 값으로 순서를 판정하고 최신 위치에 저장한다")
+    void 미래로_잰_위치는_한_번_자른_같은_시각으로_순서_판정과_저장을_한다() {
+        // given
+        long oneDayLater = System.currentTimeMillis() + 86_400_000L;
+        byte[] payload = payload(1L, oneDayLater);
+        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get())
+                .given(sequencer).run(eq(1L), any(), any(), any());
+        given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
+        Member member = stubSenior(1L);
+        given(parentLocationRepository.findAllByMember(member)).willReturn(List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
+        given(storeCall(payload)).willReturn(true);
+
+        // when
+        realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        org.mockito.ArgumentCaptor<Long> orderAt = org.mockito.ArgumentCaptor.forClass(Long.class);
+        then(sequencer).should().run(eq(1L), orderAt.capture(), any(), any());
+        org.mockito.ArgumentCaptor<SeniorLocation> saved = org.mockito.ArgumentCaptor.forClass(SeniorLocation.class);
+        then(seniorLocationRepository).should().save(saved.capture());
+        assertThat(orderAt.getValue()).isLessThanOrEqualTo(System.currentTimeMillis());
+        assertThat(saved.getValue().getMeasuredAtMs()).isEqualTo(orderAt.getValue());
     }
 
     private boolean storeCall(byte[] payload) {

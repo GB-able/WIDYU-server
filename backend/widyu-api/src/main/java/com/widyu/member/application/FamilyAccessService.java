@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +51,14 @@ public class FamilyAccessService {
         verifyFamilyRelationship(guardianId, targetMember);
     }
 
+    /**
+     * 실시간 위치, 심박 방송을 받을 자격을 확인한다. 응답 채널 인터셉터가 방송을 보내는 스레드에서 부른다.
+     *
+     * <p>짧은 읽기 트랜잭션에서 끝내 커넥션을 바로 돌려준다(LLD-0140). 위치 처리 메서드는 트랜잭션 없이(NOT_SUPPORTED)
+     * 돌고, 그 안에서 트랜잭션 없는 조회를 하면 메서드가 끝날 때까지 커넥션을 쥔다. 그 상태로 원본 저장(REQUIRES_NEW)이
+     * 커넥션을 하나 더 기다려, 동시 요청이 풀 크기를 넘으면 모두 막혔다.
+     */
+    @Transactional(readOnly = true)
     public void verifyActiveFamilyAccess(Long guardianId, Long targetMemberId) {
         Member guardian = memberRepository.findById(guardianId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN,

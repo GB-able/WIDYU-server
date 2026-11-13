@@ -87,6 +87,8 @@ public class RealtimeLocationService {
     private final ObjectMapper redisValueMapper = RedisConfig.redisObjectMapper();
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
+    // @RedisHash 저장소가 쓰는 키 모양(keyspace:id)과 같아야 만료 연장이 그 위치에 걸린다.
+    private static final String SENIOR_LOCATION_KEY_PREFIX = SeniorLocation.KEYSPACE + ":";
     private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
     // 이동 경로 점 상한. 초당 1건으로 보내도 15분을 담는다. 위치마다 TTL을 다시 걸어 키가 만료되지 않으므로
@@ -122,7 +124,7 @@ public class RealtimeLocationService {
 
         if (!request.isRawFix()) {
             validate(request);
-            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId));
+            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, serverReceivedAtMs));
         }
 
         long acceptedAtMs;
@@ -140,7 +142,7 @@ public class RealtimeLocationService {
         LocationUpdateResponse response = null;
         RuntimeException realtimeFailure = null;
         try {
-            response = applyRealtime(request, authenticatedMemberId);
+            response = applyRealtime(request, authenticatedMemberId, serverReceivedAtMs);
         } catch (BusinessException e) {
             // 실시간 경로의 업무 예외(시니어 아님)는 부수효과 전에 난다. 다시 보내도 같으므로 원본도 남기지 않는다.
             return rejected(request, authenticatedMemberId, e);
@@ -199,18 +201,32 @@ public class RealtimeLocationService {
      * 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. 최신 판단부터 방송 요청까지 같은 회원 안에서
      * 한 번에 하나씩 실행한다(LLD-0139). 15분 넘게 지난 위치는 최신 위치를 읽지 않고 바로 거르므로 차례를 기다리지 않는다.
      */
-    private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId) {
+    private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId,
+                                                 long serverReceivedAtMs) {
         verifySelf(request.memberId(), authenticatedMemberId);
         if (isTooOld(request)) {
             return skipped(request);
         }
-        return sequencer.run(request.memberId(), () -> {
+        // 순서 판정, 최신값 비교, Redis 저장이 모두 이 한 값을 쓴다(LLD-0140). 시점마다 따로 "지금"으로 자르면 미래로 잰
+        // 위치가 처리 중일 때 뒤에 온 정상 위치를 밀린 것으로 보거나 최신보다 먼저 잰 것으로 보고 반영 없이 ACK한다.
+        Long orderAtMs = orderAt(request.tsMs(), serverReceivedAtMs);
+        return sequencer.run(request.memberId(), orderAtMs, () -> {
             // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
-            if (isTooOld(request) || !isNewerThanLatest(request)) {
+            if (isTooOld(request) || !isNewerThanLatest(request.memberId(), orderAtMs)) {
                 return skipped(request);
             }
-            return updateAndBroadcast(request, authenticatedMemberId);
-        });
+            return updateAndBroadcast(request, authenticatedMemberId, orderAtMs);
+        }, () -> superseded(request));
+    }
+
+    /**
+     * 같은 회원의 더 늦게 잰 위치가 실시간에 반영돼 이 위치의 실시간 처리는 할 필요가 없다(LLD-0140). 원본 저장 결과로
+     * ACK한다. 더 최근 위치가 실패하면 순서 잠금이 과부하 예외를 던져 이 위치도 ACK를 받지 못한다.
+     */
+    private LocationUpdateResponse superseded(LocationUpdateRequest request) {
+        log.info("위치 실시간 반영 생략(더 최근 위치 반영됨): memberId={}, seq={}", request.memberId(), request.seq());
+        return LocationUpdateResponse.received(
+                request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
     }
 
     private LocationUpdateResponse skipped(LocationUpdateRequest request) {
@@ -229,12 +245,11 @@ public class RealtimeLocationService {
         return measuredAtMs != null && System.currentTimeMillis() - measuredAtMs > REALTIME_MAX_AGE_MS;
     }
 
-    private boolean isNewerThanLatest(LocationUpdateRequest request) {
-        Long measuredAtMs = request.tsMs();
+    private boolean isNewerThanLatest(Long memberId, Long measuredAtMs) {
         if (measuredAtMs == null) {
             return true;
         }
-        Long latestMeasuredAtMs = seniorLocationRepository.findById(request.memberId())
+        Long latestMeasuredAtMs = seniorLocationRepository.findById(memberId)
                 .map(SeniorLocation::getMeasuredAtMs)
                 .orElse(null);
         if (latestMeasuredAtMs == null) {
@@ -244,14 +259,15 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 최신 위치의 비교 기준에는 미래 시각을 남기지 않는다. 기기 시계가 앞서 미래로 잰 위치가 기준이 되면
-     * 그 뒤 정상 시각의 위치가 모두 "최신보다 먼저 잰 위치"로 빠지고, TTL 갱신이 그 값을 계속 살려 둔다.
+     * 최신 위치의 비교 기준(순서 시각). 미래 시각은 서버가 받은 시각으로 자른다. 기기 시계가 앞서 미래로 잰 위치가 기준이
+     * 되면 그 뒤 정상 시각의 위치가 모두 "최신보다 먼저 잰 위치"로 빠지고, TTL 갱신이 그 값을 계속 살려 둔다.
+     * 요청마다 한 번만 계산해 같은 값을 쓴다.
      */
-    private static Long notAfterNow(Long measuredAtMs) {
+    private static Long orderAt(Long measuredAtMs, long serverReceivedAtMs) {
         if (measuredAtMs == null) {
             return null;
         }
-        return Math.min(measuredAtMs, System.currentTimeMillis());
+        return Math.min(measuredAtMs, serverReceivedAtMs);
     }
 
     private void verifySelf(Long memberId, Long authenticatedMemberId) {
@@ -290,9 +306,14 @@ public class RealtimeLocationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
                                                       Long authenticatedMemberId) {
+        return updateAndBroadcast(request, authenticatedMemberId, orderAt(request.tsMs(), System.currentTimeMillis()));
+    }
+
+    private LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request, Long authenticatedMemberId,
+                                                      Long orderAtMs) {
         LocationUpdateResponse response = new TransactionTemplate(transactionManager)
                 .execute(status -> decideInTransaction(request, authenticatedMemberId));
-        publishAfterTransaction(request, response);
+        publishAfterTransaction(request, response, orderAtMs);
         return response;
     }
 
@@ -326,11 +347,12 @@ public class RealtimeLocationService {
      * 실시간 후보로 다시 평가돼 복구된다. 그 뒤 단계는 최신 위치가 이미 저장돼 같은 시각의 재전송이 걸러지므로,
      * 오류를 돌려줘도 복구되지 않는다. 그래서 실패를 남기고 나머지를 계속한다.
      */
-    private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response) {
+    private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response,
+                                         Long orderAtMs) {
         Long memberId = request.memberId();
         Double latitude = request.resolvedLatitude();
         Double longitude = request.resolvedLongitude();
-        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, notAfterNow(request.tsMs())));
+        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, orderAtMs));
         appendTrailQuietly(memberId, latitude, longitude);
         broadcastQuietly(memberId, response);
         publishLocationUpdatedQuietly(memberId, latitude, longitude);
@@ -730,9 +752,13 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)를 갱신해
+     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)의 만료 시간을 늘려
      * 시니어가 정지 중이어도 위치 데이터가 만료되지 않도록 유지한다.
-     * 활성 회원이 아니면 갱신하지 않고 지운다. 탈퇴 삭제와 겹쳐 위치가 다시 저장돼도 다음 주기에 사라진다. → LLD-0059
+     * 활성 회원이 아니면 갱신하지 않고 지운다. → LLD-0059
+     *
+     * <p>위치 본문은 다시 저장하지 않고 만료 시간만 늘린다(LLD-0140). 읽어 둔 위치를 다시 저장하면, 읽은 뒤 위치 수신이
+     * 저장한 새 위치를 옛 위치로 덮는다. 이 작업은 회원별 순서 잠금을 거치지 않는다. 키가 이미 없으면(탈퇴 삭제, 만료)
+     * 만료 연장은 아무것도 하지 않으므로 지운 위치를 되살리지도 않는다.
      */
     @Scheduled(fixedRate = 240_000)
     public void refreshLocationTtl() {
@@ -752,7 +778,8 @@ public class RealtimeLocationService {
                 deleteLocation(location.getSeniorId());
                 continue;
             }
-            seniorLocationRepository.save(location);
+            redisTemplate.expire(SENIOR_LOCATION_KEY_PREFIX + location.getSeniorId(),
+                    SeniorLocation.TTL_SECONDS, TimeUnit.SECONDS);
             String stayKey = LOCATION_STAY_KEY_PREFIX + location.getSeniorId();
             redisTemplate.expire(stayKey, STAY_TTL_SECONDS, TimeUnit.SECONDS);
         }

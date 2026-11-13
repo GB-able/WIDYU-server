@@ -107,7 +107,7 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
-    @DisplayName("위치 TTL을 갱신할 때 활성 회원은 갱신하고 활성이 아닌 회원의 위치는 지운다")
+    @DisplayName("위치 TTL을 갱신할 때 활성 회원은 위치를 다시 저장하지 않고 만료 시간만 늘리며 활성이 아닌 회원의 위치는 지운다")
     void 위치_TTL_갱신_시_활성_회원만_갱신하고_나머지는_지운다() {
         // given
         SeniorLocation active = SeniorLocation.of(1L, 37.5, 127.0);
@@ -119,8 +119,9 @@ class RealtimeLocationServiceTest {
         realtimeLocationService.refreshLocationTtl();
 
         // then
-        then(seniorLocationRepository).should().save(active);
-        then(seniorLocationRepository).should(never()).save(withdrawn);
+        then(redisTemplate).should().expire("senior_location:1", 300L, TimeUnit.SECONDS);
+        then(redisTemplate).should(never()).expire("senior_location:2", 300L, TimeUnit.SECONDS);
+        then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
         then(seniorLocationRepository).should().deleteById(2L);
         then(redisTemplate).should().delete(java.util.List.of("location:trail:2", "location:stay:2"));
     }
