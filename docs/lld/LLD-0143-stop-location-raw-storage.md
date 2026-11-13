@@ -78,17 +78,30 @@ receive ─ 파싱, 검증(구형: 좌표 / v2(`v`=2): device_id, ts_ms, session
 
 ## 7. 인수조건
 
-- [ ] v2 위치를 반영하면 `APPLIED`, 오래됐거나 최신보다 먼저 잰 위치, 같은 위치 재전송, 밀린 위치는 `SKIPPED`, 입력 오류, 남의 위치, 시니어 아님(건너뛰는 위치 포함)은 `REJECTED`다(`RealtimeLocationAckContractTest`)
-- [ ] 판정 DB 오류, Redis 오류면 ACK가 없고 최신 위치, 방송, 위치 원본이 남지 않는다. 최신 위치 저장 실패 뒤 재전송은 `APPLIED`로 복구되고 방송은 한 번이다
-- [ ] 실제 프록시에서 판정 커밋 뒤 커넥션 0, 이미 있던 `location_fix` 행이 그대로이고 새 행이 없다(`LocationIngestTransactionBoundaryTest`)
-- [ ] 실제 MySQL에서 과거 행이 있는 회원들의 몰림, 오래된 몰림, 최신 우선, 첫 위치 동시, 같은 위치 16건 동시 뒤 `location_fix` 행 수가 같고 교착이 없다. 같은 위치 동시 수신은 `APPLIED` 한 번, 상태 행 하나다(`LocationBurstConnectionPoolMySqlTest`)
-- [ ] 위치가 없는 회차는 `LOCATION_RAW_NOT_COLLECTED`로 신고하고 과거 위치는 그대로 내보낸다(`RunExportAssemblerTest`)
-- [ ] k6 같은 조건 전후 비교(8절)
-- [ ] `bash scripts/harness/verify.sh` 통과
+- [x] v2 위치를 반영하면 `APPLIED`, 오래됐거나 최신보다 먼저 잰 위치, 같은 위치 재전송, 밀린 위치는 `SKIPPED`, 입력 오류, 남의 위치, 시니어 아님(건너뛰는 위치 포함)은 `REJECTED`다(`RealtimeLocationAckContractTest`)
+- [x] 판정 DB 오류, Redis 오류면 ACK가 없고 최신 위치, 방송, 위치 원본이 남지 않는다. 최신 위치 저장 실패 뒤 재전송은 `APPLIED`로 복구되고 방송은 한 번이다
+- [x] 실제 프록시에서 판정 커밋 뒤 커넥션 0, 이미 있던 `location_fix` 행이 그대로이고 새 행이 없다(`LocationIngestTransactionBoundaryTest`)
+- [x] 실제 MySQL에서 과거 행이 있는 회원들의 몰림, 오래된 몰림, 최신 우선, 첫 위치 동시, 같은 위치 16건 동시 뒤 `location_fix` 행 수가 같고 교착이 없다. 같은 위치 동시 수신은 `APPLIED` 한 번, 상태 행 하나다(`LocationBurstConnectionPoolMySqlTest`)
+- [x] 위치가 없는 회차는 `LOCATION_RAW_NOT_COLLECTED`로 신고하고 과거 위치는 그대로 내보낸다(`RunExportAssemblerTest`)
+- [x] k6 같은 조건 전후 비교(8절)
+- [x] `bash scripts/harness/verify.sh` 통과
 
 ## 8. 전후 측정
 
-구현 뒤 채운다.
+k6로 실제 인증, STOMP, 보호자 구독, MySQL 8.0, Redis 7을 거쳐 #1046(36d3543e)과 이 변경(1acf1021)을 버전마다 45회 같은 조건(풀 10)으로 쟀다. 측정 전 회원당 과거 원본 5행(모두 120행)을 심었다. 로컬 단일 인스턴스, 합성 입력, 조건당 3회다.
+
+| 상황 | 지표 | 36d3543e | 1acf1021 |
+| --- | --- | --- | --- |
+| 모든 실행 | 심어 둔 과거 원본 120행 | 그대로 | 그대로 |
+| 같은 자리 20명 x 40건 | 원본 행 증가 | 800 | 0 |
+| | INSERT, SELECT, COMMIT(서버 전체) | 860, 8401, 3320 | 60, 6001, 2520 |
+| | ACK p95(ms) | 39~65 | 30~35 |
+| 안심구역 들락날락 20명 x 10건 | 이탈, 복귀 알림 | 20, 20 | 20, 20 |
+| 1시간 전 위치 20명 x 40건 즉시 | ACK p95(ms), ACK/초 | 617~798, 924~1196 | 409~428, 1728~1802 |
+| 한 회원 640건 즉시 | 9초 내 ACK 없음 | 161~223 | 492~595 |
+| 모든 상황 | 최신값 지연 | 0 | 0 |
+
+한 회원 640건 몰림의 ACK 없음 증가는 원본 저장이 수신 스레드를 붙잡아 주던 감속이 사라져 회원 대기 상한(4건)에 더 걸린 결과다(서버 로그의 원인은 두 버전 모두 대기 상한과 Redis 정지 상황뿐, 교착 0). 대기 상한 정책은 이번에 바꾸지 않았다. 상세는 `apiDocs/engineering/performance/location-k6-noraw-2026-11-13/README.md`(개인 문서)다.
 
 ## 9. 미결정 사항
 
