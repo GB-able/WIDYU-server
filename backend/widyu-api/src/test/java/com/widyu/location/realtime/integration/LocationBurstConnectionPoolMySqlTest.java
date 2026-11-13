@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.raw.application.LocationFixService;
+import com.widyu.location.realtime.dto.LocationAckResponse;
+import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -36,6 +39,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
@@ -91,6 +96,8 @@ class LocationBurstConnectionPoolMySqlTest {
     @Autowired private FamilyRepository familyRepository;
     @Autowired private SeniorProfileRepository seniorProfileRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private LocationFixService locationFixService;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     @DynamicPropertySource
     static void infrastructure(DynamicPropertyRegistry registry) {
@@ -132,11 +139,161 @@ class LocationBurstConnectionPoolMySqlTest {
         assertThat(result.storedRows()).isEqualTo(result.sent());
     }
 
+    @Test
+    @DisplayName("회원 20명이 앱 새 방식대로 최신 위치 1건의 ACK를 받은 뒤 나머지 39건을 몰아 보내도 실패하지 않고 원본이 모두 남는다")
+    void 최신_위치부터_보내면_실패하지_않는다() throws Exception {
+        Result result = burst("multi-20x40-newest-first", 20, 40, 5_000L, true);
+
+        assertThat(result.failed()).isZero();
+        assertThat(result.storedRows()).isEqualTo(result.sent());
+    }
+
+    @Test
+    @DisplayName("같은 원본이 16개 스레드에서 동시에 와도 한 행만 저장되고 모든 요청이 STORED 또는 DUPLICATE ACK를 받는다")
+    void 같은_원본이_동시에_와도_한_행만_저장되고_모두_ACK를_받는다() throws Exception {
+        // given
+        Long memberId = saveSenior();
+        byte[] payload = payload(memberId, 1, System.currentTimeMillis() - 20 * 60_000L);
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<String>> futures = new ArrayList<>();
+        for (int i = 0; i < THREADS; i++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                try {
+                    return "ACK:" + realtimeLocationService.updateAndBroadcast(payload, memberId).result();
+                } catch (Exception e) {
+                    return e.getClass().getSimpleName();
+                }
+            }));
+        }
+
+        // when
+        start.countDown();
+        Map<String, Integer> outcomes = new TreeMap<>();
+        for (Future<String> future : futures) {
+            outcomes.merge(future.get(1, TimeUnit.MINUTES), 1, Integer::sum);
+        }
+        pool.shutdown();
+
+        // then
+        Integer rows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM location_fix WHERE member_id = ?", Integer.class, memberId);
+        System.out.printf("[LOCATION-DUP-RACE] threads=%d outcomes=%s rows=%d%n", THREADS, outcomes, rows);
+        assertThat(rows).isEqualTo(1);
+        assertThat(outcomes).containsOnlyKeys("ACK:STORED", "ACK:DUPLICATE");
+        assertThat(outcomes.get("ACK:STORED")).isEqualTo(1);
+    }
+
+    /**
+     * 원본 배치 저장 후보의 비용을 같은 800건으로 잰다(LLD-0139 9절). API를 만들지 않고, 지금 경로의 원본 저장만 800번
+     * 부른 경우와, 100건씩 기존 키를 한 번에 조회한 뒤 여러 행 INSERT 한 문장으로 넣고 커밋하는 경우를 비교한다.
+     * 회차 조회(resolveRun)는 배치에서 생략했으므로 배치 쪽이 그만큼 유리하다.
+     */
+    @Test
+    @DisplayName("원본 800건을 건별로 저장할 때와 100건 묶음 INSERT로 저장할 때 문장 수와 걸린 시간을 남긴다")
+    void 원본_800건_건별_저장과_묶음_INSERT_후보를_비교한다() {
+        // given
+        Long memberId = saveSenior();
+        long now = System.currentTimeMillis();
+        int count = 800;
+
+        // when: 지금 경로의 원본 저장(건별 REQUIRES_NEW, 존재 확인 + 회차 조회 + INSERT + COMMIT)
+        Map<String, Long> before = statementCounters();
+        long startedAt = System.nanoTime();
+        for (int i = 0; i < count; i++) {
+            byte[] body = payload(memberId, i, now - 20 * 60_000L - i);
+            LocationUpdateRequest request = parse(body);
+            locationFixService.store(memberId, request, body, now, now);
+        }
+        long singleMs = (System.nanoTime() - startedAt) / 1_000_000;
+        Map<String, Long> single = delta(before, statementCounters());
+
+        // when: 묶음 후보(100건마다 기존 키 1회 조회 + 여러 행 INSERT 1문장 + COMMIT 1회)
+        before = statementCounters();
+        startedAt = System.nanoTime();
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        for (int from = 0; from < count; from += 100) {
+            int start = from;
+            tx.executeWithoutResult(status -> insertChunk(memberId, start, 100, now));
+        }
+        long batchMs = (System.nanoTime() - startedAt) / 1_000_000;
+        Map<String, Long> batch = delta(before, statementCounters());
+
+        // then
+        Integer rows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM location_fix WHERE member_id = ?", Integer.class, memberId);
+        System.out.printf("[LOCATION-BATCH-CANDIDATE] rows=%d single{ms=%d, mysql=%s} batch100{ms=%d, mysql=%s}%n",
+                rows, singleMs, single, batchMs, batch);
+        assertThat(rows).isEqualTo(count * 2);
+    }
+
+    private void insertChunk(Long memberId, int from, int size, long now) {
+        List<Object> keys = new ArrayList<>();
+        StringBuilder in = new StringBuilder();
+        for (int i = from; i < from + size; i++) {
+            if (in.length() > 0) {
+                in.append(',');
+            }
+            in.append("(?,?,?)");
+            keys.add("batch-" + memberId);
+            keys.add("s-batch");
+            keys.add((long) i);
+        }
+        jdbc.queryForList("SELECT device_id, session_id, seq FROM location_fix WHERE (device_id, session_id, seq) IN ("
+                + in + ")", keys.toArray());
+        StringBuilder sql = new StringBuilder("INSERT INTO location_fix (member_id, device_id, session_id, seq, ts_ms, "
+                + "lat, lon, is_mock, reason, server_received_at_ms, accepted_at_ms, persisted_at_ms, payload, "
+                + "payload_sha256, created_at, updated_at) VALUES ");
+        List<Object> args = new ArrayList<>();
+        for (int i = from; i < from + size; i++) {
+            if (i > from) {
+                sql.append(',');
+            }
+            sql.append("(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(6),NOW(6))");
+            String body = new String(payload(memberId, i, now - i), UTF_8);
+            args.add(memberId);
+            args.add("batch-" + memberId);
+            args.add("s-batch");
+            args.add((long) i);
+            args.add(now - i);
+            args.add(37.55);
+            args.add(126.97);
+            args.add(false);
+            args.add("move");
+            args.add(now);
+            args.add(now);
+            args.add(now);
+            args.add(body);
+            args.add("0".repeat(64));
+        }
+        jdbc.update(sql.toString(), args.toArray());
+    }
+
+    private static LocationUpdateRequest parse(byte[] body) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                    .disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                    .readValue(body, LocationUpdateRequest.class);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /**
      * 회원마다 지금부터 거꾸로 {@code intervalMs} 간격으로 잰 위치를 만들어, 모든 회원의 위치를 한꺼번에 16개 스레드에 던진다.
      * 앱이 쌓아 둔 순서(오래된 것부터)로 제출하고, 처리 결과와 저장된 원본 행 수를 센다.
      */
     private Result burst(String label, int members, int fixesPerMember, long intervalMs) throws Exception {
+        return burst(label, members, fixesPerMember, intervalMs, false);
+    }
+
+    /**
+     * {@code newestFirst}면 앱 새 방식(ADR-0041 결정 5)처럼 회원마다 가장 최근 위치를 먼저 처리해 끝낸 뒤 나머지를 몰아 보낸다.
+     * 먼저 보낸 처리 시간과 문장 수도 결과에 포함한다.
+     */
+    private Result burst(String label, int members, int fixesPerMember, long intervalMs, boolean newestFirst)
+            throws Exception {
         List<Long> memberIds = new ArrayList<>();
         for (int i = 0; i < members; i++) {
             memberIds.add(saveSenior());
@@ -150,40 +307,80 @@ class LocationBurstConnectionPoolMySqlTest {
             }
         }
 
+        List<Object[]> newest = new ArrayList<>();
+        if (newestFirst) {
+            newest.addAll(work.subList(work.size() - memberIds.size(), work.size()));
+            work = new ArrayList<>(work.subList(0, work.size() - memberIds.size()));
+        }
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
-        CountDownLatch start = new CountDownLatch(1);
-        Map<String, Integer> failures = new TreeMap<>();
-        List<Future<String>> futures = new ArrayList<>();
-        for (Object[] item : work) {
-            futures.add(pool.submit(() -> {
-                start.await();
-                try {
-                    realtimeLocationService.updateAndBroadcast((byte[]) item[1], (Long) item[0]);
-                    return null;
-                } catch (Exception e) {
-                    return e.getClass().getSimpleName();
-                }
-            }));
-        }
-        long startedAt = System.nanoTime();
-        start.countDown();
-        for (Future<String> future : futures) {
-            String failure = future.get(5, TimeUnit.MINUTES);
-            if (failure != null) {
-                failures.merge(failure, 1, Integer::sum);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            Map<String, Integer> failures = new TreeMap<>();
+            List<Future<String>> futures = new ArrayList<>();
+            for (Object[] item : work) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        LocationAckResponse ack = realtimeLocationService.updateAndBroadcast((byte[]) item[1], (Long) item[0]);
+                        if (ack == null) {
+                            return "ACK:NONE";
+                        }
+                        return "ACK:" + ack.result();
+                    } catch (Exception e) {
+                        return e.getClass().getSimpleName();
+                    }
+                }));
             }
-        }
-        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
-        pool.shutdown();
+            Map<String, Long> statusBefore = statementCounters();
+            long startedAt = System.nanoTime();
+            Map<String, Integer> acks = new TreeMap<>();
+            for (Object[] item : newest) {
+                LocationAckResponse ack = realtimeLocationService.updateAndBroadcast((byte[]) item[1], (Long) item[0]);
+                acks.merge("first:" + ack.result(), 1, Integer::sum);
+            }
+            start.countDown();
+            for (Future<String> future : futures) {
+                String outcome = future.get(5, TimeUnit.MINUTES);
+                if (outcome.startsWith("ACK:")) {
+                    acks.merge(outcome.substring(4), 1, Integer::sum);
+                } else {
+                    failures.merge(outcome, 1, Integer::sum);
+                }
+            }
+            long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+            Map<String, Long> statements = delta(statusBefore, statementCounters());
 
-        Integer stored = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM location_fix WHERE member_id IN (" + join(memberIds) + ")", Integer.class);
-        int failed = failures.values().stream().mapToInt(Integer::intValue).sum();
-        Result result = new Result(work.size(), failed, stored, elapsedMs);
-        System.out.printf("[LOCATION-BURST] scenario=%s threads=%d pool=10 sent=%d failed=%d failures=%s "
-                        + "storedRows=%d elapsedMs=%d%n",
-                label, THREADS, result.sent(), failed, failures, stored, elapsedMs);
-        return result;
+            Integer stored = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM location_fix WHERE member_id IN (" + join(memberIds) + ")", Integer.class);
+            int failed = failures.values().stream().mapToInt(Integer::intValue).sum();
+            Result result = new Result(work.size() + newest.size(), failed, stored, elapsedMs);
+            System.out.printf("[LOCATION-BURST] scenario=%s threads=%d pool=10 sent=%d failed=%d failures=%s "
+                            + "acks=%s storedRows=%d elapsedMs=%d mysql=%s%n",
+                    label, THREADS, result.sent(), failed, failures, acks, stored, elapsedMs, statements);
+            return result;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * 서버 전체 문장 수(SHOW GLOBAL STATUS). 측정 중 스케줄러 등 다른 쿼리도 섞이므로 근사치다.
+     * MySQL 8.0 이상은 Com_select 외에 Com_stmt_execute(서버 측 prepared)가 아니라 클라이언트 측 prepared가 기본이다.
+     */
+    private Map<String, Long> statementCounters() {
+        Map<String, Long> counters = new TreeMap<>();
+        jdbc.query("SHOW GLOBAL STATUS WHERE Variable_name IN "
+                        + "('Com_select','Com_insert','Com_update','Com_commit','Com_rollback','Questions')",
+                rs -> {
+                    counters.put(rs.getString(1), rs.getLong(2));
+                });
+        return counters;
+    }
+
+    private static Map<String, Long> delta(Map<String, Long> before, Map<String, Long> after) {
+        Map<String, Long> delta = new TreeMap<>();
+        after.forEach((name, value) -> delta.put(name, value - before.getOrDefault(name, 0L)));
+        return delta;
     }
 
     private Long saveSenior() {

@@ -215,7 +215,8 @@ class RealtimeLocationSafeZoneRedisTest {
         return new RealtimeLocationService(seniorLocationRepository, familyMembershipRepository,
                 seniorProfileRepository, parentLocationRepository, messagingTemplate, redisTemplate,
                 locationEventPublisher, safeZoneAlertService, locationFixService, locationAccessLogService,
-                memberRepository, validator, transactionManager);
+                memberRepository, validator, transactionManager,
+                new MemberLocationSequencer(4, 3_000));
     }
 
     private void seniorWithHomeSafeZone() {

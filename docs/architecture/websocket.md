@@ -46,7 +46,7 @@ flowchart LR
 
 ## 6. Consistency Model
 
-인가 결과를 연결 수명 동안 캐시하지 않는다. 검사 직후부터 전송 사이의 변경이나 이미 전달한 메시지를 회수하는 보장은 없다. Simple Broker는 메모리 기반이며 재접속 후 누락 메시지 replay나 DB와의 원자적 발송을 제공하지 않는다. 심박 결과 ACK는 발신 세션을 지정한다. v2 위치 ACK는 요청의 `deviceId`, `sessionId`, `seq`와 `result`(`STORED`, `DUPLICATE`, `REJECTED`)를 실어 원본 저장을 확인해 준다. 원본 저장에 실패하면 ACK를 보내지 않으며 앱은 재전송한다(LLD-0123).
+인가 결과를 연결 수명 동안 캐시하지 않는다. 검사 직후부터 전송 사이의 변경이나 이미 전달한 메시지를 회수하는 보장은 없다. Simple Broker는 메모리 기반이며 재접속 후 누락 메시지 replay나 DB와의 원자적 발송을 제공하지 않는다. 심박 결과 ACK는 발신 세션을 지정한다. v2 위치 ACK는 요청의 `deviceId`, `sessionId`, `seq`와 `result`(`STORED`, `DUPLICATE`, `REJECTED`)를 실어 원본 저장을 확인해 준다. 원본 저장에 실패하면 ACK를 보내지 않으며 앱은 재전송한다(LLD-0123). 같은 회원의 실시간 위치 처리는 회원별 잠금으로 한 번에 하나씩 실행하고(단일 인스턴스 전제), 실시간 처리가 기술 오류나 대기 초과로 끝나도 원본 저장은 시도한다. 이때 ACK는 보내지 않아 앱이 재전송하고, 재전송에서 원본은 `DUPLICATE`, 실시간 처리는 다시 평가된다. 응답 채널은 세션별 보낸 순서를 보존한다(LLD-0139).
 
 ## 7. Operational Parameters
 

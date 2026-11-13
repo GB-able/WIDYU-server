@@ -145,6 +145,7 @@
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 - **v2 원본 저장**: `/app/location/update`를 `Message<byte[]>`로 받아 파싱한다. `v==2`·`device_id`·`ts_ms`가 오면 잰 시각·정확도·속도·`reason`(move/keepalive/incident)과 원문을 `location_fix`에 남긴다. 멱등 키는 `(device_id, session_id, seq)`, 회차 귀속은 B8 재사용 → LLD-0048
 - **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 한다(`LOCATION_4000`). **v2 위치의 ACK(`LocationAckResponse`)는 「앱이 큐에서 지워도 된다」는 뜻이다**: 요청의 `deviceId`·`sessionId`·`seq`와 `result`(`STORED`·`DUPLICATE`·`REJECTED`)를 싣고, 업무 예외는 `REJECTED`, 원본 저장 실패(업무 예외 아님)는 ACK 없이 오류로 보내 앱이 재전송하게 한다. 이 경로에서 일시적 실패를 `BusinessException`으로 던지지 않는다 → LLD-0123 **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
+- **같은 회원 위치는 한 번에 하나씩 실시간 처리한다**(`MemberLocationSequencer`, 단일 인스턴스 전제): 최신 판단부터 체류, 안전구역 판정, 최신 위치 저장, 방송 요청까지 회원별 잠금 안에서 실행하고 잠금은 DB 트랜잭션 전에 잡는다. 대기는 회원당 4건, 3초(`location.realtime.sequencer.*`)이고 넘치면 원본만 저장하고 ACK를 보내지 않는다. v2 위치는 입력, 본인, 회차(`run_id`가 있을 때) 검증을 실시간 처리 전에 하고, 실시간 처리가 기술 오류로 실패해도 원본 저장을 시도한 뒤 ACK 없이 오류를 보낸다. `STORED`, `DUPLICATE`는 원본 저장과 실시간 처리(또는 생략)가 모두 끝났다는 뜻이다. 원본 유일 키 충돌은 행이 있으면 `DUPLICATE`다. 시니어 확인은 원본 저장 트랜잭션 안에서 한다. `updateAndBroadcast(byte[])`는 트랜잭션이 없어(`NOT_SUPPORTED`) 여기서 트랜잭션 없는 저장소 메서드를 부르면 스레드에 묶인 EntityManager가 요청 끝까지 커넥션을 쥐고 실시간 트랜잭션과 교착한다(LLD-0114 재발, 실제 MySQL 테스트로만 드러남). 응답은 세션별 보낸 순서를 지킨다(`setPreservePublishOrder`) → LLD-0139
 
 ### `location.access` — 보호자 위치 열람 기록·통보
 - 보호자가 시니어 위치를 읽으면 **읽기 경로마다 `location_access_log` 한 줄**을 남기고 시니어에게 통보한다(위치정보법 제16조②·제19조③④) → ADR-0036 결정 3·4, LLD-0056

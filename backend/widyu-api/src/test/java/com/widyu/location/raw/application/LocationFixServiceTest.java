@@ -22,6 +22,7 @@ import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.location.realtime.dto.LocationUpdateRequest;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.CollectionRunStatus;
 import com.widyu.run.application.CollectionRunService;
@@ -42,6 +43,7 @@ class LocationFixServiceTest {
 
     @Mock private LocationFixRepository locationFixRepository;
     @Mock private CollectionRunService collectionRunService;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
 
     @InjectMocks private LocationFixService locationFixService;
 
@@ -59,6 +61,7 @@ class LocationFixServiceTest {
                 .startedAtMs(1_760_000_000_000L)
                 .status(CollectionRunStatus.OPEN)
                 .build();
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(false);
         given(collectionRunService.resolveRun(MEMBER_ID, DEVICE_ID, TS_MS))
@@ -104,6 +107,7 @@ class LocationFixServiceTest {
                 MEMBER_ID, null, null, null, 2, DEVICE_ID, SESSION_ID, SEQ,
                 "요청이-주장한-연구", "요청이-주장한-참여", null,
                 37.5551, 126.9707, 8.5, 0.9, 0.5, 212.0, 41.2, "fused", false, TS_MS, "move");
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(false);
         given(collectionRunService.resolveRun(MEMBER_ID, DEVICE_ID, TS_MS))
@@ -126,6 +130,7 @@ class LocationFixServiceTest {
                 MEMBER_ID, null, null, null, 2, DEVICE_ID, SESSION_ID, SEQ,
                 null, null, "run-남의것",
                 37.5551, 126.9707, 8.5, 0.9, 0.5, 212.0, 41.2, "fused", false, TS_MS, "move");
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(false);
         willThrow(new BusinessException(ErrorCode.RUN_NOT_FOUND))
@@ -156,6 +161,7 @@ class LocationFixServiceTest {
     void 같은_기기와_세션과_seq를_다시_보내면_저장하지_않는다() {
         // given
         LocationUpdateRequest request = rawFix("move", 37.5551, 8.5, false);
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(true);
 
@@ -196,6 +202,7 @@ class LocationFixServiceTest {
     void 정확도가_낮은_위치도_값_그대로_저장한다() {
         // given
         LocationUpdateRequest request = rawFix("keepalive", 37.5551, 250.0, false);
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(false);
         given(collectionRunService.resolveRun(MEMBER_ID, DEVICE_ID, TS_MS)).willReturn(Optional.empty());
@@ -216,6 +223,7 @@ class LocationFixServiceTest {
     void is_mock이_true인_위치도_값_그대로_저장한다() {
         // given
         LocationUpdateRequest request = rawFix("move", 37.5551, 8.5, true);
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(true);
         given(locationFixRepository.existsByDeviceIdAndSessionIdAndSeq(DEVICE_ID, SESSION_ID, SEQ))
                 .willReturn(false);
         given(collectionRunService.resolveRun(MEMBER_ID, DEVICE_ID, TS_MS)).willReturn(Optional.empty());
@@ -225,6 +233,50 @@ class LocationFixServiceTest {
 
         // then
         assertThat(savedFix().getIsMock()).isTrue();
+    }
+
+    @Test
+    @DisplayName("시니어가 아닌 회원의 원본은 저장하지 않고 BAD_REQUEST 예외를 던진다")
+    void 시니어가_아닌_회원의_원본은_저장하지_않는다() {
+        // given
+        LocationUpdateRequest request = rawFix("move", 37.5551, 8.5, false);
+        given(seniorProfileRepository.existsByMemberId(MEMBER_ID)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> locationFixService.store(MEMBER_ID, request, "{}".getBytes(UTF_8), 1_000L, 2_000L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+        then(locationFixRepository).should(never()).save(any(LocationFix.class));
+    }
+
+    @Test
+    @DisplayName("앱이 실어 보낸 회차가 이 회원, 기기의 것이 아니면 실시간 처리 전에 RUN_NOT_FOUND 예외를 던진다")
+    void 실어_보낸_회차가_남의_것이면_예외가_발생한다() {
+        // given
+        LocationUpdateRequest request = new LocationUpdateRequest(
+                MEMBER_ID, null, null, null,
+                2, DEVICE_ID, SESSION_ID, SEQ, null, null, "run-other",
+                37.5551, 126.9707, 8.5, 0.9, 0.5, 212.0, 41.2, "fused", false, TS_MS, "move");
+        willThrow(new BusinessException(ErrorCode.RUN_NOT_FOUND))
+                .given(collectionRunService).requireAttributableRun("run-other", MEMBER_ID, DEVICE_ID, TS_MS);
+
+        // when & then
+        assertThatThrownBy(() -> locationFixService.verifyAttribution(MEMBER_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RUN_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("회차를 싣지 않은 위치는 회차 확인에서 조회 없이 통과한다")
+    void 회차를_싣지_않은_위치는_조회_없이_통과한다() {
+        // given
+        LocationUpdateRequest request = rawFix("move", 37.5551, 8.5, false);
+
+        // when
+        locationFixService.verifyAttribution(MEMBER_ID, request);
+
+        // then
+        then(collectionRunService).shouldHaveNoInteractions();
     }
 
     private LocationFix savedFix() {

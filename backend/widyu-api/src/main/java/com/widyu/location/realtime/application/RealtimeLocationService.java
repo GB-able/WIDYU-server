@@ -47,6 +47,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -77,6 +78,7 @@ public class RealtimeLocationService {
     private final MemberRepository memberRepository;
     private final Validator validator;
     private final PlatformTransactionManager transactionManager;
+    private final MemberLocationSequencer sequencer;
     // 미지정 필드를 무시하고 페이로드를 읽는 전용 매퍼. 주입받지 않는 이유는 Redis·응답 직렬화와
     // 설정을 공유하면 안 되기 때문이다(초기화 필드라 생성자 주입 대상에서 빠진다).
     private final ObjectMapper payloadMapper = new ObjectMapper()
@@ -104,9 +106,14 @@ public class RealtimeLocationService {
      * 원본 저장(REQUIRES_NEW)이 커넥션을 하나 더 요청하면, 재연결 직후 위치가 몰릴 때 풀 전체가
      * 두 번째 커넥션을 기다리며 막힌다(LLD-0114). 그래서 이 메서드는 트랜잭션을 열지 않는다.
      *
-     * <p>v2 위치의 ACK는 "앱이 큐에서 지워도 된다"는 뜻이다(LLD-0123). 원본을 저장했거나 이미 있으면 그 결과를,
-     * 요청 자체가 잘못됐으면 {@code REJECTED}를 돌려준다. 원본 저장이 실패하면 예외를 그대로 던져 ACK를 보내지 않는다.
-     * 앱은 ACK가 오지 않으면 같은 위치를 다시 보내고, 실시간 경로는 같은 측정 시각을 걸러 원본만 다시 저장한다.
+     * <p>v2 위치의 ACK는 "앱이 큐에서 지워도 된다"는 뜻이다(LLD-0123, LLD-0139). 원본이 저장됐고(또는 이미 있었고)
+     * 실시간 처리가 끝났거나 필요 없을 때만 {@code STORED}, {@code DUPLICATE}를, 요청 자체가 잘못됐으면 {@code REJECTED}를
+     * 돌려준다. 원본 저장이 실패하면 예외를 그대로 던져 ACK를 보내지 않는다.
+     *
+     * <p>실시간 처리가 기술 오류(Redis, DB 장애)로 실패해도 원본 저장은 시도한다(LLD-0139). 저장한 뒤 실시간 오류를
+     * 던져 ACK를 보내지 않으므로 앱이 같은 위치를 다시 보내고, 그때 원본은 {@code DUPLICATE}이며 실시간 처리는
+     * 최신 시각 비교로 다시 평가된다. 같은 회원 위치가 너무 몰려 실시간 차례를 얻지 못하면 경고만 남기고 ACK 없이
+     * {@code null}을 돌려준다(컨트롤러가 아무것도 보내지 않는다).
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LocationAckResponse updateAndBroadcast(byte[] payload, Long authenticatedMemberId) {
@@ -118,38 +125,98 @@ public class RealtimeLocationService {
             return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId));
         }
 
-        LocationUpdateResponse response;
-        boolean stored;
+        long acceptedAtMs;
         try {
+            // 잘못된 요청, 남의 위치, 남의 회차는 실시간 부수효과(방송, 안전구역 판정)가 생기기 전에 거절한다.
             validate(request);
-            long acceptedAtMs = System.currentTimeMillis();
+            acceptedAtMs = System.currentTimeMillis();
             locationFixService.validate(request);
-            response = applyRealtime(request, authenticatedMemberId);
-            stored = locationFixService.store(
-                    authenticatedMemberId, request, payload, serverReceivedAtMs, acceptedAtMs);
+            verifySelf(request.memberId(), authenticatedMemberId);
+            locationFixService.verifyAttribution(authenticatedMemberId, request);
         } catch (BusinessException e) {
-            // 이 경로의 업무 예외는 요청 자체의 문제(좌표·필드 검증, 본인 아님, 시니어 아님, 남의 회차)라 다시 보내도 같다.
-            // DB·Redis 장애는 업무 예외가 아니라 여기서 잡히지 않고 ACK 없이 오류로 간다.
-            log.warn("위치 거절: memberId={}, seq={}, code={}",
-                    authenticatedMemberId, request.seq(), e.getErrorCode().getCode());
-            return LocationAckResponse.rejected(request);
+            return rejected(request, authenticatedMemberId, e);
         }
 
+        LocationUpdateResponse response = null;
+        RuntimeException realtimeFailure = null;
+        try {
+            response = applyRealtime(request, authenticatedMemberId);
+        } catch (BusinessException e) {
+            // 실시간 경로의 업무 예외(시니어 아님)는 부수효과 전에 난다. 다시 보내도 같으므로 원본도 남기지 않는다.
+            return rejected(request, authenticatedMemberId, e);
+        } catch (RuntimeException e) {
+            realtimeFailure = e;
+        }
+
+        boolean stored;
+        try {
+            stored = storeRaw(authenticatedMemberId, request, payload, serverReceivedAtMs, acceptedAtMs);
+        } catch (BusinessException e) {
+            return rejected(request, authenticatedMemberId, e);
+        }
+
+        if (realtimeFailure instanceof LocationSequenceBusyException) {
+            log.warn("위치 원본 저장, 실시간 처리 대기 초과로 ACK 보류: memberId={}, seq={}",
+                    authenticatedMemberId, request.seq());
+            return null;
+        }
+        if (realtimeFailure != null) {
+            log.warn("위치 원본 저장, 실시간 처리 실패로 ACK 보류: memberId={}, seq={}, cause={}",
+                    authenticatedMemberId, request.seq(), realtimeFailure.getClass().getSimpleName());
+            throw realtimeFailure;
+        }
         if (stored) {
             return LocationAckResponse.of(response, request, LocationAckResult.STORED);
         }
         return LocationAckResponse.of(response, request, LocationAckResult.DUPLICATE);
     }
 
-    /** 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. */
+    /** 이 경로의 업무 예외는 요청 자체의 문제(좌표, 필드 검증, 본인 아님, 시니어 아님, 남의 회차)라 다시 보내도 같다. */
+    private LocationAckResponse rejected(LocationUpdateRequest request, Long authenticatedMemberId, BusinessException e) {
+        log.warn("위치 거절: memberId={}, seq={}, code={}",
+                authenticatedMemberId, request.seq(), e.getErrorCode().getCode());
+        return LocationAckResponse.rejected(request);
+    }
+
+    /**
+     * 같은 원본이 거의 동시에 두 번 오면 둘 다 존재 확인을 통과하고 한쪽이 유일 키에서 실패한다. 그 행이 이제 있으면
+     * 이미 저장된 위치이므로 {@code DUPLICATE}로 본다. 없으면 다른 무결성 오류라 그대로 던진다.
+     */
+    private boolean storeRaw(Long memberId, LocationUpdateRequest request, byte[] payload,
+                             long serverReceivedAtMs, long acceptedAtMs) {
+        try {
+            return locationFixService.store(memberId, request, payload, serverReceivedAtMs, acceptedAtMs);
+        } catch (DataIntegrityViolationException e) {
+            if (locationFixService.exists(request)) {
+                log.info("위치 원본 동시 중복 수신: memberId={}, seq={}", memberId, request.seq());
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. 최신 판단부터 방송 요청까지 같은 회원 안에서
+     * 한 번에 하나씩 실행한다(LLD-0139). 15분 넘게 지난 위치는 최신 위치를 읽지 않고 바로 거르므로 차례를 기다리지 않는다.
+     */
     private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId) {
         verifySelf(request.memberId(), authenticatedMemberId);
-        if (!isRealtimeCandidate(request)) {
-            log.info("위치 실시간 반영 생략: memberId={}, seq={}", request.memberId(), request.seq());
-            return LocationUpdateResponse.received(
-                    request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
+        if (isTooOld(request)) {
+            return skipped(request);
         }
-        return updateAndBroadcast(request, authenticatedMemberId);
+        return sequencer.run(request.memberId(), () -> {
+            // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
+            if (isTooOld(request) || !isNewerThanLatest(request)) {
+                return skipped(request);
+            }
+            return updateAndBroadcast(request, authenticatedMemberId);
+        });
+    }
+
+    private LocationUpdateResponse skipped(LocationUpdateRequest request) {
+        log.info("위치 실시간 반영 생략: memberId={}, seq={}", request.memberId(), request.seq());
+        return LocationUpdateResponse.received(
+                request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
     }
 
     /**
@@ -157,13 +224,15 @@ public class RealtimeLocationService {
      * 옛 위치가 현재 위치처럼 방송되거나 안전구역 판정을 다시 돌리지 않게 한다. 잰 시각(ts_ms)이 없는
      * 옛 형식은 비교할 수 없어 그대로 반영한다(LLD-0114).
      */
-    private boolean isRealtimeCandidate(LocationUpdateRequest request) {
+    private boolean isTooOld(LocationUpdateRequest request) {
+        Long measuredAtMs = request.tsMs();
+        return measuredAtMs != null && System.currentTimeMillis() - measuredAtMs > REALTIME_MAX_AGE_MS;
+    }
+
+    private boolean isNewerThanLatest(LocationUpdateRequest request) {
         Long measuredAtMs = request.tsMs();
         if (measuredAtMs == null) {
             return true;
-        }
-        if (System.currentTimeMillis() - measuredAtMs > REALTIME_MAX_AGE_MS) {
-            return false;
         }
         Long latestMeasuredAtMs = seniorLocationRepository.findById(request.memberId())
                 .map(SeniorLocation::getMeasuredAtMs)
