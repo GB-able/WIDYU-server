@@ -276,22 +276,28 @@ class RealtimeLocationRawIsolationTest {
     }
 
     @Test
-    @DisplayName("기기 시계가 앞서 미래로 잰 위치는 순서 잠금에 지금 시각으로 잘라 넘겨 뒤에 온 정상 위치를 밀어내지 않는다")
-    void 미래로_잰_위치는_지금_시각으로_잘라_순서_잠금에_넘긴다() {
+    @DisplayName("미래로 잰 위치는 서버 수신 시각으로 한 번 자른 같은 값으로 순서를 판정하고 최신 위치에 저장한다")
+    void 미래로_잰_위치는_한_번_자른_같은_시각으로_순서_판정과_저장을_한다() {
         // given
         long oneDayLater = System.currentTimeMillis() + 86_400_000L;
         byte[] payload = payload(1L, oneDayLater);
-        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(3)).get())
+        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get())
                 .given(sequencer).run(eq(1L), any(), any(), any());
+        given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
+        stubSenior(1L);
+        given(valueOperations.get("location:stay:1")).willReturn(null);
         given(storeCall(payload)).willReturn(true);
 
         // when
         realtimeLocationService.updateAndBroadcast(payload, 1L);
 
         // then
-        org.mockito.ArgumentCaptor<Long> measuredAt = org.mockito.ArgumentCaptor.forClass(Long.class);
-        then(sequencer).should().run(eq(1L), measuredAt.capture(), any(), any());
-        assertThat(measuredAt.getValue()).isLessThanOrEqualTo(System.currentTimeMillis());
+        org.mockito.ArgumentCaptor<Long> orderAt = org.mockito.ArgumentCaptor.forClass(Long.class);
+        then(sequencer).should().run(eq(1L), orderAt.capture(), any(), any());
+        org.mockito.ArgumentCaptor<SeniorLocation> saved = org.mockito.ArgumentCaptor.forClass(SeniorLocation.class);
+        then(seniorLocationRepository).should().save(saved.capture());
+        assertThat(orderAt.getValue()).isLessThanOrEqualTo(System.currentTimeMillis());
+        assertThat(saved.getValue().getMeasuredAtMs()).isEqualTo(orderAt.getValue());
     }
 
     private boolean storeCall(byte[] payload) {

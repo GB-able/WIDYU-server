@@ -124,7 +124,7 @@ public class RealtimeLocationService {
 
         if (!request.isRawFix()) {
             validate(request);
-            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId));
+            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, serverReceivedAtMs));
         }
 
         long acceptedAtMs;
@@ -142,7 +142,7 @@ public class RealtimeLocationService {
         LocationUpdateResponse response = null;
         RuntimeException realtimeFailure = null;
         try {
-            response = applyRealtime(request, authenticatedMemberId);
+            response = applyRealtime(request, authenticatedMemberId, serverReceivedAtMs);
         } catch (BusinessException e) {
             // 실시간 경로의 업무 예외(시니어 아님)는 부수효과 전에 난다. 다시 보내도 같으므로 원본도 남기지 않는다.
             return rejected(request, authenticatedMemberId, e);
@@ -201,19 +201,21 @@ public class RealtimeLocationService {
      * 실시간 반영 대상이면 반영하고, 아니면 받은 좌표만 ACK로 돌려준다. 최신 판단부터 방송 요청까지 같은 회원 안에서
      * 한 번에 하나씩 실행한다(LLD-0139). 15분 넘게 지난 위치는 최신 위치를 읽지 않고 바로 거르므로 차례를 기다리지 않는다.
      */
-    private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId) {
+    private LocationUpdateResponse applyRealtime(LocationUpdateRequest request, Long authenticatedMemberId,
+                                                 long serverReceivedAtMs) {
         verifySelf(request.memberId(), authenticatedMemberId);
         if (isTooOld(request)) {
             return skipped(request);
         }
-        // 밀어내기와 반영 완료 판정은 Redis 최신값과 같은 기준(미래 시각은 지금으로 자른 값)을 쓴다. 원래 시각을 쓰면 시계가
-        // 앞선 위치가 처리 중일 때 뒤에 온 정상 위치를 밀린 것으로 보고 반영 없이 ACK한다.
-        return sequencer.run(request.memberId(), notAfterNow(request.tsMs()), () -> {
+        // 순서 판정, 최신값 비교, Redis 저장이 모두 이 한 값을 쓴다(LLD-0140). 시점마다 따로 "지금"으로 자르면 미래로 잰
+        // 위치가 처리 중일 때 뒤에 온 정상 위치를 밀린 것으로 보거나 최신보다 먼저 잰 것으로 보고 반영 없이 ACK한다.
+        Long orderAtMs = orderAt(request.tsMs(), serverReceivedAtMs);
+        return sequencer.run(request.memberId(), orderAtMs, () -> {
             // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
-            if (isTooOld(request) || !isNewerThanLatest(request)) {
+            if (isTooOld(request) || !isNewerThanLatest(request.memberId(), orderAtMs)) {
                 return skipped(request);
             }
-            return updateAndBroadcast(request, authenticatedMemberId);
+            return updateAndBroadcast(request, authenticatedMemberId, orderAtMs);
         }, () -> superseded(request));
     }
 
@@ -243,12 +245,11 @@ public class RealtimeLocationService {
         return measuredAtMs != null && System.currentTimeMillis() - measuredAtMs > REALTIME_MAX_AGE_MS;
     }
 
-    private boolean isNewerThanLatest(LocationUpdateRequest request) {
-        Long measuredAtMs = request.tsMs();
+    private boolean isNewerThanLatest(Long memberId, Long measuredAtMs) {
         if (measuredAtMs == null) {
             return true;
         }
-        Long latestMeasuredAtMs = seniorLocationRepository.findById(request.memberId())
+        Long latestMeasuredAtMs = seniorLocationRepository.findById(memberId)
                 .map(SeniorLocation::getMeasuredAtMs)
                 .orElse(null);
         if (latestMeasuredAtMs == null) {
@@ -258,14 +259,15 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 최신 위치의 비교 기준에는 미래 시각을 남기지 않는다. 기기 시계가 앞서 미래로 잰 위치가 기준이 되면
-     * 그 뒤 정상 시각의 위치가 모두 "최신보다 먼저 잰 위치"로 빠지고, TTL 갱신이 그 값을 계속 살려 둔다.
+     * 최신 위치의 비교 기준(순서 시각). 미래 시각은 서버가 받은 시각으로 자른다. 기기 시계가 앞서 미래로 잰 위치가 기준이
+     * 되면 그 뒤 정상 시각의 위치가 모두 "최신보다 먼저 잰 위치"로 빠지고, TTL 갱신이 그 값을 계속 살려 둔다.
+     * 요청마다 한 번만 계산해 같은 값을 쓴다.
      */
-    private static Long notAfterNow(Long measuredAtMs) {
+    private static Long orderAt(Long measuredAtMs, long serverReceivedAtMs) {
         if (measuredAtMs == null) {
             return null;
         }
-        return Math.min(measuredAtMs, System.currentTimeMillis());
+        return Math.min(measuredAtMs, serverReceivedAtMs);
     }
 
     private void verifySelf(Long memberId, Long authenticatedMemberId) {
@@ -304,9 +306,14 @@ public class RealtimeLocationService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request,
                                                       Long authenticatedMemberId) {
+        return updateAndBroadcast(request, authenticatedMemberId, orderAt(request.tsMs(), System.currentTimeMillis()));
+    }
+
+    private LocationUpdateResponse updateAndBroadcast(LocationUpdateRequest request, Long authenticatedMemberId,
+                                                      Long orderAtMs) {
         LocationUpdateResponse response = new TransactionTemplate(transactionManager)
                 .execute(status -> decideInTransaction(request, authenticatedMemberId));
-        publishAfterTransaction(request, response);
+        publishAfterTransaction(request, response, orderAtMs);
         return response;
     }
 
@@ -340,11 +347,12 @@ public class RealtimeLocationService {
      * 실시간 후보로 다시 평가돼 복구된다. 그 뒤 단계는 최신 위치가 이미 저장돼 같은 시각의 재전송이 걸러지므로,
      * 오류를 돌려줘도 복구되지 않는다. 그래서 실패를 남기고 나머지를 계속한다.
      */
-    private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response) {
+    private void publishAfterTransaction(LocationUpdateRequest request, LocationUpdateResponse response,
+                                         Long orderAtMs) {
         Long memberId = request.memberId();
         Double latitude = request.resolvedLatitude();
         Double longitude = request.resolvedLongitude();
-        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, notAfterNow(request.tsMs())));
+        seniorLocationRepository.save(SeniorLocation.of(memberId, latitude, longitude, orderAtMs));
         appendTrailQuietly(memberId, latitude, longitude);
         broadcastQuietly(memberId, response);
         publishLocationUpdatedQuietly(memberId, latitude, longitude);
