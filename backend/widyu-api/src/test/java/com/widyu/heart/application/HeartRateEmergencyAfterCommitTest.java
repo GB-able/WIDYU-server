@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -44,7 +43,6 @@ class HeartRateEmergencyAfterCommitTest {
     @MockBean private IncidentEscalation escalation;
     @MockBean private FcmService fcmService;
     @MockBean private SensorProperties sensorProperties;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

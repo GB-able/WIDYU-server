@@ -3,7 +3,6 @@ package com.widyu.album.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.album.Album;
 import com.widyu.album.dto.request.AlbumFeedRequest;
 import com.widyu.album.dto.response.AlbumFeedResponse;
@@ -36,7 +35,6 @@ class AlbumFeedPagingIntegrationTest {
 
     @Autowired private TestEntityManager entityManager;
     @Autowired private AlbumFeedService albumFeedService;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
     @MockBean private MemberUtil memberUtil;
     @MockBean private FamilyAccessService familyAccessService;
 

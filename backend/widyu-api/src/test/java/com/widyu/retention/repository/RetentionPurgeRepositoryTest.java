@@ -11,7 +11,6 @@ import static com.widyu.retention.repository.RetentionFixture.outbox;
 import static com.widyu.retention.repository.RetentionFixture.senior;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.global.config.JpaAuditingConfig;
@@ -23,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -39,7 +37,6 @@ class RetentionPurgeRepositoryTest {
     @Autowired private RetentionPurgeRepository retentionPurgeRepository;
     @Autowired private TestEntityManager entityManager;
     @Autowired private JdbcTemplate jdbcTemplate;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("모든 대상 테이블의 조회 문장이 빈 테이블에서 0건을 반환한다")

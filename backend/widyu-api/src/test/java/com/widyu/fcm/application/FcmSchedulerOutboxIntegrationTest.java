@@ -1,6 +1,5 @@
 package com.widyu.fcm.application;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.application.degraded.DegradedAlertMarker;
@@ -68,7 +67,6 @@ class FcmSchedulerOutboxIntegrationTest {
     @MockBean DegradedAlertMarker degradedAlertMarker;
     @MockBean FcmOutboxDispatcher immediate;
     @MockBean FcmTransport transport;
-    @MockBean JPAQueryFactory queryFactory;
     @MockBean MemberUtil memberUtil;
     @MockBean SecurityUtil securityUtil;
     @MockBean FamilyAccessService familyAccessService;

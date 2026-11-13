@@ -3,7 +3,6 @@ package com.widyu.goal.medicineschedule.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
@@ -18,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -32,7 +30,6 @@ class MedicationProofRepositoryTest {
 
     @Autowired private MedicationProofRepository medicationProofRepository;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     private Member persistSenior(String phoneNumber) {
         Member member = Member.createMember(MemberType.SENIOR, "부모님", phoneNumber);

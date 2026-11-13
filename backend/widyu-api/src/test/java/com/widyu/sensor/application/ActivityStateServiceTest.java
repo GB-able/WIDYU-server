@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.location.raw.LocationFix;
@@ -29,7 +28,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -57,7 +55,6 @@ class ActivityStateServiceTest {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private TestEntityManager entityManager;
     // 다른 리포지토리 테스트와 같은 컨텍스트를 쓰도록 서비스는 빈으로 등록하지 않고 직접 만든다(CI 테스트 힙 1g)
-    @MockBean private JPAQueryFactory jpaQueryFactory;
     private final SensorProperties sensorProperties = mock(SensorProperties.class);
     private ActivityStateService service;
 

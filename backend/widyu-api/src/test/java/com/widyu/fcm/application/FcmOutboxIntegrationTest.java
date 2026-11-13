@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.*;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.*;
 import com.widyu.fcm.application.degraded.DegradedAlertMarker;
 import com.widyu.fcm.dto.FcmSendDto;
@@ -74,7 +73,6 @@ class FcmOutboxIntegrationTest {
     @Autowired PlatformTransactionManager transactionManager;
     @MockBean DegradedAlertMarker degradedAlertMarker;
     @MockBean FcmOutboxDispatcher immediate;
-    @MockBean JPAQueryFactory queryFactory;
     @MockBean MemberUtil memberUtil;
 
     @AfterEach

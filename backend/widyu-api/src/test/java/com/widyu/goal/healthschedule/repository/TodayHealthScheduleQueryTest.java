@@ -3,7 +3,6 @@ package com.widyu.goal.healthschedule.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.healthschedule.HealthSchedule;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -32,7 +30,6 @@ class TodayHealthScheduleQueryTest {
 
     @Autowired private HealthScheduleRepository healthScheduleRepository;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("보호자 홈 조회 범위로 조회하면 오늘 00:00 일정은 포함하고 내일 00:00 일정과 삭제된 일정은 뺀다")
