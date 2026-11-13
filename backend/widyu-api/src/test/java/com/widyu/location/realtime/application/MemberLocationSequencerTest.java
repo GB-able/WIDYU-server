@@ -79,13 +79,13 @@ class MemberLocationSequencerTest {
     }
 
     @Test
-    @DisplayName("더 늦게 잰 위치가 처리 중이면 먼저 잰 위치는 기다리지 않고 밀린 것으로 끝난다")
-    void 더_최근_위치가_처리_중이면_먼저_잰_위치는_바로_밀린다() throws Exception {
+    @DisplayName("더 늦게 잰 위치가 처리 중이면 먼저 잰 위치는 자기 처리 없이 그 위치가 끝나기를 기다려 밀린 것으로 끝난다")
+    void 더_최근_위치가_끝나면_먼저_잰_위치는_밀린_것으로_끝난다() throws Exception {
         // given
         MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 5_000);
         CountDownLatch holding = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        ExecutorService pool = Executors.newSingleThreadExecutor();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<String> holder = pool.submit(() -> sequencer.run(1L, 500L, () -> {
                 holding.countDown();
@@ -93,15 +93,20 @@ class MemberLocationSequencerTest {
                 return "applied";
             }, SUPERSEDED));
             assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
+            boolean[] olderRan = {false};
 
             // when
-            long startedAt = System.nanoTime();
-            String older = sequencer.run(1L, 400L, () -> "ran", SUPERSEDED);
+            Future<String> older = pool.submit(() -> sequencer.run(1L, 400L, () -> {
+                olderRan[0] = true;
+                return "ran";
+            }, SUPERSEDED));
+            Thread.sleep(100);
+            assertThat(older.isDone()).isFalse();
+            release.countDown();
 
             // then
-            assertThat(older).isEqualTo("superseded");
-            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)).isLessThan(500);
-            release.countDown();
+            assertThat(older.get(2, TimeUnit.SECONDS)).isEqualTo("superseded");
+            assertThat(olderRan[0]).isFalse();
             assertThat(holder.get(2, TimeUnit.SECONDS)).isEqualTo("applied");
         } finally {
             release.countDown();
@@ -110,8 +115,40 @@ class MemberLocationSequencerTest {
     }
 
     @Test
-    @DisplayName("대기가 가득 차도 지금까지보다 늦게 잰 위치는 들어오고, 그보다 먼저 잰 대기자는 밀려 빠진다")
-    void 대기가_가득_차도_가장_최근_위치는_들어오고_먼저_잰_대기자는_빠진다() throws Exception {
+    @DisplayName("더 늦게 잰 위치의 실시간 처리가 실패하면 밀린 위치도 성공으로 끝나지 않고 과부하 예외가 된다")
+    void 더_최근_위치가_실패하면_밀린_위치도_성공하지_않는다() throws Exception {
+        // given
+        MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 300);
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> holder = pool.submit(() -> sequencer.run(1L, 500L, () -> {
+                holding.countDown();
+                await(release);
+                throw new IllegalStateException("Redis 장애");
+            }, SUPERSEDED));
+            assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
+
+            // when
+            Future<String> older = pool.submit(() -> sequencer.run(1L, 400L, () -> "ran", SUPERSEDED));
+            Thread.sleep(50);
+            release.countDown();
+
+            // then
+            assertThatThrownBy(() -> older.get(2, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(LocationSequenceBusyException.class);
+            assertThatThrownBy(() -> holder.get(2, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(IllegalStateException.class);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("대기가 가득 차도 지금까지보다 늦게 잰 위치는 들어오고, 그보다 먼저 잰 대기자는 그 위치가 반영된 뒤 밀린 것으로 끝난다")
+    void 대기가_가득_차도_가장_최근_위치는_들어오고_먼저_잰_대기자는_밀린다() throws Exception {
         // given
         MemberLocationSequencer sequencer = new MemberLocationSequencer(1, 5_000);
         CountDownLatch holding = new CountDownLatch(1);
@@ -129,12 +166,13 @@ class MemberLocationSequencerTest {
 
             // when
             Future<String> newest = pool.submit(() -> sequencer.run(1L, 300L, () -> "newest", SUPERSEDED));
+            Thread.sleep(100);
+            release.countDown();
 
             // then
-            assertThat(olderWaiter.get(2, TimeUnit.SECONDS)).isEqualTo("superseded");
-            release.countDown();
             assertThat(holder.get(2, TimeUnit.SECONDS)).isEqualTo("first");
             assertThat(newest.get(2, TimeUnit.SECONDS)).isEqualTo("newest");
+            assertThat(olderWaiter.get(2, TimeUnit.SECONDS)).isEqualTo("superseded");
             assertThat(sequencer.trackedMembers()).isZero();
         } finally {
             release.countDown();

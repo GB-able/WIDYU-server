@@ -216,12 +216,11 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 같은 회원의 더 늦게 잰 위치가 이미 처리 중이거나 기다리고 있어 이 위치의 실시간 처리를 생략한다(LLD-0140).
-     * 반영해도 곧 더 최근 위치로 바뀌므로 할 일이 없다. 원본 저장 결과로 ACK한다. 더 최근 위치가 실패하면 그 위치는
-     * ACK를 받지 못해 다시 오므로 최신 위치는 그 재전송에서 맞춰진다.
+     * 같은 회원의 더 늦게 잰 위치가 실시간에 반영돼 이 위치의 실시간 처리는 할 필요가 없다(LLD-0140). 원본 저장 결과로
+     * ACK한다. 더 최근 위치가 실패하면 순서 잠금이 과부하 예외를 던져 이 위치도 ACK를 받지 못한다.
      */
     private LocationUpdateResponse superseded(LocationUpdateRequest request) {
-        log.info("위치 실시간 반영 생략(더 최근 위치 처리 중): memberId={}, seq={}", request.memberId(), request.seq());
+        log.info("위치 실시간 반영 생략(더 최근 위치 반영됨): memberId={}, seq={}", request.memberId(), request.seq());
         return LocationUpdateResponse.received(
                 request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
     }
