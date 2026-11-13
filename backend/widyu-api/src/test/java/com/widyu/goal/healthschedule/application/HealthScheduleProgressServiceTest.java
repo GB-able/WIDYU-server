@@ -147,7 +147,8 @@ class HealthScheduleProgressServiceTest {
         Long scheduleId = 1L;
         Member senior = seniorMember();
         HealthSchedule schedule = upcomingScheduleFor(senior, LocalDateTime.now().minusMinutes(5));
-        long yesterday = System.currentTimeMillis() - 86_400_000L;
+        // 일정이 5분 전이라 자정 직후면 일정 날짜가 어제다. 어제 잰 위치는 그날 0시 이후일 수 있어 3일 전으로 둔다.
+        long yesterday = System.currentTimeMillis() - 3 * 86_400_000L;
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(healthScheduleRepository.findByIdForUpdate(scheduleId)).willReturn(Optional.of(schedule));
         given(seniorLocationRepository.findBySeniorId(senior.getId()))
