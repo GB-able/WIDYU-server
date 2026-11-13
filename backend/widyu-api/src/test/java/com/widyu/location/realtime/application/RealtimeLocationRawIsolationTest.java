@@ -275,6 +275,25 @@ class RealtimeLocationRawIsolationTest {
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
     }
 
+    @Test
+    @DisplayName("기기 시계가 앞서 미래로 잰 위치는 순서 잠금에 지금 시각으로 잘라 넘겨 뒤에 온 정상 위치를 밀어내지 않는다")
+    void 미래로_잰_위치는_지금_시각으로_잘라_순서_잠금에_넘긴다() {
+        // given
+        long oneDayLater = System.currentTimeMillis() + 86_400_000L;
+        byte[] payload = payload(1L, oneDayLater);
+        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(3)).get())
+                .given(sequencer).run(eq(1L), any(), any(), any());
+        given(storeCall(payload)).willReturn(true);
+
+        // when
+        realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        org.mockito.ArgumentCaptor<Long> measuredAt = org.mockito.ArgumentCaptor.forClass(Long.class);
+        then(sequencer).should().run(eq(1L), measuredAt.capture(), any(), any());
+        assertThat(measuredAt.getValue()).isLessThanOrEqualTo(System.currentTimeMillis());
+    }
+
     private boolean storeCall(byte[] payload) {
         return locationFixService.store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
     }

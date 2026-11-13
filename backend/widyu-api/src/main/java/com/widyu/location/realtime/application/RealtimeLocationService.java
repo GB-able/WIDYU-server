@@ -206,7 +206,9 @@ public class RealtimeLocationService {
         if (isTooOld(request)) {
             return skipped(request);
         }
-        return sequencer.run(request.memberId(), request.tsMs(), () -> {
+        // 밀어내기와 반영 완료 판정은 Redis 최신값과 같은 기준(미래 시각은 지금으로 자른 값)을 쓴다. 원래 시각을 쓰면 시계가
+        // 앞선 위치가 처리 중일 때 뒤에 온 정상 위치를 밀린 것으로 보고 반영 없이 ACK한다.
+        return sequencer.run(request.memberId(), notAfterNow(request.tsMs()), () -> {
             // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
             if (isTooOld(request) || !isNewerThanLatest(request)) {
                 return skipped(request);
