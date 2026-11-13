@@ -78,7 +78,7 @@ ADR-0044 맥락 그대로다. (1) 보호자에게 보이는 좌표가 언제 잰
 
 1. 시니어 프로필 조회
 2. `stayStateService.find(memberId)`로 잠그지 않고 읽는다. 체류 지점 30m 안이면 그 상태로 응답하고 끝(쓰기, 잠금 없음)
-3. 아니면 `lockForChange`: 영속성 컨텍스트에 있으면 `refresh(PESSIMISTIC_WRITE)`, 없으면 `find(..., PESSIMISTIC_WRITE)`(MySQL `SELECT ... FOR UPDATE`, 행이 없으면 PK 범위 잠금). 다시 30m 안이면 끝
+3. 아니면 `lockForChange`: 행이 있으면 `refresh(PESSIMISTIC_WRITE)`(MySQL `SELECT ... FOR UPDATE`, 있는 PK라 그 행만 잠근다)로 다시 읽고 30m 안이면 끝. 행이 없으면 잠그지 않는다(5.3)
 4. 안전구역 매칭(75m) → 행이 없으면 INSERT, 있으면 새 체류로 옮김
 5. `SafeZoneAlertService`가 `state.applySafeZoneTransition`으로 알림을 정하고 이벤트를 발행 → `SafeZoneNotificationListener`가 같은 트랜잭션에서 알림 센터 행과 Outbox를 넣는다
 6. 커밋. 실패하면 상태, 알림 모두 롤백
@@ -98,7 +98,8 @@ ADR-0044 맥락 그대로다. (1) 보호자에게 보이는 좌표가 언제 잰
 ### 5.3 동시성
 
 - 같은 회원: JVM 순서 잠금(LLD-0139)이 한 번에 하나씩 보낸다. DB 행 잠금은 다른 인스턴스나 순서 잠금 밖 경로에 대한 방어다.
-- 첫 상태 동시 생성: PK가 한 행만 허용한다. 진 쪽은 트랜잭션 전체(상태, 알림)가 롤백되고 실시간 기술 오류로 ACK가 없어 재전송된다.
+- 첫 상태 생성: 행이 없을 때 잠금 조회를 하지 않고 바로 INSERT(`persist`)한다. REPEATABLE READ에서 없는 PK를 `FOR UPDATE`로 읽으면 틈(gap) 잠금이 걸려, 첫 행을 함께 만드는 다른 회원들의 INSERT가 서로 막혀 교착(1213)한다. 첫 구현(650ef315)이 그렇게 해 실제 MySQL에서 회원 20명 첫 위치 동시 수신 때 46건이 교착했고(k6 smoke, `LocationBurstConnectionPoolMySqlTest`), 고친 뒤 0건이다. H2는 틈 잠금이 없어 단위, 통합 테스트로는 드러나지 않았다.
+- 같은 회원 첫 상태 동시 생성: PK가 한 행만 허용한다. 진 쪽은 트랜잭션 전체(상태, 알림)가 롤백되고 실시간 기술 오류로 ACK가 없어 재전송된다.
 - 잠금 대기: 단일 인스턴스에서는 순서 잠금이 겹침을 막아 행 잠금 대기가 생기지 않는다. MySQL 행 잠금 대기 한도는 `innodb_lock_wait_timeout` 기본값을 따른다(Hibernate MySQL 방언은 잠금 시간 제한 힌트를 지원하지 않는다).
 - 커넥션: 판정 트랜잭션 안에 Redis 명령이 없다. 요청 하나가 동시에 쥐는 커넥션은 1개다(LLD-0114).
 
@@ -132,7 +133,7 @@ ADR-0044 맥락 그대로다. (1) 보호자에게 보이는 좌표가 언제 잰
 - [x] 이동 경로는 측정 시각 기준 15분 점만 돌려주고 예전 점은 저장 시각으로 거른다
 - [x] 30분 묶음 규칙(첫 이탈 Z01, 묶음 안 재이탈 없음, 첫 복귀 Z02, 묶음 없으면 복귀 없음, 묶음 끝난 뒤 재이탈 Z01, 같은 쪽 변화 없음)이 그대로다(`SafeZoneAlertServiceTest`)
 - [x] 같은 자리 위치는 상태를 잠그지도 쓰지도 않는다(`RealtimeLocationServiceTest`)
-- [x] 실제 Spring 트랜잭션에서 나갔다 돌아오면 알림 센터 Z01, Z02가 한 번씩, 상태는 `RETURNED`다. 알림 저장 실패로 롤백되면 상태도 남지 않고 재전송으로 함께 한 번 저장된다. 커밋 뒤 최신 위치 저장 실패 후 재전송해도 알림이 중복되지 않는다. 같은 회원 첫 상태 동시 생성에도 행은 하나다(`StayStateOutboxAtomicityTest`, H2)
+- [x] 실제 Spring 트랜잭션에서 나갔다 돌아오면 알림 센터 Z01, Z02가 한 번씩, 상태는 `RETURNED`다. 알림 저장 실패로 롤백되면 상태도 남지 않고 재전송으로 함께 한 번 저장된다. 커밋 뒤 최신 위치 저장 실패 후 재전송해도 알림이 중복되지 않는다. 같은 회원 첫 상태 동시 생성에도 행은 하나다. 상태 행이 없는 회원 20명이 첫 위치를 동시에 보내도 실제 MySQL에서 교착 없이 20행이 생긴다(`LocationBurstConnectionPoolMySqlTest`)(`StayStateOutboxAtomicityTest`, H2)
 - [x] 예전 Redis 체류와 진행 중 묶음을 옮기고(남은 TTL로 묶음 끝), 이미 있는 행은 덮지 않고 깨진 값은 건너뛴다(`LegacyStayStateImporterTest`)
 - [x] Redis 삭제가 실패해도 상태 행은 지우고, 최신 위치가 만료된 비활성 회원의 상태 행도 TTL 갱신 때 지운다(`RealtimeLocationServiceTest`, `StayStateOutboxAtomicityTest`)
 - [x] 인증 가능 시간 전에 잰 위치로는 방문 인증하지 않는다(`HealthScheduleProgressServiceTest`)

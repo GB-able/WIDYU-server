@@ -131,6 +131,18 @@ class LocationBurstConnectionPoolMySqlTest {
     }
 
     @Test
+    @DisplayName("체류 상태 행이 없는 회원 20명이 첫 위치를 동시에 보내도 틈 잠금 교착 없이 모두 ACK를 받고 상태 행이 20개 생긴다")
+    void 상태_행이_없는_회원들이_첫_위치를_동시에_보내도_교착하지_않는다() throws Exception {
+        Integer before = jdbc.queryForObject("SELECT COUNT(*) FROM senior_stay_state", Integer.class);
+
+        Result result = burst("first-20x1", 20, 1, 0L);
+
+        Integer after = jdbc.queryForObject("SELECT COUNT(*) FROM senior_stay_state", Integer.class);
+        assertThat(result.failed()).isZero();
+        assertThat(after - before).isEqualTo(20);
+    }
+
+    @Test
     @DisplayName("회원 20명이 1시간 넘게 밀린 위치 40건씩 몰아 보내도 커넥션 대기로 실패하지 않고 원본이 모두 남는다")
     void 오래_밀린_위치가_여러_회원에게서_몰려도_실패하지_않는다() throws Exception {
         Result result = burst("multi-20x40-stale", 20, 40, 90_000L);
