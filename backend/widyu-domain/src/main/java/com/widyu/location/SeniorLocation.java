@@ -11,8 +11,14 @@ import org.springframework.data.redis.core.RedisHash;
 @Getter
 @Builder
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@RedisHash(value = "senior_location", timeToLive = 300) // 5분 TTL
+@RedisHash(value = SeniorLocation.KEYSPACE, timeToLive = SeniorLocation.TTL_SECONDS)
 public class SeniorLocation {
+
+    /** Redis 키 앞부분. 값은 {@code senior_location:{seniorId}} 해시에 들어간다. */
+    public static final String KEYSPACE = "senior_location";
+
+    /** 최신 위치를 남겨 두는 시간(5분). */
+    public static final long TTL_SECONDS = 300;
 
     @Id
     private Long seniorId;

@@ -87,6 +87,8 @@ public class RealtimeLocationService {
     private final ObjectMapper redisValueMapper = RedisConfig.redisObjectMapper();
 
     private static final String LOCATION_TRAIL_KEY_PREFIX = "location:trail:";
+    // @RedisHash 저장소가 쓰는 키 모양(keyspace:id)과 같아야 만료 연장이 그 위치에 걸린다.
+    private static final String SENIOR_LOCATION_KEY_PREFIX = SeniorLocation.KEYSPACE + ":";
     private static final String LOCATION_STAY_KEY_PREFIX = "location:stay:";
     private static final long TRAIL_TTL_SECONDS = 900; // 15분
     // 이동 경로 점 상한. 초당 1건으로 보내도 15분을 담는다. 위치마다 TTL을 다시 걸어 키가 만료되지 않으므로
@@ -204,13 +206,24 @@ public class RealtimeLocationService {
         if (isTooOld(request)) {
             return skipped(request);
         }
-        return sequencer.run(request.memberId(), () -> {
+        return sequencer.run(request.memberId(), request.tsMs(), () -> {
             // 차례를 기다리는 동안 15분을 넘길 수 있어 잠금 안에서 다시 본다.
             if (isTooOld(request) || !isNewerThanLatest(request)) {
                 return skipped(request);
             }
             return updateAndBroadcast(request, authenticatedMemberId);
-        });
+        }, () -> superseded(request));
+    }
+
+    /**
+     * 같은 회원의 더 늦게 잰 위치가 이미 처리 중이거나 기다리고 있어 이 위치의 실시간 처리를 생략한다(LLD-0140).
+     * 반영해도 곧 더 최근 위치로 바뀌므로 할 일이 없다. 원본 저장 결과로 ACK한다. 더 최근 위치가 실패하면 그 위치는
+     * ACK를 받지 못해 다시 오므로 최신 위치는 그 재전송에서 맞춰진다.
+     */
+    private LocationUpdateResponse superseded(LocationUpdateRequest request) {
+        log.info("위치 실시간 반영 생략(더 최근 위치 처리 중): memberId={}, seq={}", request.memberId(), request.seq());
+        return LocationUpdateResponse.received(
+                request.memberId(), request.resolvedLatitude(), request.resolvedLongitude());
     }
 
     private LocationUpdateResponse skipped(LocationUpdateRequest request) {
@@ -730,9 +743,13 @@ public class RealtimeLocationService {
     }
 
     /**
-     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)를 갱신해
+     * 4분마다 실행 — SeniorLocation(5분 TTL)과 location:stay(24시간 TTL)의 만료 시간을 늘려
      * 시니어가 정지 중이어도 위치 데이터가 만료되지 않도록 유지한다.
-     * 활성 회원이 아니면 갱신하지 않고 지운다. 탈퇴 삭제와 겹쳐 위치가 다시 저장돼도 다음 주기에 사라진다. → LLD-0059
+     * 활성 회원이 아니면 갱신하지 않고 지운다. → LLD-0059
+     *
+     * <p>위치 본문은 다시 저장하지 않고 만료 시간만 늘린다(LLD-0140). 읽어 둔 위치를 다시 저장하면, 읽은 뒤 위치 수신이
+     * 저장한 새 위치를 옛 위치로 덮는다. 이 작업은 회원별 순서 잠금을 거치지 않는다. 키가 이미 없으면(탈퇴 삭제, 만료)
+     * 만료 연장은 아무것도 하지 않으므로 지운 위치를 되살리지도 않는다.
      */
     @Scheduled(fixedRate = 240_000)
     public void refreshLocationTtl() {
@@ -752,7 +769,8 @@ public class RealtimeLocationService {
                 deleteLocation(location.getSeniorId());
                 continue;
             }
-            seniorLocationRepository.save(location);
+            redisTemplate.expire(SENIOR_LOCATION_KEY_PREFIX + location.getSeniorId(),
+                    SeniorLocation.TTL_SECONDS, TimeUnit.SECONDS);
             String stayKey = LOCATION_STAY_KEY_PREFIX + location.getSeniorId();
             redisTemplate.expire(stayKey, STAY_TTL_SECONDS, TimeUnit.SECONDS);
         }

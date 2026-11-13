@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -243,7 +244,7 @@ class RealtimeLocationRawIsolationTest {
     void 실시간_대기_초과면_원본만_저장하고_ACK가_없다() {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
-        willThrow(new LocationSequenceBusyException()).given(sequencer).run(eq(1L), any());
+        willThrow(new LocationSequenceBusyException()).given(sequencer).run(eq(1L), any(), any(), any());
         given(storeCall(payload)).willReturn(true);
 
         // when
@@ -252,6 +253,25 @@ class RealtimeLocationRawIsolationTest {
         // then
         assertThat(response).isNull();
         then(locationFixService).should().store(eq(1L), any(LocationUpdateRequest.class), eq(payload), anyLong(), anyLong());
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("같은 회원의 더 늦게 잰 위치가 처리 중이라 밀린 위치는 실시간 처리 없이 원본 저장 결과로 ACK를 돌려준다")
+    void 더_최근_위치에_밀린_위치는_원본_저장_결과로_ACK한다() {
+        // given
+        byte[] payload = payload(1L, System.currentTimeMillis());
+        willAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(3)).get())
+                .given(sequencer).run(eq(1L), any(), any(), any());
+        given(storeCall(payload)).willReturn(true);
+
+        // when
+        LocationAckResponse response = realtimeLocationService.updateAndBroadcast(payload, 1L);
+
+        // then
+        assertThat(response.result()).isEqualTo(LocationAckResult.STORED);
+        assertThat(response.seq()).isEqualTo(7L);
+        then(seniorLocationRepository).should(never()).findById(any());
         then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
     }
 
