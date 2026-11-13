@@ -97,13 +97,15 @@ WithdrawnMemberLocationListener, @Scheduled ────────── Locat
 
 ## 5. 인수조건
 
-- [ ] 기존 위치, 홈, WebSocket, 건강 일정 회귀가 그대로 통과한다(단위 테스트는 판정 빈을 실제 `TransactionInterceptor`로 감싸 커밋이 최신 위치 저장보다 먼저인지 계속 본다)
-- [ ] 실제 Spring 프록시에서 판정 중에는 트랜잭션이 있고, Redis 최신 위치를 저장할 때는 트랜잭션이 없고 활성 커넥션이 0이며 상태 행이 다른 커넥션에서 보인다(`LocationIngestTransactionBoundaryTest`)
-- [ ] 실제 프록시에서 판정이 DB 기술 오류로 실패해도 원본 행이 남고 상태 행, 최신 위치는 남지 않으며 성공 ACK가 없다
-- [ ] 시니어가 아닌 회원의 위치는 판정 트랜잭션의 업무 거절이 그대로 전달돼 원본 없이 `REJECTED`다
-- [ ] 실제 MySQL 테스트(`LocationBurstConnectionPoolMySqlTest`, `LocationRedisWriteStallConnectionMySqlTest`)가 그대로 통과한다
-- [ ] k6 핵심 시나리오(같은 조건, 실제 MySQL, Redis, STOMP)에서 원본, ACK, 최신값, 알림 결과가 #1045 기준(deac77f7)과 같다
-- [ ] `bash scripts/harness/verify.sh` 통과
+- [x] 기존 위치, 홈, WebSocket, 건강 일정 회귀가 그대로 통과한다(단위 테스트는 판정 빈을 실제 `TransactionInterceptor`로 감싸 커밋이 최신 위치 저장보다 먼저인지 계속 본다)
+- [x] 실제 Spring 프록시에서 판정 중에는 트랜잭션이 있고, Redis 최신 위치를 저장할 때는 트랜잭션이 없고 활성 커넥션이 0이며 상태 행이 다른 커넥션에서 보인다(`LocationIngestTransactionBoundaryTest`)
+- [x] 실제 프록시에서 판정이 DB 기술 오류로 실패해도 원본 행이 남고 상태 행, 최신 위치는 남지 않으며 성공 ACK가 없다
+- [x] 시니어가 아닌 회원의 위치는 판정 트랜잭션의 업무 거절이 그대로 전달돼 원본 없이 `REJECTED`다
+- [x] 실제 MySQL 테스트(`LocationBurstConnectionPoolMySqlTest`, `LocationRedisWriteStallConnectionMySqlTest`)가 그대로 통과한다
+- [x] k6 핵심 시나리오(같은 조건, 실제 MySQL, Redis, STOMP)에서 원본, ACK, 최신값, 알림 결과가 #1045 기준(deac77f7)과 같다
+- [x] `bash scripts/harness/verify.sh` 통과
+
+검증 결과: verify 2,045건 통과. 실제 MySQL 테스트 8개 클래스 통과, 교착 0. k6는 deac77f7과 9b13c14b를 버전마다 42회 같은 조건으로 재서 원본, ACK, 최신값, 알림(들락날락 이탈 20, 복귀 20), 상태 행, UPDATE 수가 같았다. TTL 갱신은 `locationMaintenanceService` 빈으로 불렸다. 지연 수치는 범위가 겹쳐 차이를 주장하지 않는다.
 
 ## 6. 파일 지도
 
