@@ -20,7 +20,19 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface MemberRepository extends JpaRepository<Member, Long>, MemberRepositoryCustom {
+public interface MemberRepository extends JpaRepository<Member, Long> {
+
+    @Query("SELECT DISTINCT m FROM Member m JOIN FETCH m.socialAccounts sa "
+            + "WHERE sa.provider = :provider AND sa.oauthId = :oauthId")
+    Optional<Member> findByProviderAndOauthId(@Param("provider") String provider, @Param("oauthId") String oauthId);
+
+    @Query("SELECT m.id FROM Member m JOIN m.socialAccounts sa "
+            + "WHERE sa.provider = :provider AND sa.oauthId = :oauthId")
+    Optional<Long> findMemberIdByProviderAndOauthId(@Param("provider") String provider, @Param("oauthId") String oauthId);
+
+    @Query("SELECT DISTINCT m FROM Member m LEFT JOIN FETCH m.socialAccounts WHERE m.id = :id")
+    Optional<Member> findWithAllAccountsById(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Member m WHERE m.id = :memberId")
     Optional<Member> findByIdForUpdate(@Param("memberId") Long memberId);

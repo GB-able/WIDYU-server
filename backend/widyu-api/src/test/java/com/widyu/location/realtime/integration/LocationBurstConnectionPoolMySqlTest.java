@@ -310,50 +310,53 @@ class LocationBurstConnectionPoolMySqlTest {
             work = new ArrayList<>(work.subList(0, work.size() - memberIds.size()));
         }
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
-        CountDownLatch start = new CountDownLatch(1);
-        Map<String, Integer> failures = new TreeMap<>();
-        List<Future<String>> futures = new ArrayList<>();
-        for (Object[] item : work) {
-            futures.add(pool.submit(() -> {
-                start.await();
-                try {
-                    LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
-                    if (ack == null) {
-                        return "ACK:NONE";
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            Map<String, Integer> failures = new TreeMap<>();
+            List<Future<String>> futures = new ArrayList<>();
+            for (Object[] item : work) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
+                        if (ack == null) {
+                            return "ACK:NONE";
+                        }
+                        return "ACK:" + ack.result();
+                    } catch (Exception e) {
+                        return e.getClass().getSimpleName();
                     }
-                    return "ACK:" + ack.result();
-                } catch (Exception e) {
-                    return e.getClass().getSimpleName();
-                }
-            }));
-        }
-        Map<String, Long> statusBefore = statementCounters();
-        long startedAt = System.nanoTime();
-        Map<String, Integer> acks = new TreeMap<>();
-        for (Object[] item : newest) {
-            LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
-            acks.merge("first:" + ack.result(), 1, Integer::sum);
-        }
-        start.countDown();
-        for (Future<String> future : futures) {
-            String outcome = future.get(5, TimeUnit.MINUTES);
-            if (outcome.startsWith("ACK:")) {
-                acks.merge(outcome.substring(4), 1, Integer::sum);
-            } else {
-                failures.merge(outcome, 1, Integer::sum);
+                }));
             }
-        }
-        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
-        Map<String, Long> statements = delta(statusBefore, statementCounters());
-        pool.shutdown();
+            Map<String, Long> statusBefore = statementCounters();
+            long startedAt = System.nanoTime();
+            Map<String, Integer> acks = new TreeMap<>();
+            for (Object[] item : newest) {
+                LocationAckResponse ack = locationIngestService.receive((byte[]) item[1], (Long) item[0]);
+                acks.merge("first:" + ack.result(), 1, Integer::sum);
+            }
+            start.countDown();
+            for (Future<String> future : futures) {
+                String outcome = future.get(5, TimeUnit.MINUTES);
+                if (outcome.startsWith("ACK:")) {
+                    acks.merge(outcome.substring(4), 1, Integer::sum);
+                } else {
+                    failures.merge(outcome, 1, Integer::sum);
+                }
+            }
+            long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+            Map<String, Long> statements = delta(statusBefore, statementCounters());
 
-        int failed = failures.values().stream().mapToInt(Integer::intValue).sum();
-        Result result = new Result(work.size() + newest.size(), failed, fixRowsBefore, fixRows(memberIds), elapsedMs);
-        System.out.printf("[LOCATION-BURST] scenario=%s threads=%d pool=10 sent=%d failed=%d failures=%s "
-                        + "acks=%s fixRows=%d->%d elapsedMs=%d mysql=%s%n",
-                label, THREADS, result.sent(), failed, failures, acks, fixRowsBefore, result.fixRowsAfter(),
-                elapsedMs, statements);
-        return result;
+            int failed = failures.values().stream().mapToInt(Integer::intValue).sum();
+            Result result = new Result(work.size() + newest.size(), failed, fixRowsBefore, fixRows(memberIds), elapsedMs);
+            System.out.printf("[LOCATION-BURST] scenario=%s threads=%d pool=10 sent=%d failed=%d failures=%s "
+                            + "acks=%s fixRows=%d->%d elapsedMs=%d mysql=%s%n",
+                    label, THREADS, result.sent(), failed, failures, acks, fixRowsBefore, result.fixRowsAfter(),
+                    elapsedMs, statements);
+            return result;
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     /**

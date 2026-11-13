@@ -10,7 +10,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.BDDMockito.willThrow;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.properties.MedicineProperties;
 import com.widyu.goal.medicineschedule.client.MedicineApiClient;
@@ -78,7 +77,6 @@ class MedicineSearchFallbackIntegrationTest {
     @SpyBean private MedicineRepository medicineRepository;
     @MockBean private MedicineApiClient medicineApiClient;
     @MockBean private MedicineProperties medicineProperties;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @BeforeEach
     void noDatabaseHit() {

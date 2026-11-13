@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmNotification;
 import com.widyu.fcm.NotificationType;
@@ -40,7 +39,6 @@ class NotificationCenterServiceIntegrationTest {
     @Autowired private FcmNotificationRepository notifications;
     @Autowired private MemberRepository members;
     @MockBean private MemberUtil memberUtil;
-    @MockBean private JPAQueryFactory queryFactory;
 
     @Test
     @DisplayName("시니어가 위치 필터를 요청하면 FCM_4002 예외가 발생한다")

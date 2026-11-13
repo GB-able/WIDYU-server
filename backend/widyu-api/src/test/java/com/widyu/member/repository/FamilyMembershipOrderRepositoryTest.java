@@ -2,7 +2,6 @@ package com.widyu.member.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,7 +30,6 @@ class FamilyMembershipOrderRepositoryTest {
     @Autowired private FamilyRepository familyRepository;
     @Autowired private TestEntityManager entityManager;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("보호자 순서를 조회하면 저장한 위에서 아래 순서로 반환한다")

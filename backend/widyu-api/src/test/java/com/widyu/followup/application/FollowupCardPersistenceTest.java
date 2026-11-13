@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.followup.FollowupAnswer;
 import com.widyu.followup.FollowupCard;
 import com.widyu.followup.FollowupCardState;
@@ -49,7 +48,6 @@ class FollowupCardPersistenceTest {
     @Autowired private MemberRepository members;
     @Autowired private PlatformTransactionManager transactionManager;
     @MockBean private SensorProperties properties;
-    @MockBean private JPAQueryFactory queryFactory;
     @MockBean private FollowupRewardService rewardService;
 
     @Test

@@ -70,8 +70,8 @@ websocket:
 location:
   realtime:
     sequencer:
-      # 처리 중 1건 외에 기다릴 수 있는 위치 수. 앱에 요청한 동시 전송 상한(4건, LLD-0139 8절)이면 넘지 않고, 한 회원이 수신 스레드를
-      # 5개보다 많이 붙잡지 못한다. 넘치면 원본만 저장하고 ACK 없이 앱 재전송에 맡긴다.
+      # 최신 요청이 아닌 위치의 대기 수 상한. 더 늦게 잰 위치는 이 상한을 우회하므로 회원별 수신 스레드 점유 수의 절대 상한은 아니다.
+      # 상한을 넘은 옛 위치는 원본만 저장하고 ACK를 보내지 않는다. 최신 요청 몰림의 스레드 독점은 LLD-0140 9절의 미해결 항목이다.
       max-waiting: ${LOCATION_SEQUENCER_MAX_WAITING:4}
       # 차례를 기다리는 최대 시간. 정상 처리는 수 ms이고, Redis 명령 제한(3초, ADR-0040)과 커넥션 대기 한도(3초)에 맞췄다.
       wait-timeout-ms: ${LOCATION_SEQUENCER_WAIT_TIMEOUT_MS:3000}

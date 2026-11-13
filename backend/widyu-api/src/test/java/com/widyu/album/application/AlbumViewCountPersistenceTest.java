@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.album.Album;
 import com.widyu.album.dto.response.AlbumDetailResponse;
 import com.widyu.album.repository.AlbumRepository;
@@ -35,7 +34,6 @@ class AlbumViewCountPersistenceTest {
     @Autowired private AlbumService albumService;
     @Autowired private AlbumRepository albumRepository;
     @Autowired private MemberRepository memberRepository;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
     @MockBean private MemberUtil memberUtil;
     @MockBean private AlbumPermissionService albumPermissionService;
 

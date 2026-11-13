@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.times;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.FcmCategory;
@@ -98,7 +97,6 @@ class HeartRatePersistenceRetryIntegrationTest {
     @SpyBean private HeartRateEmergencyRepository heartRateEmergencyRepository;
     @MockBean private HeartRateLatestResultWriter latestResultWriter;
     @MockBean private FcmOutboxDispatcher dispatcher;
-    @MockBean private JPAQueryFactory queryFactory;
     @MockBean private MemberUtil memberUtil;
 
     @AfterEach

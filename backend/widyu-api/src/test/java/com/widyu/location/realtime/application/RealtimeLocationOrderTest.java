@@ -8,7 +8,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.timeout;
 
 import com.widyu.location.SeniorLocation;
@@ -63,10 +62,10 @@ class RealtimeLocationOrderTest {
 
     @Mock private SeniorLocationRepository seniorLocationRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
-    @Mock private SeniorProfileRepository seniorProfileRepository;
-    @Mock private ParentLocationRepository parentLocationRepository;
+    @Mock(strictness = Mock.Strictness.LENIENT) private SeniorProfileRepository seniorProfileRepository;
+    @Mock(strictness = Mock.Strictness.LENIENT) private ParentLocationRepository parentLocationRepository;
     @Mock private SimpMessagingTemplate messagingTemplate;
-    @Mock private RedisTemplate<String, Object> redisTemplate;
+    @Mock(strictness = Mock.Strictness.LENIENT) private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOperations;
     @Mock private ListOperations<String, Object> listOperations;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -89,7 +88,7 @@ class RealtimeLocationOrderTest {
     }
 
     @Test
-    @DisplayName("같은 회원의 새 위치와 옛 위치가 동시에 처리돼도 최신 위치와 마지막 방송은 나중에 잰 위치다")
+    @DisplayName("같은 회원의 새 위치와 옛 위치가 동시에 처리돼도 최신 위치와 마지막 방송에 나중에 잰 위치를 반영한다")
     void 같은_회원의_위치가_동시에_와도_옛_위치가_최신_위치를_덮지_않는다() throws Exception {
         // given
         long now = System.currentTimeMillis();
@@ -101,9 +100,10 @@ class RealtimeLocationOrderTest {
         stubSenior(1L);
         // 두 요청이 최신 위치를 함께 읽게 벌린다. 순서를 지키는 구현에서는 두 번째 읽기가 오지 않아 시간 초과로 넘어간다.
         willAnswer(invocation -> {
+            Optional<SeniorLocation> seen = Optional.ofNullable(latest.get(1L));
             bothRead.countDown();
             bothRead.await(WAIT_MS, TimeUnit.MILLISECONDS);
-            return Optional.ofNullable(latest.get(1L));
+            return seen;
         }).given(seniorLocationRepository).findById(1L);
         // 옛 위치의 최신 위치 저장을 새 위치 저장 뒤로 늦춘다.
         willAnswer(invocation -> {
@@ -186,10 +186,10 @@ class RealtimeLocationOrderTest {
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
                 member, Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
         ReflectionTestUtils.setField(member, "seniorProfile", seniorProfile);
-        lenient().when(seniorProfileRepository.findByMemberId(memberId)).thenReturn(Optional.of(seniorProfile));
-        lenient().when(parentLocationRepository.findAllByMember(member)).thenReturn(List.of());
-        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        lenient().when(redisTemplate.opsForList()).thenReturn(listOperations);
+        given(seniorProfileRepository.findByMemberId(memberId)).willReturn(Optional.of(seniorProfile));
+        given(parentLocationRepository.findAllByMember(member)).willReturn(List.of());
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(redisTemplate.opsForList()).willReturn(listOperations);
     }
 
     private static byte[] payload(Long memberId, long seq, double latitude, long tsMs) {

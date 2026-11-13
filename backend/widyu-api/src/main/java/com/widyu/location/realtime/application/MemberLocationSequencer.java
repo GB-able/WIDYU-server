@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
  * (LLD-0139). 최신 시각 비교와 최신 위치 저장 사이에 다른 위치가 끼어들면 먼저 잰 위치가 최신 위치를 덮기 때문이다.
  *
  * <p>호출자는 DB 트랜잭션을 열기 전에 부른다. 그래서 기다리는 동안 커넥션을 쥐지 않는다. 회원마다 잠금이 따로라
- * 다른 회원은 기다리지 않는다. 한 회원에 몰린 위치가 수신 스레드를 다 붙잡지 않도록 대기 수와 대기 시간에 상한을 둔다.
+ * 다른 회원의 잠금과는 경합하지 않는다. 대기 시간에는 상한을 두지만, 최신 위치는 대기 수 상한을 우회한다.
+ * 따라서 계속 증가하는 측정 시각의 요청이 몰리면 한 회원이 수신 스레드를 모두 점유할 수 있다(LLD-0140 9절).
  *
  * <p>같은 회원의 더 늦게 잰 위치가 이미 들어와 있으면 먼저 잰 위치는 자기 처리를 하지 않는다(LLD-0140). 반영해도 곧
  * 더 최근 위치로 바뀌기 때문이다. 다만 그 더 최근 위치의 실시간 처리가 실제로 끝날 때까지 기다렸다가 {@code superseded}를
@@ -37,6 +38,12 @@ public class MemberLocationSequencer {
             @Value("${location.realtime.sequencer.max-waiting:4}") int maxWaiting,
             @Value("${location.realtime.sequencer.wait-timeout-ms:3000}") long waitTimeoutMs
     ) {
+        if (maxWaiting < 0) {
+            throw new IllegalArgumentException("location.realtime.sequencer.max-waiting must be non-negative");
+        }
+        if (waitTimeoutMs < 0) {
+            throw new IllegalArgumentException("location.realtime.sequencer.wait-timeout-ms must be non-negative");
+        }
         this.maxWaiting = maxWaiting;
         this.waitTimeoutMs = waitTimeoutMs;
     }
@@ -92,16 +99,21 @@ public class MemberLocationSequencer {
                 if (isOlderThanNewest(gate, measuredAtMs)) {
                     return false;
                 }
-                long remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
-                if (remainingMs <= 0) {
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0 && waitTimeoutMs > 0) {
                     throw new LocationSequenceBusyException();
                 }
-                if (gate.lock.tryLock(Math.min(SUPERSEDE_CHECK_MS, remainingMs), TimeUnit.MILLISECONDS)) {
+                long attemptNanos = Math.max(0,
+                        Math.min(TimeUnit.MILLISECONDS.toNanos(SUPERSEDE_CHECK_MS), remainingNanos));
+                if (gate.lock.tryLock(attemptNanos, TimeUnit.NANOSECONDS)) {
                     if (isOlderThanNewest(gate, measuredAtMs)) {
                         gate.lock.unlock();
                         return false;
                     }
                     return true;
+                }
+                if (waitTimeoutMs == 0) {
+                    throw new LocationSequenceBusyException();
                 }
             }
         } catch (InterruptedException e) {

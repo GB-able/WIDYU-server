@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,55 @@ class MemberLocationSequencerTest {
     private static final Supplier<String> SUPERSEDED = () -> "superseded";
 
     @Test
-    @DisplayName("같은 회원의 대기 수가 상한을 넘으면 기다리지 않고 바로 과부하 예외를 던진다")
+    @DisplayName("대기 수나 대기 시간을 음수로 설정하면 시작 시 예외가 발생한다")
+    void 음수_대기_설정을_거절한다() {
+        assertThatThrownBy(() -> new MemberLocationSequencer(-1, 3_000))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("max-waiting");
+        assertThatThrownBy(() -> new MemberLocationSequencer(4, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("wait-timeout-ms");
+    }
+
+    @Test
+    @DisplayName("대기 수와 시간을 0으로 설정해도 빈 잠금이면 즉시 처리한다")
+    void 대기하지_않는_설정으로_빈_잠금을_사용한다() {
+        MemberLocationSequencer sequencer = new MemberLocationSequencer(0, 0);
+
+        assertThat(sequencer.run(1L, 100L, () -> "done", SUPERSEDED)).isEqualTo("done");
+        assertThat(sequencer.trackedMembers()).isZero();
+    }
+
+    @Test
+    @DisplayName("대기 시간이 0이고 다른 요청이 잠금을 사용하면 즉시 과부하 예외가 발생한다")
+    void 대기_시간이_0이면_사용_중인_잠금을_기다리지_않는다() throws Exception {
+        // given
+        MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 0);
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> holder = pool.submit(() -> sequencer.run(1L, 100L, () -> {
+                holding.countDown();
+                await(release);
+                return "held";
+            }, SUPERSEDED));
+            assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
+
+            // when & then
+            assertThatThrownBy(() -> sequencer.run(1L, 100L, () -> "unexpected", SUPERSEDED))
+                    .isInstanceOf(LocationSequenceBusyException.class);
+            release.countDown();
+            assertThat(holder.get(2, TimeUnit.SECONDS)).isEqualTo("held");
+            assertThat(sequencer.trackedMembers()).isZero();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("같은 회원의 대기 수가 상한을 넘으면 즉시 과부하 예외가 발생한다")
     void 대기_수가_상한을_넘으면_바로_과부하_예외를_던진다() throws Exception {
         // given
         MemberLocationSequencer sequencer = new MemberLocationSequencer(1, 5_000);
@@ -32,8 +81,8 @@ class MemberLocationSequencerTest {
                 return "held";
             }, SUPERSEDED));
             assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<String> waiter = pool.submit(() -> sequencer.run(1L, 300L, () -> "waited", SUPERSEDED));
-            Thread.sleep(100);
+            Future<String> waiter = submitWaiting(pool,
+                    () -> sequencer.run(1L, 300L, () -> "waited", SUPERSEDED));
 
             // when & then
             long startedAt = System.nanoTime();
@@ -50,7 +99,7 @@ class MemberLocationSequencerTest {
     }
 
     @Test
-    @DisplayName("대기 시간 안에 차례가 오지 않으면 실행하지 않고 과부하 예외를 던진다")
+    @DisplayName("대기 시간 안에 차례가 오지 않으면 실행 없이 과부하 예외가 발생한다")
     void 대기_시간을_넘기면_실행하지_않고_과부하_예외를_던진다() throws Exception {
         // given
         MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 100);
@@ -96,11 +145,10 @@ class MemberLocationSequencerTest {
             boolean[] olderRan = {false};
 
             // when
-            Future<String> older = pool.submit(() -> sequencer.run(1L, 400L, () -> {
+            Future<String> older = submitWaiting(pool, () -> sequencer.run(1L, 400L, () -> {
                 olderRan[0] = true;
                 return "ran";
             }, SUPERSEDED));
-            Thread.sleep(100);
             assertThat(older.isDone()).isFalse();
             release.countDown();
 
@@ -131,8 +179,8 @@ class MemberLocationSequencerTest {
             assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
 
             // when
-            Future<String> older = pool.submit(() -> sequencer.run(1L, 400L, () -> "ran", SUPERSEDED));
-            Thread.sleep(50);
+            Future<String> older = submitWaiting(pool,
+                    () -> sequencer.run(1L, 400L, () -> "ran", SUPERSEDED));
             release.countDown();
 
             // then
@@ -161,12 +209,12 @@ class MemberLocationSequencerTest {
                 return "first";
             }, SUPERSEDED));
             assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
-            Future<String> olderWaiter = pool.submit(() -> sequencer.run(1L, 200L, () -> "older", SUPERSEDED));
-            Thread.sleep(100);
+            Future<String> olderWaiter = submitWaiting(pool,
+                    () -> sequencer.run(1L, 200L, () -> "older", SUPERSEDED));
 
             // when
-            Future<String> newest = pool.submit(() -> sequencer.run(1L, 300L, () -> "newest", SUPERSEDED));
-            Thread.sleep(100);
+            Future<String> newest = submitWaiting(pool,
+                    () -> sequencer.run(1L, 300L, () -> "newest", SUPERSEDED));
             release.countDown();
 
             // then
@@ -197,8 +245,8 @@ class MemberLocationSequencerTest {
             assertThat(holding.await(2, TimeUnit.SECONDS)).isTrue();
 
             // when
-            Future<String> resent = pool.submit(() -> sequencer.run(1L, 500L, () -> "resent", SUPERSEDED));
-            Thread.sleep(100);
+            Future<String> resent = submitWaiting(pool,
+                    () -> sequencer.run(1L, 500L, () -> "resent", SUPERSEDED));
             release.countDown();
 
             // then
@@ -210,7 +258,7 @@ class MemberLocationSequencerTest {
     }
 
     @Test
-    @DisplayName("처리가 끝나면 예외가 나도 회원 항목을 지워 잠금이 쌓이지 않는다")
+    @DisplayName("처리가 끝나면 예외 여부와 무관하게 회원 잠금 항목을 제거한다")
     void 처리가_끝나면_회원_항목을_지운다() {
         // given
         MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 100);
@@ -223,6 +271,20 @@ class MemberLocationSequencerTest {
 
         // then
         assertThat(sequencer.trackedMembers()).isZero();
+    }
+
+    private static Future<String> submitWaiting(ExecutorService pool, Supplier<String> work) {
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        Future<String> future = pool.submit(() -> {
+            worker.set(Thread.currentThread());
+            return work.get();
+        });
+        org.awaitility.Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertThat(worker.get()).isNotNull();
+            assertThat(future).isNotDone();
+            assertThat(worker.get().getState()).isEqualTo(Thread.State.TIMED_WAITING);
+        });
+        return future;
     }
 
     private static void await(CountDownLatch latch) {

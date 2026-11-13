@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.MemberFcmToken;
@@ -96,7 +95,6 @@ class HeartRateEmergencyAfterCommitOutboxTest {
     @MockBean private FcmDeliveryProperties deliveryProperties;
     @MockBean private FcmEligibility eligibility;
     @MockBean private FcmOutboxDispatcher dispatcher;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
     @MockBean private RedisTemplate<String, Object> redisTemplate;
 
     @Test

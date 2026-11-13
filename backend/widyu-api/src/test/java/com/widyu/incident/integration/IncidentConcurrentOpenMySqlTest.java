@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.application.FcmOutboxService;
@@ -94,7 +93,6 @@ class IncidentConcurrentOpenMySqlTest {
     @MockBean private IncidentRejectedAttemptRecorder rejectedAttemptRecorder;
     @MockBean private FamilyAccessService familyAccessService;
     @MockBean private SensorProperties sensorProperties;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {

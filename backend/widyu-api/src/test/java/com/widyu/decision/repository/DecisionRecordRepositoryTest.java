@@ -2,14 +2,12 @@ package com.widyu.decision.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.global.config.JpaAuditingConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -22,7 +20,6 @@ class DecisionRecordRepositoryTest {
     private static final String DECISION_ID = "dec-01";
 
     @Autowired private DecisionRecordRepository decisionRecordRepository;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("첫 전송 성공을 기록하면 도달 여부와 알림 식별자와 시각이 채워진다")

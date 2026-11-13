@@ -2,7 +2,6 @@ package com.widyu.incident.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.incident.Incident;
@@ -17,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -36,7 +34,6 @@ class IncidentAlertRecordRepositoryTest {
 
     @Autowired private IncidentAlertRecordRepository incidentAlertRecordRepository;
     @Autowired private TestEntityManager entityManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
 
     @Test
     @DisplayName("회차 있는 알림을 조회하면 판정 기록의 근거와 판정 묶음의 착용 값이 한 줄에 붙는다")

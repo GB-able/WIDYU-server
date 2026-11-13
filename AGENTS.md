@@ -24,7 +24,7 @@ WIDYU는 시니어와 보호자가 사진·영상을 공유하는 플랫폼이�
 
 ## 구조와 명령
 
-- `backend/widyu-domain`: JPA/Redis 엔티티와 QueryDSL Q 클래스, 라이브러리 JAR.
+- `backend/widyu-domain`: JPA/Redis 엔티티, 라이브러리 JAR.
 - `backend/widyu-api`: Controller / Service / Facade / Repository / 설정, 진입점 `com.widyu.WidyuApiApplication`.
 - `admin`: 별도 React + TypeScript SPA.
 - 도메인 패키지는 `controller/docs`, `application`, `repository`, `dto/request`, `dto/response`, `validator`로 나눈다.
@@ -39,7 +39,7 @@ WIDYU는 시니어와 보호자가 사진·영상을 공유하는 플랫폼이�
 | API 테스트 | `./gradlew :backend:widyu-api:test` |
 | Domain + API 테스트 | `bash scripts/harness/run-module-tests.sh domain` |
 | 단일 테스트 | `./gradlew :backend:widyu-api:test --tests 'com.widyu.<패키지>.<테스트클래스>'` |
-| Q 클래스 재생성 | `./gradlew compileJava` (엔티티 변경 시 필수) |
+| 컴파일만 확인 | `./gradlew compileJava` |
 | 로컬 실행 | `./gradlew :backend:widyu-api:bootRun --args='--spring.profiles.active=local'` |
 | 전체 빌드 | `./gradlew build` |
 | 하네스 회귀 검사 | `python3 -m unittest discover -s scripts/harness -p 'test_*.py'` |

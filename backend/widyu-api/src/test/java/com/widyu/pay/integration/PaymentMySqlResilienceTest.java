@@ -352,8 +352,7 @@ class PaymentMySqlResilienceTest {
             includeFilters = @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
                     PaymentRepository.class, PaymentOrderRepository.class, PaymentCancelRepository.class,
                     MemberRepository.class, SeniorProfileRepository.class, FamilyRepository.class, PointHistoryRepository.class}))
-    @Import({PaymentTransactionService.class, AesGcmStringConverter.class,
-            com.widyu.global.config.QuerydslConfig.class})
+    @Import({PaymentTransactionService.class, AesGcmStringConverter.class})
     static class Config {
         @Bean MemberUtil memberUtil() { return mock(MemberUtil.class); }
     }

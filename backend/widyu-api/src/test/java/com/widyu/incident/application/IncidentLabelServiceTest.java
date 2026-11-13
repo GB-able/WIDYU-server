@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -40,7 +39,6 @@ class IncidentLabelServiceTest {
     @Autowired private IncidentLabelRepository labels;
     @Autowired private LabelAnnotationRepository annotations;
     @Autowired private MemberRepository members;
-    @MockBean private JPAQueryFactory queryFactory;
     @MockBean private SecurityUtil securityUtil;
 
     @Test

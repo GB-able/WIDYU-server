@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -86,7 +85,7 @@ class RealtimeLocationAckContractTest {
     @DisplayName("판정하고 최신 위치에 반영한 위치는 APPLIED ACK를 돌려주고 요청 식별자를 그대로 싣는다")
     void 반영한_위치는_APPLIED() {
         // given
-        stubSenior(1L);
+        stubAppliedPath(stubSenior(1L));
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
 
         // when
@@ -202,7 +201,7 @@ class RealtimeLocationAckContractTest {
     @DisplayName("앱이 회차를 실어 보내도 위치는 회차에 귀속하지 않고 실시간 처리 결과로 ACK한다")
     void 회차를_실어_보내도_실시간_결과로_ACK한다() {
         // given
-        stubSenior(1L);
+        stubAppliedPath(stubSenior(1L));
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
         byte[] payload = """
                 {"v":2,"memberId":1,"device_id":"ph-1","session_id":"s-1","seq":7,"run_id":"run-other",
@@ -248,7 +247,7 @@ class RealtimeLocationAckContractTest {
     void 최신_위치_저장_실패는_재전송으로_복구된다() {
         // given
         byte[] payload = payload(1L, System.currentTimeMillis());
-        stubSenior(1L);
+        stubAppliedPath(stubSenior(1L));
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
         willThrow(new RedisConnectionFailureException("down"))
                 .willReturn(null)
@@ -305,7 +304,7 @@ class RealtimeLocationAckContractTest {
         // given
         long oneDayLater = System.currentTimeMillis() + 86_400_000L;
         given(seniorLocationRepository.findById(1L)).willReturn(Optional.empty());
-        stubSenior(1L);
+        stubAppliedPath(stubSenior(1L));
 
         // when
         LocationAckResponse ack = ingestService().receive(payload(1L, oneDayLater), 1L);
@@ -320,15 +319,20 @@ class RealtimeLocationAckContractTest {
         assertThat(saved.getValue().getMeasuredAtMs()).isEqualTo(orderAt.getValue());
     }
 
-    private void stubSenior(Long memberId) {
+    private Member stubSenior(Long memberId) {
         Member member = Member.createMember(MemberType.SENIOR, "부모님", "01011112222");
         ReflectionTestUtils.setField(member, "id", memberId);
         SeniorProfile seniorProfile = SeniorProfile.createSeniorProfile(
                 member, Family.createFamily("ABC123"), "서울시", "INV1234", LocalDate.of(1950, 1, 1));
         ReflectionTestUtils.setField(member, "seniorProfile", seniorProfile);
         given(seniorProfileRepository.findByMemberId(memberId)).willReturn(Optional.of(seniorProfile));
-        lenient().when(parentLocationRepository.findAllByMember(member)).thenReturn(List.of());
-        lenient().when(redisTemplate.opsForList()).thenReturn(listOperations);
+        return member;
+    }
+
+    /** 판정이 체류를 새로 정하고(안심구역 조회) 반영이 이동 경로를 쓰는 경로. 쓰지 않는 테스트에 엄격 스텁이 남지 않게 나눈다. */
+    private void stubAppliedPath(Member member) {
+        given(parentLocationRepository.findAllByMember(member)).willReturn(List.of());
+        given(redisTemplate.opsForList()).willReturn(listOperations);
     }
 
     private static byte[] payload(Long memberId, long tsMs) {

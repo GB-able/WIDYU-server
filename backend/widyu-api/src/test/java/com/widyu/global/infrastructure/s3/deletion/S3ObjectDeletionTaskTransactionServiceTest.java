@@ -1,6 +1,5 @@
 package com.widyu.global.infrastructure.s3.deletion;
 
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.widyu.global.config.JpaAuditingConfig;
 import com.widyu.global.infrastructure.s3.S3DeleteResult;
 import com.widyu.global.infrastructure.s3.S3Service;
@@ -42,7 +41,6 @@ class S3ObjectDeletionTaskTransactionServiceTest {
     @Autowired private S3ObjectDeletionTaskTransactionService transactionService;
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private PlatformTransactionManager transactionManager;
-    @MockBean private JPAQueryFactory jpaQueryFactory;
     @MockBean private S3Service s3Service;
 
     @Test

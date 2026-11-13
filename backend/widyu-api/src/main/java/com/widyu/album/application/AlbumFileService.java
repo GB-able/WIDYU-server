@@ -366,6 +366,8 @@ public class AlbumFileService {
             case "image/webp" -> "webp";
             case "image/bmp" -> "bmp";
             case "image/svg+xml" -> "svg";
+            case "image/heic" -> "heic";
+            case "image/heif" -> "heif";
             case "video/mp4" -> "mp4";
             case "video/quicktime" -> "mov";
             case "video/x-msvideo" -> "avi";

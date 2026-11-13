@@ -7,7 +7,7 @@
 
 - 여러 서비스 조합은 Facade, OAuth 제공자별 처리는 Strategy + Factory를 사용한다.
 - 가족 접근은 @ValidateFamilyAccess AOP 또는 명시적 권한 검사 경로를 해당 ADR/LLD에 맞춰 적용한다(ADR-0002·0020).
-- 도메인 간 알림은 이벤트, 복잡한 조건 쿼리는 QueryDSL을 사용한다.
+- 도메인 간 알림은 이벤트, 조회는 Spring Data JPA(메서드 이름 쿼리, `@Query` JPQL)로 작성한다. QueryDSL은 쓰지 않는다(ADR-0044).
 - WebSocket STOMP 인증·구독 인가를 확인하고 SimpMessagingTemplate으로 전송한다. 위치 데이터는 Redis에 저장한다.
 
 ## Core Domain Modules
@@ -115,4 +115,4 @@
 
 ## 검증 환경
 
-Java 21이 필요하다. H2 테스트 외에 실제 Redis를 사용하는 통합 테스트도 있으므로 로컬 Redis가 필요할 수 있다(CI는 Redis 서비스를 제공한다). Domain 변경은 API 소비자 테스트도 수행한다. 엔티티 변경 시 compileJava 및 ERD 갱신, MySQL ENUM 변경 시 LLD에 ALTER TABLE 명령을 기록한다.
+Java 21이 필요하다. H2 테스트 외에 실제 Redis를 사용하는 통합 테스트도 있으므로 로컬 Redis가 필요할 수 있다(CI는 Redis 서비스를 제공한다). Domain 변경은 API 소비자 테스트도 수행한다. 엔티티 변경 시 ERD 갱신, MySQL ENUM 변경 시 LLD에 ALTER TABLE 명령을 기록한다.
