@@ -2,6 +2,7 @@ package com.widyu.home.controller;
 
 import com.widyu.global.annotation.ValidateFamilyAccess;
 import com.widyu.global.response.ApiResponseTemplate;
+import com.widyu.home.application.GuardianHomeFacade;
 import com.widyu.home.application.GuardianHomeService;
 import com.widyu.home.application.SeniorHomeService;
 import com.widyu.home.controller.docs.HomeDocs;
@@ -21,6 +22,7 @@ public class HomeController implements HomeDocs {
 
     private final SeniorHomeService seniorHomeService;
     private final GuardianHomeService guardianHomeService;
+    private final GuardianHomeFacade guardianHomeFacade;
 
     @Override
     @GetMapping("/senior/cards")
@@ -38,7 +40,7 @@ public class HomeController implements HomeDocs {
     public ApiResponseTemplate<GuardianHomeCardsResponse> getGuardianHomeCards(
             @RequestParam(required = false) Long memberId
     ) {
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(memberId);
+        GuardianHomeCardsResponse response = guardianHomeFacade.getHomeCards(memberId);
         return ApiResponseTemplate.ok()
                 .code("HOME_2002")
                 .message("보호자 홈 카드 조회 성공")

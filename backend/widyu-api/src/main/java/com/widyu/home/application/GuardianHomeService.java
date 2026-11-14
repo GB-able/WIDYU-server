@@ -13,8 +13,6 @@ import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.home.dto.response.GuardianSeniorListResponse;
-import com.widyu.location.access.LocationAccessPath;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
@@ -55,13 +53,16 @@ public class GuardianHomeService {
     private final WalkRepository walkRepository;
     private final HomeAlbumRecommendationService albumRecommendationService;
     private final RealtimeLocationService realtimeLocationService;
-    private final LocationAccessLogService locationAccessLogService;
 
-    public GuardianHomeCardsResponse getHomeCards(Long memberId) {
+    /**
+     * 위치 열람 기록은 이 읽기 트랜잭션이 끝난 뒤 {@link GuardianHomeFacade}가 남긴다. 읽기 안에서 기록하면 요청 하나가
+     * 커넥션 두 개를 쥔다(LLD-0152). 그래서 외출 상태를 읽은 보호자와 시니어를 카드와 함께 돌려준다.
+     */
+    public GuardianHomeCards getHomeCards(Long memberId) {
         return getHomeCards(memberId, LocalDateTime.now());
     }
 
-    GuardianHomeCardsResponse getHomeCards(Long memberId, LocalDateTime now) {
+    GuardianHomeCards getHomeCards(Long memberId, LocalDateTime now) {
         Member guardian = memberUtil.getCurrentMember();
         if (guardian.getType() != MemberType.GUARDIAN) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "보호자만 접근 가능합니다.");
@@ -70,10 +71,7 @@ public class GuardianHomeService {
         Member senior = resolveSenior(memberId, guardian);
         LocalDate today = now.toLocalDate();
 
-        // 외출 여부는 좌표가 아니지만 위치에서 파생되므로 열람으로 센다(ADR-0036 결과).
-        recordAccessQuietly(guardian.getId(), senior.getId());
-
-        return GuardianHomeCardsResponse.of(
+        return new GuardianHomeCards(guardian.getId(), senior.getId(), GuardianHomeCardsResponse.of(
                 realtimeLocationService.getOutingStatus(senior.getId()),
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
@@ -81,7 +79,7 @@ public class GuardianHomeService {
                 getHealthScheduleInfo(senior, now),
                 getTodayHealthSchedules(senior, now),
                 getWalkInfo(senior, today)
-        );
+        ));
     }
 
     public GuardianSeniorListResponse getFamilySeniors() {
@@ -94,16 +92,6 @@ public class GuardianHomeService {
                 .map(membership -> seniorProfileRepository.findAllByFamilyIdWithMember(membership.getFamily().getId()))
                 .map(GuardianSeniorListResponse::from)
                 .orElseGet(GuardianSeniorListResponse::empty);
-    }
-
-    /** 기록이 깨져도 홈 카드는 그려져야 한다(LLD-0056 5.1). */
-    private void recordAccessQuietly(Long guardianId, Long seniorMemberId) {
-        try {
-            locationAccessLogService.record(guardianId, seniorMemberId, LocationAccessPath.HOME_OUTING);
-        } catch (Exception e) {
-            log.warn("위치 열람 기록 실패: path={}, cause={}",
-                    LocationAccessPath.HOME_OUTING, e.getClass().getSimpleName());
-        }
     }
 
     private Member resolveSenior(Long memberId, Member guardian) {
@@ -133,6 +121,10 @@ public class GuardianHomeService {
         }
 
         return seniors.getFirst().getMember();
+    }
+
+    /** 홈 카드와, 그 카드의 외출 상태를 읽은 보호자, 시니어 회원 식별자. */
+    public record GuardianHomeCards(Long guardianId, Long seniorId, GuardianHomeCardsResponse response) {
     }
 
     private GuardianHomeCardsResponse.HeartRateInfo getHeartRateInfo(Member senior) {

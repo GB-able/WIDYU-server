@@ -18,7 +18,6 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
@@ -59,7 +58,6 @@ class GuardianHomeServiceTodayScheduleTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private RealtimeLocationService realtimeLocationService;
-    @Mock private LocationAccessLogService locationAccessLogService;
 
     @InjectMocks private GuardianHomeService guardianHomeService;
 
@@ -78,7 +76,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules())
@@ -107,7 +105,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(7), ProgressStatus.UPCOMING)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -126,7 +124,7 @@ class GuardianHomeServiceTodayScheduleTest {
         givenConnectedSenior();
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();

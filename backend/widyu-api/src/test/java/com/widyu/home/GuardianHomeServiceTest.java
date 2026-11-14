@@ -110,7 +110,7 @@ class GuardianHomeServiceTest {
         given(realtimeLocationService.getOutingStatus(any())).willReturn(true);
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null).response();
 
         // then
         assertThat(response.medicine()).isNull();
@@ -138,7 +138,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null).response();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -165,7 +165,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null).response();
 
         // then
         assertThat(response.albums()).isEmpty();
@@ -202,7 +202,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null).response();
 
         // then: 스케줄 개수 기준 (알 개수 합계 5가 아닌 스케줄 횟수 2)
         assertThat(response.medicine().totalCount()).isEqualTo(2);

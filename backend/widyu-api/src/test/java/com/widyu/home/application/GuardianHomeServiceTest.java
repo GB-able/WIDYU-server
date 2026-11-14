@@ -1,24 +1,18 @@
 package com.widyu.home.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.then;
-import static org.mockito.BDDMockito.willThrow;
 
 import com.widyu.global.entity.Status;
-import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
-import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.access.LocationAccessPath;
-import com.widyu.location.access.application.LocationAccessLogService;
+import com.widyu.home.application.GuardianHomeService.GuardianHomeCards;
 import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
@@ -43,7 +37,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("GuardianHomeService 홈 카드 위치 열람 기록 단위 테스트")
+@DisplayName("GuardianHomeService 홈 카드 열람 대상 단위 테스트")
 class GuardianHomeServiceTest {
 
     private static final Long GUARDIAN_ID = 1L;
@@ -60,54 +54,23 @@ class GuardianHomeServiceTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private RealtimeLocationService realtimeLocationService;
-    @Mock private LocationAccessLogService locationAccessLogService;
 
     @InjectMocks
     private GuardianHomeService guardianHomeService;
 
     @Test
-    @DisplayName("보호자가 홈 카드를 열면 외출 상태를 읽은 시니어에 대해 HOME_OUTING 열람 기록을 남긴다")
-    void 홈_카드_조회는_HOME_OUTING_기록을_남긴다() {
+    @DisplayName("보호자가 홈 카드를 열면 외출 상태를 읽은 보호자와 시니어 식별자를 카드와 함께 반환한다")
+    void 홈_카드와_함께_열람_기록에_쓸_보호자와_시니어를_반환한다() {
         // given
         givenEmptyHomeCards();
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID);
+        GuardianHomeCards cards = guardianHomeService.getHomeCards(SENIOR_ID);
 
         // then
-        assertThat(response).isNotNull();
-        then(locationAccessLogService).should()
-                .record(GUARDIAN_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
-    }
-
-    @Test
-    @DisplayName("열람 기록이 예외를 던져도 홈 카드 응답은 그대로 돌려준다")
-    void 열람_기록이_실패해도_홈_카드를_돌려준다() {
-        // given
-        givenEmptyHomeCards();
-        willThrow(new IllegalStateException("DB 장애"))
-                .given(locationAccessLogService)
-                .record(GUARDIAN_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
-
-        // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID);
-
-        // then
-        assertThat(response).isNotNull();
-    }
-
-    @Test
-    @DisplayName("접근 권한이 없어 홈 카드 조회가 막히면 열람 기록을 남기지 않는다")
-    void 권한이_없으면_열람_기록을_남기지_않는다() {
-        // given
-        givenEmptyHomeCards();
-        given(familyMembershipRepository.existsByFamilyIdAndGuardianId(any(), anyLong()))
-                .willReturn(false);
-
-        // when & then
-        assertThatThrownBy(() -> guardianHomeService.getHomeCards(SENIOR_ID))
-                .isInstanceOf(BusinessException.class);
-        then(locationAccessLogService).shouldHaveNoInteractions();
+        assertThat(cards.guardianId()).isEqualTo(GUARDIAN_ID);
+        assertThat(cards.seniorId()).isEqualTo(SENIOR_ID);
+        assertThat(cards.response().isOuting()).isTrue();
     }
 
     private void givenEmptyHomeCards() {
