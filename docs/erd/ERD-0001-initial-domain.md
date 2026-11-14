@@ -972,6 +972,7 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 16개 테이블(`incident`, `study_participation` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 30개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |
 | 2026-11-14 | 전체 72개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다 | `db/migration/V1__baseline.sql` |
 | 2026-11-12 | `activity_window` | 신규 테이블 (LLD-0138). 손목 움직임 5초 구간의 샘플 수·크기 합계·제곱합과 상태(`REST`/`LOW`/`ACTIVE`, VARCHAR). `sensor_batch.original_batch_id` 인덱스 추가. 운영 구축 때 적용 | `scripts/mysql/create_activity_window.sql` |
 | 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |
@@ -1021,4 +1022,4 @@ erDiagram
 
 - 이 문서는 `backend/widyu-domain/src/main/java/com/widyu/**`의 현재 엔티티 기준이다.
 - 새로운 엔티티, 컬럼, enum, 인덱스가 추가되면 이 문서를 함께 수정한다.
-- MySQL ENUM 컬럼 추가 시 `ALTER TABLE` 명령을 PR 비고에 포함한다.
+- enum 컬럼은 VARCHAR로 매핑한다(`@JdbcTypeCode(SqlTypes.VARCHAR)`). 값 추가는 스키마 변경이 아니다(LLD-0155).

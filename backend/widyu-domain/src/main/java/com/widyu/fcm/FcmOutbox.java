@@ -43,11 +43,11 @@ public class FcmOutbox extends BaseTimeEntity {
     private String dataPayload;
     @Column(name = "notification_id")
     private Long notificationId;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 32)
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.VARCHAR) @Column(nullable = false, length = 32)
     private FcmCategory fcmCategory;
     @Column(nullable = false)
     private boolean emergency;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 24)
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.VARCHAR) @Column(nullable = false, length = 24)
     private State state;
     @Column(nullable = false)
     private int attempts;

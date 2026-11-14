@@ -18,8 +18,10 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
@@ -55,7 +57,8 @@ public class HealthSchedule extends BaseTimeEntity {
     private LocalDateTime scheduledAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "progress_status", nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "progress_status", nullable = false, length = 20)
     private ProgressStatus progressStatus = ProgressStatus.UPCOMING;
 
     @Column(name = "reward_point", nullable = false)
@@ -65,7 +68,8 @@ public class HealthSchedule extends BaseTimeEntity {
     private Boolean isReward = false;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "status", nullable = false, length = 20)
     private Status status = Status.ACTIVE;
 
     @Builder(access = AccessLevel.PRIVATE)

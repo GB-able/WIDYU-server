@@ -3,6 +3,7 @@ package com.widyu.global.db;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.widyu.global.crypto.AesGcmStringConverter;
+import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -68,6 +69,27 @@ class FlywayMigrationMySqlTest {
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.info().current()).isNotNull();
         assertThat(failed).isZero();
+    }
+
+    @Test
+    @DisplayName("버전 파일을 모두 적용하면 native ENUM 컬럼과 enum 값 CHECK 제약이 남지 않는다")
+    void 버전_파일을_모두_적용하면_native_ENUM_컬럼과_enum_값_CHECK_제약이_남지_않는다() {
+        // given: enum 컬럼은 VARCHAR여야 값을 더할 때 ALTER가 필요 없다(LLD-0155)
+
+        // when
+        List<String> enumColumns = jdbc.queryForList(
+                "SELECT CONCAT(table_name, '.', column_name) FROM information_schema.columns "
+                        + "WHERE table_schema = DATABASE() AND data_type = 'enum'", String.class);
+        List<String> checks = jdbc.queryForList(
+                "SELECT tc.constraint_name FROM information_schema.table_constraints tc "
+                        + "JOIN information_schema.check_constraints cc ON cc.constraint_schema = tc.constraint_schema "
+                        + "AND cc.constraint_name = tc.constraint_name "
+                        + "WHERE tc.constraint_schema = DATABASE() AND tc.constraint_type = 'CHECK' "
+                        + "AND cc.check_clause LIKE '% in (%'", String.class);
+
+        // then
+        assertThat(enumColumns).isEmpty();
+        assertThat(checks).isEmpty();
     }
 
     @Configuration(proxyBeanMethods = false)

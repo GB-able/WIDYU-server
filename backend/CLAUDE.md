@@ -213,8 +213,7 @@
   - `MultipartFile`은 요청 종료 후 삭제되므로 `File`로 변환해 async 스레드에 전달
   - 새 스레드는 호출자 트랜잭션을 전파받지 못하므로, DB 작업이 있는 `@Async` 메서드에는 `@Transactional`을 직접 선언한다 (훅이 누락 시 경고)
   - 임시 파일은 `finally`에서 삭제
-- **MySQL ENUM**: `ddl-auto: update`는 기존 ENUM 컬럼에 새 값을 추가하지 않음 → 수동 실행 필요:
-  `ALTER TABLE <table> MODIFY COLUMN <col> ENUM('A','B','NEW') NOT NULL`
+- **enum 컬럼**: `@Enumerated(EnumType.STRING)`에는 `@JdbcTypeCode(SqlTypes.VARCHAR)`와 `@Column(length = n)`을 함께 단다. 빠뜨리면 Hibernate 6이 MySQL native `ENUM(...)`으로 매핑해, 값을 더할 때마다 ALTER가 필요하고 dev, prod validate가 VARCHAR 컬럼과 어긋난다고 기동을 멈춘다. 버전 파일에서도 VARCHAR로 만들고 enum 값 CHECK 제약을 걸지 않는다. 그러면 enum 값 추가에 스키마 변경이 필요 없다(LLD-0155).
 
 ## 테스트 작성 규칙
 
