@@ -21,7 +21,7 @@ Hibernate 6은 MySQL에서 `@Enumerated(EnumType.STRING)` 필드를 native `ENUM
 ### In scope
 - 변경 모듈: widyu-domain, widyu-api(버전 파일, 테스트), docs
 - 23개 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)`와 `@Column(length = n)`을 단다.
-- `V2__enum_columns_to_varchar.sql`: 23개 컬럼을 `MODIFY COLUMN ... VARCHAR(n)`으로 바꾸고 enum 값 CHECK 제약 30개를 `DROP CHECK`로 지운다.
+- `V2__enum_columns_to_varchar.sql`: 23개 컬럼을 `MODIFY COLUMN ... VARCHAR(n)`으로 바꾸고 enum 값 CHECK 제약 31개를 `DROP CHECK`로 지운다.
 - `FlywayMigrationMySqlTest`에 "버전 파일을 모두 적용하면 native ENUM 컬럼과 enum 값 CHECK가 없다"를 더한다.
 - 규칙 문서(`backend/CLAUDE.md`, `backend/AGENTS.md`의 MySQL ENUM 항목, ERD 마이그레이션 이력).
 
@@ -68,9 +68,9 @@ API 변경 없음. 저장되는 문자열 값이 같아 응답도 같다.
 
 길이는 기존 VARCHAR enum 관례(상태 20, 분류 32, 종류 48)를 따르고, 지금 최장 값보다 짧아지지 않게 했다. 엔티티에 길이가 이미 있던 필드(1, 3, 4, 21, 22)는 그 값을 쓴다.
 
-### 지우는 enum 값 CHECK 제약 30개
+### 지우는 enum 값 CHECK 제약 31개
 
-개발 서버(V1)에 있는 `<table>_chk_N` 30개다. 모두 VARCHAR enum 컬럼의 `IN (...)` 목록이며, 이름은 V1과 같다: `activity_window`(1), `consent_record`(2), `followup_answer`(2), `followup_card`(1), `incident`(4), `incident_guardian_response`(1), `incident_label`(3), `incident_response_attempt`(3), `label_annotation`(3), `location_access_log`(1), `member_withdrawal_request`(1), `sensor_batch`(1), `sensor_batch_rejection`(1), `social_unlink_task`(1), `study_participation`(2), `study_participation_history`(3).
+개발 서버(V1)에 있는 `<table>_chk_N` 31개다. 모두 VARCHAR enum 컬럼의 `IN (...)` 목록이며, 이름은 V1과 같다: `activity_window`(1), `consent_record`(2), `followup_answer`(2), `followup_card`(1), `incident`(4), `incident_guardian_response`(1), `incident_label`(3), `incident_response_attempt`(3), `label_annotation`(3), `location_access_log`(1), `member_withdrawal_request`(1), `senior_stay_state`(1, #1069로 추가), `sensor_batch`(1), `sensor_batch_rejection`(1), `social_unlink_task`(1), `study_participation`(2), `study_participation_history`(3).
 
 CHECK를 남기면 VARCHAR여도 새 enum 값이 막혀 "값 추가에 ALTER가 필요 없다"는 목표를 못 이룬다. 값 검증은 지금처럼 애플리케이션의 enum 변환이 맡는다. 수기 스크립트로 만든 테이블에는 원래 CHECK가 없었다.
 

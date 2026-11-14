@@ -12,7 +12,6 @@ import static org.mockito.Mockito.timeout;
 
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
@@ -71,15 +70,22 @@ class RealtimeLocationOrderTest {
     @Mock private ListOperations<String, Object> listOperations;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private SafeZoneAlertService safeZoneAlertService;
-    @Mock private LocationFixService locationFixService;
     @Mock private LocationAccessLogService locationAccessLogService;
     @Mock private MemberRepository memberRepository;
     @Mock private PlatformTransactionManager transactionManager;
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
+    @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("같은 회원의 새 위치와 옛 위치가 동시에 처리돼도 최신 위치와 마지막 방송에 나중에 잰 위치를 반영한다")
@@ -113,12 +119,13 @@ class RealtimeLocationOrderTest {
         }).given(seniorLocationRepository).save(any(SeniorLocation.class));
 
         // when
+        LocationIngestService ingestService = ingestService();
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<?> newer = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 1, 37.60, newerTs), 1L));
+                    ingestService.receive(payload(1L, 1, 37.60, newerTs), 1L));
             Future<?> older = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 2, 37.50, olderTs), 1L));
+                    ingestService.receive(payload(1L, 2, 37.50, olderTs), 1L));
             newer.get(5, TimeUnit.SECONDS);
             older.get(5, TimeUnit.SECONDS);
         } finally {
@@ -151,13 +158,14 @@ class RealtimeLocationOrderTest {
         given(seniorLocationRepository.findById(2L)).willReturn(Optional.empty());
 
         // when
+        LocationIngestService ingestService = ingestService();
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<?> blocked = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(1L, 1, 37.5, now), 1L));
+                    ingestService.receive(payload(1L, 1, 37.5, now), 1L));
             assertThat(firstEntered.await(2, TimeUnit.SECONDS)).isTrue();
             Future<?> other = pool.submit(() ->
-                    realtimeLocationService.updateAndBroadcast(payload(2L, 1, 37.5, now), 2L));
+                    ingestService.receive(payload(2L, 1, 37.5, now), 2L));
             other.get(2, TimeUnit.SECONDS);
 
             // then

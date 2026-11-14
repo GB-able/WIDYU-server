@@ -573,7 +573,7 @@ public interface MedicineScheduleDocs {
                     약 복용을 인증합니다.
 
                     **기능:**
-                    - 약 복용 인증 이미지 업로드
+                    - 약 복용 인증 이미지 업로드 (형식은 파일 내용으로 판별, 앨범 사진과 같은 형식, 장당 10MB까지. 한 장이라도 어긋나면 아무것도 올리지 않음)
                     - 알람 시간 전후 30분 이내에만 인증 가능
                     - 당일 중복 인증 불가
 
@@ -592,7 +592,7 @@ public interface MedicineScheduleDocs {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "인증 성공"),
-            @ApiResponse(responseCode = "400", description = "시간 범위 초과 또는 이미 인증 완료"),
+            @ApiResponse(responseCode = "400", description = "시간 범위 초과 또는 이미 인증 완료, FILE_4002: JPEG, PNG, GIF, WEBP, BMP, HEIC, HEIF가 아닌 파일(SVG 포함), FILE_4004: 10MB 초과"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
             @ApiResponse(responseCode = "403", description = "권한 없음"),
             @ApiResponse(responseCode = "409", description = "포인트 잔액 동시 변경 충돌")

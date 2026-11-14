@@ -13,6 +13,7 @@ import com.widyu.member.MemberRole;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -97,7 +98,7 @@ public class JwtUtil {
 
     public AccessTokenDto parseAccessToken(String token) throws ExpiredJwtException {
         try {
-            Jws<Claims> claims = parseTokenClaims(token, getAccessTokenKey());
+            Jws<Claims> claims = parseTokenClaims(token, getAccessTokenKey(), TokenType.ACCESS);
             Claims body = claims.getBody();
 
             return new AccessTokenDto(
@@ -115,7 +116,7 @@ public class JwtUtil {
 
     public RefreshTokenDto parseRefreshToken(String token) throws ExpiredJwtException {
         try {
-            Jws<Claims> claims = parseTokenClaims(token, getRefreshTokenKey());
+            Jws<Claims> claims = parseTokenClaims(token, getRefreshTokenKey(), TokenType.REFRESH);
             Claims body = claims.getBody();
 
             return new RefreshTokenDto(
@@ -132,7 +133,7 @@ public class JwtUtil {
 
     public TemporaryTokenDto parseTemporaryToken(String token) throws ExpiredJwtException {
         try {
-            Jws<Claims> claims = parseTokenClaims(token, getTemporaryTokenKey());
+            Jws<Claims> claims = parseTokenClaims(token, getTemporaryTokenKey(), TokenType.TEMPORARY);
             Claims body = claims.getBody();
 
             return new TemporaryTokenDto(
@@ -150,7 +151,7 @@ public class JwtUtil {
 
     public SocialTemporaryTokenDto parseSocialTemporaryToken(String token) throws ExpiredJwtException {
         try {
-            Jws<Claims> claims = parseTokenClaims(token, getTemporaryTokenKey());
+            Jws<Claims> claims = parseTokenClaims(token, getTemporaryTokenKey(), TokenType.TEMPORARY);
             Claims body = claims.getBody();
 
             return new SocialTemporaryTokenDto(
@@ -229,11 +230,17 @@ public class JwtUtil {
         );
     }
 
-    private Jws<Claims> parseTokenClaims(String token, Key key) {
-        return Jwts.parserBuilder()
+    // 서명 키만으로 종류를 가르면 비밀값을 같게 설정했을 때 다른 종류의 토큰이 통과한다.
+    // 발급 때 서명된 헤더에 넣은 type으로 종류를 확인한다 (LLD-0148)
+    private Jws<Claims> parseTokenClaims(String token, Key key, TokenType expectedType) {
+        Jws<Claims> claims = Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token);
+        if (!expectedType.getValue().equals(claims.getHeader().get(TOKEN_TYPE_KEY_NAME))) {
+            throw new JwtException("토큰 종류가 다릅니다.");
+        }
+        return claims;
     }
 
     private Key getAccessTokenKey() {

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import com.widyu.album.application.AlbumPermissionService;
 import com.widyu.global.entity.Status;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -24,7 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -42,8 +43,13 @@ class SeniorHomeServiceMedicineTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
+    @Mock private AlbumPermissionService albumPermissionService;
 
-    @InjectMocks private SeniorHomeService seniorHomeService;
+    private SeniorHomeService seniorHomeService() {
+        return new SeniorHomeService(memberUtil,
+                new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository), walkRepository,
+                healthScheduleRepository, heartRateResultRepository, albumRecommendationService, albumPermissionService);
+    }
 
     @ParameterizedTest
     @CsvSource({"20:30, 59", "21:00:30, 59", "21:30, 59", "21:30:00.000000001, 60", "22:10, 60", "23:30, 60"})
@@ -59,7 +65,7 @@ class SeniorHomeServiceMedicineTest {
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, time));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, time));
 
         // then
         assertThat(response.medicine().medicineScheduleId()).isEqualTo(expectedScheduleId);
@@ -81,10 +87,60 @@ class SeniorHomeServiceMedicineTest {
                 .willReturn(List.of(MedicationProof.create(verified, senior, List.of("proof.jpg"))));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
 
         // then
         assertThat(response.medicine().medicineScheduleId()).isEqualTo(70L);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("홈 카드를 조회할 때 같은 일정의 인증이 둘이면 가장 먼저 한 인증의 사진을 반환한다")
+    void 중복_인증은_최초_인증을_대표로_반환한다() {
+        // given: 조회 쿼리에 정렬이 없으므로 늦은 인증이 먼저 반환되는 순서를 재현한다.
+        Member senior = senior();
+        MedicineSchedule schedule = alarmSchedule(senior, 59L, LocalTime.of(21, 0));
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, TODAY))
+                .willReturn(List.of(schedule));
+        given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
+                .willReturn(List.of(
+                        proof(schedule, senior, TODAY.atTime(21, 25), "later.jpg"),
+                        proof(schedule, senior, TODAY.atTime(21, 5), "earlier.jpg")));
+
+        // when
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(21, 40)));
+
+        // then
+        assertThat(response.medicine().proofImageUrl()).isEqualTo("earlier.jpg");
+        assertThat(response.medicine().todayTakenCount()).isEqualTo(1);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("홈 카드를 조회할 때 오늘 유효 목록에서 빠진 일정의 인증은 복용 횟수와 상태에 넣지 않는다")
+    void 유효하지_않은_일정의_인증은_복용_횟수에서_제외한다() {
+        // given: 오전에 인증한 뒤 일정을 수정해 옛 버전이 오늘 유효 목록에서 빠진 상황
+        Member senior = senior();
+        MedicineSchedule closedSchedule = alarmSchedule(senior, 59L, LocalTime.of(8, 0));
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, TODAY))
+                .willReturn(List.of(alarmSchedule(senior, 60L, LocalTime.of(9, 0))));
+        given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
+                .willReturn(List.of(proof(closedSchedule, senior, TODAY.atTime(8, 5), "old.jpg")));
+
+        // when
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(9, 10)));
+
+        // then
+        assertThat(response.medicine().todayTakenCount()).isZero();
+        assertThat(response.medicine().todayTotalCount()).isEqualTo(1);
+        assertThat(response.medicine().scheduleStatuses().getFirst().taken()).isFalse();
+        assertThat(response.medicine().proofImageUrl()).isNull();
+    }
+
+    private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
+        MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
+        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
+        return proof;
     }
 
     private Member senior() {

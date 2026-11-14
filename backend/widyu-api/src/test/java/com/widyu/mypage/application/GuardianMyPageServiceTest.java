@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.inOrder;
@@ -69,6 +70,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class GuardianMyPageServiceTest {
+
+    private static final byte[] PNG_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
@@ -183,9 +186,9 @@ class GuardianMyPageServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getProfileImage()).willReturn("https://s3.old.png");
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         guardianMyPageService.updateProfileImage(image);
@@ -203,9 +206,9 @@ class GuardianMyPageServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getProfileImage()).willReturn(null);
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         guardianMyPageService.updateProfileImage(image);
@@ -553,9 +556,9 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn("https://s3.old-senior.png");
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new-senior.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new-senior.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         guardianMyPageService.updateSeniorProfileImage(10L, image);
@@ -582,9 +585,9 @@ class GuardianMyPageServiceTest {
         given(seniorProfile.getMember()).willReturn(seniorMember);
         given(seniorMember.getProfileImage()).willReturn(null);
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new-senior.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new-senior.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         guardianMyPageService.updateSeniorProfileImage(10L, image);
@@ -608,7 +611,7 @@ class GuardianMyPageServiceTest {
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
         given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileIdAndIsLeaderTrue(1L, 100L)).willReturn(false);
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when & then
         assertThatThrownBy(() -> guardianMyPageService.updateSeniorProfileImage(10L, image))

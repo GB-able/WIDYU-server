@@ -1,4 +1,4 @@
--- native ENUM으로 남은 enum 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 30개를 지운다(LLD-0155, #1058).
+-- native ENUM으로 남은 enum 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 31개를 지운다(LLD-0155, #1058).
 -- 엔티티는 모두 @Enumerated(STRING) + @JdbcTypeCode(VARCHAR)라, 이후 enum 값을 더해도 ALTER가 필요 없다.
 -- NULL 허용 여부는 V1(2026-11-14 개발 서버)의 정의를 그대로 둔다. DEFAULT가 있던 컬럼은 없다.
 -- 문자셋과 정렬은 테이블 기본값(utf8mb4, utf8mb4_unicode_ci)을 따르며 V1과 같다.
@@ -93,6 +93,8 @@ ALTER TABLE `label_annotation`
 ALTER TABLE `location_access_log` DROP CHECK `location_access_log_chk_1`;
 
 ALTER TABLE `member_withdrawal_request` DROP CHECK `member_withdrawal_request_chk_1`;
+
+ALTER TABLE `senior_stay_state` DROP CHECK `senior_stay_state_chk_1`;
 
 ALTER TABLE `sensor_batch` DROP CHECK `sensor_batch_chk_1`;
 

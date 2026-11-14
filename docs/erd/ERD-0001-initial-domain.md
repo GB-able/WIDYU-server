@@ -828,7 +828,7 @@ erDiagram
 
 | 엔티티 | key | TTL | 주요 필드 |
 | --- | --- | --- | --- |
-| `SeniorLocation` | `senior_location:{seniorId}` | 300s (5분) | latitude, longitude, updatedAt |
+| `SeniorLocation` | `senior_location:{seniorId}` | 300s (5분, 4분마다 만료만 연장) | latitude, longitude, updatedAt, measuredAtMs(순서 시각), deviceMeasuredAtMs(앱 측정 시각), receivedAtMs(서버 수신 시각) (LLD-0141) |
 | `HeartRateResult` | `heart_rate_result:{memberId}` | 86400s (24시간) | status, heartRate, measuredAt |
 | `RefreshToken` | - | - | token |
 | `VerificationCode` | - | - | code |
@@ -930,7 +930,7 @@ erDiagram
 | `incident` | `idx_incident_member_time` | `(member_id, opened_at_ms)` | 가족 조회·본인 대기 목록 |
 | `incident` | `idx_incident_run_time` | `(run_id, opened_at_ms)` | 회차 내보내기 |
 | `incident` | `idx_incident_state_deadline` | `(state, respond_by_ms)` | 무응답 스케줄러가 매 폴링마다 타는 경로 |
-| `location_fix` | UK `uk_location_fix_seq` | `(device_id, session_id, seq)` | 같은 fix 재전송 멱등 (LLD-0048) |
+| `location_fix` | UK `uk_location_fix_seq` | `(device_id, session_id, seq)` | 같은 fix 재전송 멱등 (LLD-0048). 2026-11-13 이후 새 행 없음, 과거 행 조회용(LLD-0143) |
 | `location_fix` | `idx_location_fix_member_time` | `(member_id, ts_ms)` | 참가자별 잰 시각순 조회·내보내기 |
 | `location_fix` | `idx_location_fix_run` | `(run_id)` | 회차별 위치 조회 |
 | `device_heartbeat` | UK `uk_device_heartbeat_ts` | `(device_id, session_id, ts_ms)` | seq 없는 하트비트 멱등 키 |
@@ -960,8 +960,13 @@ erDiagram
 - 외부 API fallback: `item_seq` unique 기준으로 배치 동기화
 
 ### 위치 (SeniorLocation)
-- Redis `senior_location:{seniorId}` 키로 저장, TTL 5분
-- WebSocket 연결 시 실시간 업데이트, 구독 해제 시 자연 만료
+- Redis `senior_location:{seniorId}` 키로 저장, TTL 5분. 4분마다 만료만 늘리므로 오래된 좌표도 남는다. 신선도는 측정 시각으로 판단한다(LLD-0141)
+- 이동 경로 `location:trail:{seniorId}` List(최대 900점), 점마다 측정 시각을 담고 조회 때 최근 15분만 돌려준다
+
+### 체류, 안전구역 판정 상태 (SeniorStayState)
+- 테이블 `senior_stay_state`, PK `member_id`(회원당 1행). 체류 시작 지점 좌표와 시각, 안전구역 종류와 이름, 30분 알림 묶음(`alert_state` VARCHAR `EXITED`/`RETURNED`, `alert_until`)
+- 위치 처리 트랜잭션 안에서 알림 Outbox와 함께 커밋, 롤백된다. 같은 자리(30m 안) 위치는 쓰지 않고, 바뀔 때만 행을 잠근다(LLD-0141, ADR-0044)
+- 예전 Redis `location:stay:{id}`, `safezone:alert:{id}`를 대체한다. 탈퇴, 비활성 회원 정리 때 지운다
 
 ### 위치 열람 기록 (LocationAccessLog)
 - 보호자 읽기 경로 5곳에서 추가 전용으로 쌓는다. 좌표는 담지 않는다
@@ -972,8 +977,9 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
-| 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 16개 테이블(`incident`, `study_participation` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 30개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |
-| 2026-11-14 | 전체 72개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다 | `db/migration/V1__baseline.sql` |
+| 2026-11-13 | `senior_stay_state` | 신규 테이블 (LLD-0141). 체류, 안전구역 판정 상태와 30분 알림 묶음. `alert_state` VARCHAR. 배포 때 서버가 예전 Redis 체류 키를 한 번 옮긴다(`location.stay-state.import-legacy-redis`) | `scripts/mysql/create_senior_stay_state.sql` |
+| 2026-11-14 | 전체 73개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다. `senior_stay_state`도 V1에 들어 있다 | `db/migration/V1__baseline.sql` |
+| 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 17개 테이블(`incident`, `study_participation`, `senior_stay_state` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 31개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |
 | 2026-11-12 | `activity_window` | 신규 테이블 (LLD-0138). 손목 움직임 5초 구간의 샘플 수·크기 합계·제곱합과 상태(`REST`/`LOW`/`ACTIVE`, VARCHAR). `sensor_batch.original_batch_id` 인덱스 추가. 운영 구축 때 적용 | `scripts/mysql/create_activity_window.sql` |
 | 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |
 | 2026-11-12 | `data_purge_log` | 신규 테이블 (LLD-0136). 보관 기간 정리 작업의 날짜·테이블별 대상 건수·참가자 제외 건수. 회원 ID 없음. 운영 구축 때 적용 | `scripts/mysql/create_data_purge_log.sql` |

@@ -21,7 +21,7 @@
 ### In scope
 - 변경 모듈: widyu-api, docs
 - Flyway(`flyway-core`, `flyway-mysql`, Spring Boot 3.3.5 의존성 관리 버전)를 넣는다. 버전 파일 위치는 Spring 기본값 `classpath:db/migration`이다.
-- `V1__baseline.sql`: 2026-11-14 개발 서버 DB의 `mysqldump --no-data` 결과(MySQL 8.0.46, develop `513f5396` 배포 상태, 테이블 72개)에서 `AUTO_INCREMENT=` 시작값과 mysqldump 세션 설정 주석을 지운 것이다. FULLTEXT 인덱스의 `/*!50100 WITH PARSER ngram */`는 같은 뜻의 일반 구문으로 바꿨다. 그 밖의 정의(컬럼, 인덱스, FK, CHECK)는 개발 서버와 같다.
+- `V1__baseline.sql`: 2026-11-14 개발 서버 DB의 `mysqldump --no-data` 결과(MySQL 8.0.46, develop `513f5396` 배포 상태, 테이블 72개)에, 같은 날 #1069 배포로 생긴 `senior_stay_state` 1개(develop `9fe0f3e1` 배포 뒤 다시 덤프)를 더해 73개로 만들고 `AUTO_INCREMENT=` 시작값과 mysqldump 세션 설정 주석을 지운 것이다. FULLTEXT 인덱스의 `/*!50100 WITH PARSER ngram */`는 같은 뜻의 일반 구문으로 바꿨다. 그 밖의 정의(컬럼, 인덱스, FK, CHECK)는 개발 서버와 같다.
 - 프로필별 Flyway 설정과 개발 서버 `ddl-auto` 전환(4절).
 - 빈 MySQL에 버전 파일을 모두 적용하고 Hibernate validate로 엔티티와 대조하는 테스트 `FlywayMigrationMySqlTest`(일회용 MySQL 환경변수가 있을 때만 실행).
 - 규칙 문서: `backend/CLAUDE.md`, `backend/AGENTS.md`, `docs/production-deployment.md`.
@@ -66,7 +66,7 @@ Spring Boot는 엔티티 매니저보다 Flyway를 먼저 실행하므로, 기�
 4. Hibernate validate가 엔티티와 테이블을 대조한다.
 
 ### 빈 DB(운영 최초, 새 로컬)
-1. Flyway가 V1을 실행해 72개 테이블을 만들고 이력에 남긴다. 이어서 V2 이후를 순서대로 적용한다.
+1. Flyway가 V1을 실행해 73개 테이블을 만들고 이력에 남긴다. 이어서 V2 이후를 순서대로 적용한다.
 2. Hibernate validate가 대조한다.
 
 ### 엔티티와 V1 대조 결과(2026-11-14, 로컬 일회용 MySQL 8.0.44)

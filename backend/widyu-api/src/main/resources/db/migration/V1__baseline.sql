@@ -1,5 +1,6 @@
 -- 기준 스키마(LLD-0154). 2026-11-14 개발 서버 DB(MySQL 8.0.46, develop 513f5396 배포 상태)의
--- mysqldump --no-data 결과에서 AUTO_INCREMENT 시작값과 mysqldump 세션 설정을 지웠다. 그 밖의 정의는 개발 서버와 같다.
+-- mysqldump --no-data 결과에, 같은 날 #1069 배포로 생긴 senior_stay_state(develop 9fe0f3e1 배포 뒤 다시 덤프)를 더했다.
+-- 덤프 결과에서 AUTO_INCREMENT 시작값과 mysqldump 세션 설정을 지웠다. 그 밖의 정의는 개발 서버와 같다.
 -- 개발 서버처럼 이미 테이블이 있는 DB는 이 파일을 실행하지 않고 버전 1로만 표시한다(baseline-on-migrate).
 -- 테이블이 이름 순서라 아직 없는 테이블을 가리키는 FK가 있어 FK 검사를 끄고 만든다.
 SET FOREIGN_KEY_CHECKS = 0;
@@ -1099,6 +1100,21 @@ CREATE TABLE `senior_profile` (
   KEY `FKbu5uivkqq8farh35yl1diw8xe` (`family_id`),
   CONSTRAINT `FK6ogebitm9xhw1rnipywbaqgmq` FOREIGN KEY (`member_id`) REFERENCES `member` (`id`),
   CONSTRAINT `FKbu5uivkqq8farh35yl1diw8xe` FOREIGN KEY (`family_id`) REFERENCES `family` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `senior_stay_state` (
+  `member_id` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `alert_state` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `alert_until` datetime(6) DEFAULT NULL,
+  `latitude` double NOT NULL,
+  `location_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `location_type` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `longitude` double NOT NULL,
+  `stay_started_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`member_id`),
+  CONSTRAINT `senior_stay_state_chk_1` CHECK ((`alert_state` in (_utf8mb4'EXITED',_utf8mb4'RETURNED')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `sensor_batch` (

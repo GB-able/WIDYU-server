@@ -75,8 +75,11 @@ public interface GuardianMyPageDocs {
     })
     ApiResponseTemplate<Void> updatePhone(UpdatePhoneRequest request);
 
-    @Operation(summary = "보호자 프로필 이미지 수정")
-    @ApiResponses({@ApiResponse(responseCode = "200", description = "수정 성공")})
+    @Operation(summary = "보호자 프로필 이미지 수정", description = "형식은 파일 내용으로 판별하며 앨범 사진과 같은 형식, 10MB까지 받습니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "FILE_4002: JPEG, PNG, GIF, WEBP, BMP, HEIC, HEIF가 아닌 파일(SVG 포함), FILE_4004: 10MB 초과")
+    })
     ApiResponseTemplate<Void> updateProfileImage(ProfileImageUploadRequest request);
 
     @Operation(summary = "연결된 시니어 목록 조회 (위듀 프로필)", description = "보호자와 연결된 시니어 목록을 조회합니다.")
@@ -126,9 +129,10 @@ public interface GuardianMyPageDocs {
             @Parameter(description = "시니어 회원 ID", required = true, example = "1") Long memberId,
             UpdateSeniorAddressRequest request);
 
-    @Operation(summary = "시니어 프로필 이미지 수정", description = "방장만 호출 가능.")
+    @Operation(summary = "시니어 프로필 이미지 수정", description = "방장만 호출 가능. 형식은 파일 내용으로 판별하며 앨범 사진과 같은 형식, 10MB까지 받습니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "FILE_4002: JPEG, PNG, GIF, WEBP, BMP, HEIC, HEIF가 아닌 파일(SVG 포함), FILE_4004: 10MB 초과"),
             @ApiResponse(responseCode = "403", description = "방장만 수정 가능")
     })
     ApiResponseTemplate<Void> updateSeniorProfileImage(
