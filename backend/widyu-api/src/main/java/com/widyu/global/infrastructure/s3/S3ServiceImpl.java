@@ -29,11 +29,16 @@ public class S3ServiceImpl implements S3Service {
 
     @Override
     public String uploadFile(MultipartFile file, String filePath) {
+        return uploadFile(file, filePath, file.getContentType());
+    }
+
+    @Override
+    public String uploadFile(MultipartFile file, String filePath, String contentType) {
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(s3Properties.s3().bucketName())
                     .key(filePath)
-                    .contentType(file.getContentType())
+                    .contentType(contentType)
                     .build();
 
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));

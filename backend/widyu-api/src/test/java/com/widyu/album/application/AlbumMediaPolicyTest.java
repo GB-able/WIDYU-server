@@ -1,16 +1,21 @@
 package com.widyu.album.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import java.io.ByteArrayInputStream;
+import java.util.HexFormat;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 @DisplayName("AlbumMediaPolicy 예외 처리 단위 테스트")
@@ -166,6 +171,74 @@ class AlbumMediaPolicyTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TOO_LARGE)
                 .hasMessageContaining("동영상은 최대 2GB");
+    }
+
+    // ======================== 단일 사진 검사 (복약 인증, 프로필) ========================
+
+    @ParameterizedTest
+    @CsvSource({
+            "FFD8FFE0, image/jpeg, jpg",
+            "89504E470D0A1A0A, image/png, png",
+            "474946383961, image/gif, gif",
+            "524946460000000057454250, image/webp, webp",
+            "424D, image/bmp, bmp",
+            "0000001866747970686569630000, image/heic, heic",
+            "00000018667479706D69663100, image/heif, heif"
+    })
+    @DisplayName("파일 앞부분 시그니처로 형식을 정하면 클라이언트 Content-Type과 무관하게 저장 형식과 확장자를 반환한다")
+    void 파일_시그니처로_저장_형식과_확장자를_정한다(String hex, String contentType, String extension) {
+        // given
+        MultipartFile file = new MockMultipartFile("image", "a.html", "application/octet-stream", HexFormat.of().parseHex(hex));
+
+        // when
+        AlbumMediaPolicy.ImageFormat format = AlbumMediaPolicy.validateImageFile(file);
+
+        // then
+        assertThat(format).isEqualTo(new AlbumMediaPolicy.ImageFormat(contentType, extension));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"/>",
+            "<html><script>alert(1)</script></html>",
+            "plain text"
+    })
+    @DisplayName("이미지 Content-Type을 붙여도 시그니처가 허용 이미지가 아니면 INVALID_FILE_TYPE 예외를 던진다")
+    void 시그니처가_허용_이미지가_아니면_예외가_발생한다(String body) {
+        // given
+        MultipartFile file = new MockMultipartFile("image", "a.png", "image/svg+xml", body.getBytes());
+
+        // when & then
+        assertThatThrownBy(() -> AlbumMediaPolicy.validateImageFile(file))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_FILE_TYPE);
+    }
+
+    @Test
+    @DisplayName("단일 사진이 앨범 사진 상한 10MB를 넘으면 FILE_TOO_LARGE 예외를 던진다")
+    void 단일_사진이_10MB를_넘으면_예외가_발생한다() throws Exception {
+        // given
+        MultipartFile file = mock(MultipartFile.class);
+        given(file.isEmpty()).willReturn(false);
+        given(file.getInputStream()).willReturn(new ByteArrayInputStream(HexFormat.of().parseHex("FFD8FFE0")));
+        given(file.getSize()).willReturn(AlbumMediaPolicy.MAX_PHOTO_BYTES + 1);
+
+        // when & then
+        assertThatThrownBy(() -> AlbumMediaPolicy.validateImageFile(file))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TOO_LARGE);
+    }
+
+    @Test
+    @DisplayName("빈 파일을 단일 사진으로 올리면 FILE_IS_EMPTY 예외를 던진다")
+    void 빈_파일을_단일_사진으로_올리면_예외가_발생한다() {
+        // given
+        MultipartFile file = new MockMultipartFile("image", "a.jpg", "image/jpeg", new byte[0]);
+
+        // when & then
+        assertThatThrownBy(() -> AlbumMediaPolicy.validateImageFile(file))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_IS_EMPTY);
     }
 
     private MultipartFile mockFile(String contentType, long size) {

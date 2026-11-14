@@ -1,5 +1,7 @@
 package com.widyu.goal.medicineschedule.application;
 
+import com.widyu.album.application.AlbumMediaPolicy;
+import com.widyu.album.application.AlbumMediaPolicy.ImageFormat;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.S3Service;
@@ -40,12 +42,19 @@ public class MedicationProofService {
             return List.of();
         }
 
+        // 한 장이라도 형식이나 크기가 맞지 않으면 아무것도 올리지 않는다(LLD-0150).
+        List<ImageFormat> formats = new ArrayList<>();
+        for (MultipartFile image : images) {
+            formats.add(AlbumMediaPolicy.validateImageFile(image));
+        }
+
         List<String> uploadedUrls = new ArrayList<>();
         try {
-            for (MultipartFile image : images) {
+            for (int i = 0; i < images.size(); i++) {
+                ImageFormat format = formats.get(i);
                 String directory = PROOF_IMAGE_DIRECTORY + "/" + memberId;
-                String filePath = s3Service.generateFilePath(directory, image.getOriginalFilename());
-                uploadedUrls.add(s3Service.uploadFile(image, filePath));
+                String filePath = s3Service.generateFilePath(directory, "proof." + format.extension());
+                uploadedUrls.add(s3Service.uploadFile(images.get(i), filePath, format.contentType()));
             }
             return uploadedUrls;
         } catch (Exception exception) {
