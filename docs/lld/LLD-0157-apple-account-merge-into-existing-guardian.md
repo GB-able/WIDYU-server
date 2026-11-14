@@ -54,12 +54,14 @@ SMS 인증은 이 서비스에서 이미 계정 주인 확인으로 쓰인다(�
 2. A에게 이미 번호가 있으면 403.
 3. `findTop2ByPhoneNumber(인증한 번호)`: 둘 이상이면 409 `MEMBER_4090`. 없으면 기존처럼 빈 번호를 채우고 `merged=false`.
 4. 주인(B)이 있으면 `AppleAccountMergeService.merge(A, B)`:
-   1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 회원이 직접 만드는 자료가 없음(`MemberRepository.countOwnedContentFlag`: 가족 소속, 시니어 프로필, 주소 즐겨찾기, 앨범과 댓글, 좋아요, 해제, 건강 일정, 복약 일정과 인증, 부모 위치, 걷기, 결제 주문과 결제). 아니면 400 `AUTH_4021`(자료가 있는 회원을 탈퇴 처리하면 그 자료에 닿을 수 없다). 알림, 동의 기록, FCM 토큰 같은 시스템 행은 보지 않는다. 회원이 만드는 자료 테이블이 새로 생기면 이 목록에 더한다.
+   1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 회원의 기록이 없음(`MemberRepository.countOwnedContentFlag`: `member`를 외래키로 참조하는 테이블 중 시스템 행인 `fcm_notification`, `fcm_outbox`, `member_fcm_token`, `member_notification_setting`, `local_account`, `social_account`를 뺀 전부. 가족 소속, 시니어 프로필, 주소 즐겨찾기, 앨범과 댓글, 좋아요, 해제, 조회, 건강 일정, 복약 일정과 인증, 부모 위치, 걷기, 결제 주문과 결제, 실증 참여, 측정 회차, 심박과 위급, 센서 배치). 아니면 400 `AUTH_4021`(기록이 있는 회원을 탈퇴 처리하면 그 기록에 닿을 수 없다). `member`를 참조하는 테이블이 새로 생기면 이 목록에 더한다.
    2. B 행을 `entityManager.refresh(B, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 번호가 인증한 번호와 달라졌으면(조회와 잠금 사이 번호 변경) 403. 활성 보호자(탈퇴, 정지 아님)가 아니면 400 `AUTH_4021`. B에게 Apple 계정이 이미 있으면 400 `AUTH_4019`(동시 합치기도 잠금 뒤 여기서 걸린다).
    3. `moveSocialAccount(A, B, APPLE)`가 1행이 아니면 403(동시 요청이 먼저 옮김).
    4. 영속성 컨텍스트가 비워졌으므로 A를 다시 읽어 `maskPersonalInfo()`, `markWithdrawn(now)`. A의 리프레시 토큰을 지운다. Apple 연동 해제(토큰 폐기)는 하지 않는다. 계정이 B로 옮겨갔기 때문이다.
    5. B의 토큰 쌍(`loginType=APPLE`)을 발급한다.
 5. 임시 회원은 커밋 뒤 삭제한다(LLD-0094와 같음). `merged=true`와 B의 토큰을 돌려준다.
+
+외래키가 없는 기록 중 동의 기록(`consent_record`)은 보지 않는다. 앱이 가입 중에 동의를 먼저 기록하면 정상 흐름까지 막히고, 그 기록은 빈 회원 자신의 동의 이력이라 탈퇴 회원에 그대로 남긴다. 보호자는 합친 뒤 자기 계정의 동의 상태를 쓴다.
 
 FCM 토큰은 따로 옮기지 않는다. 앱이 로그인 뒤 토큰을 등록하면 `upsertActive`가 현재 회원(B)으로 옮긴다.
 

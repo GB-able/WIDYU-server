@@ -50,8 +50,9 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     int moveSocialAccount(@Param("source") Member source, @Param("target") Member target,
                           @Param("provider") String provider);
 
-    // 애플 계정을 합치기 전에 빈 회원인지 본다. 회원이 직접 만드는 자료 테이블만 보고 알림, 동의, 토큰 같은 시스템 행은 보지 않는다 (LLD-0157)
-    // ponytail: 테이블 목록을 손으로 관리한다. 회원이 만드는 자료 테이블이 새로 생기면 여기에 더한다
+    // 애플 계정을 합치기 전에 빈 회원인지 본다. member를 외래키로 참조하는 테이블 중 시스템 행(알림, 알림 설정, FCM 토큰,
+    // 로그인 계정)을 뺀 전부를 본다. 하나라도 있으면 그 회원을 탈퇴 처리했을 때 기록에 닿을 수 없다 (LLD-0157)
+    // ponytail: 테이블 목록을 손으로 관리한다. member를 참조하는 테이블이 새로 생기면 여기에 더한다
     @Query(value = "SELECT CASE WHEN "
             + "EXISTS (SELECT 1 FROM family_membership WHERE guardian_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM senior_profile WHERE member_id = :memberId) "
@@ -60,6 +61,12 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             + "OR EXISTS (SELECT 1 FROM album_comment WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM album_like WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM album_unlock WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM album_view WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM study_participation WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM collection_run WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM heart_rate_emergency WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM heart_rate_event WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM sensor_batch WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM health_schedule WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM medicine_schedule WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM medication_proof WHERE member_id = :memberId) "
