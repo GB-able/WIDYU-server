@@ -65,7 +65,9 @@ public class NaverLoginStrategy implements SocialLoginStrategy {
                     naverAuthResponse.response().email(),
                     naverAuthResponse.response().name(),
                     phoneNumber,
-                    null  // 네이버는 getUserInfo API로 리프레시 토큰을 받을 수 없음
+                    null,  // 네이버는 getUserInfo API로 리프레시 토큰을 받을 수 없음
+                    // 네이버는 이메일 인증 여부를 주지 않는다. 이메일 매칭은 기존처럼 유지한다 (LLD-0149)
+                    true
             );
         } catch (Exception e) {
             log.error("네이버 사용자 정보 조회 실패");

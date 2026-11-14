@@ -99,7 +99,8 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     boolean existsByPhoneNumber(String phoneNumber);
     Optional<Member> findByPhoneNumberAndName(String phoneNumber, String name);
     Optional<Member> findByPhoneNumberAndNameAndLocalAccount_Email(String phoneNumber, String name, String email);
-    Optional<Member> findBySocialAccounts_Email(String email);
+    // 같은 이메일의 회원이 여럿이면 단건 조회 예외(500)가 나므로 두 건까지 읽는다 (LLD-0149)
+    List<Member> findDistinctTop2BySocialAccounts_Email(String email);
     Optional<Member> findBySocialAccounts_EmailAndSocialAccounts_Provider(String email, String provider);
     long countByType(MemberType type);
     long countByCreatedAtAfter(LocalDateTime dateTime);

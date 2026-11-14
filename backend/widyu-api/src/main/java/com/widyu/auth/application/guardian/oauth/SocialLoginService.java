@@ -195,7 +195,7 @@ public class SocialLoginService {
                                                        SocialClientResponse socialResponse,
                                                        UserInfo userInfo,
                                                        String oauthId) {
-        Optional<Member> existingMember = findExistingMemberByUserInfo(userInfo);
+        Optional<Member> existingMember = findExistingMemberByUserInfo(userInfo, socialResponse.emailVerified());
 
         if (existingMember.isPresent() && hasOtherAccounts(existingMember.get())) {
             return handleConflictingSocialAccount(existingMember.get(), provider, userInfo, oauthId);
@@ -226,8 +226,8 @@ public class SocialLoginService {
                 userInfo.email()
         );
 
-        Member fullMember = memberRepository.findWithAllAccountsById(existingMember.getId()).orElse(existingMember);
-        UserProfile profile = createUserProfile(fullMember);
+        // 요청자가 기존 계정 주인인지 아직 모르므로 연동 안내에 필요한 로그인 수단 목록만 준다 (LLD-0149)
+        UserProfile profile = UserProfile.providersOnly(extractProviders(existingMember));
 
         return SocialLoginResponse.ofWithSocialToken(false, null, null, profile, socialTemporaryToken);
     }
@@ -275,7 +275,7 @@ public class SocialLoginService {
                 .anyMatch(account -> OAuthProvider.APPLE.getValue().equals(account.getProvider()));
     }
 
-    private Optional<Member> findExistingMemberByUserInfo(UserInfo userInfo) {
+    private Optional<Member> findExistingMemberByUserInfo(UserInfo userInfo, boolean emailVerified) {
         if (userInfo.hasPhoneNumber()) {
             List<Member> members = memberRepository.findTop2ByPhoneNumber(userInfo.phoneNumber());
             // 같은 번호의 회원이 여럿이면 어느 쪽에 소셜 계정을 붙일지 알 수 없다. 임의로 고르거나 새 회원을 만들지 않는다 (LLD-0116)
@@ -290,15 +290,24 @@ public class SocialLoginService {
             }
         }
 
-        if (userInfo.hasEmail()) {
-            Optional<Member> member = memberRepository.findBySocialAccounts_Email(userInfo.email());
-            if (member.isPresent()) {
-                log.info("이메일로 기존 회원 발견: email={}", PiiMaskingUtil.maskEmail(userInfo.email()));
-                return memberRepository.findWithAllAccountsById(member.get().getId());
-            }
+        // 공급자가 소유를 확인하지 않은 이메일은 누구나 적을 수 있다. 그 이메일로는 기존 회원을 찾지 않고 새 회원으로 가입시킨다 (LLD-0149)
+        if (!userInfo.hasEmail() || !emailVerified) {
+            return Optional.empty();
         }
 
-        return Optional.empty();
+        List<Member> members = memberRepository.findDistinctTop2BySocialAccounts_Email(userInfo.email());
+        // 미인증 이메일 가입으로 같은 이메일의 회원이 여럿일 수 있다. 어느 쪽인지 알 수 없으므로 고르지 않는다 (LLD-0149)
+        if (members.size() > 1) {
+            log.warn("같은 이메일의 회원이 여러 명이라 이메일로 기존 회원을 찾지 않음: email={}",
+                    PiiMaskingUtil.maskEmail(userInfo.email()));
+            return Optional.empty();
+        }
+        if (members.isEmpty()) {
+            return Optional.empty();
+        }
+
+        log.info("이메일로 기존 회원 발견: email={}", PiiMaskingUtil.maskEmail(userInfo.email()));
+        return memberRepository.findWithAllAccountsById(members.get(0).getId());
     }
 
     private SocialLoginResponse createSuccessfulLoginResponse(Member member, boolean isFirstLogin, String currentProvider) {

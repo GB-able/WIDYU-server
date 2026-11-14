@@ -15,4 +15,9 @@ public record UserProfile(
     public static UserProfile of(String name, String phoneNumber, String email, List<String> providers) {
         return new UserProfile(name, phoneNumber, email, providers);
     }
+
+    // 소유 확인 전인 계정 연동 안내용. 개인정보는 빈 문자열로 가린다. 이전 앱이 name, email을 null 불가로 파싱한다 (LLD-0149)
+    public static UserProfile providersOnly(List<String> providers) {
+        return new UserProfile("", "", "", providers);
+    }
 }

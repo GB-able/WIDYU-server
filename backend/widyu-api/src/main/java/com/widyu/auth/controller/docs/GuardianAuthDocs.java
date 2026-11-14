@@ -223,7 +223,7 @@ public interface GuardianAuthDocs {
     )
     @ApiResponse(
             responseCode = "200",
-            description = "다른 소셜 계정이 이미 존재하는 경우 (토큰 null, 연동 대상 정보 포함)",
+            description = "다른 소셜 계정이 이미 존재하는 경우 (토큰 null). 기존 계정 주인인지 확인하기 전이므로 profile에는 로그인 수단 목록(providers)만 싣고 name, phoneNumber, email은 빈 문자열입니다",
             content = @Content(
                     schema = @Schema(implementation = ApiResponseTemplate.class),
                     examples = @ExampleObject(
@@ -235,9 +235,9 @@ public interface GuardianAuthDocs {
                                       "data": {
                                         "isFirst": false,
                                         "profile": {
-                                          "name": "홍길동",
-                                          "phoneNumber": "010-1234-5678",
-                                          "email": "existing@example.com",
+                                          "name": "",
+                                          "phoneNumber": "",
+                                          "email": "",
                                           "providers": ["kakao"]
                                         },
                                         "socialTemporaryToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."

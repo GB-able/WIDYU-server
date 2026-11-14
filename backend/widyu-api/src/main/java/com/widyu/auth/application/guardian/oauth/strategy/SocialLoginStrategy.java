@@ -36,7 +36,8 @@ public interface SocialLoginStrategy {
                     response.email(),
                     response.name(),
                     response.phoneNumber(),
-                    request.refreshToken()
+                    request.refreshToken(),
+                    response.emailVerified()
             );
         }
         return response;
