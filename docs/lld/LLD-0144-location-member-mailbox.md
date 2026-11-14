@@ -107,14 +107,14 @@ STOMP 수신 스레드 ─ prepare: 파싱, 입력 검증, 본인 확인, 순서
 
 ## 6. 인수조건
 
-- [ ] 수정 전에는 회원 A의 몰림으로 공용 수신 스레드가 막혀 결정적 회귀 테스트가 실패하고, 수정 뒤에는 A의 지연을 풀기 전에 B의 처리가 끝난다(`LocationMemberIsolationStompTest`)
-- [ ] 회원별 실행, 대기, 밀린 항목과 전체 회원, 작업 수에 상한이 있고 과부하 때 수신 스레드가 작업을 대신 실행하지 않는다(`MemberLocationMailboxTest`)
-- [ ] 최신 위치가 옛 위치로 되돌아가지 않는다(STOMP 테스트에서 A의 최종 최신 위치 = 가장 늦게 잰 위치, 우편함 동시성 테스트)
-- [ ] 더 최근 위치가 반영되기 전에는 밀린 위치를 성공으로 확인하지 않는다. 기술 실패나 대기열 진입만으로 성공 ACK를 보내지 않는다(`LocationIngestAsyncTest`, `MemberLocationMailboxTest`)
-- [ ] `APPLIED`, `SKIPPED`, `REJECTED` 계약이 그대로이고 위치 원본 INSERT가 없다
-- [ ] 같은 시각 재전송, 역순, 구형, 권한 위반, 실패 후 재시도, 발신 세션 격리, 종료 뒤 회원 항목 정리를 검증한다
-- [ ] 로컬 k6 혼합 트래픽 전후 비교(8절)
-- [ ] `bash scripts/harness/verify.sh`, 코드 검수
+- [x] 수정 전에는 회원 A의 몰림으로 공용 수신 스레드가 막혀 결정적 회귀 테스트가 실패하고, 수정 뒤에는 A의 지연을 풀기 전에 B의 처리가 끝난다(`LocationMemberIsolationStompTest`)
+- [x] 회원별 실행, 대기, 밀린 항목과 전체 회원, 작업 수에 상한이 있고 과부하 때 수신 스레드가 작업을 대신 실행하지 않는다(`MemberLocationMailboxTest`)
+- [x] 최신 위치가 옛 위치로 되돌아가지 않는다(STOMP 테스트에서 A의 최종 최신 위치 = 가장 늦게 잰 위치, 우편함 동시성 테스트)
+- [x] 더 최근 위치가 반영되기 전에는 밀린 위치를 성공으로 확인하지 않는다. 기술 실패나 대기열 진입만으로 성공 ACK를 보내지 않는다(`LocationIngestAsyncTest`, `MemberLocationMailboxTest`)
+- [x] `APPLIED`, `SKIPPED`, `REJECTED` 계약이 그대로이고 위치 원본 INSERT가 없다
+- [x] 같은 시각 재전송, 역순, 구형, 권한 위반, 실패 후 재시도, 발신 세션 격리, 종료 뒤 회원 항목 정리를 검증한다
+- [x] 로컬 k6 혼합 트래픽 전후 비교(8절)
+- [x] `bash scripts/harness/verify.sh`, 코드 검수
 
 ## 7. 미결정 사항
 
@@ -122,4 +122,19 @@ STOMP 수신 스레드 ─ prepare: 파싱, 입력 검증, 본인 확인, 순서
 
 ## 8. 검증 결과
 
-구현 뒤 채운다.
+- `bash scripts/harness/verify.sh`: 2,067건 통과(실패 0, 환경 변수가 필요한 MySQL 테스트는 건너뜀).
+- 결정적 STOMP 테스트(`LocationMemberIsolationStompTest`, H2, 실제 STOMP 수신): 수정 전 7d25b2b6에서 B가 2초 안에 ACK를 받지 못해 실패, 수정 뒤 통과(B `APPLIED`, A를 풀기 전). A의 31건은 `APPLIED` 2(첫 위치와 가장 늦게 잰 위치), `SKIPPED` 16, 과부하 13으로 모두 한 번씩 끝났고 A의 최신 위치는 가장 늦게 잰 위치다.
+- 단위: `MemberLocationMailboxTest`(교체, 밀린 항목 정리, 실패 뒤 대기, 거절 전파, 회원별, 전체 상한, 공정성, 구형 도착 순서, 실행기 거절과 정리, 동시 제출 4,000건 한 번씩 종료, 응답 전송 예외 뒤 다음 차례), `LocationIngestAsyncTest`(즉시 거절, 발신 세션 APPLIED, 밀린 SKIPPED, 거절 전파, 기술 오류, 과부하, 순서 잠금 대기 초과, 구형).
+- k6(실제 인증, STOMP, MySQL 8.0, Redis 7, 로컬 단일 인스턴스, 버전마다 45회, 7d25b2b6 대비 2cf79d91):
+
+| 상황 | 지표(3회 범위) | 전 | 후 |
+| --- | --- | --- | --- |
+| A 판정 300ms 지연 + A 200건 몰림 + 정상 19명 | 정상 ACK p95 | 5,844~6,375ms | 81~121ms |
+| | 정상 5초 내 ACK 없음(570건) | 69~85 | 0 |
+| | A 최종 최신값 정확 | 3/3 | 3/3 |
+| A 몰림 + 정상 19명(지연 없음) | 정상 ACK p95 | 61~64ms | 90~130ms |
+| 정상 19명만 | 정상 ACK p95 | 55~77ms | 77~120ms |
+| 한 회원 640건 즉시 | 9초 내 ACK 없음 | 532~592 | 622 |
+
+  모든 실행에서 원본 새 행 0, 심어 둔 과거 원본 보존, 안심구역 이탈, 복귀 알림 20, 20, Redis 정지 중 성공 ACK 0, 사칭 `REJECTED`가 두 버전 같다.
+- 대가: 부하가 없을 때 정상 ACK p95가 수십 ms 늘었다(원인 미확인, 실행기 전환과 별도 응답 경로로 추정). 몰린 회원의 밀린 항목 상한을 넘은 옛 위치는 ACK 대신 `TEMPORARILY_BUSY`를 받는다.
