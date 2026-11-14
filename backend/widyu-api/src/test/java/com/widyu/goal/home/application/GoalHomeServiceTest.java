@@ -750,6 +750,31 @@ class GoalHomeServiceTest {
     }
 
     @Test
+    @DisplayName("같은 알람의 인증이 둘이면 보호자 목표 홈은 가장 먼저 한 인증의 사진을 반환한다")
+    void 보호자_목표_홈은_중복_인증의_최초_인증_사진을_반환한다() {
+        // given: 조회 쿼리에 정렬이 없으므로 늦은 인증이 먼저 반환되는 순서를 재현한다.
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = alarmSchedule(senior, 1L, LocalTime.of(8, 0));
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(
+                        proof(morning, senior, today.atTime(8, 25), "https://cdn.widyu.shop/later.jpg"),
+                        proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/earlier.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+        assertThat(response.medicine().medicineSchedules())
+                .extracting(GuardianGoalHomeResponse.ScheduleItem::proofImageUrl)
+                .containsExactly("https://cdn.widyu.shop/earlier.jpg");
+    }
+
+    @Test
     @DisplayName("오늘 지난 일정·완료 일정·남은 일정과 내일 일정이 있으면 보호자 목표 홈은 오늘 일정만 오름차순으로 담고 다음 일정은 오늘 남은 일정을 반환한다")
     void 보호자_목표_홈은_오늘_일정만_담고_다음_일정은_오늘_남은_일정이다() {
         // given
