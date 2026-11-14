@@ -108,10 +108,9 @@ public class GuardianAuthController implements GuardianAuthDocs {
 
     @PatchMapping("/apple/phone-number")
     public ApiResponseTemplate<Void> updatePhoneNumberIfAppleSignUp(
-            @RequestBody @Valid final AppleSignUpRequest request,
-            HttpServletRequest httpServletRequest
+            @RequestBody @Valid final AppleSignUpRequest request
     ) {
-        guardianAuthService.updatePhoneNumberIfAppleSignUp(request, httpServletRequest);
+        guardianAuthService.updatePhoneNumberIfAppleSignUp(request);
         return ApiResponseTemplate.ok()
                 .code("AUTH_2008")
                 .message("애플 로그인 회원 전화번호 업데이트 성공")
