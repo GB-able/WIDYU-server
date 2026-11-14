@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import com.widyu.album.application.AlbumPermissionService;
 import com.widyu.global.entity.Status;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -24,7 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -42,8 +43,13 @@ class SeniorHomeServiceMedicineTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
+    @Mock private AlbumPermissionService albumPermissionService;
 
-    @InjectMocks private SeniorHomeService seniorHomeService;
+    private SeniorHomeService seniorHomeService() {
+        return new SeniorHomeService(memberUtil,
+                new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository), walkRepository,
+                healthScheduleRepository, heartRateResultRepository, albumRecommendationService, albumPermissionService);
+    }
 
     @ParameterizedTest
     @CsvSource({"20:30, 59", "21:00:30, 59", "21:30, 59", "21:30:00.000000001, 60", "22:10, 60", "23:30, 60"})
@@ -59,7 +65,7 @@ class SeniorHomeServiceMedicineTest {
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, time));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, time));
 
         // then
         assertThat(response.medicine().medicineScheduleId()).isEqualTo(expectedScheduleId);
@@ -81,7 +87,7 @@ class SeniorHomeServiceMedicineTest {
                 .willReturn(List.of(MedicationProof.create(verified, senior, List.of("proof.jpg"))));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
 
         // then
         assertThat(response.medicine().medicineScheduleId()).isEqualTo(70L);
@@ -102,7 +108,7 @@ class SeniorHomeServiceMedicineTest {
                         proof(schedule, senior, TODAY.atTime(21, 5), "earlier.jpg")));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(21, 40)));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(21, 40)));
 
         // then
         assertThat(response.medicine().proofImageUrl()).isEqualTo("earlier.jpg");
@@ -122,7 +128,7 @@ class SeniorHomeServiceMedicineTest {
                 .willReturn(List.of(proof(closedSchedule, senior, TODAY.atTime(8, 5), "old.jpg")));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(9, 10)));
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(9, 10)));
 
         // then
         assertThat(response.medicine().todayTakenCount()).isZero();
