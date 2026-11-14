@@ -19,7 +19,6 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
@@ -59,13 +58,11 @@ class GuardianHomeServiceTodayScheduleTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private LocationQueryService locationQueryService;
-    @Mock private LocationAccessLogService locationAccessLogService;
 
     private GuardianHomeService guardianHomeService() {
         return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
                 heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
-                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService,
-                locationAccessLogService);
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService);
     }
 
     @Test
@@ -83,7 +80,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules())
@@ -112,7 +109,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(7), ProgressStatus.UPCOMING)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -131,7 +128,7 @@ class GuardianHomeServiceTodayScheduleTest {
         givenConnectedSenior();
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();

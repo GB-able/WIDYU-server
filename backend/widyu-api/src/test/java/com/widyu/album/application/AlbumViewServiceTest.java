@@ -3,6 +3,7 @@ package com.widyu.album.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -36,42 +38,44 @@ class AlbumViewServiceTest {
     private AlbumViewService albumViewService;
 
     @Test
-    @DisplayName("처음 조회한 앨범이면 조회 기록이 저장되고 조회수가 증가한다")
-    void 처음_조회한_앨범이면_조회기록_저장되고_조회수_증가() {
+    @DisplayName("처음 조회한 앨범이면 조회수를 올린 뒤 조회 기록을 저장하고 true를 반환한다")
+    void 처음_조회한_앨범이면_조회수를_올린_뒤_조회기록을_저장한다() {
         // given
         Member member = mock(Member.class);
         given(member.getId()).willReturn(1L);
 
         Album album = mock(Album.class);
-        given(album.getId()).willReturn(10L);
+        given(albumRepository.getReferenceById(10L)).willReturn(album);
         given(albumViewRepository.findByAlbumAndMember(album, member)).willReturn(Optional.empty());
 
         // when
-        albumViewService.recordView(album, member);
+        boolean recorded = albumViewService.recordView(10L, member);
 
         // then
-        verify(albumViewRepository).save(any(AlbumView.class));
-        verify(albumRepository).incrementViewCount(10L);
-        verify(album).incrementViewCount();
+        assertThat(recorded).isTrue();
+        InOrder inOrder = inOrder(albumRepository, albumViewRepository);
+        inOrder.verify(albumRepository).incrementViewCount(10L);
+        inOrder.verify(albumViewRepository).save(any(AlbumView.class));
         verify(eventPublisher).publishEvent(any(AlbumViewedEvent.class));
     }
 
     @Test
-    @DisplayName("이미 조회한 앨범이면 조회 기록이 저장되지 않고 조회수가 증가하지 않는다")
+    @DisplayName("이미 조회한 앨범이면 조회 기록을 저장하지 않고 조회수를 올리지 않으며 false를 반환한다")
     void 이미_조회한_앨범이면_조회기록_저장되지_않고_조회수_증가하지_않는다() {
         // given
         Member member = mock(Member.class);
         Album album = mock(Album.class);
         AlbumView existingView = mock(AlbumView.class);
+        given(albumRepository.getReferenceById(10L)).willReturn(album);
         given(albumViewRepository.findByAlbumAndMember(album, member)).willReturn(Optional.of(existingView));
 
         // when
-        albumViewService.recordView(album, member);
+        boolean recorded = albumViewService.recordView(10L, member);
 
         // then
+        assertThat(recorded).isFalse();
         verify(albumViewRepository, never()).save(any(AlbumView.class));
         verify(albumRepository, never()).incrementViewCount(any());
-        verify(album, never()).incrementViewCount();
         verify(eventPublisher, never()).publishEvent(any());
     }
 

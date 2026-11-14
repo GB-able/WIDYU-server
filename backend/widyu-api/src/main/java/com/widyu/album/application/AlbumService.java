@@ -101,13 +101,8 @@ public class AlbumService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_FOUND));
 
         albumPermissionService.checkFamilyAccess(album, currentMember);
-        // 잠긴 앨범도 해금 화면에 가격을 보여 주도록 응답하되, 해금 전에는 조회로 치지 않는다
+        // 잠긴 앨범도 해금 화면에 가격을 보여 주도록 응답한다. 조회 기록은 이 트랜잭션이 끝난 뒤 파사드가 남긴다(LLD-0152)
         boolean isUnlocked = albumPermissionService.isUnlockedFor(album, currentMember);
-
-        // 조회 기록 추가 (해금된 타인 앨범인 경우에만)
-        if (isUnlocked && !album.getMember().getId().equals(currentMember.getId())) {
-            albumViewService.recordView(album, currentMember);
-        }
 
         // 댓글 목록 조회 (최상위 댓글만, 대댓글은 응답에서 포함)
         List<AlbumComment> comments = albumCommentRepository.findTopLevelCommentsByAlbumAndStatus(album, Status.ACTIVE);
