@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
+import com.widyu.global.websocket.WebSocketWorkDispatcher;
+import com.widyu.location.realtime.application.MemberLocationMailbox.Outcome;
 import com.widyu.location.realtime.dto.LocationAckResponse;
 import com.widyu.location.realtime.dto.LocationAckResult;
 import com.widyu.location.realtime.dto.LocationFreshness;
@@ -13,10 +15,13 @@ import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.io.IOException;
+import java.security.Principal;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +58,8 @@ public class LocationIngestService {
     private final MemberLocationSequencer sequencer;
     private final LocationJudgeService judgeService;
     private final LocationProjectionService projectionService;
+    private final MemberLocationMailbox mailbox;
+    private final WebSocketWorkDispatcher workDispatcher;
     // 미지정 필드를 무시하고 페이로드를 읽는 전용 매퍼. 주입받지 않는 이유는 Redis·응답 직렬화와
     // 설정을 공유하면 안 되기 때문이다(초기화 필드라 생성자 주입 대상에서 빠진다).
     private final ObjectMapper payloadMapper = new ObjectMapper()
@@ -72,20 +79,63 @@ public class LocationIngestService {
      * 몰려 차례를 얻지 못하면 경고만 남기고 ACK 없이 {@code null}을 돌려준다(컨트롤러가 아무것도 보내지 않는다).
      */
     public LocationAckResponse receive(byte[] payload, Long authenticatedMemberId) {
+        return process(prepare(payload, authenticatedMemberId));
+    }
+
+    /**
+     * STOMP 수신 스레드의 진입점(LLD-0144). 파싱, 검증, 본인 확인만 하고 회원 우편함에 넣은 뒤 바로 돌아간다. 실시간 처리와
+     * ACK는 위치 실행기가 원래 발신 세션에 보낸다. 입력 오류는 여기서 바로 {@code REJECTED}를 돌려준다(컨트롤러가 보낸다).
+     * 그 밖에는 {@code null}을 돌려준다. 구형 위치의 입력 오류는 예전처럼 예외로 알린다.
+     */
+    public LocationAckResponse submit(byte[] payload, Long authenticatedMemberId, Principal user, String sessionId) {
+        Prepared prepared = prepare(payload, authenticatedMemberId);
+        if (prepared.rejection() != null) {
+            return prepared.rejection();
+        }
+        mailbox.submit(authenticatedMemberId, new LocationJob(prepared, user, sessionId, MDC.getCopyOfContextMap()));
+        return null;
+    }
+
+    /**
+     * 수신 때 할 일. 비교 기준 시각(순서 시각)은 여기서 한 번 정하고 우편함 비교와 실시간 처리가 같은 값을 쓴다(LLD-0140).
+     * DB, Redis를 부르지 않는다.
+     */
+    Prepared prepare(byte[] payload, Long authenticatedMemberId) {
         long serverReceivedAtMs = System.currentTimeMillis();
         LocationUpdateRequest request = parse(payload);
+        Long orderAtMs = orderAt(request.tsMs(), serverReceivedAtMs);
 
         if (!request.isV2()) {
             validate(request);
-            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, serverReceivedAtMs));
+            verifySelf(request.memberId(), authenticatedMemberId);
+            return new Prepared(request, authenticatedMemberId, serverReceivedAtMs, orderAtMs, null);
         }
-
-        LocationUpdateResponse response;
         try {
             // 잘못된 요청, 남의 위치는 실시간 부수효과(방송, 안전구역 판정)가 생기기 전에 거절한다.
             validate(request);
             validateFix(request);
-            response = applyRealtime(request, authenticatedMemberId, serverReceivedAtMs);
+            verifySelf(request.memberId(), authenticatedMemberId);
+        } catch (BusinessException e) {
+            return new Prepared(request, authenticatedMemberId, serverReceivedAtMs, orderAtMs,
+                    rejected(request, authenticatedMemberId, e));
+        }
+        return new Prepared(request, authenticatedMemberId, serverReceivedAtMs, orderAtMs, null);
+    }
+
+    /** 작업 스레드에서 할 일. 회원 순서 잠금 아래 실시간 처리를 하고 ACK를 정한다. 기술 오류는 던진다(ACK 없음). */
+    LocationAckResponse process(Prepared prepared) {
+        if (prepared.rejection() != null) {
+            return prepared.rejection();
+        }
+        LocationUpdateRequest request = prepared.request();
+        Long authenticatedMemberId = prepared.memberId();
+        if (!request.isV2()) {
+            return LocationAckResponse.legacy(applyRealtime(request, authenticatedMemberId, prepared.receivedAtMs()));
+        }
+
+        LocationUpdateResponse response;
+        try {
+            response = applyRealtime(request, authenticatedMemberId, prepared.receivedAtMs());
             if (!isApplied(response)) {
                 // 반영하지 않은 위치는 판정(시니어 확인)을 거치지 않았다. 시니어가 아니면 생략이 아니라 거절이다.
                 judgeService.requireSenior(request.memberId());
@@ -246,5 +296,134 @@ public class LocationIngestService {
         if (request.resolvedLatitude() == null || request.resolvedLongitude() == null) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
+    }
+
+    /** 수신 스레드에서 정한 요청. {@code rejection}이 있으면 입력 오류라 실시간 처리 없이 그 응답으로 끝난다. */
+    record Prepared(LocationUpdateRequest request, Long memberId, long receivedAtMs, Long orderAtMs,
+                    LocationAckResponse rejection) {
+    }
+
+    /**
+     * 우편함 작업 하나(LLD-0144). 수신 스레드의 발신 세션, 인증 정보, MDC를 들고 위치 실행기에서 돈다. 응답은 원래 발신
+     * 세션에만 보낸다. 연결이 끊긴 세션으로 보낸 응답은 브로커가 버린다(처리 자체는 끝까지 한다).
+     */
+    private final class LocationJob implements MemberLocationMailbox.Job {
+
+        private static final String API = "RealtimeLocationController.updateLocation";
+        private static final String DESTINATION = "/app/location/update";
+        private static final String ACK_DESTINATION = "/queue/location/ack";
+
+        private final Prepared prepared;
+        private final Principal user;
+        private final String sessionId;
+        private final Map<String, String> mdc;
+
+        private LocationJob(Prepared prepared, Principal user, String sessionId, Map<String, String> mdc) {
+            this.prepared = prepared;
+            this.user = user;
+            this.sessionId = sessionId;
+            this.mdc = mdc;
+        }
+
+        @Override
+        public Long orderAtMs() {
+            return prepared.orderAtMs();
+        }
+
+        @Override
+        public Outcome run() {
+            Outcome[] outcome = {Outcome.FAILED};
+            withMdc(() -> outcome[0] = runAndReply());
+            return outcome[0];
+        }
+
+        private Outcome runAndReply() {
+            try {
+                LocationAckResponse ack = process(prepared);
+                if (ack == null) {
+                    // 회원 순서 잠금 대기 초과(동기 경로와 겹칠 때). 성공 ACK 없이 과부하를 알려 재전송을 받는다.
+                    workDispatcher.sendOverloaded(API, user, sessionId);
+                    return Outcome.FAILED;
+                }
+                send(ack);
+                return outcomeOf(ack);
+            } catch (RuntimeException e) {
+                workDispatcher.sendError(e, API, DESTINATION, user, sessionId);
+                return Outcome.FAILED;
+            }
+        }
+
+        /** 같거나 늦게 잰 위치가 반영되거나 생략으로 끝났으니 이 위치는 실시간에 반영할 필요가 없다. 같은 회원이라 거절도 같다. */
+        @Override
+        public void settledBy(Outcome outcome) {
+            withMdc(() -> settle(outcome));
+        }
+
+        @Override
+        public void overloaded() {
+            withMdc(() -> {
+                log.warn("위치 실시간 처리 대기 공간 부족으로 ACK 보류: memberId={}, seq={}",
+                        prepared.memberId(), prepared.request().seq());
+                workDispatcher.sendOverloaded(API, user, sessionId);
+            });
+        }
+
+        private void settle(Outcome outcome) {
+            LocationUpdateRequest request = prepared.request();
+            if (outcome == Outcome.REJECTED) {
+                if (request.isV2()) {
+                    send(LocationAckResponse.rejected(request));
+                    return;
+                }
+                workDispatcher.sendError(new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."),
+                        API, DESTINATION, user, sessionId);
+                return;
+            }
+            log.info("위치 실시간 반영 생략(더 최근 위치 반영됨): memberId={}, seq={}", prepared.memberId(), request.seq());
+            LocationUpdateResponse response = requestOnly(request, prepared.receivedAtMs());
+            if (request.isV2()) {
+                send(LocationAckResponse.of(response, request, LocationAckResult.SKIPPED));
+                return;
+            }
+            send(LocationAckResponse.legacy(response));
+        }
+
+        private void send(LocationAckResponse ack) {
+            workDispatcher.sendToSession(user.getName(), sessionId, ACK_DESTINATION, ack);
+        }
+
+        /** 수신 때의 MDC로 실행하고 이 스레드의 원래 MDC로 되돌린다(과부하 응답은 수신 스레드에서 불릴 수 있다). */
+        private void withMdc(Runnable action) {
+            Map<String, String> previous = MDC.getCopyOfContextMap();
+            if (mdc != null) {
+                MDC.setContextMap(mdc);
+            }
+            try {
+                action.run();
+            } finally {
+                if (previous == null) {
+                    MDC.clear();
+                } else {
+                    MDC.setContextMap(previous);
+                }
+            }
+        }
+    }
+
+    /** 구형 ACK는 결과가 없어 출처로 가른다. 반영했으면 최신 위치(LATEST), 아니면 요청 좌표(REQUEST)다. */
+    private static Outcome outcomeOf(LocationAckResponse ack) {
+        if (ack.result() == LocationAckResult.REJECTED) {
+            return Outcome.REJECTED;
+        }
+        if (ack.result() == LocationAckResult.APPLIED) {
+            return Outcome.APPLIED;
+        }
+        if (ack.result() == LocationAckResult.SKIPPED) {
+            return Outcome.SKIPPED;
+        }
+        if (isApplied(ack.location())) {
+            return Outcome.APPLIED;
+        }
+        return Outcome.SKIPPED;
     }
 }

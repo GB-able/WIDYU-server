@@ -26,6 +26,9 @@ public class RealtimeLocationController {
      *
      * <p>본문을 원문 바이트로 받아 서비스가 구형과 v2를 가려 파싱, 검증한다. 위치 원본은 저장하지 않는다(LLD-0143).
      * ACK 결과는 실시간 처리 결과({@code APPLIED}, {@code SKIPPED}, {@code REJECTED})다.
+     *
+     * <p>입력 오류의 {@code REJECTED}만 여기서 바로 돌려준다. 실시간 처리는 회원별 우편함이 위치 실행기에서 하고 ACK를
+     * 이 발신 세션에 따로 보낸다(LLD-0144). 그래서 한 회원이 몰아 보내도 수신 스레드를 붙잡지 않는다.
      */
     @MessageMapping("/location/update")
     @SendToUser(destinations = "/queue/location/ack", broadcast = false)
@@ -36,7 +39,8 @@ public class RealtimeLocationController {
         Long authenticatedMemberId = resolveMemberId(headerAccessor.getUser());
         log.info("위치 업데이트 수신 - authenticatedMemberId: {}", authenticatedMemberId);
 
-        return locationIngestService.receive(message.getPayload(), authenticatedMemberId);
+        return locationIngestService.submit(message.getPayload(), authenticatedMemberId, headerAccessor.getUser(),
+                headerAccessor.getSessionId());
     }
 
     /**

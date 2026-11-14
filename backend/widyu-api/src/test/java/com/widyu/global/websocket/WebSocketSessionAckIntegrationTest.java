@@ -329,7 +329,7 @@ class WebSocketSessionAckIntegrationTest {
                     return HeartRateStatusResponse.of(invocation.getArgument(0), HeartRateStatus.NORMAL,
                             request.heartRate(), request.measuredAt());
                 });
-        given(locationIngestService.receive(any(byte[].class), anyLong()))
+        given(locationIngestService.submit(any(byte[].class), anyLong(), any(), any()))
                 .willAnswer(invocation -> {
                     String tag = JSON.readTree(invocation.getArgument(0, byte[].class)).get("tag").asText();
                     return LocationAckResponse.legacy(LocationUpdateResponse.of(invocation.getArgument(1), tag, null,

@@ -1,6 +1,8 @@
 package com.widyu.global.config;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import com.widyu.location.realtime.application.MemberLocationMailbox;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -25,6 +27,8 @@ public class WebSocketExecutorConfig {
     /** S3 apiCallTimeout(5초) + 여유. */
     private static final int SENSOR_AWAIT_TERMINATION_SECONDS = 10;
     private static final int OUTBOUND_AWAIT_TERMINATION_SECONDS = 5;
+    /** 판정 트랜잭션과 Redis 명령 제한(3초) + 여유. 종료 때 실행 중인 위치가 반영과 ACK까지 갈 시간이다. */
+    private static final int LOCATION_AWAIT_TERMINATION_SECONDS = 10;
 
     @Bean
     public ThreadPoolTaskExecutor websocketHeartExecutor(
@@ -56,6 +60,40 @@ public class WebSocketExecutorConfig {
         // Spring이 응답 채널에 등록한 실행기의 스레드 이름을 이 값으로 바꾸므로 처음부터 같게 둔다.
         return fixedExecutor("clientOutboundChannel-", threads, queueCapacity, OUTBOUND_AWAIT_TERMINATION_SECONDS,
                 new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+
+    /**
+     * 위치 실시간 처리 전용(LLD-0144). 대기열에는 회원마다 차례 하나만 들어가므로 용량을 활성 회원 상한과 같게 둔다.
+     * 가득 차면 거절하고(AbortPolicy) 수신 스레드에서 대신 실행하지 않는다.
+     */
+    @Bean
+    public ThreadPoolTaskExecutor websocketLocationExecutor(
+            @Value("${websocket.executor.location.threads:8}") int threads,
+            @Value("${location.ingest.max-members:1024}") int maxMembers
+    ) {
+        return fixedExecutor("websocketLocation-", threads, maxMembers, LOCATION_AWAIT_TERMINATION_SECONDS,
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @Bean
+    public MemberLocationMailbox memberLocationMailbox(
+            @Qualifier("websocketLocationExecutor") ThreadPoolTaskExecutor websocketLocationExecutor,
+            @Value("${location.ingest.max-waiting-per-member:16}") int maxWaitingPerMember,
+            @Value("${location.ingest.max-members:1024}") int maxMembers,
+            @Value("${location.ingest.max-queued:4096}") int maxQueued
+    ) {
+        return new MemberLocationMailbox(websocketLocationExecutor, maxWaitingPerMember, maxMembers, maxQueued);
+    }
+
+    @Bean
+    public MeterBinder websocketLocationMetrics(
+            @Qualifier("websocketLocationExecutor") ThreadPoolTaskExecutor location, MemberLocationMailbox mailbox
+    ) {
+        return registry -> {
+            ExecutorServiceMetrics.monitor(registry, location.getThreadPoolExecutor(), "websocket.location");
+            Gauge.builder("location.ingest.members", mailbox, MemberLocationMailbox::trackedMembers).register(registry);
+            Gauge.builder("location.ingest.queued", mailbox, MemberLocationMailbox::queuedJobs).register(registry);
+        };
     }
 
     @Bean

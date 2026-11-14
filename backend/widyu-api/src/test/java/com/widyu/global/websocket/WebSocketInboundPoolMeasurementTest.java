@@ -472,7 +472,7 @@ class WebSocketInboundPoolMeasurementTest {
                     return HeartRateStatusResponse.of(invocation.getArgument(0), HeartRateStatus.NORMAL,
                             request.heartRate(), request.measuredAt());
                 });
-        given(locationIngestService.receive(any(byte[].class), anyLong()))
+        given(locationIngestService.submit(any(byte[].class), anyLong(), any(), any()))
                 .willAnswer(invocation -> {
                     noteCaller(INBOUND_PREFIX, locationOffPool, locationThreads);
                     String tag = JSON.readTree(invocation.getArgument(0, byte[].class)).get("tag").asText();

@@ -68,6 +68,18 @@ public class WebSocketWorkDispatcher {
         messagingTemplate.convertAndSendToUser(user, destination, payload, headers);
     }
 
+    /** 실행기 밖에서 직접 관리하는 작업(위치 우편함, LLD-0144)의 과부하를 발신 세션에 알린다. 성공 응답은 보내지 않는다. */
+    public void sendOverloaded(String api, Principal user, String sessionId) {
+        meterRegistry.counter(REJECTED_METRIC, "api", api).increment();
+        sendToSession(nameOf(user), sessionId, ERRORS_DESTINATION, OVERLOADED);
+    }
+
+    /** 실행기 밖에서 직접 관리하는 작업의 예외를 {@link #dispatch}와 같은 로그 형식으로 남기고 발신 세션에 오류를 보낸다. */
+    public void sendError(Exception e, String api, String destination, Principal user, String sessionId) {
+        Map<String, String> error = exceptionHandler.handle(e, api, destination, ApiRequestContext.actorOf(user));
+        sendToSession(nameOf(user), sessionId, ERRORS_DESTINATION, error);
+    }
+
     private void run(Runnable work, String api, String destination, Principal user, String sessionId,
                      Map<String, String> mdc) {
         if (mdc != null) {

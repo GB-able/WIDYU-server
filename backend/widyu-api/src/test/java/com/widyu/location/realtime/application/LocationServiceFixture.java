@@ -25,7 +25,16 @@ final class LocationServiceFixture {
                                         LocationProjectionService projectionService,
                                         PlatformTransactionManager transactionManager) {
         return new LocationIngestService(validator, sequencer,
-                transactional(judgeService, transactionManager), projectionService);
+                transactional(judgeService, transactionManager), projectionService, null, null);
+    }
+
+    /** 비동기 수신 경로(submit) 조립. 우편함과 응답 전송기를 받는다(LLD-0144). */
+    static LocationIngestService ingest(Validator validator, MemberLocationSequencer sequencer,
+                                        LocationJudgeService judgeService, LocationProjectionService projectionService,
+                                        PlatformTransactionManager transactionManager, MemberLocationMailbox mailbox,
+                                        com.widyu.global.websocket.WebSocketWorkDispatcher workDispatcher) {
+        return new LocationIngestService(validator, sequencer, transactional(judgeService, transactionManager),
+                projectionService, mailbox, workDispatcher);
     }
 
     @SuppressWarnings("unchecked")
