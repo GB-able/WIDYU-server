@@ -11,6 +11,7 @@ import com.widyu.album.application.AlbumPermissionService;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -29,7 +30,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -37,7 +37,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("SeniorHomeService 단위 테스트")
 class SeniorHomeServiceTest {
 
-    @InjectMocks private SeniorHomeService seniorHomeService;
 
     @Mock private MemberUtil memberUtil;
     @Mock private MedicineScheduleRepository medicineScheduleRepository;
@@ -48,6 +47,12 @@ class SeniorHomeServiceTest {
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private AlbumPermissionService albumPermissionService;
 
+    private SeniorHomeService seniorHomeService() {
+        return new SeniorHomeService(memberUtil,
+                new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository), walkRepository,
+                healthScheduleRepository, heartRateResultRepository, albumRecommendationService, albumPermissionService);
+    }
+
     @Test
     @DisplayName("보호자가 시니어 홈을 호출하면 403 예외가 발생한다")
     void 보호자가_시니어홈_호출하면_403_예외가_발생한다() {
@@ -56,7 +61,7 @@ class SeniorHomeServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(guardian);
 
         // when & then
-        assertThatThrownBy(() -> seniorHomeService.getHomeCards())
+        assertThatThrownBy(() -> seniorHomeService().getHomeCards())
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -74,7 +79,7 @@ class SeniorHomeServiceTest {
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.medicine()).isNull();
@@ -105,7 +110,7 @@ class SeniorHomeServiceTest {
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.medicine().scheduleStatuses()).hasSize(1);
@@ -126,7 +131,7 @@ class SeniorHomeServiceTest {
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -146,7 +151,7 @@ class SeniorHomeServiceTest {
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.walk()).isNull();
@@ -166,7 +171,7 @@ class SeniorHomeServiceTest {
         given(albumRecommendationService.recommendAlbums(any(), any())).willReturn(List.of());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.albums()).isEmpty();
@@ -190,7 +195,7 @@ class SeniorHomeServiceTest {
         given(albumPermissionService.isUnlockedFor(lockedPhotoAlbum, senior)).willReturn(false);
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards();
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards();
 
         // then
         assertThat(response.albums()).hasSize(1);

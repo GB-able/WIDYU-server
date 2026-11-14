@@ -12,6 +12,7 @@ import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -34,7 +35,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -62,8 +62,12 @@ class GuardianHomeServiceTest {
     @Mock private LocationQueryService locationQueryService;
     @Mock private LocationAccessLogService locationAccessLogService;
 
-    @InjectMocks
-    private GuardianHomeService guardianHomeService;
+    private GuardianHomeService guardianHomeService() {
+        return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
+                heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService,
+                locationAccessLogService);
+    }
 
     @Test
     @DisplayName("보호자가 홈 카드를 열면 외출 상태를 읽은 시니어에 대해 HOME_OUTING 열람 기록을 남긴다")
@@ -72,7 +76,7 @@ class GuardianHomeServiceTest {
         givenEmptyHomeCards();
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID);
 
         // then
         assertThat(response).isNotNull();
@@ -90,7 +94,7 @@ class GuardianHomeServiceTest {
                 .record(GUARDIAN_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID);
 
         // then
         assertThat(response).isNotNull();
@@ -105,7 +109,7 @@ class GuardianHomeServiceTest {
                 .willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> guardianHomeService.getHomeCards(SENIOR_ID))
+        assertThatThrownBy(() -> guardianHomeService().getHomeCards(SENIOR_ID))
                 .isInstanceOf(BusinessException.class);
         then(locationAccessLogService).shouldHaveNoInteractions();
     }

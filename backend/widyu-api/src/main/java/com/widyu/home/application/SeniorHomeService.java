@@ -1,15 +1,13 @@
 package com.widyu.home.application;
 
 import com.widyu.album.application.AlbumPermissionService;
-import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
-import com.widyu.goal.home.application.GoalHomeService;
-import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
-import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedication;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.heart.repository.HeartRateResultRepository;
@@ -26,8 +24,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.function.BinaryOperator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,8 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SeniorHomeService {
 
     private final MemberUtil memberUtil;
-    private final MedicineScheduleRepository medicineScheduleRepository;
-    private final MedicationProofRepository medicationProofRepository;
+    private final TodayMedicationQuery todayMedicationQuery;
     private final WalkRepository walkRepository;
     private final HealthScheduleRepository healthScheduleRepository;
     private final HeartRateResultRepository heartRateResultRepository;
@@ -80,37 +75,21 @@ public class SeniorHomeService {
     }
 
     private SeniorHomeCardsResponse.MedicineInfo getMedicineInfo(Member member, LocalDateTime now) {
-        LocalDate today = now.toLocalDate();
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
+        TodayMedication todayMedication = todayMedicationQuery.find(member, now.toLocalDate());
+        List<MedicineSchedule> schedules = todayMedication.schedules();
 
         if (schedules.isEmpty()) {
             return null;
         }
 
-        // 스케줄 수정·삭제로 오늘 유효 목록에서 빠진 버전의 인증은 제외한다 (takenCount가 totalCount를 넘지 않도록)
-        Set<Long> scheduleIds = schedules.stream()
-                .map(MedicineSchedule::getId)
-                .collect(java.util.stream.Collectors.toSet());
-
-        Map<Long, MedicationProof> proofsByScheduleId = medicationProofRepository
-                .findByMemberIdAndDateRange(member.getId(), today, today)
-                .stream()
-                .filter(proof -> scheduleIds.contains(proof.getMedicineSchedule().getId()))
-                .collect(java.util.stream.Collectors.toMap(
-                        proof -> proof.getMedicineSchedule().getId(),
-                        proof -> proof,
-                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
-                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
-                ));
+        Map<Long, MedicationProof> proofsByScheduleId = todayMedication.proofsByScheduleId();
 
         List<SeniorHomeCardsResponse.ScheduleStatus> scheduleStatuses = schedules.stream()
                 .sorted(Comparator.comparing(MedicineSchedule::getAlarmTime))
                 .map(s -> SeniorHomeCardsResponse.ScheduleStatus.from(s, proofsByScheduleId.containsKey(s.getId())))
                 .toList();
 
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(
-                schedules, now.toLocalTime(), proofsByScheduleId.keySet());
+        MedicineSchedule nextSchedule = todayMedication.nextSchedule(now.toLocalTime());
 
         return SeniorHomeCardsResponse.MedicineInfo.from(
                 nextSchedule,
