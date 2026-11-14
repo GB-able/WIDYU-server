@@ -6,6 +6,7 @@ import com.widyu.auth.application.guardian.oauth.strategy.SocialLoginStrategyFac
 import com.widyu.auth.application.guardian.oauth.strategy.UserInfo;
 import com.widyu.auth.dto.request.AppleSignUpRequest;
 import com.widyu.auth.dto.request.SocialLoginRequest;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.SocialClientResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
@@ -47,6 +48,7 @@ public class SocialLoginService {
     private final JwtTokenProvider jwtTokenProvider;
     private final TemporaryMemberUtil temporaryMemberUtil;
     private final MemberUtil memberUtil;
+    private final AppleAccountMergeService appleAccountMergeService;
     private final SocialTemporaryTokenService socialTemporaryTokenService;
 
     @Transactional
@@ -80,18 +82,24 @@ public class SocialLoginService {
     }
 
     // 번호를 채울 회원은 Apple 로그인으로 받은 액세스 토큰의 회원이다. 임시 토큰은 SMS로 인증한 번호만 증명한다 (LLD-0145)
-    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
+    public ApplePhoneNumberResponse updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
         TemporaryMember temporaryMember = temporaryMemberUtil.getTemporaryMember(request.temporaryToken());
         Member member = memberUtil.getCurrentMember();
         if (!hasAppleAccount(member)) {
             log.warn("애플 계정이 없는 회원의 애플 번호 보강 거부: memberId={}", member.getId());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        if (member.getPhoneNumber() != null && !member.getPhoneNumber().isBlank()) {
+            log.warn("전화번호가 이미 있는 애플 회원의 번호 보강 거부: memberId={}", member.getId());
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
-        // 전화번호는 회원 전체에서 하나여야 한다. 다른 회원이 쓰는 번호로는 보강하지 않는다 (LLD-0116)
-        if (memberRepository.existsByPhoneNumberAndIdNot(temporaryMember.getPhoneNumber(), member.getId())) {
-            log.warn("다른 회원이 쓰는 번호로 애플 회원 번호 보강 거부: memberId={}", member.getId());
-            throw new BusinessException(ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
+        // 전화번호는 회원 전체에서 하나여야 한다(LLD-0116). 번호 주인이 따로 있으면 그 보호자에게 애플 계정을 합친다 (LLD-0157)
+        Optional<Member> phoneOwner = findOnlyPhoneOwner(temporaryMember.getPhoneNumber());
+        if (phoneOwner.isPresent()) {
+            TokenPairResponse tokenPair = appleAccountMergeService.merge(member, phoneOwner.get());
+            deleteTemporaryMemberAfterCommit(temporaryMember.getId());
+            return ApplePhoneNumberResponse.merged(tokenPair);
         }
 
         if (memberRepository.fillPhoneNumberIfEmpty(member.getId(), temporaryMember.getPhoneNumber()) == 0) {
@@ -101,6 +109,17 @@ public class SocialLoginService {
 
         deleteTemporaryMemberAfterCommit(temporaryMember.getId());
         log.info("애플 사용자 전화번호 업데이트 완료: memberId={}", member.getId());
+        return ApplePhoneNumberResponse.filled();
+    }
+
+    private Optional<Member> findOnlyPhoneOwner(String phoneNumber) {
+        List<Member> owners = memberRepository.findTop2ByPhoneNumber(phoneNumber);
+        // 같은 번호의 회원이 여럿이면 누구에게 합칠지 알 수 없다 (LLD-0116)
+        if (owners.size() > 1) {
+            log.warn("같은 전화번호의 회원이 여러 명이라 애플 번호 보강 거부");
+            throw new BusinessException(ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        }
+        return owners.stream().findFirst();
     }
 
     // 번호 반영이 롤백되면 임시 토큰을 다시 쓸 수 있어야 하므로 커밋 뒤에 지운다

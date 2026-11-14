@@ -23,6 +23,7 @@ import com.widyu.auth.dto.response.CurrentMemberResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.auth.dto.response.TemporaryTokenResponse;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.auth.dto.response.UserProfile;
 import com.widyu.member.Member;
@@ -94,8 +95,8 @@ public class GuardianAuthService {
     }
 
     @Transactional
-    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+    public ApplePhoneNumberResponse updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
+        return socialLoginService.updatePhoneNumberIfAppleSignUp(request);
     }
 
     @Transactional(readOnly = true)

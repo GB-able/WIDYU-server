@@ -43,6 +43,13 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             + "WHERE m.id = :memberId AND (m.phoneNumber IS NULL OR TRIM(m.phoneNumber) = '')")
     int fillPhoneNumberIfEmpty(@Param("memberId") Long memberId, @Param("phoneNumber") String phoneNumber);
 
+    // 소셜 계정을 다른 회원으로 옮긴다. 컬렉션에서 빼서 옮기면 orphanRemoval이 행을 지우므로 UPDATE 한 문장으로 바꾼다 (LLD-0157)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE SocialAccount sa SET sa.member = :target "
+            + "WHERE sa.member = :source AND sa.provider = :provider")
+    int moveSocialAccount(@Param("source") Member source, @Param("target") Member target,
+                          @Param("provider") String provider);
+
     Optional<Member> findByPhoneNumber(String phoneNumber);
     boolean existsByPhoneNumber(String phoneNumber);
     Optional<Member> findByPhoneNumberAndName(String phoneNumber, String name);

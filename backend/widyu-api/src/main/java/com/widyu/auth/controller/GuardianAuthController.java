@@ -14,6 +14,7 @@ import com.widyu.auth.dto.response.CurrentMemberResponse;
 import com.widyu.auth.dto.response.LocalSignupResponse;
 import com.widyu.auth.dto.response.MemberInfoResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.auth.dto.response.UserProfile;
 import com.widyu.global.response.ApiResponseTemplate;
@@ -107,14 +108,14 @@ public class GuardianAuthController implements GuardianAuthDocs {
     }
 
     @PatchMapping("/apple/phone-number")
-    public ApiResponseTemplate<Void> updatePhoneNumberIfAppleSignUp(
+    public ApiResponseTemplate<ApplePhoneNumberResponse> updatePhoneNumberIfAppleSignUp(
             @RequestBody @Valid final AppleSignUpRequest request
     ) {
-        guardianAuthService.updatePhoneNumberIfAppleSignUp(request);
+        ApplePhoneNumberResponse response = guardianAuthService.updatePhoneNumberIfAppleSignUp(request);
         return ApiResponseTemplate.ok()
                 .code("AUTH_2008")
                 .message("애플 로그인 회원 전화번호 업데이트 성공")
-                .body(null);
+                .body(response);
     }
 
     @GetMapping("/profile/temporary")
