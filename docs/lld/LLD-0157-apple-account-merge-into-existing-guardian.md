@@ -54,7 +54,7 @@ SMS 인증은 이 서비스에서 이미 계정 주인 확인으로 쓰인다(�
 2. A에게 이미 번호가 있으면 403.
 3. `findTop2ByPhoneNumber(인증한 번호)`: 둘 이상이면 409 `MEMBER_4090`. 없으면 기존처럼 빈 번호를 채우고 `merged=false`.
 4. 주인(B)이 있으면 `AppleAccountMergeService.merge(A, B)`:
-   0. A 행을 `refresh(A, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 같은 A의 동시 합치기는 여기서 줄 선다.
+   0. A 행을 `refresh(A, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 같은 A의 동시 요청은 여기서 줄 선다. 기다리는 사이 다른 요청이 A의 번호를 채웠으면 403(먼저 성공한 요청의 결과를 지킨다).
    1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 회원의 기록이 없음(`MemberRepository.countOwnedContentFlag`). 회원 ID를 담는 컬럼이 있는 테이블(외래키 유무와 무관, 2026-11-14 dev 스키마 기준 37개 컬럼) 중 시스템 행(알림 `fcm_notification`, `fcm_outbox`, `member_fcm_token`, `member_notification_setting`, 로그인 계정 `local_account`, `social_account`, 작업 큐 `s3_object_deletion_task`, `medication_proof_image_deletion_task`, `social_unlink_task`, 동의 기록 `consent_record`)과 관리자 기록(`admin_access_log`, `admin_audit_log`, 탈퇴 요청의 처리 관리자)을 뺀 전부를 본다. 아니면 400 `AUTH_4021`(기록이 있는 회원을 탈퇴 처리하면 그 기록에 닿을 수 없다). 회원 ID 컬럼을 가진 테이블이 새로 생기면 이 목록에 더한다. 미머지 PR #1069의 `senior_stay_state`(시니어 체류 상태)는 이 PR 시점에 테이블이 없어 넣지 않았고, 시니어 기록이라 보호자 빈 회원 판정에는 영향이 없다.
    2. B 행을 `entityManager.refresh(B, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 번호가 인증한 번호와 달라졌으면(조회와 잠금 사이 번호 변경) 403. 활성 보호자(탈퇴, 정지 아님)가 아니면 400 `AUTH_4021`. B에게 Apple 계정이 이미 있으면 400 `AUTH_4019`(동시 합치기도 잠금 뒤 여기서 걸린다).
    3. `moveSocialAccount(A, B, APPLE)`가 1행이 아니면 403(동시 요청이 먼저 옮김).
@@ -90,6 +90,7 @@ FCM 토큰은 따로 옮기지 않는다. 앱이 로그인 뒤 토큰을 등록�
 - [x] AC4: B가 시니어, 탈퇴 회원이거나 이미 Apple 계정이 있으면 합치지 않는다.
 - [x] AC5: A에 자료(가족 소속, 주소 즐겨찾기 등 직접 만든 자료, 다른 소셜 계정)가 있으면 합치지 않는다.
 - [x] AC5-1: B를 잠그고 다시 읽었을 때 번호가 인증한 번호와 다르면 합치지 않는다.
+- [x] AC5-2: A를 잠그고 다시 읽었을 때 다른 요청이 A의 번호를 채웠으면 합치지 않는다.
 - [x] AC6: 번호 주인이 없으면 기존처럼 번호만 채우고 `merged=false`다.
 - [x] AC7: Swagger 설명과 응답 예시가 반영된다.
 - [x] AC8: `./gradlew :backend:widyu-api:test`가 통과한다.

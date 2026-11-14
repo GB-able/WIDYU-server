@@ -188,6 +188,27 @@ class AppleAccountMergeServiceTest {
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("빈 회원 행을 잠그고 다시 읽었을 때 같은 회원의 다른 요청이 번호를 채웠으면 합치지 않고 FORBIDDEN 예외가 발생한다")
+    void 잠근_뒤_애플_회원에_번호가_채워졌으면_합치지_않는다() {
+        // given
+        Member appleMember = appleMember(38L);
+        Member owner = guardian(9L);
+        willAnswer(invocation -> {
+            if (invocation.getArgument(0) == appleMember) {
+                ReflectionTestUtils.setField(appleMember, "phoneNumber", "01055555555");
+            }
+            return null;
+        }).given(entityManager).refresh(any(Member.class), any(LockModeType.class));
+
+        // when & then
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        verify(memberRepository, never()).countOwnedContentFlag(any());
+        verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
+    }
+
     private static Member appleMember(Long id) {
         Member member = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
         ReflectionTestUtils.setField(member, "id", id);

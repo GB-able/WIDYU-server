@@ -41,6 +41,12 @@ public class AppleAccountMergeService {
         // ponytail: 이 회원의 자료를 만드는 다른 요청은 회원 행을 잠그지 않아, 확인과 커밋 사이(수 ms)에 저장된 자료는 막지 못한다.
         // 방금 만든 회원이라 그 사이 자료가 생길 일은 사실상 없다. 실제로 생기면 자료 쓰기 경로도 회원 행을 잠그게 한다
         entityManager.refresh(appleMember, LockModeType.PESSIMISTIC_WRITE);
+        // 잠금을 기다리는 사이 같은 회원의 다른 요청이 번호를 채웠으면 그 결과를 지킨다
+        String currentPhone = appleMember.getPhoneNumber();
+        if (currentPhone != null && !currentPhone.isBlank()) {
+            log.warn("잠금 뒤 애플 회원에 번호가 이미 있어 합치지 않음: memberId={}", appleMember.getId());
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
         validateEmptyAppleMember(appleMember);
 
         // 보호자 행을 잠그며 최신 상태로 다시 읽는다. 조회 뒤 번호가 바뀌었거나 다른 애플 계정이 먼저 합쳐졌으면 여기서 드러난다
