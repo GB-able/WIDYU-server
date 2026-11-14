@@ -14,6 +14,8 @@ import static org.mockito.Mockito.verify;
 import com.widyu.auth.dto.request.SeniorSignInRequest;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.auth.infrastructure.AuthLimitStore;
+import com.widyu.auth.infrastructure.ClientIpResolver;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
@@ -55,6 +57,8 @@ class SeniorAuthServiceTest {
     @Mock private GeocodingService geocodingService;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private MemberUtil memberUtil;
+    @Mock private AuthLimitStore authLimitStore;
+    @Mock private ClientIpResolver clientIpResolver;
 
     @InjectMocks
     private SeniorAuthService seniorAuthService;
