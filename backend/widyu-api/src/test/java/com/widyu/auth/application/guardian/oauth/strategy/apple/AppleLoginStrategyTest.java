@@ -20,6 +20,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -106,8 +108,54 @@ class AppleLoginStrategyTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOCIAL_EMAIL_NOT_PROVIDED);
     }
 
+    @ParameterizedTest(name = "email_verified={0}")
+    @CsvSource({"'\"true\"', true", "true, true", "'\"false\"', false", "false, false"})
+    @DisplayName("id_token의 email_verified를 문자열과 불리언 어느 쪽으로 받아도 인증 여부로 읽는다")
+    void id_token의_email_verified를_문자열과_불리언_모두_읽는다(String emailVerifiedJson, boolean expected) {
+        // given
+        String payload = "{\"sub\":\"apple-sub\",\"email\":\"owner@example.com\",\"email_verified\":"
+                + emailVerifiedJson + "}";
+
+        // when
+        SocialClientResponse response = appleUserInfo(payload);
+
+        // then
+        assertThat(response.emailVerified()).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("id_token에 email_verified가 없으면 인증되지 않은 이메일로 본다")
+    void id_token에_email_verified가_없으면_미인증으로_본다() {
+        // given
+        String payload = "{\"sub\":\"apple-sub\",\"email\":\"owner@example.com\"}";
+
+        // when
+        SocialClientResponse response = appleUserInfo(payload);
+
+        // then
+        assertThat(response.emailVerified()).isFalse();
+    }
+
+    private SocialClientResponse appleUserInfo(String idTokenPayload) {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer appleServer = MockRestServiceServer.bindTo(builder).build();
+        AppleLoginStrategy strategyWithServer = new AppleLoginStrategy(
+                new AppleProperties("ios", "android", "team", "key", "private-key", "redirect-uri"),
+                mock(AppleJwtUtils.class),
+                builder.build(),
+                new ObjectMapper()
+        );
+        appleServer.expect(requestTo(APPLE_TOKEN_URL))
+                .andRespond(withSuccess(appleTokenResponse(idTokenPayload), MediaType.APPLICATION_JSON));
+        SocialLoginRequest request = SocialLoginRequest.builder().authorizationCode("code").platform("ios").build();
+        return strategyWithServer.getUserInfo(request);
+    }
+
     private String appleTokenResponse(String subject, String email) {
-        String payload = "{\"sub\":\"" + subject + "\",\"email\":\"" + email + "\"}";
+        return appleTokenResponse("{\"sub\":\"" + subject + "\",\"email\":\"" + email + "\"}");
+    }
+
+    private String appleTokenResponse(String payload) {
         String encodedPayload = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         String idToken = "header." + encodedPayload + ".signature";

@@ -327,6 +327,139 @@ class SocialLoginServiceTest {
         verify(memberRepository, never()).save(any(Member.class));
     }
 
+    @Test
+    @DisplayName("전화번호로 다른 계정이 있는 기존 회원을 찾으면 연결 토큰 응답에 개인정보 없이 로그인 수단 목록만 담는다")
+    void 연결_토큰_응답에_개인정보_없이_로그인_수단_목록만_담는다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenNaverUser(request,
+                SocialClientResponse.of("naver-new", "attacker@naver.com", "공격자", "01012345678", null, true));
+
+        Member victim = memberWithSocialAccount(1L, "피해자", "01012345678", "victim@kakao.com", "kakao");
+        given(memberRepository.findMemberIdByProviderAndOauthId("naver", "naver-new")).willReturn(Optional.empty());
+        given(memberRepository.findTop2ByPhoneNumber("01012345678")).willReturn(List.of(victim));
+        given(memberRepository.findWithAllAccountsById(1L)).willReturn(Optional.of(victim));
+        given(socialTemporaryTokenService.createSocialTemporaryToken(1L, "naver", "naver-new", "attacker@naver.com"))
+                .willReturn("social-temp-token");
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("naver", request);
+
+        // then
+        assertThat(response.accessToken()).isNull();
+        assertThat(response.memberId()).isNull();
+        assertThat(response.socialTemporaryToken()).isEqualTo("social-temp-token");
+        assertThat(response.profile().providers()).containsExactly("kakao");
+        assertThat(response.profile().name()).isEmpty();
+        assertThat(response.profile().phoneNumber()).isEmpty();
+        assertThat(response.profile().email()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("공급자가 이메일을 인증하지 않았으면 같은 이메일의 기존 회원을 찾지 않고 새 회원으로 가입시킨다")
+    void 미인증_이메일이면_기존_회원을_찾지_않고_새_회원으로_가입시킨다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "victim@example.com", "공격자", null, null, false));
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> {
+            Member saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 2L);
+            return saved;
+        });
+        given(jwtTokenProvider.generateTokenPair(2L, MemberRole.USER, "kakao"))
+                .willReturn(TokenPairResponse.of(2L, "new-access", "new-refresh"));
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(2L);
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.socialTemporaryToken()).isNull();
+        verify(memberRepository, never()).findDistinctTop2BySocialAccounts_Email(any());
+        verify(socialTemporaryTokenService, never()).createSocialTemporaryToken(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("공급자가 인증한 이메일이 다른 계정이 있는 기존 회원과 같으면 연결 토큰을 발급한다")
+    void 인증된_이메일이_기존_회원과_같으면_연결_토큰을_발급한다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "owner@example.com", "주인", null, null, true));
+        Member owner = memberWithSocialAccount(1L, "주인", "01011112222", "owner@example.com", "APPLE");
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.findDistinctTop2BySocialAccounts_Email("owner@example.com")).willReturn(List.of(owner));
+        given(memberRepository.findWithAllAccountsById(1L)).willReturn(Optional.of(owner));
+        given(socialTemporaryTokenService.createSocialTemporaryToken(1L, "kakao", "kakao-new", "owner@example.com"))
+                .willReturn("social-temp-token");
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.socialTemporaryToken()).isEqualTo("social-temp-token");
+        assertThat(response.profile().providers()).containsExactly("APPLE");
+        verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    @DisplayName("인증된 이메일을 쓰는 회원이 둘 이상이면 어느 회원에도 연결 토큰을 발급하지 않고 새 회원으로 가입시킨다")
+    void 같은_이메일의_회원이_둘_이상이면_연결하지_않고_새_회원으로_가입시킨다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "shared@example.com", "사용자", null, null, true));
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.findDistinctTop2BySocialAccounts_Email("shared@example.com")).willReturn(List.of(
+                memberWithSocialAccount(1L, "회원1", null, "shared@example.com", "APPLE"),
+                memberWithSocialAccount(2L, "회원2", null, "shared@example.com", "naver")));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> {
+            Member saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 3L);
+            return saved;
+        });
+        given(jwtTokenProvider.generateTokenPair(3L, MemberRole.USER, "kakao"))
+                .willReturn(TokenPairResponse.of(3L, "new-access", "new-refresh"));
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(3L);
+        assertThat(response.socialTemporaryToken()).isNull();
+        verify(socialTemporaryTokenService, never()).createSocialTemporaryToken(any(), any(), any(), any());
+    }
+
+    private void givenKakaoUser(SocialLoginRequest request, SocialClientResponse socialResponse) {
+        givenSocialUser("kakao", OAuthProvider.KAKAO, request, socialResponse);
+    }
+
+    private void givenNaverUser(SocialLoginRequest request, SocialClientResponse socialResponse) {
+        givenSocialUser("naver", OAuthProvider.NAVER, request, socialResponse);
+    }
+
+    private void givenSocialUser(String providerName, OAuthProvider provider,
+                                 SocialLoginRequest request, SocialClientResponse socialResponse) {
+        SocialLoginStrategy strategy = mock(SocialLoginStrategy.class);
+        given(strategyFactory.getStrategy(providerName)).willReturn(strategy);
+        given(strategy.getSupportedProvider()).willReturn(provider);
+        given(strategy.getUserInfo(request)).willReturn(socialResponse);
+        given(strategy.enrichWithRefreshToken(socialResponse, request)).willReturn(socialResponse);
+        given(strategy.processUserInfo(socialResponse, request)).willReturn(
+                UserInfo.of(socialResponse.name(), socialResponse.email(), socialResponse.phoneNumber()));
+    }
+
+    private static Member memberWithSocialAccount(Long id, String name, String phoneNumber, String email, String provider) {
+        Member member = Member.createMember(MemberType.GUARDIAN, name, phoneNumber);
+        ReflectionTestUtils.setField(member, "id", id);
+        member.getSocialAccounts().add(
+                SocialAccount.createSocialAccount(email, provider, provider + "-oauth-id", null, member));
+        return member;
+    }
+
     private static Member appleMember(Long id, String phoneNumber) {
         Member member = Member.createMember(MemberType.GUARDIAN, "애플유저", phoneNumber);
         ReflectionTestUtils.setField(member, "id", id);
