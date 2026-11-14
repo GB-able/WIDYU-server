@@ -214,12 +214,29 @@ class SeniorMyPageServiceTest {
         // given
         Member member = mock(Member.class);
         given(memberUtil.getCurrentMember()).willReturn(member);
+        given(member.getType()).willReturn(MemberType.SENIOR);
 
         // when
         seniorMyPageService.updatePhoneNumber(new UpdatePhoneRequest("01099998888"));
 
         // then
         verify(member).updatePhoneNumber("01099998888");
+    }
+
+    @Test
+    @DisplayName("보호자가 시니어용 전화번호 수정을 부르면 FORBIDDEN 예외가 발생하고 번호가 바뀌지 않는다")
+    void 보호자가_시니어용_전화번호_수정을_부르면_거부한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "한토마", "01000000001");
+        ReflectionTestUtils.setField(guardian, "id", 1L);
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+
+        // when & then
+        assertThatThrownBy(() -> seniorMyPageService.updatePhoneNumber(new UpdatePhoneRequest("01000000002")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        assertThat(guardian.getPhoneNumber()).isEqualTo("01000000001");
+        verify(memberRepository, never()).existsByPhoneNumberAndIdNot(anyString(), any());
     }
 
     @Test

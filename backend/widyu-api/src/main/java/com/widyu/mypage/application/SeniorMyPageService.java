@@ -6,6 +6,7 @@ import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
+import com.widyu.member.MemberType;
 import com.widyu.member.PointHistory;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
@@ -74,6 +75,10 @@ public class SeniorMyPageService {
     @Transactional
     public void updatePhoneNumber(UpdatePhoneRequest request) {
         Member member = MyPageProfileService.getCurrentMember(memberUtil);
+        // 이 경로는 SMS 인증을 거치지 않는다. 보호자는 인증을 요구하는 보호자용 경로로만 번호를 바꾼다 (#1052)
+        if (member.getType() != MemberType.SENIOR) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "시니어만 접근 가능합니다.");
+        }
         // 전화번호는 회원 전체에서 하나여야 한다. 본인 번호를 다시 저장하는 것은 허용한다 (LLD-0116)
         if (memberRepository.existsByPhoneNumberAndIdNot(request.phoneNumber(), member.getId())) {
             throw new BusinessException(ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
