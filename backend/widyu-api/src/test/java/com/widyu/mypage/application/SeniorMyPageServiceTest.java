@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -44,6 +45,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class SeniorMyPageServiceTest {
+
+    private static final byte[] PNG_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
     @Mock private MemberUtil memberUtil;
     @Mock private S3Service s3Service;
@@ -154,9 +157,9 @@ class SeniorMyPageServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getProfileImage()).willReturn("https://s3.old-image.png");
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new-image.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new-image.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         seniorMyPageService.updateProfileImage(image);
@@ -174,9 +177,9 @@ class SeniorMyPageServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(member.getProfileImage()).willReturn(null);
         given(s3Service.generateFilePath(anyString(), anyString())).willReturn("profile/new.png");
-        given(s3Service.uploadFile(any(), anyString())).willReturn("https://s3.new-image.png");
+        given(s3Service.uploadFile(any(), anyString(), eq("image/png"))).willReturn("https://s3.new-image.png");
 
-        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", new byte[]{1});
+        MockMultipartFile image = new MockMultipartFile("image", "new.png", "image/png", PNG_BYTES);
 
         // when
         seniorMyPageService.updateProfileImage(image);
@@ -184,6 +187,23 @@ class SeniorMyPageServiceTest {
         // then
         verify(s3Service, never()).deleteFile(anyString());
         verify(member).updateProfileImage("https://s3.new-image.png");
+    }
+
+    @Test
+    @DisplayName("이미지 Content-Type을 붙인 HTML 파일로 프로필을 바꾸면 INVALID_FILE_TYPE 예외가 발생하고 업로드하지 않는다")
+    void 이미지로_위장한_HTML_파일로_프로필을_바꾸면_거부한다() {
+        // given
+        Member member = mock(Member.class);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        MockMultipartFile image = new MockMultipartFile(
+                "image", "new.png", "image/png", "<html><script>alert(1)</script></html>".getBytes());
+
+        // when & then
+        assertThatThrownBy(() -> seniorMyPageService.updateProfileImage(image))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_FILE_TYPE);
+        verify(s3Service, never()).uploadFile(any(), anyString(), anyString());
+        verify(member, never()).updateProfileImage(anyString());
     }
 
     // ======================== 전화번호 수정 ========================
