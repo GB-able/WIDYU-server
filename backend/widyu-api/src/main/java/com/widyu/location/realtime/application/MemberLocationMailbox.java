@@ -72,7 +72,7 @@ public class MemberLocationMailbox {
     public void submit(Long memberId, Job job) {
         if (queued.incrementAndGet() > maxQueued) {
             queued.decrementAndGet();
-            job.overloaded();
+            runEach(List.of(job::overloaded));
             return;
         }
         List<Runnable> after = new ArrayList<>();
@@ -80,7 +80,7 @@ public class MemberLocationMailbox {
             Box box = boxes.computeIfAbsent(memberId, id -> newBox());
             if (box == null) {
                 queued.decrementAndGet();
-                job.overloaded();
+                runEach(List.of(job::overloaded));
                 return;
             }
             synchronized (box) {
@@ -89,7 +89,7 @@ public class MemberLocationMailbox {
                 }
                 accept(memberId, box, new Entry(job, box.nextArrival++), after);
             }
-            after.forEach(Runnable::run);
+            runEach(after);
             return;
         }
     }
@@ -149,7 +149,7 @@ public class MemberLocationMailbox {
                 failWaiting(box, after);
                 closeIfIdle(memberId, box);
             }
-            after.forEach(Runnable::run);
+            runEach(after);
         }
     }
 
@@ -182,7 +182,21 @@ public class MemberLocationMailbox {
                 closeIfIdle(memberId, box);
             }
         }
-        after.forEach(Runnable::run);
+        runEach(after);
+    }
+
+    /**
+     * 잠금 밖에서 모은 일을 차례로 한다. 응답 전송 콜백 하나가 실패해도 뒤의 일(다음 차례 등록 등)은 반드시 한다.
+     * 그러지 않으면 그 회원의 대기 위치가 응답 없이 멈춘다.
+     */
+    private static void runEach(List<Runnable> actions) {
+        for (Runnable action : actions) {
+            try {
+                action.run();
+            } catch (RuntimeException e) {
+                log.warn("위치 우편함 후속 처리 실패: cause={}", e.getClass().getSimpleName());
+            }
+        }
     }
 
     private static Outcome runSafely(Entry entry) {

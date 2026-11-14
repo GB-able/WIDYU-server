@@ -111,6 +111,37 @@ class MemberLocationMailboxTest {
     }
 
     @Test
+    @DisplayName("밀린 항목의 응답 전송이 예외를 던져도 다음 최신 위치의 차례 등록은 그대로 해 회원 처리가 멈추지 않는다")
+    void 응답_전송_예외에도_다음_차례를_등록한다() {
+        // given
+        ManualExecutor executor = new ManualExecutor();
+        MemberLocationMailbox mailbox = new MemberLocationMailbox(executor, 4, 10, 100);
+        List<String> events = new ArrayList<>();
+        BlockingJob running = new BlockingJob("t200", 200L, Outcome.APPLIED, events);
+        mailbox.submit(1L, running);
+        Thread worker = new Thread(executor::runOne);
+        worker.start();
+        running.awaitStarted();
+        mailbox.submit(1L, new RecordingJob("t100", 100L, Outcome.APPLIED, events) {
+            @Override
+            public void settledBy(Outcome result) {
+                throw new IllegalStateException("send failed");
+            }
+        });
+        mailbox.submit(1L, job("t300", 300L, Outcome.APPLIED, events));
+
+        // when
+        running.release();
+        join(worker);
+        executor.runAll();
+
+        // then
+        assertThat(events).containsExactly("run:t200", "run:t300");
+        assertThat(mailbox.trackedMembers()).isZero();
+        assertThat(mailbox.queuedJobs()).isZero();
+    }
+
+    @Test
     @DisplayName("거절로 끝난 위치는 밀린 항목도 거절로 끝낸다")
     void 거절은_밀린_항목도_거절로_끝낸다() {
         // given
