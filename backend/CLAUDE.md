@@ -28,6 +28,7 @@
 - **불변식**: Feed 쿼리는 `status=ACTIVE`만 (PROCESSING 자동 제외). Status enum: ACTIVE/INACTIVE/DELETED/PROCESSING
 - 비동기 업로드: 사진 즉시(sync) → 영상 `@Async`(FFmpeg 썸네일→S3→ACTIVE, 실패 시 DELETED). → LLD-0006·0012·0013, ADR-0004·0010·0011
 - 잠금해제: 50포인트, `AlbumUnlock`, 이후 영구 접근. 잠금 판정은 `AlbumPermissionService.isUnlockedFor` 하나다(보호자가 조회하는 경우와 시니어가 작성한 앨범은 잠기지 않음. 잠기는 것은 시니어가 보호자 작성 앨범을 볼 때). 잠금 전에는 좋아요·댓글 작성이 403 `ALBUM_UNLOCK_4031`이고 상세 `comments`가 빈 배열이다 → LLD-0021
+- **카운터(좋아요·댓글·조회 수)는 `AlbumRepository`의 원자 UPDATE로만 바꾼다**. 엔티티 필드를 고쳐 저장하지 않는다. 좋아요·댓글은 카운터 UPDATE(앨범 행 배타 잠금)를 자식 INSERT보다 먼저 해 외래키 공유 잠금 교착을 피한다. `Album`은 `@DynamicUpdate`라 삭제·캡션 수정이 카운터를 덮지 않는다 → LLD-0099·0151
 
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
