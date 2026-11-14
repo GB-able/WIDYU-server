@@ -26,6 +26,10 @@ spring:
     secret-key: test-secret-key
     base-url: https://api.test-payments.com/v1/payments
 
+  # db/migration은 MySQL 문법이라 H2에서 돌릴 수 없다. 테스트 스키마는 지금처럼 Hibernate가 만든다(LLD-0154).
+  flyway:
+    enabled: false
+
   jpa:
     hibernate:
       ddl-auto: create

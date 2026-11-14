@@ -44,6 +44,9 @@ dependencies {
 
     // Database
     runtimeOnly 'com.mysql:mysql-connector-j'
+    // 스키마 버전 관리(LLD-0154). 버전은 Spring Boot 의존성 관리 값을 따른다.
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-mysql'
     testRuntimeOnly 'com.h2database:h2'
 
     // JWT

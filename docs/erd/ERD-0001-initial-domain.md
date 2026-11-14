@@ -972,6 +972,7 @@ erDiagram
 
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
+| 2026-11-14 | 전체 72개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다 | `db/migration/V1__baseline.sql` |
 | 2026-11-12 | `activity_window` | 신규 테이블 (LLD-0138). 손목 움직임 5초 구간의 샘플 수·크기 합계·제곱합과 상태(`REST`/`LOW`/`ACTIVE`, VARCHAR). `sensor_batch.original_batch_id` 인덱스 추가. 운영 구축 때 적용 | `scripts/mysql/create_activity_window.sql` |
 | 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |
 | 2026-11-12 | `data_purge_log` | 신규 테이블 (LLD-0136). 보관 기간 정리 작업의 날짜·테이블별 대상 건수·참가자 제외 건수. 회원 ID 없음. 운영 구축 때 적용 | `scripts/mysql/create_data_purge_log.sql` |
