@@ -18,6 +18,7 @@ import com.widyu.auth.application.guardian.oauth.strategy.UserInfo;
 import com.widyu.auth.dto.SocialTemporaryTokenDto;
 import com.widyu.auth.dto.request.AppleSignUpRequest;
 import com.widyu.auth.dto.request.SocialLoginRequest;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.SocialClientResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
@@ -56,6 +57,7 @@ class SocialLoginServiceTest {
     @Mock private TemporaryMemberUtil temporaryMemberUtil;
     @Mock private SocialTemporaryTokenService socialTemporaryTokenService;
     @Mock private MemberUtil memberUtil;
+    @Mock private AppleAccountMergeService appleAccountMergeService;
 
     @InjectMocks
     private SocialLoginService socialLoginService;
@@ -137,11 +139,14 @@ class SocialLoginServiceTest {
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(1);
 
         // when
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+        ApplePhoneNumberResponse response = socialLoginService.updatePhoneNumberIfAppleSignUp(request);
 
         // then
+        assertThat(response.merged()).isFalse();
+        assertThat(response.accessToken()).isNull();
         verify(memberRepository).fillPhoneNumberIfEmpty(1L, "01099999999");
         verify(temporaryMemberUtil).deleteTemporaryMember(temporaryMember.getId());
+        verifyNoInteractions(appleAccountMergeService);
     }
 
     @Test
@@ -176,6 +181,24 @@ class SocialLoginServiceTest {
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("다른사람", "01099999999");
         given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
         given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, "01011111111"));
+
+        // when & then
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
+        verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
+        verifyNoInteractions(appleAccountMergeService);
+    }
+
+    @Test
+    @DisplayName("빈 번호를 채우는 조건부 갱신이 0건이면 동시 요청이 먼저 채운 것으로 보고 FORBIDDEN 예외가 발생한다")
+    void 빈_번호_채우기가_0건이면_예외가_발생한다() {
+        // given
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01099999999");
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(0);
 
         // when & then
@@ -281,19 +304,49 @@ class SocialLoginServiceTest {
     }
 
     @Test
-    @DisplayName("다른 회원이 쓰는 번호로 애플 회원 번호를 보강하면 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생하고 번호를 채우지 않는다")
-    void 다른_회원이_쓰는_번호로_애플_회원_번호를_보강하면_거부한다() {
+    @DisplayName("인증한 번호의 주인이 다른 회원이면 번호를 채우지 않고 애플 계정을 그 회원에 합친 뒤 그 회원의 토큰을 돌려준다")
+    void 번호_주인이_다른_회원이면_애플_계정을_합치고_그_회원의_토큰을_돌려준다() {
         // given
         AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
-        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01000000002");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("기존회원", "01000000002");
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        Member appleMember = appleMember(1L, null);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember);
+        Member owner = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        ReflectionTestUtils.setField(owner, "id", 9L);
+        given(memberRepository.findTop2ByPhoneNumber("01000000002")).willReturn(List.of(owner));
+        given(appleAccountMergeService.merge(appleMember, owner, "01000000002"))
+                .willReturn(TokenPairResponse.of(9L, "owner-access", "owner-refresh"));
+
+        // when
+        ApplePhoneNumberResponse response = socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+
+        // then
+        assertThat(response.merged()).isTrue();
+        assertThat(response.memberId()).isEqualTo(9L);
+        assertThat(response.accessToken()).isEqualTo("owner-access");
+        assertThat(response.refreshToken()).isEqualTo("owner-refresh");
+        verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
+        verify(temporaryMemberUtil).deleteTemporaryMember(temporaryMember.getId());
+    }
+
+    @Test
+    @DisplayName("인증한 번호를 쓰는 회원이 둘 이상이면 합칠 대상을 정할 수 없어 PHONE_NUMBER_SHARED_BY_MEMBERS 예외가 발생한다")
+    void 번호를_쓰는_회원이_둘_이상이면_합치지_않고_거부한다() {
+        // given
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("기존회원", "01000000002");
         given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
         given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
-        given(memberRepository.existsByPhoneNumberAndIdNot("01000000002", 1L)).willReturn(true);
+        Member first = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        Member second = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        given(memberRepository.findTop2ByPhoneNumber("01000000002")).willReturn(List.of(first, second));
 
         // when & then
         assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        verifyNoInteractions(appleAccountMergeService);
         verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
         verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
     }
