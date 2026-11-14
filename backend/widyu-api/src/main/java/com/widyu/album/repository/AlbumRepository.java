@@ -30,6 +30,24 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     @Query("UPDATE Album a SET a.viewCount = a.viewCount + 1 WHERE a.id = :albumId")
     void incrementViewCount(@Param("albumId") Long albumId);
 
+    // 좋아요·댓글 수도 같은 이유로 원자적으로 바꾼다. 엔티티를 고쳐 저장하면 행 전체 UPDATE가 동시에 커밋된 삭제(status)까지 덮는다(LLD-0151).
+    // 상태 조건은 두지 않는다. 처리 중 삭제된 앨범도 좋아요·댓글 행과 카운터가 같은 값을 유지한다.
+    @Modifying
+    @Query("UPDATE Album a SET a.likeCount = a.likeCount + 1 WHERE a.id = :albumId")
+    void incrementLikeCount(@Param("albumId") Long albumId);
+
+    @Modifying
+    @Query("UPDATE Album a SET a.likeCount = GREATEST(a.likeCount - 1, 0) WHERE a.id = :albumId")
+    void decrementLikeCount(@Param("albumId") Long albumId);
+
+    @Modifying
+    @Query("UPDATE Album a SET a.commentCount = a.commentCount + 1 WHERE a.id = :albumId")
+    void incrementCommentCount(@Param("albumId") Long albumId);
+
+    @Modifying
+    @Query("UPDATE Album a SET a.commentCount = GREATEST(a.commentCount - :amount, 0) WHERE a.id = :albumId")
+    void decrementCommentCount(@Param("albumId") Long albumId, @Param("amount") int amount);
+
     @Query("SELECT a.id FROM Album a WHERE a.status = 'ACTIVE' AND a.member.id IN :memberIds ORDER BY a.createdAt DESC, a.id DESC")
     org.springframework.data.domain.Slice<Long> findLatestAlbumIdsByMemberIds(@Param("memberIds") List<Long> memberIds,
                                                                                 Pageable pageable);

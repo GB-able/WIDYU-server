@@ -57,10 +57,9 @@ public class AlbumCommentService {
             comment = AlbumComment.createComment(album, currentMember, request.content());
         }
 
+        // 좋아요와 같이 카운터를 먼저 올려 앨범 행 배타 잠금을 잡은 뒤 INSERT한다(외래키 공유 잠금 교착 방지).
+        albumRepository.incrementCommentCount(albumId);
         AlbumComment savedComment = albumCommentRepository.save(comment);
-
-        // 앨범 댓글 수 증가
-        album.incrementCommentCount();
 
         // 댓글 작성 알림 이벤트 발행
         eventPublisher.publishEvent(new AlbumCommentedEvent(
@@ -109,12 +108,6 @@ public class AlbumCommentService {
                 .count();
         
         comment.deleteWithReplies();
-        
-        // 앨범 댓글 수 감소
-        Album album = comment.getAlbum();
-        for (int i = 0; i < deletedCount; i++) {
-            album.decrementCommentCount();
-        }
-
+        albumRepository.decrementCommentCount(comment.getAlbum().getId(), (int) deletedCount);
     }
 }
