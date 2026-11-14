@@ -19,7 +19,7 @@ import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -59,7 +59,7 @@ class GuardianHomeServiceTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
-    @Mock private RealtimeLocationService realtimeLocationService;
+    @Mock private LocationQueryService locationQueryService;
     @Mock private LocationAccessLogService locationAccessLogService;
 
     @InjectMocks
@@ -122,7 +122,7 @@ class GuardianHomeServiceTest {
         given(memberRepository.findById(SENIOR_ID)).willReturn(Optional.of(senior));
         given(seniorProfileRepository.findByMemberId(SENIOR_ID)).willReturn(Optional.of(seniorProfile));
         given(familyMembershipRepository.existsByFamilyIdAndGuardianId(any(), anyLong())).willReturn(true);
-        given(realtimeLocationService.getOutingStatus(SENIOR_ID)).willReturn(Boolean.TRUE);
+        given(locationQueryService.getOutingStatus(SENIOR_ID)).willReturn(Boolean.TRUE);
         given(heartRateResultRepository.findByMemberId(SENIOR_ID)).willReturn(Optional.empty());
         given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(
                 any(Member.class), any(Status.class), any(LocalDate.class))).willReturn(List.of());

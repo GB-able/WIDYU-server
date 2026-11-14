@@ -19,7 +19,7 @@ import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -58,7 +58,7 @@ class GuardianHomeServiceTodayScheduleTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
-    @Mock private RealtimeLocationService realtimeLocationService;
+    @Mock private LocationQueryService locationQueryService;
     @Mock private LocationAccessLogService locationAccessLogService;
 
     @InjectMocks private GuardianHomeService guardianHomeService;

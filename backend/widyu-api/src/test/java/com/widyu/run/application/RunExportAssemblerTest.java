@@ -450,6 +450,26 @@ class RunExportAssemblerTest {
 
     // ── 합성 자료 ──────────────────────────────────────────────────
 
+    @Test
+    @DisplayName("위치 원본 신규 저장을 멈춘 뒤 위치가 없는 회차는 위치 파일 없이 자료 없음이 아니라 수집 중단으로 신고한다")
+    void 위치가_없는_회차는_수집_중단으로_신고한다() throws IOException {
+        // given
+        CollectionRun run = givenSyntheticRun();
+        given(locationFixRepository.findByRunIdOrderByTsMsAscSeqAsc(RUN_ID)).willReturn(List.of());
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        assertThat(streamNames()).doesNotContain("location_%s.jsonl".formatted(PHONE_DEVICE));
+        List<String> absent = new ArrayList<>();
+        readJson("manifest.json").get("streams_absent").forEach(node -> absent.add(
+                node.path("stream").asText() + "|" + node.path("device_id").asText()
+                        + "|" + node.path("reason").asText()));
+        assertThat(absent).contains("location|%s|LOCATION_RAW_NOT_COLLECTED".formatted(PHONE_DEVICE));
+        assertThat(absent).noneMatch(entry -> entry.startsWith("location|") && entry.endsWith("NO_DATA_IN_THIS_RUN"));
+    }
+
     private CollectionRun givenSyntheticRun() {
         return givenSyntheticRun(syntheticIncidents());
     }

@@ -40,7 +40,7 @@ class ControllerFamilyAccessTest {
             "HealthScheduleController#getHealthScheduleCalendarForSenior",
             "HealthScheduleController#getHealthSchedulesByDateForSenior",
 
-            // RealtimeLocationService:190,262 — existsByGuardianIdAndSeniorProfileId
+            // LocationQueryService.findAccessibleSenior — existsByGuardianIdAndSeniorProfileId
             "RealtimeLocationRestController#getLastLocation",
             "RealtimeLocationRestController#getLocationTrail",
 
