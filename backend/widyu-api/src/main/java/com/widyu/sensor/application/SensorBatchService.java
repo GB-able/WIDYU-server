@@ -61,13 +61,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class SensorBatchService {
 
-    private static final String CONTENT_TYPE = "application/json";
-    private static final String QUALITY_STATUS_OK = "OK";
+    static final String CONTENT_TYPE = "application/json";
+    static final String QUALITY_STATUS_OK = "OK";
     private static final String STREAM_WATCH = "imu_watch";
     private static final String STREAM_PHONE = "imu_phone";
-    private static final String STREAM_HR = "hr";
+    static final String STREAM_HR = "hr";
     private static final String STREAM_IMU_DROPPED = "imu_dropped";
-    private static final String SOURCE_WATCH = "watch";
     /** 거절 기록에 남길 stream 이름. 목록 밖 값도 남겨 옛 앱이 보낸 이름을 찾는다(LLD-0128 4.3). */
     private static final Pattern STREAM_NAME_PATTERN = Pattern.compile("^[a-z0-9_]{1,20}$");
     /** 수신 시도 카운터(LLD-0128 3.2). 태그 키는 channel·stream·result로 고정한다. */
@@ -78,13 +77,13 @@ public class SensorBatchService {
 
     private final SensorBatchRepository sensorBatchRepository;
     private final ClockMappingService clockMappingService;
-    private final HeartRateBatchService heartRateBatchService;
     private final FallAssessmentService fallAssessmentService;
     private final ActivityStateService activityStateService;
     private final CollectionRunService collectionRunService;
     private final MemberRepository memberRepository;
     private final S3Service s3Service;
     private final SensorBatchValidator batchValidator;
+    private final HeartRateBatchIngest heartRateBatchIngest;
     private final SensorProperties sensorProperties;
     private final ObjectMapper payloadMapper;
     private final SensorDroppedRangeService sensorDroppedRangeService;
@@ -109,13 +108,14 @@ public class SensorBatchService {
     ) {
         this.sensorBatchRepository = sensorBatchRepository;
         this.clockMappingService = clockMappingService;
-        this.heartRateBatchService = heartRateBatchService;
         this.fallAssessmentService = fallAssessmentService;
         this.activityStateService = activityStateService;
         this.collectionRunService = collectionRunService;
         this.memberRepository = memberRepository;
         this.s3Service = s3Service;
         this.batchValidator = new SensorBatchValidator(validator);
+        this.heartRateBatchIngest = new HeartRateBatchIngest(sensorBatchRepository, clockMappingService,
+                heartRateBatchService, collectionRunService, s3Service, batchValidator);
         this.sensorProperties = sensorProperties;
         this.sensorDroppedRangeService = sensorDroppedRangeService;
         this.rejectionRecorder = rejectionRecorder;
@@ -191,7 +191,8 @@ public class SensorBatchService {
                                             long serverReceivedAtMs, SensorIngestChannel channel) {
         String stream = streamOf(root);
         if (STREAM_HR.equals(stream)) {
-            return ingestHeartRate(member, memberId, payload, root, serverReceivedAtMs, channel);
+            return heartRateBatchIngest.ingest(member, memberId, payload,
+                    treeToValue(root, HeartRateBatchRequest.class), serverReceivedAtMs, channel);
         }
         // 워치 IMU 큐가 넘쳐 버린 구간 기록. 배치가 아니라 결측 근거라 따로 저장한다(LLD-0124).
         if (STREAM_IMU_DROPPED.equals(stream)) {
@@ -365,7 +366,7 @@ public class SensorBatchService {
      * {@code collectionMode}는 회차를 실제로 조회했을 때만 채워진다. 설정 대조의 기준값이며,
      * 앱이 실어 보낸 {@code run_id}를 그대로 쓴 경우에는 추가 조회를 하지 않아 null이다.
      */
-    private record RunAttribution(
+    record RunAttribution(
             String runId, String studyId, String participationId, String collectionMode) {}
 
     /**
@@ -391,7 +392,7 @@ public class SensorBatchService {
         return attributionOf(run.get());
     }
 
-    private RunAttribution attributionOf(CollectionRun run) {
+    static RunAttribution attributionOf(CollectionRun run) {
         return new RunAttribution(
                 run.getRunId(), run.getStudyId(), run.getParticipationId(), run.getCollectionMode());
     }
@@ -443,27 +444,11 @@ public class SensorBatchService {
         return collectionRunService.findCollectionMode(attribution.runId());
     }
 
-    private String originalRunId(SensorBatchRequest.Resend resend) {
+    static String originalRunId(SensorBatchRequest.Resend resend) {
         if (resend == null || !Boolean.TRUE.equals(resend.isResend())) {
             return null;
         }
         return resend.originalRunId();
-    }
-
-    private RunAttribution resolveAttribution(
-            Long memberId, String deviceId, String runId, String studyId, String participationId,
-            SensorBatchRequest.Resend resend, long measuredAtStartMs) {
-        String candidateRunId = originalRunId(resend);
-        if (runId != null) {
-            candidateRunId = runId;
-        }
-        if (candidateRunId != null) {
-            return attributionOf(collectionRunService.requireAttributableRun(
-                    candidateRunId, memberId, deviceId, measuredAtStartMs));
-        }
-        return collectionRunService.resolveRun(memberId, deviceId, measuredAtStartMs)
-                .map(this::attributionOf)
-                .orElseGet(() -> new RunAttribution(null, studyId, participationId, null));
     }
 
     private SensorBatch toEntity(
@@ -548,7 +533,7 @@ public class SensorBatchService {
     }
 
     /** 재전송 계보 6필드(지시서 B4). 두 스트림이 같은 규칙을 쓴다. */
-    private void applyResend(SensorBatch.SensorBatchBuilder builder, SensorBatchRequest.Resend resend) {
+    static void applyResend(SensorBatch.SensorBatchBuilder builder, SensorBatchRequest.Resend resend) {
         if (resend == null) {
             return;
         }
@@ -558,123 +543,6 @@ public class SensorBatchService {
                 .originalRunId(resend.originalRunId())
                 .originalSessionId(resend.originalSessionId())
                 .resentAtMs(resend.resentAtMs());
-    }
-
-    // ── 심박 배치(LLD-0047) ──────────────────────────────────────────────
-
-    private SensorBatchResultResponse ingestHeartRate(Member member, Long memberId, byte[] payload, JsonNode root,
-                                                      long serverReceivedAtMs, SensorIngestChannel channel) {
-        HeartRateBatchRequest request = treeToValue(root, HeartRateBatchRequest.class);
-        batchValidator.validateHeartRate(request);
-        long acceptedAtMs = System.currentTimeMillis();
-
-        // 심박은 경과 나노초 축이 없어 관측 범위를 앵커 한 점으로 준다(LLD-0047 5절 3단계).
-        long anchorElapsedNs = parseElapsedNs(request.clock().anchorElapsedNs());
-        clockMappingService.register(
-                request.clock(), request.deviceId(), anchorElapsedNs, anchorElapsedNs);
-
-        // 검증이 ts_ms 엄격 증가를 보장하므로 첫·마지막 샘플이 곧 측정 범위다.
-        List<HeartRateBatchRequest.Sample> samples = request.samples();
-        long measuredAtStartMs = samples.get(0).tsMs();
-        long measuredAtEndMs = samples.get(samples.size() - 1).tsMs();
-
-        RunAttribution attribution = resolveAttribution(memberId, request.deviceId(),
-                request.runId(), request.studyId(), request.participationId(),
-                request.resend(), measuredAtStartMs);
-
-        String payloadSha256 = sha256(payload);
-        Optional<SensorBatch> existingBatch = sensorBatchRepository.findByBatchId(request.batchId());
-        if (existingBatch.isPresent()) {
-            return duplicateOrRejectHeartRate(memberId, request, payloadSha256, existingBatch.get());
-        }
-
-        String objectKey = "sensor/%d/%s/%s/%s-%s.json".formatted(
-                memberId, request.deviceId(), STREAM_HR, request.batchId(), payloadSha256);
-        s3Service.uploadBytes(objectKey, payload, CONTENT_TYPE);
-
-        // 샘플 행이 인덱스 행보다 먼저다. 인덱스가 먼저 생기면 그 뒤 샘플 저장이 실패했을 때
-        // 재전송이 DUPLICATE로 막혀 샘플이 영영 비는 구멍이 생긴다(ADR-0031 결정 4).
-        HeartRateBatchService.BatchOutcome outcome = heartRateBatchService.storeAndAssess(
-                member, request.batchId(), attribution.runId(), request.onBody(), request.wearState(),
-                samples, serverReceivedAtMs);
-
-        long persistedAtMs = System.currentTimeMillis();
-        SensorBatch batch = heartRateEntity(member, request, payload, payloadSha256, objectKey, attribution,
-                measuredAtStartMs, measuredAtEndMs, serverReceivedAtMs, acceptedAtMs, persistedAtMs, channel);
-        try {
-            sensorBatchRepository.save(batch);
-        } catch (DataIntegrityViolationException e) {
-            Optional<SensorBatch> concurrentlyStored = sensorBatchRepository.findByBatchId(request.batchId());
-            if (concurrentlyStored.isEmpty()) {
-                throw e;
-            }
-            return duplicateOrRejectHeartRate(memberId, request, payloadSha256, concurrentlyStored.get());
-        }
-        return loggedHeartRate(memberId, request, outcome.aiSkipped(), SensorBatchResult.STORED);
-    }
-
-    /** 심박 인덱스 행. 축·충격·설정 대조는 IMU만의 개념이라 비운다(LLD-0047 4절). */
-    private SensorBatch heartRateEntity(
-            Member member,
-            HeartRateBatchRequest request,
-            byte[] payload,
-            String payloadSha256,
-            String objectKey,
-            RunAttribution attribution,
-            long measuredAtStartMs,
-            long measuredAtEndMs,
-            long serverReceivedAtMs,
-            long acceptedAtMs,
-            long persistedAtMs,
-            SensorIngestChannel channel
-    ) {
-        SensorBatchRequest.Clock clock = request.clock();
-        SensorBatch.SensorBatchBuilder builder = SensorBatch.builder()
-                .batchId(request.batchId())
-                .member(member)
-                .stream(STREAM_HR)
-                .source(SOURCE_WATCH)
-                .deviceId(request.deviceId())
-                .sessionId(request.sessionId())
-                .seq(request.seq())
-                .studyId(attribution.studyId())
-                .participationId(attribution.participationId())
-                .runId(attribution.runId())
-                .bootId(clock.bootId())
-                .clockMappingId(clock.clockMappingId())
-                .anchorElapsedNs(parseElapsedNs(clock.anchorElapsedNs()))
-                .anchorEpochMs(clock.anchorEpochMs())
-                .uncertaintyMs(clock.uncertaintyMs())
-                .sampleCount(request.samples().size())
-                // 심박은 샘플마다 벽시계 시각이 실려 와 시계 환산을 하지 않는다.
-                .measuredAtStartMs(measuredAtStartMs)
-                .measuredAtEndMs(measuredAtEndMs)
-                .phoneReceivedAtMs(request.phoneReceivedAtMs())
-                .serverReceivedAtMs(serverReceivedAtMs)
-                .acceptedAtMs(acceptedAtMs)
-                .persistedAtMs(persistedAtMs)
-                .modelAvailableAtServerMs(persistedAtMs)
-                .onBody(request.onBody())
-                .wearState(request.wearState())
-                .watchBatteryPct(request.watchBatteryPct())
-                .qualityStatus(QUALITY_STATUS_OK)
-                .gyroBackfill(false)
-                .isResend(false)
-                .configMismatch(false)
-                .s3Key(objectKey)
-                .byteSize(payload.length)
-                .payloadSha256(payloadSha256)
-                .ingestChannel(channel);
-        applyResend(builder, request.resend());
-        return builder.build();
-    }
-
-    private SensorBatchResultResponse loggedHeartRate(
-            Long memberId, HeartRateBatchRequest request, int aiSkipped, SensorBatchResult result) {
-        // 심박 수치·판정 상태·AI 응답은 어떤 레벨에도 남기지 않는다(#639).
-        log.info("심박 배치 수신: memberId={}, stream={}, seq={}, sampleCount={}, aiSkipped={}, result={}",
-                memberId, STREAM_HR, request.seq(), request.samples().size(), aiSkipped, result);
-        return SensorBatchResultResponse.of(request.batchId(), request.seq(), result);
     }
 
     private SensorBatchResultResponse duplicateOrReject(
@@ -687,18 +555,6 @@ public class SensorBatchService {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         return logged(memberId, request, SensorBatchResult.DUPLICATE);
-    }
-
-    private SensorBatchResultResponse duplicateOrRejectHeartRate(
-            Long memberId,
-            HeartRateBatchRequest request,
-            String payloadSha256,
-            SensorBatch existingBatch
-    ) {
-        if (!payloadSha256.equals(existingBatch.getPayloadSha256())) {
-            throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
-        }
-        return loggedHeartRate(memberId, request, 0, SensorBatchResult.DUPLICATE);
     }
 
     private SensorBatchResultResponse logged(
@@ -716,7 +572,7 @@ public class SensorBatchService {
         return axis.n();
     }
 
-    private String sha256(byte[] payload) {
+    static String sha256(byte[] payload) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload));
         } catch (NoSuchAlgorithmException e) {
