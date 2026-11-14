@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.willAnswer;
 
 import com.widyu.location.SeniorLocation;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.raw.application.LocationFixService;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.parentlocation.repository.ParentLocationRepository;
 import com.widyu.member.repository.FamilyMembershipRepository;
@@ -50,15 +49,22 @@ class RealtimeLocationTtlRaceTest {
     @Mock(strictness = Mock.Strictness.LENIENT) private RedisTemplate<String, Object> redisTemplate;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private SafeZoneAlertService safeZoneAlertService;
-    @Mock private LocationFixService locationFixService;
     @Mock private LocationAccessLogService locationAccessLogService;
     @Mock private MemberRepository memberRepository;
     @Mock private PlatformTransactionManager transactionManager;
     @Spy private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Spy private MemberLocationSequencer sequencer = new MemberLocationSequencer(4, 3_000);
+    @Spy private FakeSeniorStayStateService stayStateService = new FakeSeniorStayStateService();
 
-    @InjectMocks
-    private RealtimeLocationService realtimeLocationService;
+    @InjectMocks private LocationJudgeService judgeService;
+    @InjectMocks private LocationProjectionService projectionService;
+    @InjectMocks private LocationQueryService queryService;
+    @InjectMocks private LocationMaintenanceService maintenanceService;
+
+    private LocationIngestService ingestService() {
+        return LocationServiceFixture.ingest(validator, sequencer, judgeService, projectionService,
+                transactionManager);
+    }
 
     @Test
     @DisplayName("TTL 갱신이 위치를 읽은 뒤 새 위치가 저장돼도 갱신이 끝나면 최신 위치는 새 위치다")
@@ -83,7 +89,7 @@ class RealtimeLocationTtlRaceTest {
         given(redisTemplate.expire(anyString(), anyLong(), any(TimeUnit.class))).willReturn(true);
 
         // when
-        realtimeLocationService.refreshLocationTtl();
+        maintenanceService.refreshLocationTtl();
 
         // then
         assertThat(redis.get(1L).getMeasuredAtMs()).isEqualTo(later);

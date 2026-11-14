@@ -3,6 +3,8 @@ package com.widyu.auth.application.senior;
 import com.widyu.auth.dto.request.SeniorSignInRequest;
 import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.response.TokenPairResponse;
+import com.widyu.auth.infrastructure.AuthLimitStore;
+import com.widyu.auth.infrastructure.ClientIpResolver;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -50,6 +52,8 @@ public class SeniorAuthService {
     private final GeocodingService geocodingService;
     private final JwtTokenProvider jwtTokenProvider;
     private final MemberUtil memberUtil;
+    private final AuthLimitStore authLimitStore;
+    private final ClientIpResolver clientIpResolver;
 
     @Transactional
     public void seniorSignUpBulk(List<SeniorSignUpRequest> requests) {
@@ -97,7 +101,17 @@ public class SeniorAuthService {
 
     @Transactional
     public TokenPairResponse seniorSignIn(SeniorSignInRequest request) {
-        SeniorProfile seniorProfile = findByInviteCodeAndPhoneNumber(request.inviteCode(), request.phoneNumber());
+        // 초대코드는 7자리 숫자라 대입할 수 있다. 보호자 로그인과 같은 실패 한도를 번호와 IP에 건다 (LLD-0146)
+        AuthLimitStore.LoginAttempt attempt = authLimitStore.reserveLogin(
+                "senior:" + request.phoneNumber(), clientIpResolver.resolve());
+        SeniorProfile seniorProfile;
+        try {
+            seniorProfile = findByInviteCodeAndPhoneNumber(request.inviteCode(), request.phoneNumber());
+        } catch (BusinessException exception) {
+            authLimitStore.completeLogin(attempt, false);
+            throw exception;
+        }
+        authLimitStore.completeLogin(attempt, true);
         return generateTokenPairForMember(seniorProfile.getMember());
     }
 

@@ -1,5 +1,6 @@
 package com.widyu.location.realtime.dto;
 
+import com.widyu.location.stay.SeniorStayState;
 import java.time.LocalDateTime;
 
 public record StayInfo(
@@ -9,7 +10,8 @@ public record StayInfo(
     String locationType,
     String locationName
 ) {
-    public static StayInfo of(Double latitude, Double longitude, String locationType, String locationName) {
-        return new StayInfo(latitude, longitude, LocalDateTime.now(), locationType, locationName);
+    public static StayInfo from(SeniorStayState state) {
+        return new StayInfo(state.getLatitude(), state.getLongitude(), state.getStayStartedAt(),
+                state.getLocationType(), state.getLocationName());
     }
 }

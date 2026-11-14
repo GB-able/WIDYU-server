@@ -7,6 +7,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
+import com.widyu.auth.infrastructure.AuthLimitStore;
+import com.widyu.auth.infrastructure.ClientIpResolver;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
@@ -36,6 +38,8 @@ class FamilyConnectionServiceTest {
     @Mock private FamilyRepository familyRepository;
     @Mock private FamilyMembershipRepository familyMembershipRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
+    @Mock private AuthLimitStore authLimitStore;
+    @Mock private ClientIpResolver clientIpResolver;
 
     @InjectMocks
     private FamilyConnectionService familyConnectionService;

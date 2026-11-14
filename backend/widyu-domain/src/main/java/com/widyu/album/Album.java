@@ -29,8 +29,12 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
+// 바뀐 컬럼만 UPDATE한다. 카운터는 리포지토리의 원자 UPDATE로 바뀌므로, 삭제·캡션 수정이 읽어 둔 옛 카운터로 행 전체를 덮으면
+// 그 사이 커밋된 좋아요·댓글·조회 수가 사라진다(LLD-0151).
 @Entity
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(indexes = {
@@ -234,26 +238,6 @@ public class Album extends BaseTimeEntity {
 
     public void updateContent(String content) {
         this.content = content;
-    }
-
-    public void incrementLikeCount() {
-        this.likeCount++;
-    }
-
-    public void decrementLikeCount() {
-        if (this.likeCount > 0) {
-            this.likeCount--;
-        }
-    }
-
-    public void incrementCommentCount() {
-        this.commentCount++;
-    }
-
-    public void decrementCommentCount() {
-        if (this.commentCount > 0) {
-            this.commentCount--;
-        }
     }
 
     public void incrementViewCount() {

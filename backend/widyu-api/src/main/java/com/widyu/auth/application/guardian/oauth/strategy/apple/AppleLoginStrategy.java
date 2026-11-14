@@ -70,7 +70,9 @@ public class AppleLoginStrategy implements SocialLoginStrategy {
                     email,
                     name,
                     null,
-                    tokenResponse.refreshToken()
+                    tokenResponse.refreshToken(),
+                    // 값이 없으면 인증되지 않은 것으로 본다 (LLD-0149)
+                    Boolean.TRUE.equals(idTokenPayload.emailVerified())
             );
         } catch (Exception e) {
             log.error("애플 사용자 정보 조회 실패");

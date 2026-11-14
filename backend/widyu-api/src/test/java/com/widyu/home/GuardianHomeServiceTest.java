@@ -20,7 +20,7 @@ import com.widyu.home.application.GuardianHomeService;
 import com.widyu.home.application.HomeAlbumRecommendationService;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
@@ -53,13 +53,13 @@ class GuardianHomeServiceTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
-    @Mock private RealtimeLocationService realtimeLocationService;
+    @Mock private LocationQueryService locationQueryService;
     @Mock private LocationAccessLogService locationAccessLogService;
 
     private GuardianHomeService guardianHomeService() {
         return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
                 heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
-                healthScheduleRepository, walkRepository, albumRecommendationService, realtimeLocationService,
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService,
                 locationAccessLogService);
     }
 
@@ -114,7 +114,7 @@ class GuardianHomeServiceTest {
         given(healthScheduleRepository.findFirstByMemberIdAndScheduledAtAfterOrderByScheduledAtAsc(any(), any())).willReturn(Optional.empty());
         given(walkRepository.findByMemberAndWalkDate(any(), any())).willReturn(Optional.empty());
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
-        given(realtimeLocationService.getOutingStatus(any())).willReturn(true);
+        given(locationQueryService.getOutingStatus(any())).willReturn(true);
 
         // when
         GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);

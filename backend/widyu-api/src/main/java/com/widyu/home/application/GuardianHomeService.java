@@ -14,7 +14,7 @@ import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.home.dto.response.GuardianSeniorListResponse;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.application.LocationAccessLogService;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.FamilyMembership;
@@ -51,7 +51,7 @@ public class GuardianHomeService {
     private final HealthScheduleRepository healthScheduleRepository;
     private final WalkRepository walkRepository;
     private final HomeAlbumRecommendationService albumRecommendationService;
-    private final RealtimeLocationService realtimeLocationService;
+    private final LocationQueryService locationQueryService;
     private final LocationAccessLogService locationAccessLogService;
 
     public GuardianHomeCardsResponse getHomeCards(Long memberId) {
@@ -71,7 +71,7 @@ public class GuardianHomeService {
         recordAccessQuietly(guardian.getId(), senior.getId());
 
         return GuardianHomeCardsResponse.of(
-                realtimeLocationService.getOutingStatus(senior.getId()),
+                locationQueryService.getOutingStatus(senior.getId()),
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
                 getLatestAlbums(senior),

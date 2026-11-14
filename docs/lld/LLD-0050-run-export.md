@@ -1,5 +1,7 @@
 # LLD-0050: 측정회차 내보내기 — `run_<run_id>.zip` (B9)
 
+> **2026-11-13:** 위치 원본 신규 저장 중단(ADR-0045). 위치가 없는 회차는 `streams_absent`에 `LOCATION_RAW_NOT_COLLECTED`로 신고한다(LLD-0143 6절).
+
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
 > **파일 형식의 정본은 `04_계약검사기/EXPORT_FORMAT.md`(`format_version "EXPORT_FORMAT v0.2"`)다.** 이 문서는 서버가 그 형식을 어떻게 만드는가만 적는다. 두 문서가 다르게 읽히면 형식서가 맞다.
 
