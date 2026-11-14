@@ -145,6 +145,7 @@ ADR-0044 맥락 그대로다. (1) 보호자에게 보이는 좌표가 언제 잰
 - **배포 순서:** (1) `scripts/mysql/create_senior_stay_state.sql` 실행(운영 `ddl-auto: validate`) (2) 새 버전 배포. 서버가 시작할 때 `location.stay-state.import-legacy-redis=true`(기본)면 Redis `location:stay:*`와 `safezone:alert:*`를 읽어 비어 있는 행만 채운다. 묶음 끝은 남은 TTL로 정한다. Redis 키는 지우지 않는다. (3) 확인 뒤 다음 배포에서 꺼도 된다.
 - **가져오기 없이 시작해도:** 상태가 없으면 "이전 체류 없음"이라 알림이 새로 생기지 않는다(복귀는 `EXITED` 묶음이 있어야, 이탈은 이전 체류가 안이어야 알린다). 잃는 것은 진행 중 30분 묶음(묶음 안 재이탈 Z01 중복 가능, 복귀 Z02 누락 가능)과 체류 시작 시각이다.
 - **롤백(이전 버전으로):** 이전 버전은 Redis 체류 키를 읽는데 배포 이후 갱신되지 않아 낡았다. 되돌리기 전에 Redis `location:stay:*`, `safezone:alert:*`를 지우면 "이전 체류 없음"으로 시작해 잘못된 알림이 나가지 않는다(진행 중 묶음은 잃는다). `senior_stay_state` 테이블은 남겨도 이전 버전이 읽지 않는다.
+- **롤백 뒤 다시 배포:** 롤백 기간에는 이전 버전이 Redis만 갱신해 `senior_stay_state` 행이 낡는다. 가져오기는 있는 행을 건너뛰므로, 다시 배포하기 전에 운영자가 `senior_stay_state` 행을 지워 Redis 값을 다시 가져오게 한다. 지우지 않으면 회원마다 다음 한 번의 전이에서 잘못된 이탈 알림이 나가거나 복귀 알림이 빠질 수 있다(이후 전이부터 맞춰진다).
 - **보존, 삭제:** 행은 회원당 1개이고 탈퇴, 비활성 정리 때 지운다(예전 Redis 24시간 TTL은 활성 회원이면 4분마다 늘어나 사실상 같은 수명이었다). 보관 기간 정리(ADR-0043) 대상 표에는 넣지 않았다(현재 상태 1행).
 - **성능:** 위치마다 PK 조회 1건(예전 Redis GET), 전이 때 잠금 조회와 쓰기, 알림. 측정 10절.
 - `backend/CLAUDE.md` location 절, `docs/architecture/websocket.md`, ERD를 갱신한다.

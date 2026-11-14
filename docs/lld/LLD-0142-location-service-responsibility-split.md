@@ -2,6 +2,8 @@
 
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
 
+> **2026-11-13 대체:** 이 문서의 원본 저장(`storeRaw`, `LocationFixService`), `STORED`, `DUPLICATE` ACK, 실시간 실패 뒤 원본 저장 정책은 [LLD-0143](LLD-0143-stop-location-raw-storage.md)으로 대체됐다. STOMP 수신 경로는 [LLD-0144](LLD-0144-location-member-mailbox.md)에서 회원별 우편함을 거친다. 책임 분리 구조와 트랜잭션, 잠금 경계는 그대로이며 아래 검증 기록은 당시 기준이다.
+
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |
