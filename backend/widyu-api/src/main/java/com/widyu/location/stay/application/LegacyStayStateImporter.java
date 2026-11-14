@@ -5,7 +5,6 @@ import com.widyu.global.config.RedisConfig;
 import com.widyu.location.realtime.dto.StayInfo;
 import com.widyu.location.stay.SafeZoneAlertState;
 import com.widyu.location.stay.SeniorStayState;
-import com.widyu.location.stay.repository.SeniorStayStateRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +15,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.Cursor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Component;
@@ -39,7 +39,7 @@ public class LegacyStayStateImporter implements ApplicationRunner {
     static final String ALERT_KEY_PREFIX = "safezone:alert:";
 
     private final RedisTemplate<String, Object> redisTemplate;
-    private final SeniorStayStateRepository repository;
+    private final SeniorStayStateService stayStateService;
     private final PlatformTransactionManager transactionManager;
     private final ObjectMapper redisValueMapper = RedisConfig.redisObjectMapper();
 
@@ -70,13 +70,7 @@ public class LegacyStayStateImporter implements ApplicationRunner {
                 invalid++;
                 continue;
             }
-            Boolean saved = transaction.execute(status -> {
-                if (repository.existsById(state.getMemberId())) {
-                    return false;
-                }
-                repository.save(state);
-                return true;
-            });
+            Boolean saved = insertIfAbsent(transaction, state);
             if (Boolean.TRUE.equals(saved)) {
                 imported++;
             } else {
@@ -84,6 +78,24 @@ public class LegacyStayStateImporter implements ApplicationRunner {
             }
         }
         return new Result(imported, existing, invalid);
+    }
+
+    /**
+     * 없을 때만 INSERT한다. merge(save)는 확인과 저장 사이에 실시간 처리가 만든 행을 예전 값으로 덮으므로 쓰지 않는다.
+     * 그 사이에 행이 생겨 PK가 충돌하면 그 회원만 건너뛴다.
+     */
+    private Boolean insertIfAbsent(TransactionTemplate transaction, SeniorStayState state) {
+        try {
+            return transaction.execute(status -> {
+                if (stayStateService.find(state.getMemberId()).isPresent()) {
+                    return false;
+                }
+                stayStateService.create(state);
+                return true;
+            });
+        } catch (DataIntegrityViolationException e) {
+            return false;
+        }
     }
 
     /** 좌표가 빠졌거나 읽을 수 없는 값은 옮기지 않는다(예전 판정도 이런 값은 지우고 체류 없음으로 봤다). */

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 위치 저장소 유지관리(LLD-0142): 최신 위치 TTL 연장, 탈퇴, 비활성 회원의 위치와 체류 상태 삭제. → LLD-0059, LLD-0141 */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LocationMaintenanceService {
@@ -49,7 +51,7 @@ public class LocationMaintenanceService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void refreshLocationTtl() {
         // 최신 위치가 만료된 비활성 회원의 체류 상태 행도 지운다(Redis 키처럼 스스로 만료되지 않는다).
-        stayStateService.findInactiveMemberIds().forEach(this::deleteLocation);
+        stayStateService.findInactiveMemberIds().forEach(this::deleteQuietly);
         List<SeniorLocation> locations = new ArrayList<>();
         seniorLocationRepository.findAll().forEach(location -> {
             if (location != null) {
@@ -65,7 +67,7 @@ public class LocationMaintenanceService {
         Set<Long> activeMemberIds = readOnly.execute(status -> memberRepository.findActiveIdsIn(memberIds));
         for (SeniorLocation location : locations) {
             if (!activeMemberIds.contains(location.getSeniorId())) {
-                deleteLocation(location.getSeniorId());
+                deleteQuietly(location.getSeniorId());
                 continue;
             }
             redisTemplate.expire(SENIOR_LOCATION_KEY_PREFIX + location.getSeniorId(),
@@ -79,12 +81,25 @@ public class LocationMaintenanceService {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deleteLocation(Long memberId) {
+        // 한 삭제의 실패가 다른 삭제를 막지 않게 차례로 시도하고, 실패가 있으면 마지막에 알린다.
         try {
             stayStateService.delete(memberId);
         } finally {
-            // DB 삭제가 실패해도 Redis 위치는 지우고, Redis 삭제가 실패해도 DB 행은 이미 지웠다.
-            seniorLocationRepository.deleteById(memberId);
-            redisTemplate.delete(List.of(LocationProjectionService.trailKey(memberId), LEGACY_STAY_KEY_PREFIX + memberId));
+            try {
+                seniorLocationRepository.deleteById(memberId);
+            } finally {
+                redisTemplate.delete(
+                        List.of(LocationProjectionService.trailKey(memberId), LEGACY_STAY_KEY_PREFIX + memberId));
+            }
+        }
+    }
+
+    /** 정리 중 한 회원의 삭제 오류가 다른 회원의 정리와 TTL 연장을 멈추지 않게 한다. 다음 실행에서 다시 시도한다. */
+    private void deleteQuietly(Long memberId) {
+        try {
+            deleteLocation(memberId);
+        } catch (RuntimeException e) {
+            log.warn("비활성 회원 위치 정리 실패: memberId={}, cause={}", memberId, e.getClass().getSimpleName());
         }
     }
 }

@@ -166,6 +166,26 @@ class RealtimeLocationServiceTest {
         then(redisTemplate).should().delete(java.util.List.of("location:trail:3", "location:stay:3"));
     }
 
+    @Test
+    @DisplayName("TTL 갱신 중 한 회원의 정리가 실패해도 다른 회원의 정리와 활성 회원의 만료 연장은 계속한다")
+    void 한_회원_정리가_실패해도_TTL_갱신을_계속한다() {
+        // given
+        SeniorLocation active = SeniorLocation.of(1L, 37.5, 127.0);
+        SeniorLocation brokenInactive = SeniorLocation.of(2L, 37.5, 127.0);
+        SeniorLocation inactive = SeniorLocation.of(3L, 37.5, 127.0);
+        given(seniorLocationRepository.findAll()).willReturn(java.util.List.of(brokenInactive, inactive, active));
+        given(memberRepository.findActiveIdsIn(java.util.List.of(2L, 3L, 1L))).willReturn(java.util.Set.of(1L));
+        willThrow(new QueryTimeoutException("redis down")).given(seniorLocationRepository).deleteById(2L);
+
+        // when
+        maintenanceService.refreshLocationTtl();
+
+        // then
+        then(seniorLocationRepository).should().deleteById(3L);
+        then(redisTemplate).should().delete(java.util.List.of("location:trail:2", "location:stay:2"));
+        then(redisTemplate).should().expire("senior_location:1", 300L, TimeUnit.SECONDS);
+    }
+
     // 실시간 반영 조건(LLD-0114)을 통과하도록 잰 시각을 지금으로 둔다.
     private static String rawFixPayload(long tsMs) {
         return """

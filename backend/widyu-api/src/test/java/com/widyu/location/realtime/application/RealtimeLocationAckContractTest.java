@@ -198,6 +198,19 @@ class RealtimeLocationAckContractTest {
     }
 
     @Test
+    @DisplayName("구형 위치도 위도가 ±90을 벗어나면 판정과 방송 없이 입력 오류로 거절한다")
+    void 구형_위치도_범위_밖_좌표는_거절한다() {
+        // given
+        byte[] payload = "{\"memberId\":1,\"latitude\":91.0,\"longitude\":127.0}".getBytes(UTF_8);
+
+        // when & then
+        assertThatThrownBy(() -> ingestService().receive(payload, 1L))
+                .isInstanceOf(com.widyu.global.error.BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", com.widyu.global.error.ErrorCode.LOCATION_FIX_INVALID);
+        then(messagingTemplate).should(never()).convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
     @DisplayName("앱이 회차를 실어 보내도 위치는 회차에 귀속하지 않고 실시간 처리 결과로 ACK한다")
     void 회차를_실어_보내도_실시간_결과로_ACK한다() {
         // given

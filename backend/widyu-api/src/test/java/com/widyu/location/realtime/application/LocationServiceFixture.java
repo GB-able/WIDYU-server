@@ -39,7 +39,7 @@ final class LocationServiceFixture {
 
     @SuppressWarnings("unchecked")
     private static <T> T transactional(T target, PlatformTransactionManager transactionManager) {
-        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lenient().doReturn(new SimpleTransactionStatus()).when(transactionManager).getTransaction(any());
         ProxyFactory proxyFactory = new ProxyFactory(target);
         proxyFactory.setProxyTargetClass(true);
         proxyFactory.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));

@@ -290,7 +290,9 @@ class MemberLocationMailboxTest {
                 future.get(30, TimeUnit.SECONDS);
             }
             long deadline = System.currentTimeMillis() + 10_000;
-            while (counter.finished() < 8 * perSender && System.currentTimeMillis() < deadline) {
+            // 마지막 작업이 끝났다고 센 직후에도 우편함 정리(작업 수 감소, 회원 항목 삭제)가 남아 있을 수 있어 함께 기다린다.
+            while ((counter.finished() < 8 * perSender || mailbox.trackedMembers() > 0 || mailbox.queuedJobs() > 0)
+                    && System.currentTimeMillis() < deadline) {
                 Thread.sleep(10);
             }
 
@@ -477,10 +479,10 @@ class MemberLocationMailboxTest {
             private final java.util.concurrent.atomic.AtomicInteger duplicates = new java.util.concurrent.atomic.AtomicInteger();
 
             void finish(CountingJob job) {
-                finished.incrementAndGet();
                 if (!seen.add(job)) {
                     duplicates.incrementAndGet();
                 }
+                finished.incrementAndGet();
             }
 
             int finished() {

@@ -281,10 +281,6 @@ public class LocationIngestService {
         if (request.reason() == null || !REASONS.contains(request.reason())) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
-        if (Math.abs(request.resolvedLatitude()) > MAX_LATITUDE
-                || Math.abs(request.resolvedLongitude()) > MAX_LONGITUDE) {
-            throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
-        }
     }
 
     private void validate(LocationUpdateRequest request) {
@@ -294,6 +290,10 @@ public class LocationIngestService {
         }
         // 좌표는 lat/lon과 latitude/longitude 중 실제로 쓸 값이 정해진 뒤에 본다.
         if (request.resolvedLatitude() == null || request.resolvedLongitude() == null) {
+            throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
+        }
+        // 범위 검사는 구형과 v2 모두 방송 앞에서 한다. 범위 밖 좌표가 최신 위치로 반영되고 방송되지 않게 한다.
+        if (Math.abs(request.resolvedLatitude()) > MAX_LATITUDE || Math.abs(request.resolvedLongitude()) > MAX_LONGITUDE) {
             throw new BusinessException(ErrorCode.LOCATION_FIX_INVALID);
         }
     }
@@ -342,7 +342,7 @@ public class LocationIngestService {
                 LocationAckResponse ack = process(prepared);
                 if (ack == null) {
                     // 회원 순서 잠금 대기 초과(동기 경로와 겹칠 때). 성공 ACK 없이 과부하를 알려 재전송을 받는다.
-                    workDispatcher.sendOverloaded(API, user, sessionId);
+                    workDispatcher.sendOverloaded(API, user, sessionId, requestIds());
                     return Outcome.FAILED;
                 }
                 send(ack);
@@ -364,7 +364,7 @@ public class LocationIngestService {
             withMdc(() -> {
                 log.warn("위치 실시간 처리 대기 공간 부족으로 ACK 보류: memberId={}, seq={}",
                         prepared.memberId(), prepared.request().seq());
-                workDispatcher.sendOverloaded(API, user, sessionId);
+                workDispatcher.sendOverloaded(API, user, sessionId, requestIds());
             });
         }
 
@@ -386,6 +386,16 @@ public class LocationIngestService {
                 return;
             }
             send(LocationAckResponse.legacy(response));
+        }
+
+        /** 과부하 오류에 실어 앱이 어느 위치가 처리되지 않았는지 찾게 한다. 구형 위치는 식별자가 없어 null이다. */
+        private Map<String, Object> requestIds() {
+            LocationUpdateRequest request = prepared.request();
+            Map<String, Object> ids = new java.util.LinkedHashMap<>();
+            ids.put("deviceId", request.deviceId());
+            ids.put("sessionId", request.sessionId());
+            ids.put("seq", request.seq());
+            return ids;
         }
 
         private void send(LocationAckResponse ack) {

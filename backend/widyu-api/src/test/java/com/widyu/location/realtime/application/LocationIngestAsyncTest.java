@@ -189,7 +189,7 @@ class LocationIngestAsyncTest {
         then(workDispatcher).should(never()).sendToSession(anyString(), anyString(), eq(ACK), any());
         then(workDispatcher).should().sendError(any(QueryTimeoutException.class), anyString(), anyString(), eq(USER),
                 eq(SESSION));
-        then(workDispatcher).should().sendOverloaded(anyString(), eq(USER), eq(SESSION));
+        then(workDispatcher).should().sendOverloaded(anyString(), eq(USER), eq(SESSION), any());
         assertThat(mailbox.trackedMembers()).isZero();
         assertThat(mailbox.queuedJobs()).isZero();
     }
@@ -207,13 +207,13 @@ class LocationIngestAsyncTest {
         executor.runAll();
 
         // then
-        then(workDispatcher).should().sendOverloaded(anyString(), eq(USER), eq(SESSION));
+        then(workDispatcher).should().sendOverloaded(anyString(), eq(USER), eq(SESSION), any());
         then(workDispatcher).should(never()).sendToSession(anyString(), anyString(), eq(ACK), any());
         assertThat(mailbox.trackedMembers()).isZero();
     }
 
     @Test
-    @DisplayName("우편함 자리가 없으면 수신 스레드에서 실행하지 않고 성공 ACK 없이 과부하만 알린다")
+    @DisplayName("우편함 자리가 없으면 수신 스레드에서 실행하지 않고 성공 ACK 없이 어느 요청인지 식별자를 실은 과부하만 알린다")
     void 자리가_없으면_과부하만_알린다() {
         // given
         MemberLocationMailbox mailbox = new MemberLocationMailbox(executor, 4, 10, 1);
@@ -224,7 +224,11 @@ class LocationIngestAsyncTest {
         ingest.submit(payload(2L, 2, System.currentTimeMillis()).getBytes(UTF_8), 2L, () -> "2", "session-b");
 
         // then
-        then(workDispatcher).should().sendOverloaded(anyString(), any(Principal.class), eq("session-b"));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Object>> ids = ArgumentCaptor.forClass(java.util.Map.class);
+        then(workDispatcher).should().sendOverloaded(anyString(), any(Principal.class), eq("session-b"), ids.capture());
+        assertThat(ids.getValue()).containsEntry("deviceId", "ph-1").containsEntry("sessionId", "s-1")
+                .containsEntry("seq", 2L);
         then(workDispatcher).should(never()).sendToSession(anyString(), anyString(), eq(ACK), any());
         then(seniorLocationRepository).should(never()).findById(any());
     }

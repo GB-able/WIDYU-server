@@ -94,6 +94,7 @@ class StayStateOutboxAtomicityTest {
     // 이동 경로 쓰기만 막는다. 빈을 통째로 대역으로 바꾸면 Redis 저장소 설정이 깨진다.
     @SpyBean(name = "redisTemplate") private RedisTemplate<String, Object> redisTemplate;
     @SpyBean private FcmOutboxService fcmOutboxService;
+    @SpyBean private com.widyu.location.stay.application.SeniorStayStateService stayStateService;
 
     @Autowired private LocationIngestService ingestService;
     @Autowired private LocationJudgeService judgeService;
@@ -193,6 +194,13 @@ class StayStateOutboxAtomicityTest {
     void 첫_상태를_동시에_만들어도_행은_하나다() throws Exception {
         // given
         Long seniorId = seniorWithGuardianAndHome();
+        // 두 판정이 모두 "행 없음"을 읽은 뒤에 INSERT로 가게 맞춘다. 시작만 맞추면 한쪽이 먼저 커밋해 다른 쪽이 행을 읽을 수 있다.
+        java.util.concurrent.CyclicBarrier bothRead = new java.util.concurrent.CyclicBarrier(2);
+        org.mockito.BDDMockito.willAnswer(invocation -> {
+            Object read = invocation.callRealMethod();
+            bothRead.await(10, TimeUnit.SECONDS);
+            return read;
+        }).given(stayStateService).find(seniorId);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<String>> results = new ArrayList<>();
@@ -209,12 +217,15 @@ class StayStateOutboxAtomicityTest {
         }
 
         // when
-        start.countDown();
         List<String> outcomes = new ArrayList<>();
-        for (Future<String> result : results) {
-            outcomes.add(result.get(30, TimeUnit.SECONDS));
+        try {
+            start.countDown();
+            for (Future<String> result : results) {
+                outcomes.add(result.get(30, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
         }
-        pool.shutdown();
 
         // then
         Integer rows = jdbc.queryForObject(

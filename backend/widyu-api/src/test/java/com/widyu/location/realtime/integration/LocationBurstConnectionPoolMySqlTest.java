@@ -112,6 +112,8 @@ class LocationBurstConnectionPoolMySqlTest {
         Result result = burst("single-84", 1, 84, 5_000L);
 
         assertThat(result.failed()).isZero();
+        // 정상 위치가 거절되는 회귀를 잡는다. 실패 수와 원본 행 수만으로는 모두 REJECTED여도 통과한다.
+        assertThat(result.acks().keySet()).noneMatch(key -> key.endsWith("REJECTED"));
         assertThat(result.fixRowsAfter()).isEqualTo(result.fixRowsBefore()).isPositive();
     }
 
@@ -121,6 +123,8 @@ class LocationBurstConnectionPoolMySqlTest {
         Result result = burst("multi-20x40", 20, 40, 5_000L);
 
         assertThat(result.failed()).isZero();
+        // 정상 위치가 거절되는 회귀를 잡는다. 실패 수와 원본 행 수만으로는 모두 REJECTED여도 통과한다.
+        assertThat(result.acks().keySet()).noneMatch(key -> key.endsWith("REJECTED"));
         assertThat(result.fixRowsAfter()).isEqualTo(result.fixRowsBefore()).isPositive();
     }
 
@@ -133,7 +137,10 @@ class LocationBurstConnectionPoolMySqlTest {
 
         Integer after = jdbc.queryForObject("SELECT COUNT(*) FROM senior_stay_state", Integer.class);
         assertThat(result.failed()).isZero();
+        // 정상 위치가 거절되는 회귀를 잡는다. 실패 수와 원본 행 수만으로는 모두 REJECTED여도 통과한다.
+        assertThat(result.acks().keySet()).noneMatch(key -> key.endsWith("REJECTED"));
         assertThat(after - before).isEqualTo(20);
+        assertThat(result.acks()).containsEntry("APPLIED", 20);
     }
 
     @Test
@@ -142,6 +149,8 @@ class LocationBurstConnectionPoolMySqlTest {
         Result result = burst("multi-20x40-stale", 20, 40, 90_000L);
 
         assertThat(result.failed()).isZero();
+        // 정상 위치가 거절되는 회귀를 잡는다. 실패 수와 원본 행 수만으로는 모두 REJECTED여도 통과한다.
+        assertThat(result.acks().keySet()).noneMatch(key -> key.endsWith("REJECTED"));
         assertThat(result.fixRowsAfter()).isEqualTo(result.fixRowsBefore()).isPositive();
     }
 
@@ -151,6 +160,8 @@ class LocationBurstConnectionPoolMySqlTest {
         Result result = burst("multi-20x40-newest-first", 20, 40, 5_000L, true);
 
         assertThat(result.failed()).isZero();
+        // 정상 위치가 거절되는 회귀를 잡는다. 실패 수와 원본 행 수만으로는 모두 REJECTED여도 통과한다.
+        assertThat(result.acks().keySet()).noneMatch(key -> key.endsWith("REJECTED"));
         assertThat(result.fixRowsAfter()).isEqualTo(result.fixRowsBefore()).isPositive();
     }
 
@@ -163,30 +174,33 @@ class LocationBurstConnectionPoolMySqlTest {
         Integer fixRowsBefore = fixRows(List.of(memberId));
         byte[] payload = payload(memberId, 1, System.currentTimeMillis());
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
-        CountDownLatch start = new CountDownLatch(1);
-        List<Future<String>> futures = new ArrayList<>();
-        for (int i = 0; i < THREADS; i++) {
-            futures.add(pool.submit(() -> {
-                start.await();
-                try {
-                    LocationAckResponse ack = locationIngestService.receive(payload, memberId);
-                    if (ack == null) {
-                        return "ACK:NONE";
-                    }
-                    return "ACK:" + ack.result();
-                } catch (Exception e) {
-                    return e.getClass().getSimpleName();
-                }
-            }));
-        }
-
-        // when
-        start.countDown();
         Map<String, Integer> outcomes = new TreeMap<>();
-        for (Future<String> future : futures) {
-            outcomes.merge(future.get(1, TimeUnit.MINUTES), 1, Integer::sum);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<String>> futures = new ArrayList<>();
+            for (int i = 0; i < THREADS; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        LocationAckResponse ack = locationIngestService.receive(payload, memberId);
+                        if (ack == null) {
+                            return "ACK:NONE";
+                        }
+                        return "ACK:" + ack.result();
+                    } catch (Exception e) {
+                        return e.getClass().getSimpleName();
+                    }
+                }));
+            }
+
+            // when
+            start.countDown();
+            for (Future<String> future : futures) {
+                outcomes.merge(future.get(1, TimeUnit.MINUTES), 1, Integer::sum);
+            }
+        } finally {
+            pool.shutdownNow();
         }
-        pool.shutdown();
 
         // then
         Integer stayRows = jdbc.queryForObject(
@@ -208,17 +222,20 @@ class LocationBurstConnectionPoolMySqlTest {
         Integer fixRowsBefore = fixRows(List.of(memberId));
         byte[] payload = payload(memberId, 1, System.currentTimeMillis() - 20 * 60_000L);
         ExecutorService pool = Executors.newFixedThreadPool(THREADS);
-        List<Future<String>> futures = new ArrayList<>();
-        for (int i = 0; i < THREADS; i++) {
-            futures.add(pool.submit(() -> "ACK:" + locationIngestService.receive(payload, memberId).result()));
-        }
-
-        // when
         Map<String, Integer> outcomes = new TreeMap<>();
-        for (Future<String> future : futures) {
-            outcomes.merge(future.get(1, TimeUnit.MINUTES), 1, Integer::sum);
+        try {
+            List<Future<String>> futures = new ArrayList<>();
+            for (int i = 0; i < THREADS; i++) {
+                futures.add(pool.submit(() -> "ACK:" + locationIngestService.receive(payload, memberId).result()));
+            }
+
+            // when
+            for (Future<String> future : futures) {
+                outcomes.merge(future.get(1, TimeUnit.MINUTES), 1, Integer::sum);
+            }
+        } finally {
+            pool.shutdownNow();
         }
-        pool.shutdown();
 
         // then
         assertThat(outcomes).containsExactly(Map.entry("ACK:SKIPPED", THREADS));
@@ -348,7 +365,7 @@ class LocationBurstConnectionPoolMySqlTest {
             Map<String, Long> statements = delta(statusBefore, statementCounters());
 
             int failed = failures.values().stream().mapToInt(Integer::intValue).sum();
-            Result result = new Result(work.size() + newest.size(), failed, fixRowsBefore, fixRows(memberIds), elapsedMs);
+            Result result = new Result(work.size() + newest.size(), failed, fixRowsBefore, fixRows(memberIds), elapsedMs, acks);
             System.out.printf("[LOCATION-BURST] scenario=%s threads=%d pool=10 sent=%d failed=%d failures=%s "
                             + "acks=%s fixRows=%d->%d elapsedMs=%d mysql=%s%n",
                     label, THREADS, result.sent(), failed, failures, acks, fixRowsBefore, result.fixRowsAfter(),
@@ -416,6 +433,7 @@ class LocationBurstConnectionPoolMySqlTest {
         return value;
     }
 
-    private record Result(int sent, int failed, int fixRowsBefore, int fixRowsAfter, long elapsedMs) {
+    private record Result(int sent, int failed, int fixRowsBefore, int fixRowsAfter, long elapsedMs,
+                          Map<String, Integer> acks) {
     }
 }

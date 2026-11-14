@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 
 import com.widyu.location.stay.SafeZoneAlertState;
 import com.widyu.location.stay.SeniorStayState;
-import com.widyu.location.stay.repository.SeniorStayStateRepository;
+
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,7 +33,7 @@ class LegacyStayStateImporterTest {
 
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOperations;
-    @Mock private SeniorStayStateRepository repository;
+    @Mock private SeniorStayStateService stayStateService;
     @Mock private PlatformTransactionManager transactionManager;
 
     @InjectMocks private LegacyStayStateImporter importer;
@@ -46,7 +46,7 @@ class LegacyStayStateImporterTest {
         given(valueOperations.get("location:stay:7")).willReturn(stayMap(37.5, 127.0, "HOME", "집"));
         given(valueOperations.get("safezone:alert:7")).willReturn("EXITED");
         given(redisTemplate.getExpire("safezone:alert:7", TimeUnit.SECONDS)).willReturn(600L);
-        given(repository.existsById(7L)).willReturn(false);
+        given(stayStateService.find(7L)).willReturn(java.util.Optional.empty());
 
         // when
         LegacyStayStateImporter.Result result = importer.importKeys(List.of("location:stay:7"), NOW);
@@ -54,7 +54,7 @@ class LegacyStayStateImporterTest {
         // then
         assertThat(result.imported()).isEqualTo(1);
         ArgumentCaptor<SeniorStayState> saved = ArgumentCaptor.forClass(SeniorStayState.class);
-        then(repository).should().save(saved.capture());
+        then(stayStateService).should().create(saved.capture());
         assertThat(saved.getValue().getLocationType()).isEqualTo("HOME");
         assertThat(saved.getValue().getStayStartedAt()).isEqualTo(LocalDateTime.of(2026, 11, 13, 9, 0));
         assertThat(saved.getValue().getAlertState()).isEqualTo(SafeZoneAlertState.EXITED);
@@ -69,7 +69,7 @@ class LegacyStayStateImporterTest {
         given(valueOperations.get("location:stay:7")).willReturn(stayMap(37.5, 127.0, null, null));
         given(valueOperations.get("safezone:alert:7")).willReturn(null);
         given(valueOperations.get("location:stay:8")).willReturn(stayMap(null, 127.0, null, null));
-        given(repository.existsById(7L)).willReturn(true);
+        given(stayStateService.find(7L)).willReturn(java.util.Optional.of(org.mockito.Mockito.mock(SeniorStayState.class)));
 
         // when
         LegacyStayStateImporter.Result result =
@@ -78,7 +78,26 @@ class LegacyStayStateImporterTest {
         // then
         assertThat(result.existing()).isEqualTo(1);
         assertThat(result.invalid()).isEqualTo(1);
-        then(repository).should(never()).save(any());
+        then(stayStateService).should(never()).create(any());
+    }
+
+    @Test
+    @DisplayName("확인 뒤 저장 사이에 실시간 처리가 행을 만들어 PK가 충돌하면 덮지 않고 그 회원만 건너뛴다")
+    void PK_충돌이면_덮지_않고_건너뛴다() {
+        // given
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("location:stay:7")).willReturn(stayMap(37.5, 127.0, null, null));
+        given(valueOperations.get("safezone:alert:7")).willReturn(null);
+        given(stayStateService.find(7L)).willReturn(java.util.Optional.empty());
+        org.mockito.BDDMockito.willThrow(new org.springframework.dao.DataIntegrityViolationException("PRIMARY"))
+                .given(stayStateService).create(any());
+
+        // when
+        LegacyStayStateImporter.Result result = importer.importKeys(List.of("location:stay:7"), NOW);
+
+        // then
+        assertThat(result.imported()).isZero();
+        assertThat(result.existing()).isEqualTo(1);
     }
 
     private static Map<String, Object> stayMap(Double latitude, Double longitude, String type, String name) {
