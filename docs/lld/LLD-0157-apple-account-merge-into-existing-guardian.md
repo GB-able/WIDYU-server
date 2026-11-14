@@ -54,8 +54,8 @@ SMS 인증은 이 서비스에서 이미 계정 주인 확인으로 쓰인다(�
 2. A에게 이미 번호가 있으면 403.
 3. `findTop2ByPhoneNumber(인증한 번호)`: 둘 이상이면 409 `MEMBER_4090`. 없으면 기존처럼 빈 번호를 채우고 `merged=false`.
 4. 주인(B)이 있으면 `AppleAccountMergeService.merge(A, B)`:
-   1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 가족 소속 없음. 아니면 400 `AUTH_4021`(자료가 있는 회원은 지우지 않는다).
-   2. B 행을 `PESSIMISTIC_WRITE`로 잠그고 확인: 활성 보호자(탈퇴, 정지 아님). 아니면 400 `AUTH_4021`. B에게 Apple 계정이 이미 있으면 400 `AUTH_4019`.
+   1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 회원이 직접 만드는 자료가 없음(`MemberRepository.countOwnedContentFlag`: 가족 소속, 시니어 프로필, 주소 즐겨찾기, 앨범과 댓글, 좋아요, 해제, 건강 일정, 복약 일정과 인증, 부모 위치, 걷기, 결제 주문과 결제). 아니면 400 `AUTH_4021`(자료가 있는 회원을 탈퇴 처리하면 그 자료에 닿을 수 없다). 알림, 동의 기록, FCM 토큰 같은 시스템 행은 보지 않는다. 회원이 만드는 자료 테이블이 새로 생기면 이 목록에 더한다.
+   2. B 행을 `entityManager.refresh(B, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 번호가 인증한 번호와 달라졌으면(조회와 잠금 사이 번호 변경) 403. 활성 보호자(탈퇴, 정지 아님)가 아니면 400 `AUTH_4021`. B에게 Apple 계정이 이미 있으면 400 `AUTH_4019`(동시 합치기도 잠금 뒤 여기서 걸린다).
    3. `moveSocialAccount(A, B, APPLE)`가 1행이 아니면 403(동시 요청이 먼저 옮김).
    4. 영속성 컨텍스트가 비워졌으므로 A를 다시 읽어 `maskPersonalInfo()`, `markWithdrawn(now)`. A의 리프레시 토큰을 지운다. Apple 연동 해제(토큰 폐기)는 하지 않는다. 계정이 B로 옮겨갔기 때문이다.
    5. B의 토큰 쌍(`loginType=APPLE`)을 발급한다.
@@ -69,7 +69,8 @@ FCM 토큰은 따로 옮기지 않는다. 앱이 로그인 뒤 토큰을 등록�
 | --- | --- |
 | A에게 이미 번호가 있음 | FORBIDDEN (403) |
 | 같은 번호의 회원이 둘 이상 | PHONE_NUMBER_SHARED_BY_MEMBERS (409) |
-| A가 빈 회원이 아님(로컬 계정, 다른 소셜, 가족 소속) | ALREADY_REGISTERED_PHONE_NUMBER (400) |
+| A가 빈 회원이 아님(로컬 계정, 다른 소셜, 직접 만든 자료) | ALREADY_REGISTERED_PHONE_NUMBER (400) |
+| 잠금 뒤 B의 번호가 인증한 번호와 다름 | FORBIDDEN (403) |
 | B가 시니어, 탈퇴, 정지 | ALREADY_REGISTERED_PHONE_NUMBER (400) |
 | B에게 이미 Apple 계정이 있음 | SOCIAL_PROVIDER_ALREADY_LINKED (400) |
 | 옮길 Apple 계정이 없음(동시 요청) | FORBIDDEN (403) |
@@ -82,7 +83,8 @@ FCM 토큰은 따로 옮기지 않는다. 앱이 로그인 뒤 토큰을 등록�
 - [x] AC2: 옮긴 Apple 계정은 지워지거나 가려지지 않고, 같은 Apple ID로 로그인하면 B가 찾아진다.
 - [x] AC3: A는 탈퇴 처리되고(개인정보 가림, 탈퇴 시각) 리프레시 토큰이 지워진다. Apple 연동 해제는 일어나지 않는다.
 - [x] AC4: B가 시니어, 탈퇴 회원이거나 이미 Apple 계정이 있으면 합치지 않는다.
-- [x] AC5: A에 자료(가족 소속, 다른 소셜 계정)가 있으면 합치지 않는다.
+- [x] AC5: A에 자료(가족 소속, 주소 즐겨찾기 등 직접 만든 자료, 다른 소셜 계정)가 있으면 합치지 않는다.
+- [x] AC5-1: B를 잠그고 다시 읽었을 때 번호가 인증한 번호와 다르면 합치지 않는다.
 - [x] AC6: 번호 주인이 없으면 기존처럼 번호만 채우고 `merged=false`다.
 - [x] AC7: Swagger 설명과 응답 예시가 반영된다.
 - [x] AC8: `./gradlew :backend:widyu-api:test`가 통과한다.

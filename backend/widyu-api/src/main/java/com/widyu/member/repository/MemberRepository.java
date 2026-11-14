@@ -50,6 +50,26 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     int moveSocialAccount(@Param("source") Member source, @Param("target") Member target,
                           @Param("provider") String provider);
 
+    // 애플 계정을 합치기 전에 빈 회원인지 본다. 회원이 직접 만드는 자료 테이블만 보고 알림, 동의, 토큰 같은 시스템 행은 보지 않는다 (LLD-0157)
+    // ponytail: 테이블 목록을 손으로 관리한다. 회원이 만드는 자료 테이블이 새로 생기면 여기에 더한다
+    @Query(value = "SELECT CASE WHEN "
+            + "EXISTS (SELECT 1 FROM family_membership WHERE guardian_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM senior_profile WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM address_bookmark WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM album WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM album_comment WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM album_like WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM album_unlock WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM health_schedule WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM medicine_schedule WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM medication_proof WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM parent_location WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM walk WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM payment_order WHERE member_id = :memberId) "
+            + "OR EXISTS (SELECT 1 FROM payment WHERE member_id = :memberId) "
+            + "THEN 1 ELSE 0 END", nativeQuery = true)
+    int countOwnedContentFlag(@Param("memberId") Long memberId);
+
     Optional<Member> findByPhoneNumber(String phoneNumber);
     boolean existsByPhoneNumber(String phoneNumber);
     Optional<Member> findByPhoneNumberAndName(String phoneNumber, String name);

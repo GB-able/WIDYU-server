@@ -10,8 +10,9 @@ import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.member.Member;
 import com.widyu.member.MemberRole;
 import com.widyu.member.MemberType;
-import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,17 +31,20 @@ public class AppleAccountMergeService {
     private static final String APPLE = OAuthProvider.APPLE.getValue();
 
     private final MemberRepository memberRepository;
-    private final FamilyMembershipRepository familyMembershipRepository;
+    private final EntityManager entityManager;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
-    // 호출자 트랜잭션 안에서 돈다. 번호 주인 확인은 호출자가 SMS 임시 토큰으로 마쳤다
-    public TokenPairResponse merge(Member appleMember, Member phoneOwner) {
+    // 호출자 트랜잭션 안에서 돈다. verifiedPhoneNumber는 호출자가 SMS 임시 토큰으로 확인한 번호다
+    public TokenPairResponse merge(Member appleMember, Member owner, String verifiedPhoneNumber) {
         validateEmptyAppleMember(appleMember);
 
-        // 같은 보호자에게 두 애플 계정이 동시에 합쳐지지 않게 보호자 행을 잠근 뒤 확인한다
-        Member owner = memberRepository.findByIdForUpdate(phoneOwner.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        // 보호자 행을 잠그며 최신 상태로 다시 읽는다. 조회 뒤 번호가 바뀌었거나 다른 애플 계정이 먼저 합쳐졌으면 여기서 드러난다
+        entityManager.refresh(owner, LockModeType.PESSIMISTIC_WRITE);
+        if (!verifiedPhoneNumber.equals(owner.getPhoneNumber())) {
+            log.warn("잠금 뒤 번호 주인이 바뀌어 애플 계정을 합치지 않음: ownerId={}", owner.getId());
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
         validatePhoneOwner(owner);
 
         if (memberRepository.moveSocialAccount(appleMember, owner, APPLE) != 1) {
@@ -59,14 +63,14 @@ public class AppleAccountMergeService {
         return jwtTokenProvider.generateTokenPair(owner.getId(), MemberRole.USER, APPLE);
     }
 
-    // 방금 애플 로그인으로 만들어져 애플 계정 말고는 아무것도 없는 회원만 합친다. 무엇이 쌓인 회원을 지우면 자료가 사라진다
+    // 방금 애플 로그인으로 만들어져 애플 계정 말고는 아무것도 없는 회원만 합친다. 자료가 쌓인 회원을 탈퇴 처리하면 그 자료에 닿을 수 없다
     private void validateEmptyAppleMember(Member member) {
         boolean onlyApple = member.getSocialAccounts().size() == 1
                 && APPLE.equals(member.getSocialAccounts().get(0).getProvider());
         if (member.getType() != MemberType.GUARDIAN
                 || member.getLocalAccount() != null
                 || !onlyApple
-                || familyMembershipRepository.findByGuardianId(member.getId()).isPresent()) {
+                || memberRepository.countOwnedContentFlag(member.getId()) > 0) {
             log.warn("빈 회원이 아니라 애플 계정을 합치지 않음: memberId={}", member.getId());
             throw new BusinessException(ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         }

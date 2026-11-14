@@ -315,7 +315,7 @@ class SocialLoginServiceTest {
         Member owner = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
         ReflectionTestUtils.setField(owner, "id", 9L);
         given(memberRepository.findTop2ByPhoneNumber("01000000002")).willReturn(List.of(owner));
-        given(appleAccountMergeService.merge(appleMember, owner))
+        given(appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .willReturn(TokenPairResponse.of(9L, "owner-access", "owner-refresh"));
 
         // when

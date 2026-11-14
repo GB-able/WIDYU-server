@@ -2,7 +2,9 @@ package com.widyu.member.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.widyu.addressbookmark.AddressBookmark;
 import com.widyu.global.config.JpaAuditingConfig;
+import com.widyu.global.entity.Status;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.SocialAccount;
@@ -18,7 +20,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import(JpaAuditingConfig.class)
-@DisplayName("소셜 계정을 다른 회원으로 옮기는 UPDATE 테스트")
+@DisplayName("애플 계정 합치기에 쓰는 회원 저장소 쿼리 테스트")
 class MemberSocialAccountMoveTest {
 
     @Autowired private MemberRepository memberRepository;
@@ -72,5 +74,44 @@ class MemberSocialAccountMoveTest {
 
         // then
         assertThat(moved).isZero();
+    }
+
+    @Test
+    @DisplayName("애플 계정만 있는 빈 회원은 직접 만든 자료가 없다고 판단한다")
+    void 빈_회원은_자료가_없다고_판단한다() {
+        // given
+        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
+        appleMember.getSocialAccounts().add(
+                SocialAccount.createSocialAccount("apple@apple.com", "APPLE", "apple-oauth-id", appleMember));
+        entityManager.persistAndFlush(appleMember);
+
+        // when
+        int flag = memberRepository.countOwnedContentFlag(appleMember.getId());
+
+        // then
+        assertThat(flag).isZero();
+    }
+
+    @Test
+    @DisplayName("주소 즐겨찾기처럼 회원이 직접 만든 자료가 있으면 자료가 있다고 판단한다")
+    void 직접_만든_자료가_있으면_있다고_판단한다() {
+        // given
+        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
+        entityManager.persist(appleMember);
+        entityManager.persistAndFlush(AddressBookmark.builder()
+                .member(appleMember)
+                .name("집")
+                .address("서울")
+                .roadAddress("서울")
+                .latitude(37.5)
+                .longitude(127.0)
+                .status(Status.ACTIVE)
+                .build());
+
+        // when
+        int flag = memberRepository.countOwnedContentFlag(appleMember.getId());
+
+        // then
+        assertThat(flag).isEqualTo(1);
     }
 }

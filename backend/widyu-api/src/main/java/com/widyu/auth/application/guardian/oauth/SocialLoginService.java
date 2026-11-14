@@ -97,7 +97,8 @@ public class SocialLoginService {
         // 전화번호는 회원 전체에서 하나여야 한다(LLD-0116). 번호 주인이 따로 있으면 그 보호자에게 애플 계정을 합친다 (LLD-0157)
         Optional<Member> phoneOwner = findOnlyPhoneOwner(temporaryMember.getPhoneNumber());
         if (phoneOwner.isPresent()) {
-            TokenPairResponse tokenPair = appleAccountMergeService.merge(member, phoneOwner.get());
+            TokenPairResponse tokenPair = appleAccountMergeService.merge(
+                    member, phoneOwner.get(), temporaryMember.getPhoneNumber());
             deleteTemporaryMemberAfterCommit(temporaryMember.getId());
             return ApplePhoneNumberResponse.merged(tokenPair);
         }

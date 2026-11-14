@@ -1,7 +1,10 @@
 package com.widyu.auth.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+// merged=false면 토큰 필드를 싣지 않는다
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApplePhoneNumberResponse(
         @Schema(description = "인증한 번호의 기존 회원에 애플 계정을 합쳤는지. true면 아래 토큰으로 기존 회원에 로그인한다", example = "false")
         boolean merged,

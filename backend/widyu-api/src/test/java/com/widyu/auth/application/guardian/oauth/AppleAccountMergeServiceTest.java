@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -13,20 +14,19 @@ import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
-import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberRole;
 import com.widyu.member.MemberType;
 import com.widyu.member.SocialAccount;
-import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -35,7 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class AppleAccountMergeServiceTest {
 
     @Mock private MemberRepository memberRepository;
-    @Mock private FamilyMembershipRepository familyMembershipRepository;
+    @Mock private EntityManager entityManager;
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private JwtTokenProvider jwtTokenProvider;
 
@@ -50,15 +50,14 @@ class AppleAccountMergeServiceTest {
         Member owner = guardian(9L);
         Member emptied = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
         ReflectionTestUtils.setField(emptied, "id", 38L);
-        given(familyMembershipRepository.findByGuardianId(38L)).willReturn(Optional.empty());
-        given(memberRepository.findByIdForUpdate(9L)).willReturn(Optional.of(owner));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
         given(memberRepository.moveSocialAccount(appleMember, owner, "APPLE")).willReturn(1);
         given(memberRepository.findById(38L)).willReturn(Optional.of(emptied));
         given(jwtTokenProvider.generateTokenPair(9L, MemberRole.USER, "APPLE"))
                 .willReturn(TokenPairResponse.of(9L, "owner-access", "owner-refresh"));
 
         // when
-        TokenPairResponse tokenPair = appleAccountMergeService.merge(appleMember, owner);
+        TokenPairResponse tokenPair = appleAccountMergeService.merge(appleMember, owner, "01000000002");
 
         // then
         assertThat(tokenPair.memberId()).isEqualTo(9L);
@@ -75,11 +74,10 @@ class AppleAccountMergeServiceTest {
         Member appleMember = appleMember(38L);
         Member senior = Member.createMember(MemberType.SENIOR, "어르신", "01000000002");
         ReflectionTestUtils.setField(senior, "id", 5L);
-        given(familyMembershipRepository.findByGuardianId(38L)).willReturn(Optional.empty());
-        given(memberRepository.findByIdForUpdate(5L)).willReturn(Optional.of(senior));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, senior))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, senior, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
@@ -92,11 +90,10 @@ class AppleAccountMergeServiceTest {
         Member appleMember = appleMember(38L);
         Member withdrawn = guardian(9L);
         withdrawn.markWithdrawn(java.time.LocalDateTime.now());
-        given(familyMembershipRepository.findByGuardianId(38L)).willReturn(Optional.empty());
-        given(memberRepository.findByIdForUpdate(9L)).willReturn(Optional.of(withdrawn));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, withdrawn))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, withdrawn, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
@@ -110,30 +107,28 @@ class AppleAccountMergeServiceTest {
         Member owner = guardian(9L);
         owner.getSocialAccounts().add(
                 SocialAccount.createSocialAccount("old@apple.com", "APPLE", "other-apple-id", owner));
-        given(familyMembershipRepository.findByGuardianId(38L)).willReturn(Optional.empty());
-        given(memberRepository.findByIdForUpdate(9L)).willReturn(Optional.of(owner));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOCIAL_PROVIDER_ALREADY_LINKED);
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
     }
 
     @Test
-    @DisplayName("애플 회원이 이미 가족에 속해 있으면 자료가 있는 회원이라 합치지 않고 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생한다")
-    void 가족에_속한_애플_회원은_합치지_않는다() {
+    @DisplayName("애플 회원에 직접 만든 자료(가족 소속, 즐겨찾기 등)가 있으면 합치지 않고 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생한다")
+    void 자료가_있는_애플_회원은_합치지_않는다() {
         // given
         Member appleMember = appleMember(38L);
         Member owner = guardian(9L);
-        given(familyMembershipRepository.findByGuardianId(38L))
-                .willReturn(Optional.of(Mockito.mock(FamilyMembership.class)));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(1);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
-        verify(memberRepository, never()).findByIdForUpdate(any());
+        verify(entityManager, never()).refresh(any(), any(LockModeType.class));
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
     }
 
@@ -147,7 +142,7 @@ class AppleAccountMergeServiceTest {
         Member owner = guardian(9L);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
@@ -159,16 +154,34 @@ class AppleAccountMergeServiceTest {
         // given
         Member appleMember = appleMember(38L);
         Member owner = guardian(9L);
-        given(familyMembershipRepository.findByGuardianId(38L)).willReturn(Optional.empty());
-        given(memberRepository.findByIdForUpdate(9L)).willReturn(Optional.of(owner));
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
         given(memberRepository.moveSocialAccount(appleMember, owner, "APPLE")).willReturn(0);
 
         // when & then
-        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner))
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
         verify(memberRepository, never()).findById(any());
         verify(refreshTokenRepository, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("보호자 행을 잠그고 다시 읽었을 때 번호가 인증한 번호와 다르면 합치지 않고 FORBIDDEN 예외가 발생한다")
+    void 잠근_뒤_번호_주인이_바뀌었으면_합치지_않는다() {
+        // given
+        Member appleMember = appleMember(38L);
+        Member owner = guardian(9L);
+        given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
+        willAnswer(invocation -> {
+            ReflectionTestUtils.setField(owner, "phoneNumber", "01077777777");
+            return null;
+        }).given(entityManager).refresh(owner, LockModeType.PESSIMISTIC_WRITE);
+
+        // when & then
+        assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
     }
 
     private static Member appleMember(Long id) {
