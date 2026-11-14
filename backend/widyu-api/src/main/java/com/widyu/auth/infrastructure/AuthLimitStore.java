@@ -73,8 +73,15 @@ public class AuthLimitStore {
     }
 
     public LoginAttempt reserveLogin(String email, String ip) {
-        List<String> keys = List.of(key("login:account", email.strip().toLowerCase(Locale.ROOT)),
-                key("login:ip", ip));
+        return reserve(List.of(key("login:account", email.strip().toLowerCase(Locale.ROOT)), key("login:ip", ip)));
+    }
+
+    // 가족 코드 대입은 로그인과 다른 공격이라 회원, IP 키를 로그인과 나눈다. 한도 수치는 로그인 값을 같이 쓴다 (LLD-0147)
+    public LoginAttempt reserveFamilyJoin(long memberId, String ip) {
+        return reserve(List.of(key("family-join:member", Long.toString(memberId)), key("family-join:ip", ip)));
+    }
+
+    private LoginAttempt reserve(List<String> keys) {
         String id = UUID.randomUUID().toString();
         check(execute(LOGIN, keys, Integer.toString(properties.loginAccountFailures()),
                 Integer.toString(properties.loginIpFailures()), millis(properties.loginWindowSeconds()), id));
