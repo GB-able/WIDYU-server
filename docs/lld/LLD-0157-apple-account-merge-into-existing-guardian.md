@@ -48,12 +48,13 @@ SMS 인증은 이 서비스에서 이미 계정 주인 확인으로 쓰인다(�
 
 ## 5. 처리 흐름
 
-`GuardianAuthService.updatePhoneNumberIfAppleSignUp` 트랜잭션 안.
+`GuardianAuthService.updatePhoneNumberIfAppleSignUp` 트랜잭션 안. 격리 수준은 **READ_COMMITTED**다. MySQL 기본(REPEATABLE READ)에서는 행 잠금을 기다린 뒤의 확인 쿼리가 트랜잭션 초반 스냅샷을 봐서, 앞 요청이 커밋한 이전이나 자료를 놓친다. 앨범 해제(LLD-0069)와 같은 방식이다.
 
 1. 임시 토큰과 임시 회원 확인, 액세스 토큰 회원(A) 확인, A에게 Apple 계정이 없으면 403 (LLD-0145와 같음).
 2. A에게 이미 번호가 있으면 403.
 3. `findTop2ByPhoneNumber(인증한 번호)`: 둘 이상이면 409 `MEMBER_4090`. 없으면 기존처럼 빈 번호를 채우고 `merged=false`.
 4. 주인(B)이 있으면 `AppleAccountMergeService.merge(A, B)`:
+   0. A 행을 `refresh(A, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 같은 A의 동시 합치기는 여기서 줄 선다.
    1. A가 빈 회원인지 확인: 보호자, 로컬 계정 없음, 소셜 계정은 Apple 하나뿐, 회원의 기록이 없음(`MemberRepository.countOwnedContentFlag`). 회원 ID를 담는 컬럼이 있는 테이블(외래키 유무와 무관, 2026-11-14 dev 스키마 기준 37개 컬럼) 중 시스템 행(알림 `fcm_notification`, `fcm_outbox`, `member_fcm_token`, `member_notification_setting`, 로그인 계정 `local_account`, `social_account`, 작업 큐 `s3_object_deletion_task`, `medication_proof_image_deletion_task`, `social_unlink_task`, 동의 기록 `consent_record`)과 관리자 기록(`admin_access_log`, `admin_audit_log`, 탈퇴 요청의 처리 관리자)을 뺀 전부를 본다. 아니면 400 `AUTH_4021`(기록이 있는 회원을 탈퇴 처리하면 그 기록에 닿을 수 없다). 회원 ID 컬럼을 가진 테이블이 새로 생기면 이 목록에 더한다. 미머지 PR #1069의 `senior_stay_state`(시니어 체류 상태)는 이 PR 시점에 테이블이 없어 넣지 않았고, 시니어 기록이라 보호자 빈 회원 판정에는 영향이 없다.
    2. B 행을 `entityManager.refresh(B, PESSIMISTIC_WRITE)`로 잠그며 최신 상태로 다시 읽는다. 번호가 인증한 번호와 달라졌으면(조회와 잠금 사이 번호 변경) 403. 활성 보호자(탈퇴, 정지 아님)가 아니면 400 `AUTH_4021`. B에게 Apple 계정이 이미 있으면 400 `AUTH_4019`(동시 합치기도 잠금 뒤 여기서 걸린다).
    3. `moveSocialAccount(A, B, APPLE)`가 1행이 아니면 403(동시 요청이 먼저 옮김).
@@ -62,6 +63,8 @@ SMS 인증은 이 서비스에서 이미 계정 주인 확인으로 쓰인다(�
 5. 임시 회원은 커밋 뒤 삭제한다(LLD-0094와 같음). `merged=true`와 B의 토큰을 돌려준다.
 
 외래키가 없는 기록 중 동의 기록(`consent_record`)은 보지 않는다. 앱이 가입 중에 동의를 먼저 기록하면 정상 흐름까지 막히고, 그 기록은 빈 회원 자신의 동의 이력이라 탈퇴 회원에 그대로 남긴다. 보호자는 합친 뒤 자기 계정의 동의 상태를 쓴다.
+
+알려진 한계: A의 자료를 만드는 다른 요청은 회원 행을 잠그지 않으므로, 빈 회원 확인과 커밋 사이(수 ms)에 저장된 자료는 막지 못한다. A는 방금 Apple 로그인으로 만들어진 회원이라 그 사이 자료가 생길 일은 사실상 없다. 실제로 생기면 자료 쓰기 경로도 회원 행을 잠그게 한다.
 
 FCM 토큰은 따로 옮기지 않는다. 앱이 로그인 뒤 토큰을 등록하면 `upsertActive`가 현재 회원(B)으로 옮긴다.
 

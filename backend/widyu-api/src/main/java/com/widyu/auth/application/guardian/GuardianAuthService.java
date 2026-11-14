@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -94,7 +95,8 @@ public class GuardianAuthService {
         return socialLoginService.socialLogin(provider, request);
     }
 
-    @Transactional
+    // READ_COMMITTED는 애플 계정 합치기에서 행 잠금을 기다린 뒤의 확인이 앞 요청의 커밋을 보게 한다 (LLD-0157, AlbumUnlockService와 같은 방식)
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ApplePhoneNumberResponse updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
         return socialLoginService.updatePhoneNumberIfAppleSignUp(request);
     }

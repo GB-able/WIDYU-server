@@ -35,8 +35,12 @@ public class AppleAccountMergeService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
-    // 호출자 트랜잭션 안에서 돈다. verifiedPhoneNumber는 호출자가 SMS 임시 토큰으로 확인한 번호다
+    // 호출자의 READ_COMMITTED 트랜잭션 안에서 돈다. verifiedPhoneNumber는 호출자가 SMS 임시 토큰으로 확인한 번호다
     public TokenPairResponse merge(Member appleMember, Member owner, String verifiedPhoneNumber) {
+        // 빈 회원 행을 먼저 잠그고 최신 상태로 읽는다. 같은 회원의 동시 합치기는 여기서 줄 선다
+        // ponytail: 이 회원의 자료를 만드는 다른 요청은 회원 행을 잠그지 않아, 확인과 커밋 사이(수 ms)에 저장된 자료는 막지 못한다.
+        // 방금 만든 회원이라 그 사이 자료가 생길 일은 사실상 없다. 실제로 생기면 자료 쓰기 경로도 회원 행을 잠그게 한다
+        entityManager.refresh(appleMember, LockModeType.PESSIMISTIC_WRITE);
         validateEmptyAppleMember(appleMember);
 
         // 보호자 행을 잠그며 최신 상태로 다시 읽는다. 조회 뒤 번호가 바뀌었거나 다른 애플 계정이 먼저 합쳐졌으면 여기서 드러난다

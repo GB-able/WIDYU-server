@@ -65,6 +65,8 @@ class AppleAccountMergeServiceTest {
         assertThat(emptied.getWithdrawnAt()).isNotNull();
         assertThat(emptied.getName()).isEqualTo("탈퇴회원");
         verify(refreshTokenRepository).deleteById(38L);
+        verify(entityManager).refresh(appleMember, LockModeType.PESSIMISTIC_WRITE);
+        verify(entityManager).refresh(owner, LockModeType.PESSIMISTIC_WRITE);
     }
 
     @Test
@@ -128,7 +130,7 @@ class AppleAccountMergeServiceTest {
         assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
-        verify(entityManager, never()).refresh(any(), any(LockModeType.class));
+        verify(entityManager, never()).refresh(owner, LockModeType.PESSIMISTIC_WRITE);
         verify(memberRepository, never()).moveSocialAccount(any(), any(), any());
     }
 
@@ -173,9 +175,11 @@ class AppleAccountMergeServiceTest {
         Member owner = guardian(9L);
         given(memberRepository.countOwnedContentFlag(38L)).willReturn(0);
         willAnswer(invocation -> {
-            ReflectionTestUtils.setField(owner, "phoneNumber", "01077777777");
+            if (invocation.getArgument(0) == owner) {
+                ReflectionTestUtils.setField(owner, "phoneNumber", "01077777777");
+            }
             return null;
-        }).given(entityManager).refresh(owner, LockModeType.PESSIMISTIC_WRITE);
+        }).given(entityManager).refresh(any(Member.class), any(LockModeType.class));
 
         // when & then
         assertThatThrownBy(() -> appleAccountMergeService.merge(appleMember, owner, "01000000002"))
