@@ -233,6 +233,8 @@ class StayStateOutboxAtomicityTest {
         ingestService.applyRealtime(request(inactive, HOME_LAT), inactive);
         ingestService.applyRealtime(request(active, HOME_LAT), active);
         jdbc.update("UPDATE member SET status = 'INACTIVE' WHERE id = ?", inactive);
+        // 정리는 Redis 위치 키도 지운다. 실제 Redis 없이 돌도록 삭제만 대역으로 막는다.
+        org.mockito.Mockito.doReturn(2L).when(redisTemplate).delete(org.mockito.ArgumentMatchers.anyCollection());
 
         // when
         maintenanceService.refreshLocationTtl();
