@@ -12,6 +12,8 @@ import com.widyu.goal.home.dto.response.GuardianGoalHomeResponse;
 import com.widyu.goal.home.dto.response.GuardianGoalStatsResponse;
 import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
+import com.widyu.goal.medicineschedule.application.TodayMedication;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
@@ -33,7 +35,6 @@ import com.widyu.medicine.MedicineSchedule;
 import com.widyu.medicine.MedicineScheduleDetail;
 import com.widyu.walk.Walk;
 import java.time.DayOfWeek;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -44,7 +45,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +67,7 @@ public class GoalHomeService {
     private final HealthScheduleRepository healthScheduleRepository;
     private final MemberRepository memberRepository;
     private final MemberUtil memberUtil;
+    private final TodayMedicationQuery todayMedicationQuery;
 
     public FamilyListResponse getFamilyList() {
         Member currentMember = memberUtil.getCurrentMember();
@@ -190,31 +191,17 @@ public class GoalHomeService {
     // ===== Private Helper Methods =====
 
     private SeniorGoalHomeResponse.MedicineInfo getSeniorMedicineInfo(Member member, LocalDate today) {
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
+        TodayMedication todayMedication = todayMedicationQuery.find(member, today);
+        List<MedicineSchedule> schedules = todayMedication.schedules();
 
         if (schedules.isEmpty()) {
             return null;
         }
 
-        // 스케줄 수정·삭제로 오늘 유효 목록에서 빠진 버전의 인증은 제외한다 (takenCount가 totalCount를 넘지 않도록)
-        Set<Long> scheduleIds = schedules.stream()
-                .map(MedicineSchedule::getId)
-                .collect(Collectors.toSet());
-
         // 오늘 복용 인증 정보 (스케줄별 1건)
-        Map<Long, MedicationProof> proofsByScheduleId = medicationProofRepository
-                .findByMemberIdAndDateRange(member.getId(), today, today)
-                .stream()
-                .filter(proof -> scheduleIds.contains(proof.getMedicineSchedule().getId()))
-                .collect(Collectors.toMap(
-                        proof -> proof.getMedicineSchedule().getId(),
-                        proof -> proof,
-                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
-                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
-                ));
+        Map<Long, MedicationProof> proofsByScheduleId = todayMedication.proofsByScheduleId();
 
-        MedicineSchedule nextSchedule = findNextSchedule(schedules, LocalTime.now(), proofsByScheduleId.keySet());
+        MedicineSchedule nextSchedule = todayMedication.nextSchedule(LocalTime.now());
 
         // 조회 쿼리가 알람 시각 오름차순이므로 순서를 그대로 쓴다.
         List<SeniorGoalHomeResponse.ScheduleStatus> scheduleStatuses = schedules.stream()
@@ -229,20 +216,6 @@ public class GoalHomeService {
                 proofsByScheduleId.get(nextSchedule.getId()),
                 scheduleStatuses
         );
-    }
-
-    // 알람 시간 오름차순 목록에서 인증 마감 전인 첫 일정을 노출하고, 모두 마감됐으면 마지막 일정을 유지한다.
-    // 시니어 홈 카드도 이 함수를 쓴다. 앱은 고른 일정 ID로 인증하므로 두 화면의 기준이 같아야 한다 (#962).
-    // 오늘 이미 인증한 일정은 건너뛴다. 인증창이 겹칠 때 인증한 일정에 머물러 다음 일정을 막지 않게 한다 (#964).
-    public static MedicineSchedule findNextSchedule(List<MedicineSchedule> schedules, LocalTime now,
-                                                    Set<Long> verifiedScheduleIds) {
-        return schedules.stream()
-                .filter(s -> !verifiedScheduleIds.contains(s.getId()))
-                // 시간 차이로 비교해 자정을 넘는 마감 시각이 LocalTime에서 순환하지 않도록 한다.
-                .filter(s -> Duration.between(s.getAlarmTime(), now)
-                        .compareTo(Duration.ofMinutes(MedicationStatus.ALLOWED_WINDOW_MINUTES)) <= 0)
-                .min(Comparator.comparing(MedicineSchedule::getAlarmTime))
-                .orElse(schedules.getLast());
     }
 
     private SeniorGoalHomeResponse.StepsInfo getStepsInfo(Member member, LocalDate today) {
@@ -407,8 +380,8 @@ public class GoalHomeService {
     }
 
     private GuardianGoalHomeResponse.MedicineInfo getGuardianMedicineInfo(Member member, LocalDate today) {
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(member, Status.ACTIVE, today);
+        TodayMedication todayMedication = todayMedicationQuery.find(member, today);
+        List<MedicineSchedule> schedules = todayMedication.schedules();
 
         if (schedules.isEmpty()) {
             return null;
@@ -417,15 +390,7 @@ public class GoalHomeService {
         LocalDateTime now = LocalDateTime.now();
 
         // 오늘 복용 인증 정보 조회
-        Map<Long, MedicationProof> proofMap = medicationProofRepository
-                .findByMemberIdAndDateRange(member.getId(), today, today)
-                .stream()
-                .collect(Collectors.toMap(
-                        p -> p.getMedicineSchedule().getId(),
-                        p -> p,
-                        // 조회 쿼리에 정렬이 없어 중복 인증 시 대표를 verifiedAt 최초순으로 고정한다.
-                        BinaryOperator.minBy(Comparator.comparing(MedicationProof::getVerifiedAt))
-                ));
+        Map<Long, MedicationProof> proofMap = todayMedication.proofsByScheduleId();
 
         // 복용 횟수(알람 수)로 센다. 시니어 목표 홈·보호자 홈 카드와 같은 기준이다 (#1021).
         int totalCount = schedules.size();

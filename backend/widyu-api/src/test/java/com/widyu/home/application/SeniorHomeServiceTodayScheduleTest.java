@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.widyu.album.application.AlbumPermissionService;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.HealthScheduleFixture;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -22,7 +24,6 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,8 +42,13 @@ class SeniorHomeServiceTodayScheduleTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private HeartRateResultRepository heartRateResultRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
+    @Mock private AlbumPermissionService albumPermissionService;
 
-    @InjectMocks private SeniorHomeService seniorHomeService;
+    private SeniorHomeService seniorHomeService() {
+        return new SeniorHomeService(memberUtil,
+                new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository), walkRepository,
+                healthScheduleRepository, heartRateResultRepository, albumRecommendationService, albumPermissionService);
+    }
 
     @Test
     @DisplayName("오늘 지난 일정·완료 일정·남은 일정과 내일 일정이 있으면 오늘 일정만 오름차순으로 담고 다음 일정은 오늘 남은 일정을 반환한다")
@@ -59,7 +65,7 @@ class SeniorHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(NOW);
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(NOW);
 
         // then
         assertThat(response.todaySchedules())
@@ -87,7 +93,7 @@ class SeniorHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 2L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(NOW);
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(NOW);
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -106,7 +112,7 @@ class SeniorHomeServiceTodayScheduleTest {
         given(memberUtil.getCurrentMember()).willReturn(senior());
 
         // when
-        SeniorHomeCardsResponse response = seniorHomeService.getHomeCards(NOW);
+        SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(NOW);
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();

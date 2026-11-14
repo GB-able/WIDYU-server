@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.album.Album;
@@ -81,7 +80,7 @@ class AlbumCommentServiceTest {
 
         // then
         verify(albumCommentRepository).save(any(AlbumComment.class));
-        verify(album).incrementCommentCount();
+        verify(albumRepository).incrementCommentCount(10L);
         ArgumentCaptor<AlbumCommentedEvent> eventCaptor = ArgumentCaptor.forClass(AlbumCommentedEvent.class);
         then(eventPublisher).should().publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().commentId()).isEqualTo(100L);
@@ -128,7 +127,7 @@ class AlbumCommentServiceTest {
 
         // then
         verify(albumCommentRepository).save(any(AlbumComment.class));
-        verify(album).incrementCommentCount();
+        verify(albumRepository).incrementCommentCount(10L);
         ArgumentCaptor<AlbumCommentedEvent> eventCaptor = ArgumentCaptor.forClass(AlbumCommentedEvent.class);
         then(eventPublisher).should().publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().commentId()).isEqualTo(101L);
@@ -228,6 +227,7 @@ class AlbumCommentServiceTest {
         given(reply.getStatus()).willReturn(Status.ACTIVE);
 
         Album album = mock(Album.class);
+        given(album.getId()).willReturn(10L);
 
         AlbumComment comment = mock(AlbumComment.class);
         given(comment.getMember()).willReturn(commentOwner);
@@ -240,7 +240,7 @@ class AlbumCommentServiceTest {
 
         // then - 댓글 1개 + 활성 대댓글 1개 = 총 2번 감소
         verify(comment).deleteWithReplies();
-        verify(album, times(2)).decrementCommentCount();
+        verify(albumRepository).decrementCommentCount(10L, 2);
     }
 
     @Test
@@ -298,7 +298,7 @@ class AlbumCommentServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
         verify(albumCommentRepository, never()).save(any(AlbumComment.class));
-        verify(album, never()).incrementCommentCount();
+        verify(albumRepository, never()).incrementCommentCount(any());
     }
 
     @Test
@@ -318,7 +318,7 @@ class AlbumCommentServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
         verify(albumCommentRepository, never()).save(any(AlbumComment.class));
-        verify(album, never()).incrementCommentCount();
+        verify(albumRepository, never()).incrementCommentCount(any());
     }
 
     private void allowFamilyAccess(Album album, Member member) {

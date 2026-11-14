@@ -5,8 +5,10 @@ import com.widyu.auth.dto.request.SeniorSignUpRequest;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,13 +54,17 @@ public interface SeniorAuthDocs {
 
     @Operation(
             summary = "시니어 로그인",
-            description = "초대코드와 전화번호로 시니어 회원이 로그인합니다."
+            description = "초대코드와 전화번호로 시니어 회원이 로그인합니다.\n\n" +
+                    "- 같은 전화번호나 같은 IP에서 실패가 쌓이면 보호자 로컬 로그인과 같은 한도로 일정 시간 거부합니다(429)."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "시니어 로그인 성공"),
             @ApiResponse(responseCode = "404", description = "초대코드 또는 전화번호가 일치하지 않음"),
             @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 초대코드와 전화번호의 시니어가 여러 명이라 본인을 특정할 수 없음"),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청")
+            @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @ApiResponse(responseCode = "429", description = "AUTH_4290: 전화번호/IP 실패 및 진행 중 요청 한도. Retry-After 초 이후 재시도",
+                    headers = @Header(name = "Retry-After", schema = @Schema(type = "integer"))),
+            @ApiResponse(responseCode = "503", description = "AUTH_5030: 인증 제한 저장소 장애")
     })
     ApiResponseTemplate<TokenPairResponse> seniorSignIn(@RequestBody @Valid SeniorSignInRequest request);
 }

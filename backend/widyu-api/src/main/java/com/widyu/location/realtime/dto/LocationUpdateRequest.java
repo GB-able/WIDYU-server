@@ -78,8 +78,8 @@ public record LocationUpdateRequest(
         return longitude;
     }
 
-    /** 원본 저장 대상인가(LLD-0048 3절). v2를 선언하고 기기와 잰 시각이 있어야 한다. */
-    public boolean isRawFix() {
-        return v != null && v == 2 && deviceId != null && tsMs != null;
+    /** v2를 선언했는가. 선언했으면 v2 필수 필드를 검증하고 실시간 처리 결과로 ACK한다(LLD-0143). */
+    public boolean isV2() {
+        return v != null && v == 2;
     }
 }

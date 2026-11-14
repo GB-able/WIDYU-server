@@ -19,8 +19,9 @@ class LocationAckResponseTest {
     void v2_위치_ACK를_직렬화하면_기존_필드와_식별자를_같은_단계에_싣는다() throws Exception {
         // given
         LocationUpdateResponse location = LocationUpdateResponse.of(
-                1L, "시니어", null, 37.5551, 126.9707, LocalDateTime.now(), "OTHER", null);
-        LocationAckResponse ack = LocationAckResponse.of(location, request(), LocationAckResult.STORED);
+                1L, "시니어", null, 37.5551, 126.9707, LocalDateTime.now(), "OTHER", null,
+                LocationFreshness.of(1_000L, 2_000L, LocationSource.LATEST, 61_000L));
+        LocationAckResponse ack = LocationAckResponse.of(location, request(), LocationAckResult.APPLIED);
 
         // when
         JsonNode body = JSON.readTree(JSON.writeValueAsString(ack));
@@ -32,7 +33,11 @@ class LocationAckResponseTest {
         assertThat(body.get("deviceId").asText()).isEqualTo("ph-9c1");
         assertThat(body.get("sessionId").asText()).isEqualTo("s-2026");
         assertThat(body.get("seq").asLong()).isEqualTo(5120L);
-        assertThat(body.get("result").asText()).isEqualTo("STORED");
+        assertThat(body.get("result").asText()).isEqualTo("APPLIED");
+        assertThat(body.get("measuredAtMs").asLong()).isEqualTo(1_000L);
+        assertThat(body.get("receivedAtMs").asLong()).isEqualTo(2_000L);
+        assertThat(body.get("locationSource").asText()).isEqualTo("LATEST");
+        assertThat(body.get("ageSeconds").asLong()).isEqualTo(60L);
     }
 
     @Test

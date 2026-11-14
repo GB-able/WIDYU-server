@@ -80,3 +80,8 @@ widyu:
   encryption:
     # 테스트 전용 32바이트 키(Base64). 운영 키가 아니다.
     aes-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+
+# 테스트는 예전 Redis 체류 상태를 옮기지 않는다(LLD-0141). 옮기기 동작은 LegacyStayStateImporterTest가 본다.
+location:
+  stay-state:
+    import-legacy-redis: false

@@ -45,10 +45,10 @@ public interface SeniorMyPageDocs {
     })
     ApiResponseTemplate<Void> updateName(UpdateNameRequest request);
 
-    @Operation(summary = "프로필 이미지 수정", description = "프로필 이미지를 S3에 업로드하고 기존 이미지를 삭제합니다.")
+    @Operation(summary = "프로필 이미지 수정", description = "프로필 이미지를 S3에 업로드하고 기존 이미지를 삭제합니다. 형식은 파일 내용으로 판별하며 앨범 사진과 같은 형식, 10MB까지 받습니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "이미지 수정 성공"),
-            @ApiResponse(responseCode = "400", description = "파일 오류"),
+            @ApiResponse(responseCode = "400", description = "FILE_4002: JPEG, PNG, GIF, WEBP, BMP, HEIC, HEIF가 아닌 파일(SVG 포함), FILE_4004: 10MB 초과"),
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     ApiResponseTemplate<Void> updateProfileImage(ProfileImageUploadRequest request);

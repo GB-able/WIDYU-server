@@ -4,6 +4,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 public interface S3Service {
     String uploadFile(MultipartFile file, String filePath);
+    /** 클라이언트 Content-Type 대신 서버가 검증한 형식으로 저장한다(LLD-0150). */
+    String uploadFile(MultipartFile file, String filePath, String contentType);
     /** 메모리 위의 바이트를 지정한 키에 그대로 올린다(LLD-0041). 같은 키의 재전송은 덮어쓴다. */
     void uploadBytes(String objectKey, byte[] bytes, String contentType);
     /** 저장한 원문 바이트를 그대로 읽는다(LLD-0050 내보내기 재조립). */

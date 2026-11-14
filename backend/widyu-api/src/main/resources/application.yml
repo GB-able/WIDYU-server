@@ -56,6 +56,10 @@ websocket:
       # 거절된 심박은 앱이 다시 보내지 않으면 저장되지 않으므로, 짧은 몰림(재연결 직후 등)은 대기열이 받아낸다.
       # 200건은 AI 정상(최대 81ms)일 때 약 2초 안에 비워진다. AI가 10초씩 걸리면 대기 시간이 수 분이 되므로 더 늘리지 않는다.
       queue-capacity: ${WS_HEART_QUEUE_CAPACITY:200}
+    location:
+      # 위치 실시간 처리 전용(LLD-0144). 작업 하나가 DB 커넥션을 최대 하나 쓰므로 Hikari 풀(10)보다 작게 둔다.
+      # 대기열 용량은 location.ingest.max-members와 같다(회원마다 차례 하나만 들어간다).
+      threads: ${WS_LOCATION_THREADS:8}
     sensor:
       # 센서 배치는 스트림마다 1초에 1건. S3 PUT apiCallTimeout은 5초다.
       threads: ${WS_SENSOR_THREADS:8}
@@ -70,11 +74,23 @@ websocket:
 location:
   realtime:
     sequencer:
-      # 최신 요청이 아닌 위치의 대기 수 상한. 더 늦게 잰 위치는 이 상한을 우회하므로 회원별 수신 스레드 점유 수의 절대 상한은 아니다.
-      # 상한을 넘은 옛 위치는 원본만 저장하고 ACK를 보내지 않는다. 최신 요청 몰림의 스레드 독점은 LLD-0140 9절의 미해결 항목이다.
+      # 동기 경로(receive, applyRealtime)의 회원 순서 잠금 대기 수 상한. STOMP 수신은 회원별 우편함(location.ingest)이
+      # 실행을 회원당 하나로 줄여 이 잠금에서 기다리지 않는다(LLD-0144). 더 늦게 잰 위치는 이 상한을 우회한다.
       max-waiting: ${LOCATION_SEQUENCER_MAX_WAITING:4}
       # 차례를 기다리는 최대 시간. 정상 처리는 수 ms이고, Redis 명령 제한(3초, ADR-0040)과 커넥션 대기 한도(3초)에 맞췄다.
       wait-timeout-ms: ${LOCATION_SEQUENCER_WAIT_TIMEOUT_MS:3000}
+  ingest:
+    # 회원별 우편함(LLD-0144). 수신 스레드는 넣기만 하고, 회원마다 실행 1건, 최신 대기 1건, 밀린 항목 이 수만큼만 둔다.
+    # 밀린 항목은 더 늦게 잰 위치가 끝난 뒤 SKIPPED로 답한다. 넘치면 가장 먼저 들어온 항목을 과부하로 끝낸다(ACK 없음, 재전송).
+    max-waiting-per-member: ${LOCATION_INGEST_MAX_WAITING_PER_MEMBER:16}
+    # 우편함을 가진(처리 중이거나 기다리는) 회원 수 상한. 넘으면 새 회원의 위치를 과부하로 끝낸다.
+    max-members: ${LOCATION_INGEST_MAX_MEMBERS:1024}
+    # 모든 회원의 실행, 대기, 밀린 항목을 합친 상한. 넘으면 새 위치를 과부하로 끝낸다.
+    max-queued: ${LOCATION_INGEST_MAX_QUEUED:4096}
+  stay-state:
+    # 서버가 뜰 때 예전 Redis 체류 키와 안전구역 알림 표식을 MySQL 체류 상태로 한 번 옮긴다(LLD-0141). DB 행이 있으면 두고
+    # Redis 키는 지우지 않는다. 옮긴 뒤에는 끄고 배포해도 된다.
+    import-legacy-redis: ${LOCATION_STAY_IMPORT_LEGACY_REDIS:true}
 
 # @Async 실행기 상한(LLD-0092). 운영 서버 1~2 vCPU, Hikari 커넥션 풀 기본 10 기준.
 async:

@@ -1,5 +1,7 @@
 # ADR-0041: WebSocket 끊김 대응을 서버·앱 책임으로 나눈다
 
+> **2026-11-13:** 결정 2(위치 ACK의 원본 저장 확인)는 ADR-0045로 대체됐다. 위치 ACK는 실시간 처리 결과(`APPLIED`, `SKIPPED`, `REJECTED`)를 말하고 위치 원본은 저장하지 않는다.
+
 > Architecture Decision Record. 하나의 중요한 의사결정과 그 이유를 기록한다.
 
 | 항목 | 값 |

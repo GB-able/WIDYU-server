@@ -12,6 +12,7 @@ import com.widyu.auth.dto.response.CurrentMemberResponse;
 import com.widyu.auth.dto.response.LocalSignupResponse;
 import com.widyu.auth.dto.response.MemberInfoResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.auth.dto.response.UserProfile;
 import com.widyu.global.response.ApiResponseTemplate;
@@ -222,7 +223,7 @@ public interface GuardianAuthDocs {
     )
     @ApiResponse(
             responseCode = "200",
-            description = "다른 소셜 계정이 이미 존재하는 경우 (토큰 null, 연동 대상 정보 포함)",
+            description = "다른 소셜 계정이 이미 존재하는 경우 (토큰 null). 기존 계정 주인인지 확인하기 전이므로 profile에는 로그인 수단 목록(providers)만 싣고 name, phoneNumber, email은 빈 문자열입니다",
             content = @Content(
                     schema = @Schema(implementation = ApiResponseTemplate.class),
                     examples = @ExampleObject(
@@ -234,9 +235,9 @@ public interface GuardianAuthDocs {
                                       "data": {
                                         "isFirst": false,
                                         "profile": {
-                                          "name": "홍길동",
-                                          "phoneNumber": "010-1234-5678",
-                                          "email": "existing@example.com",
+                                          "name": "",
+                                          "phoneNumber": "",
+                                          "email": "",
                                           "providers": ["kakao"]
                                         },
                                         "socialTemporaryToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -455,6 +456,12 @@ public interface GuardianAuthDocs {
                     번호를 채울 회원은 액세스 토큰의 회원이며, 애플 계정이 없는 회원이면 403을 반환합니다.
                     전화번호가 비어 있는 애플 회원만 보강하며, 이미 전화번호가 있으면 403을 반환합니다.
                     보강에 성공하면 사용한 임시 토큰은 다시 쓸 수 없습니다.
+
+                    인증한 번호의 주인이 이미 가입한 보호자(예: 이메일로 가입)이면 번호를 채우지 않고,
+                    방금 애플 로그인으로 만들어진 빈 회원의 애플 계정을 그 보호자에게 합칩니다.
+                    이때 응답은 `merged=true`와 그 보호자의 토큰이며, 앱은 이 토큰으로 바꿔 저장하고 기존 회원으로 진행합니다.
+                    빈 회원은 탈퇴 처리되어 그 토큰은 더 쓸 수 없습니다.
+                    `merged=false`면 번호만 채운 것이고 토큰 필드는 없습니다(기존 토큰을 그대로 씁니다).
                     """
     )
     @ApiResponse(
@@ -468,7 +475,12 @@ public interface GuardianAuthDocs {
                                     {
                                       "code": "AUTH_2008",
                                       "message": "애플 로그인 회원 전화번호 업데이트 성공",
-                                      "data": null
+                                      "data": {
+                                        "merged": true,
+                                        "memberId": 9,
+                                        "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+                                        "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
+                                      }
                                     }
                                     """
                     )
@@ -497,8 +509,9 @@ public interface GuardianAuthDocs {
             content = @Content(schema = @Schema(implementation = ApiResponseTemplate.class))
     )
     @ApiResponse(responseCode = "404", description = "MEMBER_4041: 임시 토큰의 SMS 인증 정보가 만료되어 없음")
-    @ApiResponse(responseCode = "400", description = "AUTH_4021: 다른 회원이 이미 쓰는 전화번호")
-    ApiResponseTemplate<Void> updatePhoneNumberIfAppleSignUp(
+    @ApiResponse(responseCode = "400", description = "AUTH_4021: 번호 주인이 시니어이거나 활성 보호자가 아님, 또는 요청한 애플 회원에 이미 다른 자료가 있음 / AUTH_4019: 번호 주인 보호자에게 이미 애플 계정이 있음")
+    @ApiResponse(responseCode = "409", description = "MEMBER_4090: 같은 번호의 회원이 여러 명")
+    ApiResponseTemplate<ApplePhoneNumberResponse> updatePhoneNumberIfAppleSignUp(
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,

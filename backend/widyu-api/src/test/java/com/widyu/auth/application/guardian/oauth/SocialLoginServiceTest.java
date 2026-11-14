@@ -18,6 +18,7 @@ import com.widyu.auth.application.guardian.oauth.strategy.UserInfo;
 import com.widyu.auth.dto.SocialTemporaryTokenDto;
 import com.widyu.auth.dto.request.AppleSignUpRequest;
 import com.widyu.auth.dto.request.SocialLoginRequest;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.SocialClientResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
@@ -56,6 +57,7 @@ class SocialLoginServiceTest {
     @Mock private TemporaryMemberUtil temporaryMemberUtil;
     @Mock private SocialTemporaryTokenService socialTemporaryTokenService;
     @Mock private MemberUtil memberUtil;
+    @Mock private AppleAccountMergeService appleAccountMergeService;
 
     @InjectMocks
     private SocialLoginService socialLoginService;
@@ -137,11 +139,14 @@ class SocialLoginServiceTest {
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(1);
 
         // when
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+        ApplePhoneNumberResponse response = socialLoginService.updatePhoneNumberIfAppleSignUp(request);
 
         // then
+        assertThat(response.merged()).isFalse();
+        assertThat(response.accessToken()).isNull();
         verify(memberRepository).fillPhoneNumberIfEmpty(1L, "01099999999");
         verify(temporaryMemberUtil).deleteTemporaryMember(temporaryMember.getId());
+        verifyNoInteractions(appleAccountMergeService);
     }
 
     @Test
@@ -176,6 +181,24 @@ class SocialLoginServiceTest {
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("다른사람", "01099999999");
         given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
         given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, "01011111111"));
+
+        // when & then
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
+        verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
+        verifyNoInteractions(appleAccountMergeService);
+    }
+
+    @Test
+    @DisplayName("빈 번호를 채우는 조건부 갱신이 0건이면 동시 요청이 먼저 채운 것으로 보고 FORBIDDEN 예외가 발생한다")
+    void 빈_번호_채우기가_0건이면_예외가_발생한다() {
+        // given
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01099999999");
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(0);
 
         // when & then
@@ -281,19 +304,49 @@ class SocialLoginServiceTest {
     }
 
     @Test
-    @DisplayName("다른 회원이 쓰는 번호로 애플 회원 번호를 보강하면 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생하고 번호를 채우지 않는다")
-    void 다른_회원이_쓰는_번호로_애플_회원_번호를_보강하면_거부한다() {
+    @DisplayName("인증한 번호의 주인이 다른 회원이면 번호를 채우지 않고 애플 계정을 그 회원에 합친 뒤 그 회원의 토큰을 돌려준다")
+    void 번호_주인이_다른_회원이면_애플_계정을_합치고_그_회원의_토큰을_돌려준다() {
         // given
         AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
-        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01000000002");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("기존회원", "01000000002");
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        Member appleMember = appleMember(1L, null);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember);
+        Member owner = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        ReflectionTestUtils.setField(owner, "id", 9L);
+        given(memberRepository.findTop2ByPhoneNumber("01000000002")).willReturn(List.of(owner));
+        given(appleAccountMergeService.merge(appleMember, owner, "01000000002"))
+                .willReturn(TokenPairResponse.of(9L, "owner-access", "owner-refresh"));
+
+        // when
+        ApplePhoneNumberResponse response = socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+
+        // then
+        assertThat(response.merged()).isTrue();
+        assertThat(response.memberId()).isEqualTo(9L);
+        assertThat(response.accessToken()).isEqualTo("owner-access");
+        assertThat(response.refreshToken()).isEqualTo("owner-refresh");
+        verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
+        verify(temporaryMemberUtil).deleteTemporaryMember(temporaryMember.getId());
+    }
+
+    @Test
+    @DisplayName("인증한 번호를 쓰는 회원이 둘 이상이면 합칠 대상을 정할 수 없어 PHONE_NUMBER_SHARED_BY_MEMBERS 예외가 발생한다")
+    void 번호를_쓰는_회원이_둘_이상이면_합치지_않고_거부한다() {
+        // given
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("기존회원", "01000000002");
         given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
         given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
-        given(memberRepository.existsByPhoneNumberAndIdNot("01000000002", 1L)).willReturn(true);
+        Member first = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        Member second = Member.createMember(MemberType.GUARDIAN, "기존회원", "01000000002");
+        given(memberRepository.findTop2ByPhoneNumber("01000000002")).willReturn(List.of(first, second));
 
         // when & then
         assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
+        verifyNoInteractions(appleAccountMergeService);
         verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
         verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
     }
@@ -325,6 +378,139 @@ class SocialLoginServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
         verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    @DisplayName("전화번호로 다른 계정이 있는 기존 회원을 찾으면 연결 토큰 응답에 개인정보 없이 로그인 수단 목록만 담는다")
+    void 연결_토큰_응답에_개인정보_없이_로그인_수단_목록만_담는다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenNaverUser(request,
+                SocialClientResponse.of("naver-new", "attacker@naver.com", "공격자", "01012345678", null, true));
+
+        Member victim = memberWithSocialAccount(1L, "피해자", "01012345678", "victim@kakao.com", "kakao");
+        given(memberRepository.findMemberIdByProviderAndOauthId("naver", "naver-new")).willReturn(Optional.empty());
+        given(memberRepository.findTop2ByPhoneNumber("01012345678")).willReturn(List.of(victim));
+        given(memberRepository.findWithAllAccountsById(1L)).willReturn(Optional.of(victim));
+        given(socialTemporaryTokenService.createSocialTemporaryToken(1L, "naver", "naver-new", "attacker@naver.com"))
+                .willReturn("social-temp-token");
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("naver", request);
+
+        // then
+        assertThat(response.accessToken()).isNull();
+        assertThat(response.memberId()).isNull();
+        assertThat(response.socialTemporaryToken()).isEqualTo("social-temp-token");
+        assertThat(response.profile().providers()).containsExactly("kakao");
+        assertThat(response.profile().name()).isEmpty();
+        assertThat(response.profile().phoneNumber()).isEmpty();
+        assertThat(response.profile().email()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("공급자가 이메일을 인증하지 않았으면 같은 이메일의 기존 회원을 찾지 않고 새 회원으로 가입시킨다")
+    void 미인증_이메일이면_기존_회원을_찾지_않고_새_회원으로_가입시킨다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "victim@example.com", "공격자", null, null, false));
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> {
+            Member saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 2L);
+            return saved;
+        });
+        given(jwtTokenProvider.generateTokenPair(2L, MemberRole.USER, "kakao"))
+                .willReturn(TokenPairResponse.of(2L, "new-access", "new-refresh"));
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(2L);
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.socialTemporaryToken()).isNull();
+        verify(memberRepository, never()).findDistinctTop2BySocialAccounts_Email(any());
+        verify(socialTemporaryTokenService, never()).createSocialTemporaryToken(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("공급자가 인증한 이메일이 다른 계정이 있는 기존 회원과 같으면 연결 토큰을 발급한다")
+    void 인증된_이메일이_기존_회원과_같으면_연결_토큰을_발급한다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "owner@example.com", "주인", null, null, true));
+        Member owner = memberWithSocialAccount(1L, "주인", "01011112222", "owner@example.com", "APPLE");
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.findDistinctTop2BySocialAccounts_Email("owner@example.com")).willReturn(List.of(owner));
+        given(memberRepository.findWithAllAccountsById(1L)).willReturn(Optional.of(owner));
+        given(socialTemporaryTokenService.createSocialTemporaryToken(1L, "kakao", "kakao-new", "owner@example.com"))
+                .willReturn("social-temp-token");
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.socialTemporaryToken()).isEqualTo("social-temp-token");
+        assertThat(response.profile().providers()).containsExactly("APPLE");
+        verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    @DisplayName("인증된 이메일을 쓰는 회원이 둘 이상이면 어느 회원에도 연결 토큰을 발급하지 않고 새 회원으로 가입시킨다")
+    void 같은_이메일의_회원이_둘_이상이면_연결하지_않고_새_회원으로_가입시킨다() {
+        // given
+        SocialLoginRequest request = mock(SocialLoginRequest.class);
+        givenKakaoUser(request,
+                SocialClientResponse.of("kakao-new", "shared@example.com", "사용자", null, null, true));
+        given(memberRepository.findMemberIdByProviderAndOauthId("kakao", "kakao-new")).willReturn(Optional.empty());
+        given(memberRepository.findDistinctTop2BySocialAccounts_Email("shared@example.com")).willReturn(List.of(
+                memberWithSocialAccount(1L, "회원1", null, "shared@example.com", "APPLE"),
+                memberWithSocialAccount(2L, "회원2", null, "shared@example.com", "naver")));
+        given(memberRepository.save(any(Member.class))).willAnswer(invocation -> {
+            Member saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 3L);
+            return saved;
+        });
+        given(jwtTokenProvider.generateTokenPair(3L, MemberRole.USER, "kakao"))
+                .willReturn(TokenPairResponse.of(3L, "new-access", "new-refresh"));
+
+        // when
+        SocialLoginResponse response = socialLoginService.socialLogin("kakao", request);
+
+        // then
+        assertThat(response.memberId()).isEqualTo(3L);
+        assertThat(response.socialTemporaryToken()).isNull();
+        verify(socialTemporaryTokenService, never()).createSocialTemporaryToken(any(), any(), any(), any());
+    }
+
+    private void givenKakaoUser(SocialLoginRequest request, SocialClientResponse socialResponse) {
+        givenSocialUser("kakao", OAuthProvider.KAKAO, request, socialResponse);
+    }
+
+    private void givenNaverUser(SocialLoginRequest request, SocialClientResponse socialResponse) {
+        givenSocialUser("naver", OAuthProvider.NAVER, request, socialResponse);
+    }
+
+    private void givenSocialUser(String providerName, OAuthProvider provider,
+                                 SocialLoginRequest request, SocialClientResponse socialResponse) {
+        SocialLoginStrategy strategy = mock(SocialLoginStrategy.class);
+        given(strategyFactory.getStrategy(providerName)).willReturn(strategy);
+        given(strategy.getSupportedProvider()).willReturn(provider);
+        given(strategy.getUserInfo(request)).willReturn(socialResponse);
+        given(strategy.enrichWithRefreshToken(socialResponse, request)).willReturn(socialResponse);
+        given(strategy.processUserInfo(socialResponse, request)).willReturn(
+                UserInfo.of(socialResponse.name(), socialResponse.email(), socialResponse.phoneNumber()));
+    }
+
+    private static Member memberWithSocialAccount(Long id, String name, String phoneNumber, String email, String provider) {
+        Member member = Member.createMember(MemberType.GUARDIAN, name, phoneNumber);
+        ReflectionTestUtils.setField(member, "id", id);
+        member.getSocialAccounts().add(
+                SocialAccount.createSocialAccount(email, provider, provider + "-oauth-id", null, member));
+        return member;
     }
 
     private static Member appleMember(Long id, String phoneNumber) {
