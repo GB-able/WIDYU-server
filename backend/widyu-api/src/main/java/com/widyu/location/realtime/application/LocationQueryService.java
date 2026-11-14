@@ -231,7 +231,7 @@ public class LocationQueryService {
             if (lat == null || lng == null) {
                 return null;
             }
-            return new LocationPoint(lat, lng, parseTimestamp(map.get("timestamp")),
+            return LocationPoint.restored(lat, lng, parseTimestamp(map.get("timestamp")),
                     getLongOrNull(map.get("measuredAtMs")));
         }
         return null;

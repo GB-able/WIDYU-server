@@ -16,4 +16,9 @@ public record LocationPoint(
     public static LocationPoint of(Double latitude, Double longitude, Long measuredAtMs) {
         return new LocationPoint(latitude, longitude, LocalDateTime.now(), measuredAtMs);
     }
+
+    /** Redis에 저장된 점을 그대로 되살린다. 저장 시각을 지금으로 바꾸지 않는다. */
+    public static LocationPoint restored(Double latitude, Double longitude, LocalDateTime timestamp, Long measuredAtMs) {
+        return new LocationPoint(latitude, longitude, timestamp, measuredAtMs);
+    }
 }
