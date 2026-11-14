@@ -16,6 +16,7 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -97,7 +98,9 @@ public class LocationJudgeService {
         ParentLocation matchedZone = findSafeZone(member, newLat, newLng);
         String locationType = locationTypeOf(matchedZone);
         String locationName = locationNameOf(matchedZone);
-        LocalDateTime now = LocalDateTime.now();
+        // DATETIME(6)에 저장되는 정밀도로 자른다. Linux의 now()는 나노초까지 있어, 자르지 않으면 이 응답의 체류 시작 시각과
+        // 다음 조회(DB에서 읽은 값)가 1마이크로초 미만으로 어긋난다.
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
 
         String previousLocationType = null;
         if (locked == null) {
