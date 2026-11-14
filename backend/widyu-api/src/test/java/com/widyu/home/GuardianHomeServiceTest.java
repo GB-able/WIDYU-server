@@ -11,6 +11,7 @@ import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -18,6 +19,7 @@ import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.application.GuardianHomeService;
 import com.widyu.home.application.HomeAlbumRecommendationService;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
+import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.RealtimeLocationService;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Family;
@@ -34,15 +36,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GuardianHomeService 단위 테스트")
 class GuardianHomeServiceTest {
-
-    @InjectMocks private GuardianHomeService guardianHomeService;
 
     @Mock private MemberUtil memberUtil;
     @Mock private MemberRepository memberRepository;
@@ -55,6 +54,14 @@ class GuardianHomeServiceTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private RealtimeLocationService realtimeLocationService;
+    @Mock private LocationAccessLogService locationAccessLogService;
+
+    private GuardianHomeService guardianHomeService() {
+        return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
+                heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
+                healthScheduleRepository, walkRepository, albumRecommendationService, realtimeLocationService,
+                locationAccessLogService);
+    }
 
     @Test
     @DisplayName("시니어가 보호자 홈을 호출하면 403 예외가 발생한다")
@@ -64,7 +71,7 @@ class GuardianHomeServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
 
         // when & then
-        assertThatThrownBy(() -> guardianHomeService.getHomeCards(null))
+        assertThatThrownBy(() -> guardianHomeService().getHomeCards(null))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -84,7 +91,7 @@ class GuardianHomeServiceTest {
         given(familyMembershipRepository.existsByFamilyIdAndGuardianId(any(), any())).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> guardianHomeService.getHomeCards(42L))
+        assertThatThrownBy(() -> guardianHomeService().getHomeCards(42L))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -110,7 +117,7 @@ class GuardianHomeServiceTest {
         given(realtimeLocationService.getOutingStatus(any())).willReturn(true);
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
 
         // then
         assertThat(response.medicine()).isNull();
@@ -138,7 +145,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -165,7 +172,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
 
         // then
         assertThat(response.albums()).isEmpty();
@@ -202,7 +209,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
 
         // then: 스케줄 개수 기준 (알 개수 합계 5가 아닌 스케줄 횟수 2)
         assertThat(response.medicine().totalCount()).isEqualTo(2);
