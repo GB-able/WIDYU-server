@@ -41,6 +41,8 @@ public class FcmNotification extends BaseTimeEntity {
     private Long id;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 32)
     private FcmCategory fcmCategory;
     private String title;
     private String body;

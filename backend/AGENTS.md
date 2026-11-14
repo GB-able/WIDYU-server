@@ -89,6 +89,7 @@
 - **Profile**: `application.yml`에 그룹(local/dev/test) 정의, 관심사별 `application-*.yml` 분리(datasource·security·oauth·fcm·pay·redis·s3·coolsms·video·medicine·actuator).
 - **외부 연동**: Firebase FCM, AWS S3(버킷 정책 접근제어, `PUBLIC_READ` ACL 미사용), Apple/Naver/Kakao OAuth, TossPayments, Coolsms(SMS), FFmpeg, 공공 약품 API, AI Heart Rate(Flask).
 - **엔티티/영속성**: `@Entity`는 `widyu-domain`, `BaseTimeEntity`로 `createdAt`/`updatedAt` 자동. 테스트는 H2 in-memory(`application-test.yml`).
+- **스키마 변경**: 테이블, 컬럼, 인덱스 변경은 `widyu-api`의 `src/main/resources/db/migration`에 Flyway 버전 파일(`V<다음 번호>__<설명>.sql`)로만 한다. 이미 머지된 버전 파일은 고치지 않고 새 버전을 더한다. dev와 prod는 `ddl-auto: validate`라 엔티티만 바꾸고 버전 파일을 빠뜨리면 기동이 멈춘다. 새 파일 확인은 `FlywayMigrationMySqlTest`(일회용 MySQL)로 한다. `scripts/mysql/*.sql`은 도입 전 이력이라 지우지 않지만 스키마 변경 스크립트를 새로 더하지 않는다(LLD-0154).
 
 ## 백엔드 코딩 주의사항
 
@@ -99,8 +100,7 @@
   - `MultipartFile`은 요청 종료 후 삭제되므로 `File`로 변환해 async 스레드에 전달
   - 새 스레드는 호출자 트랜잭션을 전파받지 못하므로, DB 작업이 있는 `@Async` 메서드에는 `@Transactional`을 직접 선언한다 (정적 검사에서 누락 시 실패)
   - 임시 파일은 `finally`에서 삭제
-- **MySQL ENUM**: `ddl-auto: update`는 기존 ENUM 컬럼에 새 값을 추가하지 않음 → 수동 실행 필요:
-  `ALTER TABLE <table> MODIFY COLUMN <col> ENUM('A','B','NEW') NOT NULL`
+- **enum 컬럼**: `@Enumerated(EnumType.STRING)`에는 `@JdbcTypeCode(SqlTypes.VARCHAR)`와 `@Column(length = n)`을 함께 단다. 빠뜨리면 Hibernate 6이 MySQL native `ENUM(...)`으로 매핑해, 값을 더할 때마다 ALTER가 필요하고 dev, prod validate가 VARCHAR 컬럼과 어긋난다고 기동을 멈춘다. 버전 파일에서도 VARCHAR로 만들고 enum 값 CHECK 제약을 걸지 않는다. 그러면 enum 값 추가에 스키마 변경이 필요 없다(LLD-0155).
 
 ## 테스트 작성 규칙
 
@@ -117,4 +117,4 @@
 
 ## 검증 환경
 
-Java 21이 필요하다. H2 테스트 외에 실제 Redis를 사용하는 통합 테스트도 있으므로 로컬 Redis가 필요할 수 있다(CI는 Redis 서비스를 제공한다). Domain 변경은 API 소비자 테스트도 수행한다. 엔티티 변경 시 ERD 갱신, MySQL ENUM 변경 시 LLD에 ALTER TABLE 명령을 기록한다.
+Java 21이 필요하다. H2 테스트 외에 실제 Redis를 사용하는 통합 테스트도 있으므로 로컬 Redis가 필요할 수 있다(CI는 Redis 서비스를 제공한다). Domain 변경은 API 소비자 테스트도 수행한다. 엔티티 변경 시 ERD 갱신, 스키마 변경 시 LLD에 버전 파일 이름을 기록한다.

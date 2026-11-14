@@ -18,8 +18,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Entity
@@ -40,7 +42,8 @@ public class ParentLocation extends BaseTimeEntity {
     private Member member;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
     private LocationType locationType;
 
     @Column(nullable = false)
@@ -55,6 +58,8 @@ public class ParentLocation extends BaseTimeEntity {
     private String name;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 20)
     private Status status;
 
     public void update(LocationType locationType, String placeAddress, Double latitude, Double longitude, String name) {

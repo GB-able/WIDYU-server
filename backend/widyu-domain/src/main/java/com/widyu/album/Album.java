@@ -30,6 +30,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 // 바뀐 컬럼만 UPDATE한다. 카운터는 리포지토리의 원자 UPDATE로 바뀌므로, 삭제·캡션 수정이 읽어 둔 옛 카운터로 행 전체를 덮으면
 // 그 사이 커밋된 좋아요·댓글·조회 수가 사라진다(LLD-0151).
@@ -67,7 +69,8 @@ public class Album extends BaseTimeEntity {
     private Integer viewCount = 0;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "status", nullable = false, length = 20)
     private Status status = Status.ACTIVE;
 
     @ElementCollection

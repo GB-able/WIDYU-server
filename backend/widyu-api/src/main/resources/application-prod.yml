@@ -1,4 +1,7 @@
 spring:
+  # 빈 DB에는 V1(기준 스키마)부터 적용한다. 이력 테이블 없이 테이블이 있는 DB는 기동을 멈춘다(LLD-0154).
+  flyway:
+    baseline-on-migrate: false
   jpa:
     hibernate:
       ddl-auto: validate

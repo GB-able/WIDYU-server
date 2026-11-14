@@ -21,6 +21,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 측정회차(LLD-0045 4절, 작업지시서 B8).
@@ -89,6 +91,7 @@ public class CollectionRun extends BaseTimeEntity {
     private Long endedAtMs;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 10)
     private CollectionRunStatus status;
 

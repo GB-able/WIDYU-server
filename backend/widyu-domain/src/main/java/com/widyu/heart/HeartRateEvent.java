@@ -19,6 +19,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
@@ -48,7 +50,8 @@ public class HeartRateEvent extends BaseTimeEntity {
     private LocalDateTime measuredAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "status", nullable = false, length = 20)
     private HeartRateStatus status;
 
     /** 워치가 보고한 측정 정확도. 단건 경로에는 이 정보가 없어 null이다(LLD-0047). */
