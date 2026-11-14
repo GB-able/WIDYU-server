@@ -4,6 +4,8 @@ import com.widyu.member.dto.request.FamilyJoinRequest;
 import com.widyu.member.dto.response.FamilyJoinResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,7 +21,10 @@ public interface GuardianDocs {
             @ApiResponse(responseCode = "200", description = "가족 참여 성공"),
             @ApiResponse(responseCode = "400", description = "이미 해당 가족에 연결되어 있음"),
             @ApiResponse(responseCode = "403", description = "보호자 회원만 접근 가능"),
-            @ApiResponse(responseCode = "404", description = "초대코드를 찾을 수 없음")
+            @ApiResponse(responseCode = "404", description = "초대코드를 찾을 수 없음"),
+            @ApiResponse(responseCode = "429", description = "AUTH_4290: 회원/IP 실패 및 진행 중 요청 한도. Retry-After 초 이후 재시도",
+                    headers = @Header(name = "Retry-After", schema = @Schema(type = "integer"))),
+            @ApiResponse(responseCode = "503", description = "AUTH_5030: 시도 제한 저장소 장애")
     })
     ApiResponseTemplate<FamilyJoinResponse> joinFamily(FamilyJoinRequest request);
 }

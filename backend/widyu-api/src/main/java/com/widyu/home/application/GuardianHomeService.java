@@ -1,19 +1,18 @@
 package com.widyu.home.application;
 
-import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.member.MemberType;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
-import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
-import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedication;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
 import com.widyu.home.dto.response.GuardianSeniorListResponse;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.FamilyMembership;
@@ -30,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,12 +45,11 @@ public class GuardianHomeService {
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final HeartRateResultRepository heartRateResultRepository;
-    private final MedicineScheduleRepository medicineScheduleRepository;
-    private final MedicationProofRepository medicationProofRepository;
+    private final TodayMedicationQuery todayMedicationQuery;
     private final HealthScheduleRepository healthScheduleRepository;
     private final WalkRepository walkRepository;
     private final HomeAlbumRecommendationService albumRecommendationService;
-    private final RealtimeLocationService realtimeLocationService;
+    private final LocationQueryService locationQueryService;
 
     /**
      * 위치 열람 기록은 이 읽기 트랜잭션이 끝난 뒤 {@link GuardianHomeFacade}가 남긴다. 읽기 안에서 기록하면 요청 하나가
@@ -72,7 +69,7 @@ public class GuardianHomeService {
         LocalDate today = now.toLocalDate();
 
         return new GuardianHomeCards(guardian.getId(), senior.getId(), GuardianHomeCardsResponse.of(
-                realtimeLocationService.getOutingStatus(senior.getId()),
+                locationQueryService.getOutingStatus(senior.getId()),
                 getHeartRateInfo(senior),
                 getMedicineInfo(senior, today),
                 getLatestAlbums(senior),
@@ -134,25 +131,18 @@ public class GuardianHomeService {
     }
 
     private GuardianHomeCardsResponse.MedicineInfo getMedicineInfo(Member senior, LocalDate today) {
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today);
+        TodayMedication todayMedication = todayMedicationQuery.find(senior, today);
+        List<MedicineSchedule> schedules = todayMedication.schedules();
 
         if (schedules.isEmpty()) {
             return null;
         }
 
-        Map<Long, MedicationProof> proofMap = medicationProofRepository
-                .findByMemberIdAndDateRange(senior.getId(), today, today)
-                .stream()
-                .collect(Collectors.toMap(
-                        p -> p.getMedicineSchedule().getId(),
-                        p -> p,
-                        (p1, p2) -> p1
-                ));
+        Map<Long, MedicationProof> proofsByScheduleId = todayMedication.proofsByScheduleId();
+        Set<Long> takenIds = proofsByScheduleId.keySet();
 
-        Set<Long> takenIds = proofMap.keySet();
-
-        String latestProofImageUrl = proofMap.values().stream()
+        // 오늘 유효한 일정의 대표 인증(일정별 최초 인증) 중 가장 최근 것이다. 시니어 화면과 같은 규칙이다 (#1059).
+        String latestProofImageUrl = proofsByScheduleId.values().stream()
                 .max(Comparator.comparing(MedicationProof::getVerifiedAt))
                 .map(MedicationProof::getProofImageUrls)
                 .filter(urls -> !urls.isEmpty())

@@ -61,6 +61,8 @@ public class RunExportAssembler {
     private static final String STREAM_IMU_PHONE = "imu_phone";
     private static final String STREAM_HR = "hr";
     private static final String STREAM_LOCATION = "location";
+    // 위치 원본은 2026-11 결정으로 새로 저장하지 않는다(LLD-0143). 위치 스트림이 비면 통신 유실이 아니라 수집 중단이다.
+    static final String ABSENT_REASON_LOCATION_NOT_COLLECTED = "LOCATION_RAW_NOT_COLLECTED";
     private static final String STREAM_HEARTBEAT = "heartbeat";
     private static final String STREAM_MEASUREMENTS = "measurements";
     private static final String STREAM_INCIDENTS = "incidents";
@@ -779,7 +781,7 @@ public class RunExportAssembler {
                 ObjectNode node = absent.addObject();
                 node.put("stream", stream);
                 node.put("device_id", assignment.getDeviceId());
-                node.put("reason", export.absentReasonNoData());
+                node.put("reason", absentReason(stream, export));
             }
         }
         if (!hasEcg) {
@@ -795,6 +797,17 @@ public class RunExportAssembler {
             incidents.put("reason", export.absentReasonNoData());
         }
         return absent;
+    }
+
+    /**
+     * 위치 스트림이 없으면 수집 중단 사유를 적는다. 위치 원본은 더 저장하지 않으므로 「자료 없음」으로 적으면 유실로 읽힌다.
+     * 이 사유가 붙은 과거 회차는 그때 저장된 위치가 없었다는 뜻이다(LLD-0143).
+     */
+    private static String absentReason(String stream, SensorProperties.Export export) {
+        if (STREAM_LOCATION.equals(stream)) {
+            return ABSENT_REASON_LOCATION_NOT_COLLECTED;
+        }
+        return export.absentReasonNoData();
     }
 
     private List<String> expectedStreams(String role) {

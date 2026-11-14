@@ -19,6 +19,8 @@ import com.widyu.goal.home.dto.response.GuardianGoalHomeResponse;
 import com.widyu.goal.home.dto.response.GuardianGoalStatsResponse;
 import com.widyu.goal.home.dto.response.SeniorGoalHomeResponse;
 import com.widyu.goal.home.dto.response.SeniorWeeklyGoalStatusResponse;
+import com.widyu.goal.medicineschedule.application.TodayMedication;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -49,7 +51,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -67,7 +68,11 @@ class GoalHomeServiceTest {
     @Mock private MemberRepository memberRepository;
     @Mock private MemberUtil memberUtil;
 
-    @InjectMocks private GoalHomeService goalHomeService;
+    private GoalHomeService goalHomeService() {
+        return new GoalHomeService(familyMembershipRepository, seniorProfileRepository, medicineScheduleRepository,
+                medicationProofRepository, walkRepository, healthScheduleRepository, memberRepository, memberUtil,
+                new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository));
+    }
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 23, 10, 0);
 
@@ -97,7 +102,7 @@ class GoalHomeServiceTest {
                 member, startOfWeek, endOfWeek)).willReturn(List.of());
 
         // when
-        SeniorWeeklyGoalStatusResponse response = goalHomeService.getSeniorWeeklyGoalStatus();
+        SeniorWeeklyGoalStatusResponse response = goalHomeService().getSeniorWeeklyGoalStatus();
 
         // then
         List<DailyGoalStatus> expected = new ArrayList<>();
@@ -146,7 +151,7 @@ class GoalHomeServiceTest {
                 member, lastWeekStart, thisWeekEnd)).willReturn(List.of());
 
         // when
-        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+        GuardianGoalStatsResponse response = goalHomeService().getGuardianGoalStats(11L);
 
         // then
         List<Double> expectedDailyRates = new ArrayList<>();
@@ -201,7 +206,7 @@ class GoalHomeServiceTest {
                 member, lastWeekStart, thisWeekEnd)).willReturn(List.of());
 
         // when
-        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+        GuardianGoalStatsResponse response = goalHomeService().getGuardianGoalStats(11L);
 
         // then: 오늘은 약 1/1 + 걷기 0/1 = 0.5 (걷기가 빠지면 1.0이 된다)
         assertThat(response.todayGoalRate()).isEqualTo(0.5);
@@ -241,7 +246,7 @@ class GoalHomeServiceTest {
                 member, lastWeekStart, thisWeekEnd)).willReturn(List.of());
 
         // when
-        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+        GuardianGoalStatsResponse response = goalHomeService().getGuardianGoalStats(11L);
 
         // then
         assertThat(response.todayGoalRate()).isEqualTo(1.0);
@@ -275,7 +280,7 @@ class GoalHomeServiceTest {
                 member, startOfWeek, endOfWeek)).willReturn(List.of());
 
         // when
-        SeniorWeeklyGoalStatusResponse response = goalHomeService.getSeniorWeeklyGoalStatus();
+        SeniorWeeklyGoalStatusResponse response = goalHomeService().getSeniorWeeklyGoalStatus();
 
         // then: 오늘은 신버전 1개만 목표이므로 COMPLETED (두 버전이 모두 잡히면 IN_PROGRESS가 된다)
         List<DailyGoalStatus> expected = new ArrayList<>();
@@ -322,7 +327,7 @@ class GoalHomeServiceTest {
                                 ProgressStatus.INCOMPLETE)));
 
         // when
-        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+        GuardianGoalStatsResponse response = goalHomeService().getGuardianGoalStats(11L);
 
         // then: (1/2 + 3/7) ÷ 2 = 46.4% → 46 (모두 끝낸 날 비율이면 3/7 = 0.43)
         assertThat(response.lastWeekGoalRate()).isEqualTo(0.46);
@@ -357,7 +362,7 @@ class GoalHomeServiceTest {
                         member, 1L, today.atStartOfDay(), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianGoalStatsResponse response = goalHomeService.getGuardianGoalStats(11L);
+        GuardianGoalStatsResponse response = goalHomeService().getGuardianGoalStats(11L);
 
         // then: (100 + 50 + 0) ÷ 3 = 50 (예전처럼 약과 걷기를 한데 모으면 1/3)
         assertThat(response.todayGoalRate()).isEqualTo(0.5);
@@ -387,7 +392,7 @@ class GoalHomeServiceTest {
                         member, 1L, today.atTime(23, 59), ProgressStatus.UPCOMING)));
 
         // when
-        SeniorWeeklyGoalStatusResponse response = goalHomeService.getSeniorWeeklyGoalStatus();
+        SeniorWeeklyGoalStatusResponse response = goalHomeService().getSeniorWeeklyGoalStatus();
 
         // then: 약 1/1, 건강방문 0/1 → 50%
         int todayIndex = today.getDayOfWeek().getValue() % 7;
@@ -405,7 +410,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(20, 0)));
 
         // when
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 0), Set.of());
+        MedicineSchedule nextSchedule = TodayMedication.findNextSchedule(schedules, LocalTime.of(23, 0), Set.of());
 
         // then
         assertThat(nextSchedule.getId()).isEqualTo(3L);
@@ -423,7 +428,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(20, 0)));
 
         // when
-        MedicineSchedule nextSchedule = GoalHomeService.findNextSchedule(schedules, LocalTime.of(9, 0), Set.of());
+        MedicineSchedule nextSchedule = TodayMedication.findNextSchedule(schedules, LocalTime.of(9, 0), Set.of());
 
         // then
         assertThat(nextSchedule.getId()).isEqualTo(2L);
@@ -442,7 +447,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(21, 39)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
+        MedicineSchedule selected = TodayMedication.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
@@ -460,7 +465,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(21, 39)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
+        MedicineSchedule selected = TodayMedication.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
@@ -477,9 +482,9 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 3L, LocalTime.of(17, 20)));
 
         // when
-        MedicineSchedule afterFirst = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 14), Set.of(1L));
-        MedicineSchedule afterSecond = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 19), Set.of(1L, 2L));
-        MedicineSchedule allVerified = GoalHomeService.findNextSchedule(schedules, LocalTime.of(17, 21), Set.of(1L, 2L, 3L));
+        MedicineSchedule afterFirst = TodayMedication.findNextSchedule(schedules, LocalTime.of(17, 14), Set.of(1L));
+        MedicineSchedule afterSecond = TodayMedication.findNextSchedule(schedules, LocalTime.of(17, 19), Set.of(1L, 2L));
+        MedicineSchedule allVerified = TodayMedication.findNextSchedule(schedules, LocalTime.of(17, 21), Set.of(1L, 2L, 3L));
 
         // then
         assertThat(afterFirst.getId()).isEqualTo(2L);
@@ -498,7 +503,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(23, 50)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, now, Set.of());
+        MedicineSchedule selected = TodayMedication.findNextSchedule(schedules, now, Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(expectedId);
@@ -514,7 +519,7 @@ class GoalHomeServiceTest {
                 alarmSchedule(member, 2L, LocalTime.of(23, 50)));
 
         // when
-        MedicineSchedule selected = GoalHomeService.findNextSchedule(schedules, LocalTime.of(23, 55), Set.of());
+        MedicineSchedule selected = TodayMedication.findNextSchedule(schedules, LocalTime.of(23, 55), Set.of());
 
         // then
         assertThat(selected.getId()).isEqualTo(1L);
@@ -528,7 +533,7 @@ class GoalHomeServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(member);
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome();
 
         // then
         assertThat(response.medicine()).isNull();
@@ -556,7 +561,7 @@ class GoalHomeServiceTest {
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome();
 
         // then
         assertThat(response.medicine().proofImageUrl()).isEqualTo("https://cdn.widyu.shop/earlier.jpg");
@@ -584,7 +589,7 @@ class GoalHomeServiceTest {
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome();
 
         // then
         assertThat(response.medicine().takenCount()).isZero();
@@ -613,7 +618,7 @@ class GoalHomeServiceTest {
         given(healthScheduleRepository.findByMemberIdAndWeek(any(), any(), any())).willReturn(List.of());
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome();
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome();
 
         // then
         assertThat(response.medicine().scheduleStatuses())
@@ -646,7 +651,7 @@ class GoalHomeServiceTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome(NOW);
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome(NOW);
 
         // then
         assertThat(response.todaySchedules())
@@ -673,7 +678,7 @@ class GoalHomeServiceTest {
                         HealthScheduleFixture.schedule(senior, 2L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome(NOW);
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome(NOW);
 
         // then
         assertThat(response.hospital()).isNull();
@@ -693,7 +698,7 @@ class GoalHomeServiceTest {
         given(memberUtil.getCurrentMember()).willReturn(senior);
 
         // when
-        SeniorGoalHomeResponse response = goalHomeService.getSeniorGoalHome(NOW);
+        SeniorGoalHomeResponse response = goalHomeService().getSeniorGoalHome(NOW);
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();
@@ -715,7 +720,7 @@ class GoalHomeServiceTest {
                 .willReturn(List.of(proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/m.jpg")));
 
         // when
-        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
 
         // then
         assertThat(response.medicine().totalCount()).isEqualTo(2);
@@ -742,11 +747,36 @@ class GoalHomeServiceTest {
                         proof(night, senior, today.atTime(9, 5), "https://cdn.widyu.shop/n.jpg")));
 
         // when
-        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
 
         // then
         assertThat(response.medicine().totalCount()).isEqualTo(2);
         assertThat(response.medicine().takenCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("같은 알람의 인증이 둘이면 보호자 목표 홈은 가장 먼저 한 인증의 사진을 반환한다")
+    void 보호자_목표_홈은_중복_인증의_최초_인증_사진을_반환한다() {
+        // given: 조회 쿼리에 정렬이 없으므로 늦은 인증이 먼저 반환되는 순서를 재현한다.
+        Member senior = member(21L, MemberType.SENIOR);
+        LocalDate today = NOW.toLocalDate();
+        MedicineSchedule morning = alarmSchedule(senior, 1L, LocalTime.of(8, 0));
+        given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
+        given(medicineScheduleRepository.findEffectiveByMemberAndDateWithDetails(senior, Status.ACTIVE, today))
+                .willReturn(List.of(morning));
+        given(medicationProofRepository.findByMemberIdAndDateRange(21L, today, today))
+                .willReturn(List.of(
+                        proof(morning, senior, today.atTime(8, 25), "https://cdn.widyu.shop/later.jpg"),
+                        proof(morning, senior, today.atTime(8, 5), "https://cdn.widyu.shop/earlier.jpg")));
+
+        // when
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
+
+        // then
+        assertThat(response.medicine().takenCount()).isEqualTo(1);
+        assertThat(response.medicine().medicineSchedules())
+                .extracting(GuardianGoalHomeResponse.ScheduleItem::proofImageUrl)
+                .containsExactly("https://cdn.widyu.shop/earlier.jpg");
     }
 
     @Test
@@ -764,7 +794,7 @@ class GoalHomeServiceTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
 
         // then
         assertThat(response.todaySchedules())
@@ -791,7 +821,7 @@ class GoalHomeServiceTest {
                         HealthScheduleFixture.schedule(senior, 2L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
 
         // then
         assertThat(response.hospital()).isNull();
@@ -811,7 +841,7 @@ class GoalHomeServiceTest {
         given(memberRepository.findById(21L)).willReturn(Optional.of(senior));
 
         // when
-        GuardianGoalHomeResponse response = goalHomeService.getGuardianGoalHome(21L, NOW);
+        GuardianGoalHomeResponse response = goalHomeService().getGuardianGoalHome(21L, NOW);
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();

@@ -40,11 +40,10 @@ public class AlbumLikeService {
             throw new BusinessException(ErrorCode.ALBUM_ALREADY_LIKED);
         }
 
-        AlbumLike albumLike = AlbumLike.createLike(album, currentMember);
-        albumLikeRepository.save(albumLike);
-
-        // 앨범 좋아요 수 증가
-        album.incrementLikeCount();
+        // 카운터를 먼저 올려 앨범 행 배타 잠금을 잡는다. 좋아요 INSERT의 외래키 검사(공유 잠금)를 먼저 하면
+        // 같은 앨범에 동시에 좋아요한 요청끼리 서로의 공유 잠금을 기다리며 교착한다.
+        albumRepository.incrementLikeCount(albumId);
+        albumLikeRepository.save(AlbumLike.createLike(album, currentMember));
 
         // 좋아요 알림 이벤트 발행
         eventPublisher.publishEvent(new AlbumLikedEvent(
@@ -66,9 +65,7 @@ public class AlbumLikeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ALBUM_NOT_LIKED));
 
         albumLikeRepository.delete(albumLike);
-        
-        // 앨범 좋아요 수 감소
-        album.decrementLikeCount();
+        albumRepository.decrementLikeCount(albumId);
     }
 
     @Transactional(readOnly = true)

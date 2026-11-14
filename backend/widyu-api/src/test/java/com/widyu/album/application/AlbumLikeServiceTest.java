@@ -66,7 +66,7 @@ class AlbumLikeServiceTest {
 
         // then
         verify(albumLikeRepository).save(any(AlbumLike.class));
-        verify(album).incrementLikeCount();
+        verify(albumRepository).incrementLikeCount(1L);
         verify(eventPublisher).publishEvent(any(AlbumLikedEvent.class));
     }
 
@@ -121,7 +121,7 @@ class AlbumLikeServiceTest {
 
         // then
         verify(albumLikeRepository).delete(albumLike);
-        verify(album).decrementLikeCount();
+        verify(albumRepository).decrementLikeCount(1L);
     }
 
     @Test
@@ -191,7 +191,7 @@ class AlbumLikeServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALBUM_LOCKED);
         verify(albumLikeRepository, never()).save(any(AlbumLike.class));
-        verify(album, never()).incrementLikeCount();
+        verify(albumRepository, never()).incrementLikeCount(any());
     }
 
     private void allowFamilyAccess(Album album, Member member) {

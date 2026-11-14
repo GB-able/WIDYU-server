@@ -23,6 +23,7 @@ import com.widyu.auth.dto.response.CurrentMemberResponse;
 import com.widyu.auth.dto.response.SocialLoginResponse;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.auth.dto.response.TemporaryTokenResponse;
+import com.widyu.auth.dto.response.ApplePhoneNumberResponse;
 import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.auth.dto.response.UserProfile;
 import com.widyu.member.Member;
@@ -33,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -93,9 +95,10 @@ public class GuardianAuthService {
         return socialLoginService.socialLogin(provider, request);
     }
 
-    @Transactional
-    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
+    // READ_COMMITTED는 애플 계정 합치기에서 행 잠금을 기다린 뒤의 확인이 앞 요청의 커밋을 보게 한다 (LLD-0157, AlbumUnlockService와 같은 방식)
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ApplePhoneNumberResponse updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
+        return socialLoginService.updatePhoneNumberIfAppleSignUp(request);
     }
 
     @Transactional(readOnly = true)

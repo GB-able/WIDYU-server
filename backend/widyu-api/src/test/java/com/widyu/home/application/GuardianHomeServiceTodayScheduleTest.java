@@ -11,6 +11,7 @@ import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.HealthScheduleFixture;
 import com.widyu.goal.healthschedule.dto.response.TodayHealthScheduleItem;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
+import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
 import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
@@ -18,7 +19,7 @@ import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.realtime.application.RealtimeLocationService;
+import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.member.Family;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -33,7 +34,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -57,9 +57,13 @@ class GuardianHomeServiceTodayScheduleTest {
     @Mock private HealthScheduleRepository healthScheduleRepository;
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
-    @Mock private RealtimeLocationService realtimeLocationService;
+    @Mock private LocationQueryService locationQueryService;
 
-    @InjectMocks private GuardianHomeService guardianHomeService;
+    private GuardianHomeService guardianHomeService() {
+        return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
+                heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService);
+    }
 
     @Test
     @DisplayName("오늘 지난 일정·완료 일정·남은 일정이 있으면 오늘 일정을 오름차순으로 담고 다음 일정은 오늘 남은 일정을 반환한다")
@@ -76,7 +80,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(8), ProgressStatus.COMPLETED)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules())
@@ -105,7 +109,7 @@ class GuardianHomeServiceTodayScheduleTest {
                         HealthScheduleFixture.schedule(senior, 1L, NOW.withHour(7), ProgressStatus.UPCOMING)));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -124,7 +128,7 @@ class GuardianHomeServiceTodayScheduleTest {
         givenConnectedSenior();
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService.getHomeCards(SENIOR_ID, NOW).response();
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.todaySchedules()).isNotNull().isEmpty();

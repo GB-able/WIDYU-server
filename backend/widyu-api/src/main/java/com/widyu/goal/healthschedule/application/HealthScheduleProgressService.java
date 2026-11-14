@@ -65,6 +65,12 @@ public class HealthScheduleProgressService {
 
         SeniorLocation currentLocation = seniorLocationRepository.findBySeniorId(healthSchedule.getMember().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "최근 위치 정보가 없습니다."));
+        // 마지막 위치는 TTL 갱신으로 오래 남는다. 방문 인증 가능 시간 안에 잰 위치만 지금 위치로 본다(LLD-0141).
+        // 새 신선도 기준을 만들지 않고 기존 인증 가능 시간(당일 0시 ~ 일정 30분 뒤)을 위치의 관측 시각에도 적용한다.
+        LocalDateTime observedAt = observedAt(currentLocation);
+        if (observedAt == null || !healthSchedule.canCompleteAt(observedAt)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "방문 인증 가능 시간 안에 잰 위치가 없습니다.");
+        }
 
         if (!isArrivedAtSchedule(healthSchedule, currentLocation.getLatitude(), currentLocation.getLongitude())) {
             throw new BusinessException(
@@ -74,6 +80,18 @@ public class HealthScheduleProgressService {
 
         // COMPLETED로 변경하고 최초 1회 포인트 적립
         completeAndReward(healthSchedule);
+    }
+
+    /** 위치의 관측 시각. 순서 시각(미래로 잰 시각은 받은 시각으로 자른 값)을 쓰고, 없으면 서버가 받은 시각을 쓴다. */
+    private static LocalDateTime observedAt(SeniorLocation location) {
+        Long observedAtMs = location.getMeasuredAtMs();
+        if (observedAtMs == null) {
+            observedAtMs = location.getReceivedAtMs();
+        }
+        if (observedAtMs == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(observedAtMs), java.time.ZoneId.systemDefault());
     }
 
     /**

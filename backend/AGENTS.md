@@ -33,6 +33,7 @@
 - **불변식**: Feed 쿼리는 `status=ACTIVE`만 (PROCESSING 자동 제외). Status enum: ACTIVE/INACTIVE/DELETED/PROCESSING
 - 비동기 업로드: 사진 즉시(sync) → 영상 `@Async`(FFmpeg 썸네일→S3→ACTIVE, 실패 시 DELETED). → LLD-0006·0012·0013, ADR-0004·0010·0011
 - 잠금해제: 50포인트, `AlbumUnlock`, 이후 영구 접근. 잠금 판정은 `AlbumPermissionService.isUnlockedFor` 하나다(보호자가 조회하는 경우와 시니어가 작성한 앨범은 잠기지 않음. 잠기는 것은 시니어가 보호자 작성 앨범을 볼 때). 잠금 전에는 좋아요·댓글 작성이 403 `ALBUM_UNLOCK_4031`이고 상세 `comments`가 빈 배열이다 → LLD-0021
+- **카운터(좋아요·댓글·조회 수)는 `AlbumRepository`의 원자 UPDATE로만 바꾼다**. 엔티티 필드를 고쳐 저장하지 않는다. 좋아요·댓글은 카운터 UPDATE(앨범 행 배타 잠금)를 자식 INSERT보다 먼저 해 외래키 공유 잠금 교착을 피한다. `Album`은 `@DynamicUpdate`라 삭제·캡션 수정이 카운터를 덮지 않는다 → LLD-0099·0151
 
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
@@ -48,6 +49,7 @@
 - `medicine`(복약 스케줄·알람 인증), `walk`(`SeniorProfile.defaultWalkGoal`: 500~10,000보, 정한 적 없으면 null #1003), `healthschedule`, `addressbookmark`, `home`(가족 멤버 조회)
 - **목표 캘린더 월 범위**: 약 복용·걷기 월간과 건강 일정 캘린더는 이번 달(KST) 기준 앞뒤 12개월만 조회한다(400 `GOAL_4000`). 보호자의 약 복용 월간은 미래 달도 400(`GOAL_4001`). 검사는 `GoalMonthValidator` 한 곳이다(#1005)
 - **복약 불변식**: 알람 ±30분 이내에만 인증 제출, 같은 날 동일 스케줄 중복 불가, 월별 준수율 통계. → LLD-0007·0008·0009
+- **오늘 복약 현황은 `TodayMedicationQuery` 한 곳에서 만든다**: 목표 홈(시니어, 보호자)과 홈 카드(시니어, 보호자)가 같이 쓴다. 오늘 유효한 일정의 인증만 남기고, 같은 일정에 인증이 여럿이면 가장 먼저 한 인증을 대표로 고른다. 다음 일정 고르기는 `TodayMedication.nextSchedule`이다. 화면마다 따로 집계하지 않는다(#1059)
 
 ### `heart` — 심박수 (독립 도메인)
 - 심박 측정값 1건을 1초마다 수신 → AI(`POST /api/hr`) 1회 호출 → 즉시 판정·저장

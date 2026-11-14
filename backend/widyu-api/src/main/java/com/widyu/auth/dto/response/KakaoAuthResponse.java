@@ -9,6 +9,7 @@ public record KakaoAuthResponse(
 ) {
     public record KakaoAccount(
             String email,
+            @JsonProperty("is_email_verified") Boolean emailVerified,
             String name,
             @JsonProperty("phone_number") String phoneNumber
     ) {}
