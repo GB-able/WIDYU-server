@@ -450,7 +450,9 @@ public interface GuardianAuthDocs {
             summary = "애플 로그인 회원 전화번호 업데이트",
             description = """
                     애플 로그인으로 가입한 회원에게 SMS 인증한 전화번호를 보강합니다.
-                    SMS 인증 후 발급받은 임시 토큰을 Authorization 헤더(스킴: `Bearer`)로 전달해야 합니다.
+                    Authorization 헤더(스킴: `Bearer`)에는 애플 로그인 응답으로 받은 **액세스 토큰**을 보내고,
+                    SMS 인증 후 발급받은 임시 토큰은 요청 본문 `temporaryToken`에 넣습니다.
+                    번호를 채울 회원은 액세스 토큰의 회원이며, 애플 계정이 없는 회원이면 403을 반환합니다.
                     전화번호가 비어 있는 애플 회원만 보강하며, 이미 전화번호가 있으면 403을 반환합니다.
                     보강에 성공하면 사용한 임시 토큰은 다시 쓸 수 없습니다.
                     """
@@ -474,7 +476,7 @@ public interface GuardianAuthDocs {
     )
     @ApiResponse(
             responseCode = "401",
-            description = "인증 실패(토큰 만료/없음/권한 오류)",
+            description = "인증 실패(액세스 토큰 없음·만료, 임시 토큰 만료·형식 오류)",
             content = @Content(
                     schema = @Schema(implementation = ApiResponseTemplate.class),
                     examples = @ExampleObject(
@@ -491,29 +493,28 @@ public interface GuardianAuthDocs {
     )
     @ApiResponse(
             responseCode = "403",
-            description = "AUTH_4030: 이미 전화번호가 있는 애플 회원",
+            description = "AUTH_4030: 애플 계정이 없는 회원이거나 이미 전화번호가 있는 애플 회원",
             content = @Content(schema = @Schema(implementation = ApiResponseTemplate.class))
     )
-    @ApiResponse(responseCode = "404", description = "MEMBER_4041: 해당 이메일의 애플 회원 없음")
+    @ApiResponse(responseCode = "404", description = "MEMBER_4041: 임시 토큰의 SMS 인증 정보가 만료되어 없음")
     @ApiResponse(responseCode = "400", description = "AUTH_4021: 다른 회원이 이미 쓰는 전화번호")
     ApiResponseTemplate<Void> updatePhoneNumberIfAppleSignUp(
             @Valid @RequestBody
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
-                    description = "애플 사용자 이메일",
+                    description = "SMS 인증으로 받은 임시 토큰",
                     content = @Content(
                             schema = @Schema(implementation = AppleSignUpRequest.class),
                             examples = @ExampleObject(
                                     name = "요청 예시",
                                     value = """
                                             {
-                                              "email": "user@icloud.com"
+                                              "temporaryToken": "eyJhbGciOiJIUzI1NiJ9..."
                                             }
                                             """
                             )
                     )
-            ) final AppleSignUpRequest request,
-            HttpServletRequest httpServletRequest
+            ) final AppleSignUpRequest request
     );
 
     @Operation(

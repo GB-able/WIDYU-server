@@ -24,6 +24,7 @@ import com.widyu.auth.dto.response.TokenPairResponse;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
+import com.widyu.global.util.MemberUtil;
 import com.widyu.global.util.TemporaryMemberUtil;
 import com.widyu.member.Member;
 import com.widyu.member.MemberRole;
@@ -54,6 +55,7 @@ class SocialLoginServiceTest {
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private TemporaryMemberUtil temporaryMemberUtil;
     @Mock private SocialTemporaryTokenService socialTemporaryTokenService;
+    @Mock private MemberUtil memberUtil;
 
     @InjectMocks
     private SocialLoginService socialLoginService;
@@ -125,23 +127,17 @@ class SocialLoginServiceTest {
     }
 
     @Test
-    @DisplayName("전화번호가 없는 애플 회원에게 보강하면 빈 번호 조건으로 번호를 채우고 임시 회원을 삭제한다")
-    void 전화번호가_없는_애플_회원에게_보강하면_번호를_채우고_임시_회원을_삭제한다() {
+    @DisplayName("액세스 토큰 회원이 번호가 빈 애플 회원이면 임시 토큰의 번호로 채우고 임시 회원을 삭제한다")
+    void 액세스_토큰_회원이_번호가_빈_애플_회원이면_번호를_채우고_임시_회원을_삭제한다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("apple@apple.com");
-
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01099999999");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
-
-        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
-        ReflectionTestUtils.setField(appleMember, "id", 1L);
-        given(memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider("apple@apple.com", "APPLE"))
-                .willReturn(Optional.of(appleMember));
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(1);
 
         // when
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest);
+        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
 
         // then
         verify(memberRepository).fillPhoneNumberIfEmpty(1L, "01099999999");
@@ -152,22 +148,16 @@ class SocialLoginServiceTest {
     @DisplayName("트랜잭션 안에서 애플 전화번호를 보강하면 임시 회원은 커밋 뒤에 삭제한다")
     void 트랜잭션_안에서_보강하면_임시_회원은_커밋_뒤에_삭제한다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("apple@apple.com");
-
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01099999999");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
-
-        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
-        ReflectionTestUtils.setField(appleMember, "id", 1L);
-        given(memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider("apple@apple.com", "APPLE"))
-                .willReturn(Optional.of(appleMember));
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(1);
 
         TransactionSynchronizationManager.initSynchronization();
         try {
             // when
-            socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest);
+            socialLoginService.updatePhoneNumberIfAppleSignUp(request);
 
             // then
             verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
@@ -182,57 +172,70 @@ class SocialLoginServiceTest {
     @DisplayName("이미 전화번호가 있는 애플 회원에게 보강하면 FORBIDDEN 예외가 발생하고 임시 회원이 그대로 남는다")
     void 이미_전화번호가_있는_애플_회원에게_보강하면_예외가_발생하고_임시_회원이_남는다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("apple@apple.com");
-
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("다른사람", "01099999999");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
-
-        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", "01011111111");
-        ReflectionTestUtils.setField(appleMember, "id", 1L);
-        given(memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider("apple@apple.com", "APPLE"))
-                .willReturn(Optional.of(appleMember));
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, "01011111111"));
         given(memberRepository.fillPhoneNumberIfEmpty(1L, "01099999999")).willReturn(0);
 
         // when & then
-        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest))
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
         verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
     }
 
     @Test
-    @DisplayName("임시 토큰 없이 애플 전화번호 보강을 요청하면 회원을 조회하지 않고 UNAUTHORIZED 예외가 발생한다")
-    void 임시_토큰_없이_애플_전화번호_보강을_요청하면_회원을_조회하지_않는다() {
+    @DisplayName("임시 토큰이 유효하지 않으면 회원을 조회하지 않고 UNAUTHORIZED 예외가 발생한다")
+    void 임시_토큰이_유효하지_않으면_회원을_조회하지_않는다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("apple@apple.com");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest))
+        AppleSignUpRequest request = new AppleSignUpRequest("bad-token");
+        given(temporaryMemberUtil.getTemporaryMember("bad-token"))
                 .willThrow(new BusinessException(ErrorCode.UNAUTHORIZED));
 
         // when & then
-        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest))
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
-        verifyNoInteractions(memberRepository);
+        verifyNoInteractions(memberUtil, memberRepository);
     }
 
     @Test
-    @DisplayName("존재하지 않는 애플 이메일로 전화번호를 보강하면 MEMBER_NOT_FOUND 예외가 발생한다")
-    void 존재하지_않는_애플_이메일로_전화번호_업데이트_시_예외가_발생한다() {
+    @DisplayName("액세스 토큰 없이 애플 전화번호를 보강하면 UNAUTHORIZED 예외가 발생하고 번호를 채우지 않는다")
+    void 액세스_토큰_없이_보강하면_번호를_채우지_않는다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("none@apple.com");
-
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01099999999");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
-        given(memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider("none@apple.com", "APPLE"))
-                .willReturn(Optional.empty());
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willThrow(new BusinessException(ErrorCode.UNAUTHORIZED));
 
         // when & then
-        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest))
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+        verifyNoInteractions(memberRepository);
+        verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
+    }
+
+    @Test
+    @DisplayName("액세스 토큰 회원에게 애플 계정이 없으면 FORBIDDEN 예외가 발생하고 번호와 임시 회원이 바뀌지 않는다")
+    void 애플_계정이_없는_회원이_보강하면_거부한다() {
+        // given
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
+        TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("카카오유저", "01099999999");
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        Member kakaoMember = Member.createMember(MemberType.GUARDIAN, "카카오유저", null);
+        ReflectionTestUtils.setField(kakaoMember, "id", 2L);
+        kakaoMember.getSocialAccounts().add(
+                SocialAccount.createSocialAccount("kakao@kakao.com", "KAKAO", "kakao-oauth-id", null, kakaoMember));
+        given(memberUtil.getCurrentMember()).willReturn(kakaoMember);
+
+        // when & then
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+        verifyNoInteractions(memberRepository);
+        verify(temporaryMemberUtil, never()).deleteTemporaryMember(any());
     }
 
     @Test
@@ -281,20 +284,14 @@ class SocialLoginServiceTest {
     @DisplayName("다른 회원이 쓰는 번호로 애플 회원 번호를 보강하면 ALREADY_REGISTERED_PHONE_NUMBER 예외가 발생하고 번호를 채우지 않는다")
     void 다른_회원이_쓰는_번호로_애플_회원_번호를_보강하면_거부한다() {
         // given
-        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
-        AppleSignUpRequest request = new AppleSignUpRequest("apple@apple.com");
-
+        AppleSignUpRequest request = new AppleSignUpRequest("temp-token");
         TemporaryMember temporaryMember = TemporaryMember.createTemporaryMember("애플유저", "01000000002");
-        given(temporaryMemberUtil.getTemporaryMemberFromRequest(httpRequest)).willReturn(temporaryMember);
-
-        Member appleMember = Member.createMember(MemberType.GUARDIAN, "애플유저", null);
-        ReflectionTestUtils.setField(appleMember, "id", 1L);
-        given(memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider("apple@apple.com", "APPLE"))
-                .willReturn(Optional.of(appleMember));
+        given(temporaryMemberUtil.getTemporaryMember("temp-token")).willReturn(temporaryMember);
+        given(memberUtil.getCurrentMember()).willReturn(appleMember(1L, null));
         given(memberRepository.existsByPhoneNumberAndIdNot("01000000002", 1L)).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpRequest))
+        assertThatThrownBy(() -> socialLoginService.updatePhoneNumberIfAppleSignUp(request))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ALREADY_REGISTERED_PHONE_NUMBER);
         verify(memberRepository, never()).fillPhoneNumberIfEmpty(any(), any());
@@ -328,5 +325,13 @@ class SocialLoginServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PHONE_NUMBER_SHARED_BY_MEMBERS);
         verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    private static Member appleMember(Long id, String phoneNumber) {
+        Member member = Member.createMember(MemberType.GUARDIAN, "애플유저", phoneNumber);
+        ReflectionTestUtils.setField(member, "id", id);
+        member.getSocialAccounts().add(
+                SocialAccount.createSocialAccount("apple@apple.com", "APPLE", "apple-oauth-id", null, member));
+        return member;
     }
 }

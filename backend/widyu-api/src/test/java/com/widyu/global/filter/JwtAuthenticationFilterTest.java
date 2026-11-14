@@ -44,7 +44,6 @@ class JwtAuthenticationFilterTest {
             "/api/v1/auth/guardians/sign-up/local",
             "/api/v1/auth/guardians/password",
             "/api/v1/auth/guardians/email",
-            "/api/v1/auth/guardians/apple/phone-number",
             "/api/v1/auth/guardians/profile/temporary",
             "/api/v1/auth/guardians/social/integration"
     })
@@ -65,6 +64,51 @@ class JwtAuthenticationFilterTest {
         // then
         assertThat(filterChain.getRequest()).isSameAs(request);
         then(jwtTokenProvider).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("애플 전화번호 보강 API를 액세스 토큰으로 호출하면 활성 회원을 확인하고 인증한 뒤 다음 필터로 넘긴다")
+    void 애플_전화번호_보강_API는_액세스_토큰을_검증한다() throws IOException, ServletException {
+        // given
+        JwtAuthenticationFilter filter =
+                new JwtAuthenticationFilter(jwtTokenProvider, adminAccessValidator, activeMemberValidator);
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("PATCH", "/api/v1/auth/guardians/apple/phone-number");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer access-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        given(jwtTokenProvider.retrieveAccessToken("access-token"))
+                .willReturn(new AccessTokenDto(7L, MemberRole.USER, "APPLE", "access-token"));
+
+        // when
+        filter.doFilter(request, response, filterChain);
+
+        // then
+        then(activeMemberValidator).should().validate(7L);
+        assertThat(filterChain.getRequest()).isSameAs(request);
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("애플 전화번호 보강 API에 액세스 토큰이 아닌 토큰을 보내면 401을 반환하고 다음 필터로 넘기지 않는다")
+    void 애플_전화번호_보강_API에_임시_토큰을_헤더로_보내면_401을_반환한다() throws IOException, ServletException {
+        // given
+        JwtAuthenticationFilter filter =
+                new JwtAuthenticationFilter(jwtTokenProvider, adminAccessValidator, activeMemberValidator);
+        MockHttpServletRequest request =
+                new MockHttpServletRequest("PATCH", "/api/v1/auth/guardians/apple/phone-number");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer temporary-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        given(jwtTokenProvider.retrieveAccessToken("temporary-token"))
+                .willThrow(new BusinessException(ErrorCode.INVALID_ACCESS_TOKEN));
+
+        // when
+        filter.doFilter(request, response, filterChain);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(filterChain.getRequest()).isNull();
     }
 
     @Test

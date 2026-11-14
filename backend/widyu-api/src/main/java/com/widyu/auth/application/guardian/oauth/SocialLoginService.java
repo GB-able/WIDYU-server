@@ -22,6 +22,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.JwtTokenProvider;
 import com.widyu.global.util.JwtUtil;
+import com.widyu.global.util.MemberUtil;
 import com.widyu.global.util.PiiMaskingUtil;
 import com.widyu.global.util.TemporaryMemberUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,6 +46,7 @@ public class SocialLoginService {
     private final MemberRepository memberRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final TemporaryMemberUtil temporaryMemberUtil;
+    private final MemberUtil memberUtil;
     private final SocialTemporaryTokenService socialTemporaryTokenService;
 
     @Transactional
@@ -77,10 +79,14 @@ public class SocialLoginService {
                 .orElseGet(() -> handleNewSocialAccount(provider, socialResponse, userInfo, socialResponse.oauthId()));
     }
 
-    // ponytail: 이메일만으로 대상 회원을 고르므로 번호가 빈 Apple 회원은 다른 SMS 인증자도 채울 수 있다. Apple 로그인 세션과 결합하려면 클라이언트 변경이 필요하다 (LLD-0094 Open Questions)
-    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request, HttpServletRequest httpServletRequest) {
-        TemporaryMember temporaryMember = temporaryMemberUtil.getTemporaryMemberFromRequest(httpServletRequest);
-        Member member = findAppleMemberByEmail(request.email());
+    // 번호를 채울 회원은 Apple 로그인으로 받은 액세스 토큰의 회원이다. 임시 토큰은 SMS로 인증한 번호만 증명한다 (LLD-0145)
+    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
+        TemporaryMember temporaryMember = temporaryMemberUtil.getTemporaryMember(request.temporaryToken());
+        Member member = memberUtil.getCurrentMember();
+        if (!hasAppleAccount(member)) {
+            log.warn("애플 계정이 없는 회원의 애플 번호 보강 거부: memberId={}", member.getId());
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         // 전화번호는 회원 전체에서 하나여야 한다. 다른 회원이 쓰는 번호로는 보강하지 않는다 (LLD-0116)
         if (memberRepository.existsByPhoneNumberAndIdNot(temporaryMember.getPhoneNumber(), member.getId())) {
@@ -94,7 +100,7 @@ public class SocialLoginService {
         }
 
         deleteTemporaryMemberAfterCommit(temporaryMember.getId());
-        log.info("애플 사용자 전화번호 업데이트 완료: memberId={}, email={}", member.getId(), PiiMaskingUtil.maskEmail(request.email()));
+        log.info("애플 사용자 전화번호 업데이트 완료: memberId={}", member.getId());
     }
 
     // 번호 반영이 롤백되면 임시 토큰을 다시 쓸 수 있어야 하므로 커밋 뒤에 지운다
@@ -244,10 +250,9 @@ public class SocialLoginService {
                 .flatMap(memberRepository::findWithAllAccountsById);
     }
 
-    private Member findAppleMemberByEmail(String email) {
-        return memberRepository.findBySocialAccounts_EmailAndSocialAccounts_Provider(
-                        email, OAuthProvider.APPLE.getValue())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+    private boolean hasAppleAccount(Member member) {
+        return member.getSocialAccounts().stream()
+                .anyMatch(account -> OAuthProvider.APPLE.getValue().equals(account.getProvider()));
     }
 
     private Optional<Member> findExistingMemberByUserInfo(UserInfo userInfo) {

@@ -21,8 +21,12 @@ public class TemporaryMemberUtil {
 
     @Transactional(readOnly = true)
     public TemporaryMember getTemporaryMemberFromRequest(HttpServletRequest request) {
-        String token = JwtUtil.extractTemporaryTokenFromHeader(request);
-        if (token == null) throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        return getTemporaryMember(JwtUtil.extractTemporaryTokenFromHeader(request));
+    }
+
+    @Transactional(readOnly = true)
+    public TemporaryMember getTemporaryMember(String token) {
+        if (token == null || token.isBlank()) throw new BusinessException(ErrorCode.UNAUTHORIZED);
 
         TemporaryTokenDto dto;
         try {

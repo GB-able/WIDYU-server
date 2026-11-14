@@ -94,8 +94,8 @@ public class GuardianAuthService {
     }
 
     @Transactional
-    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request, HttpServletRequest httpServletRequest) {
-        socialLoginService.updatePhoneNumberIfAppleSignUp(request, httpServletRequest);
+    public void updatePhoneNumberIfAppleSignUp(AppleSignUpRequest request) {
+        socialLoginService.updatePhoneNumberIfAppleSignUp(request);
     }
 
     @Transactional(readOnly = true)
