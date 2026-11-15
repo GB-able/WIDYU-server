@@ -23,19 +23,26 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 상세 조회(읽기 전용)와 조회 기록(REQUIRES_NEW)이 각자 커밋해야 결함이 드러나므로 테스트 트랜잭션을 쓰지 않는다.
+// 상세 조회(읽기 전용)와 조회 기록이 각자 커밋해야 결함이 드러나므로 테스트 트랜잭션을 쓰지 않는다.
+// 조회 기록은 상세 읽기가 끝난 뒤 파사드가 남기므로(LLD-0152) 파사드로 부른다.
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({JpaAuditingConfig.class, AlbumService.class, AlbumViewService.class})
+@Import({JpaAuditingConfig.class, AlbumFacadeImpl.class, AlbumService.class, AlbumViewService.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @DisplayName("앨범 조회수 DB 반영 테스트")
 class AlbumViewCountPersistenceTest {
 
-    @Autowired private AlbumService albumService;
+    @Autowired private AlbumFacadeImpl albumFacade;
     @Autowired private AlbumRepository albumRepository;
     @Autowired private MemberRepository memberRepository;
     @MockBean private MemberUtil memberUtil;
     @MockBean private AlbumPermissionService albumPermissionService;
+    @MockBean private AlbumFeedService albumFeedService;
+    @MockBean private AlbumLikeService albumLikeService;
+    @MockBean private AlbumUnlockService albumUnlockService;
+    @MockBean private AlbumFileService albumFileService;
+    @MockBean private AlbumMediaPolicy albumMediaPolicy;
+    @MockBean private AlbumVideoProcessingService albumVideoProcessingService;
 
     @Test
     @DisplayName("다른 가족 회원이 처음 상세 조회하면 DB의 조회수가 1 늘고 응답에도 반영된다")
@@ -50,7 +57,7 @@ class AlbumViewCountPersistenceTest {
 
         try {
             // when
-            AlbumDetailResponse response = albumService.getAlbumDetail(album.getId());
+            AlbumDetailResponse response = albumFacade.getAlbumDetail(album.getId());
 
             // then
             assertThat(response.viewCount()).isEqualTo(1);
@@ -70,11 +77,11 @@ class AlbumViewCountPersistenceTest {
         given(memberUtil.getCurrentMember()).willReturn(viewer);
         // 잠긴 앨범 조회는 조회 기록을 남기지 않으므로(#912) 해금한 회원의 조회로 둔다.
         given(albumPermissionService.isUnlockedFor(any(), any())).willReturn(true);
-        albumService.getAlbumDetail(album.getId());
+        albumFacade.getAlbumDetail(album.getId());
 
         try {
             // when
-            AlbumDetailResponse response = albumService.getAlbumDetail(album.getId());
+            AlbumDetailResponse response = albumFacade.getAlbumDetail(album.getId());
 
             // then
             assertThat(response.viewCount()).isEqualTo(1);
@@ -94,7 +101,7 @@ class AlbumViewCountPersistenceTest {
 
         try {
             // when
-            albumService.getAlbumDetail(album.getId());
+            albumFacade.getAlbumDetail(album.getId());
 
             // then
             assertThat(persistedViewCount(album)).isZero();

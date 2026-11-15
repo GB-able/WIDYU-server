@@ -196,75 +196,8 @@ class AlbumServiceTest {
     }
 
     @Test
-    @DisplayName("앨범 상세 조회 시 본인 앨범이면 조회 기록을 저장하지 않는다")
-    void 앨범_상세_조회_시_본인_앨범이면_조회기록을_저장하지_않는다() {
-        // given
-        Long memberId = 1L;
-        Member currentMember = mock(Member.class);
-        given(currentMember.getId()).willReturn(memberId);
-        given(memberUtil.getCurrentMember()).willReturn(currentMember);
-
-        Member albumOwner = mock(Member.class);
-        given(albumOwner.getId()).willReturn(memberId);
-        given(albumOwner.getName()).willReturn("시니어");
-
-        Album album = mock(Album.class);
-        given(album.getId()).willReturn(10L);
-        given(album.getMember()).willReturn(albumOwner);
-        given(album.getMediaUrls()).willReturn(List.of());
-        given(album.getLikeCount()).willReturn(0);
-        given(album.getCommentCount()).willReturn(0);
-        given(album.getViewCount()).willReturn(0);
-        given(album.getCreatedAt()).willReturn(LocalDateTime.now());
-
-        given(albumRepository.findByIdAndStatusWithCollections(10L, Status.ACTIVE)).willReturn(Optional.of(album));
-        given(albumCommentRepository.findTopLevelCommentsByAlbumAndStatus(album, Status.ACTIVE)).willReturn(List.of());
-        given(albumViewService.getRecentViewers(album, 3)).willReturn(List.of());
-        given(albumPermissionService.isUnlockedFor(album, currentMember)).willReturn(true);
-
-        // when
-        albumService.getAlbumDetail(10L);
-
-        // then
-        verify(albumViewService, never()).recordView(any(), any());
-    }
-
-    @Test
-    @DisplayName("앨범 상세 조회 시 타인 앨범이면 조회 기록이 저장된다")
-    void 앨범_상세_조회_시_타인_앨범이면_조회기록이_저장된다() {
-        // given
-        Member currentMember = mock(Member.class);
-        given(currentMember.getId()).willReturn(1L);
-        given(memberUtil.getCurrentMember()).willReturn(currentMember);
-
-        Member albumOwner = mock(Member.class);
-        given(albumOwner.getId()).willReturn(2L);
-        given(albumOwner.getName()).willReturn("시니어");
-
-        Album album = mock(Album.class);
-        given(album.getId()).willReturn(10L);
-        given(album.getMember()).willReturn(albumOwner);
-        given(album.getMediaUrls()).willReturn(List.of());
-        given(album.getLikeCount()).willReturn(0);
-        given(album.getCommentCount()).willReturn(0);
-        given(album.getViewCount()).willReturn(0);
-        given(album.getCreatedAt()).willReturn(LocalDateTime.now());
-
-        given(albumRepository.findByIdAndStatusWithCollections(10L, Status.ACTIVE)).willReturn(Optional.of(album));
-        given(albumCommentRepository.findTopLevelCommentsByAlbumAndStatus(album, Status.ACTIVE)).willReturn(List.of());
-        given(albumViewService.getRecentViewers(album, 3)).willReturn(List.of());
-        given(albumPermissionService.isUnlockedFor(album, currentMember)).willReturn(true);
-
-        // when
-        albumService.getAlbumDetail(10L);
-
-        // then
-        verify(albumViewService).recordView(album, currentMember);
-    }
-
-    @Test
-    @DisplayName("해금하지 않은 앨범 상세를 조회하면 원본 URL 없이 썸네일과 해금 가격, 잠김 상태를 응답하고 조회 기록은 남기지 않는다")
-    void 미해금_앨범_상세_조회_시_가격을_응답하고_조회기록을_남기지_않는다() {
+    @DisplayName("해금하지 않은 앨범 상세를 조회하면 원본 URL 없이 썸네일과 해금 가격, 잠김 상태를 응답한다")
+    void 미해금_앨범_상세_조회_시_가격을_응답한다() {
         // given
         Member currentMember = mock(Member.class);
         given(currentMember.getId()).willReturn(1L);
@@ -296,7 +229,6 @@ class AlbumServiceTest {
         assertThat(response.price()).isEqualTo(Album.UNLOCK_PRICE);
         assertThat(response.mediaUrls()).isEmpty();
         assertThat(response.thumbnailUrls()).containsExactly("https://cdn/v_thumbnail.jpg");
-        verify(albumViewService, never()).recordView(any(), any());
     }
 
     @Test

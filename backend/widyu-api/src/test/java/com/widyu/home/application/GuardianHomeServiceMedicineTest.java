@@ -12,7 +12,6 @@ import com.widyu.goal.medicineschedule.repository.MedicineScheduleRepository;
 import com.widyu.goal.walk.repository.WalkRepository;
 import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
@@ -55,13 +54,11 @@ class GuardianHomeServiceMedicineTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private LocationQueryService locationQueryService;
-    @Mock private LocationAccessLogService locationAccessLogService;
 
     private GuardianHomeService guardianHomeService() {
         return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
                 heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
-                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService,
-                locationAccessLogService);
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService);
     }
 
     @Test
@@ -80,7 +77,7 @@ class GuardianHomeServiceMedicineTest {
                         proof(morning, senior, TODAY.atTime(8, 5), "morning.jpg")));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.medicine().totalCount()).isEqualTo(3);
@@ -105,7 +102,7 @@ class GuardianHomeServiceMedicineTest {
                         proof(currentSchedule, senior, TODAY.atTime(9, 5), "current.jpg")));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.medicine().latestProofImageUrl()).isEqualTo("current.jpg");
@@ -123,7 +120,7 @@ class GuardianHomeServiceMedicineTest {
                 .willReturn(List.of(proof(closedSchedule, senior, TODAY.atTime(8, 5), "old.jpg")));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.medicine().latestProofImageUrl()).isNull();
@@ -146,7 +143,7 @@ class GuardianHomeServiceMedicineTest {
                         proof(morning, senior, TODAY.atTime(8, 5), "earlier.jpg")));
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(SENIOR_ID, NOW).response();
 
         // then
         assertThat(response.medicine().latestProofImageUrl()).isEqualTo("earlier.jpg");

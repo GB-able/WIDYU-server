@@ -1,7 +1,5 @@
 package com.widyu.album.application;
 
-import static org.springframework.transaction.annotation.Propagation.REQUIRES_NEW;
-
 import com.widyu.album.Album;
 import com.widyu.album.AlbumView;
 import com.widyu.album.repository.AlbumRepository;
@@ -26,27 +24,29 @@ public class AlbumViewService {
     private final AlbumRepository albumRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Transactional(propagation = REQUIRES_NEW)
-    public void recordView(Album album, Member member) {
+    /**
+     * 처음 보는 앨범이면 조회 기록을 남기고 조회수를 올린다. 새로 남겼으면 true다.
+     *
+     * <p>상세 읽기 트랜잭션이 끝난 뒤 파사드가 부른다. 읽기 안에서 부르면 요청 하나가 커넥션 두 개를 쥔다(LLD-0152).
+     * 조회수를 기록보다 먼저 올려 앨범 행을 잠근다. 기록을 먼저 넣으면 같은 회원의 첫 조회 두 건이 외래키 공유 잠금과
+     * 조회수 배타 잠금을 서로 기다려 교착된다. 이 순서에서는 뒤 요청이 앞 요청의 커밋을 기다린 뒤 유일 키 위반으로 끝난다.
+     */
+    @Transactional
+    public boolean recordView(Long albumId, Member member) {
+        Album album = albumRepository.getReferenceById(albumId);
         Optional<AlbumView> existingView = albumViewRepository.findByAlbumAndMember(album, member);
-        
-        if (existingView.isEmpty()) {
-            AlbumView albumView = AlbumView.createView(album, member);
-            albumViewRepository.save(albumView);
-
-            // album은 호출부(상세 조회)의 읽기 전용 트랜잭션 엔티티라 이 트랜잭션에서 변경 감지되지 않는다.
-            // DB는 원자 UPDATE로 올리고, 메모리 값은 같은 요청의 응답 viewCount에만 쓰인다.
-            albumRepository.incrementViewCount(album.getId());
-            album.incrementViewCount();
-
-            // 앨범 조회 알림 이벤트 발행
-            eventPublisher.publishEvent(new AlbumViewedEvent(
-                    member.getId(),
-                    album.getId()
-            ));
-
-            log.info("앨범 첫 조회 기록: albumId={}, memberId={}", album.getId(), member.getId());
+        if (existingView.isPresent()) {
+            return false;
         }
+
+        albumRepository.incrementViewCount(albumId);
+        albumViewRepository.save(AlbumView.createView(album, member));
+
+        // 앨범 조회 알림 이벤트 발행
+        eventPublisher.publishEvent(new AlbumViewedEvent(member.getId(), albumId));
+
+        log.info("앨범 첫 조회 기록: albumId={}, memberId={}", albumId, member.getId());
+        return true;
     }
 
     @Transactional(readOnly = true)

@@ -18,6 +18,7 @@ import com.widyu.member.Member;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,6 +39,7 @@ public class AlbumFacadeImpl implements AlbumFacade {
     private final AlbumFileService albumFileService;
     private final AlbumMediaPolicy mediaPolicy;
     private final AlbumVideoProcessingService albumVideoProcessingService;
+    private final AlbumViewService albumViewService;
     private final MemberUtil memberUtil;
 
     @Override
@@ -83,9 +85,32 @@ public class AlbumFacadeImpl implements AlbumFacade {
         return albumFeedService.getMediaFeed(parsed.lastCreatedAt(), parsed.lastAlbumId());
     }
 
+    /**
+     * 상세를 읽고 그 읽기 트랜잭션이 끝난 뒤 조회 기록을 남긴다. 읽기 안에서 기록하면 요청 하나가 커넥션 두 개를 쥐어,
+     * 동시 요청이 풀 크기를 넘으면 모두 두 번째 커넥션을 기다리다 실패한다(LLD-0152).
+     * 해금 전 앨범과 본인 앨범은 조회로 치지 않는다.
+     */
     @Override
     public AlbumDetailResponse getAlbumDetail(Long albumId) {
+        AlbumDetailResponse detail = albumService.getAlbumDetail(albumId);
+        if (!detail.isUnlocked() || detail.canEdit()) {
+            return detail;
+        }
+        if (!recordFirstView(albumId)) {
+            return detail;
+        }
+        // 첫 조회면 다시 읽어 늘어난 조회수와 조회자 목록을 응답에 담는다
         return albumService.getAlbumDetail(albumId);
+    }
+
+    private boolean recordFirstView(Long albumId) {
+        try {
+            return albumViewService.recordView(albumId, memberUtil.getCurrentMember());
+        } catch (DataIntegrityViolationException e) {
+            // 같은 회원의 첫 조회가 겹쳐 다른 요청이 먼저 기록했다(유일 키 uk_album_views_album_member)
+            log.info("앨범 첫 조회 기록 중복: albumId={}", albumId);
+            return true;
+        }
     }
 
     @Override

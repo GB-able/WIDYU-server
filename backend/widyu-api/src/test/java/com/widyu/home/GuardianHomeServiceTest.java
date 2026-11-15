@@ -19,7 +19,6 @@ import com.widyu.heart.repository.HeartRateResultRepository;
 import com.widyu.home.application.GuardianHomeService;
 import com.widyu.home.application.HomeAlbumRecommendationService;
 import com.widyu.home.dto.response.GuardianHomeCardsResponse;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.application.LocationQueryService;
 import com.widyu.medicine.MedicineSchedule;
 import com.widyu.member.Family;
@@ -54,13 +53,11 @@ class GuardianHomeServiceTest {
     @Mock private WalkRepository walkRepository;
     @Mock private HomeAlbumRecommendationService albumRecommendationService;
     @Mock private LocationQueryService locationQueryService;
-    @Mock private LocationAccessLogService locationAccessLogService;
 
     private GuardianHomeService guardianHomeService() {
         return new GuardianHomeService(memberUtil, memberRepository, familyMembershipRepository, seniorProfileRepository,
                 heartRateResultRepository, new TodayMedicationQuery(medicineScheduleRepository, medicationProofRepository),
-                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService,
-                locationAccessLogService);
+                healthScheduleRepository, walkRepository, albumRecommendationService, locationQueryService);
     }
 
     @Test
@@ -117,7 +114,7 @@ class GuardianHomeServiceTest {
         given(locationQueryService.getOutingStatus(any())).willReturn(true);
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null).response();
 
         // then
         assertThat(response.medicine()).isNull();
@@ -145,7 +142,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null).response();
 
         // then
         assertThat(response.healthSchedule()).isNull();
@@ -172,7 +169,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null).response();
 
         // then
         assertThat(response.albums()).isEmpty();
@@ -209,7 +206,7 @@ class GuardianHomeServiceTest {
         given(albumRecommendationService.findLatestAlbums(any())).willReturn(List.of());
 
         // when
-        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null);
+        GuardianHomeCardsResponse response = guardianHomeService().getHomeCards(null).response();
 
         // then: 스케줄 개수 기준 (알 개수 합계 5가 아닌 스케줄 횟수 2)
         assertThat(response.medicine().totalCount()).isEqualTo(2);
