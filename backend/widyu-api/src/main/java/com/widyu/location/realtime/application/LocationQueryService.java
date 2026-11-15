@@ -3,8 +3,6 @@ package com.widyu.location.realtime.application;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.location.SeniorLocation;
-import com.widyu.location.access.LocationAccessPath;
-import com.widyu.location.access.application.LocationAccessLogService;
 import com.widyu.location.realtime.dto.LocationFreshness;
 import com.widyu.location.realtime.dto.LocationPoint;
 import com.widyu.location.realtime.dto.LocationSource;
@@ -35,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 보호자와 홈 화면의 위치 조회(LLD-0142): 가족 인가, 열람 기록(LLD-0056), 신선도를 실은 응답 조립(LLD-0141).
- * 쓰기는 하지 않는다. 열람 기록만 자기 트랜잭션(REQUIRES_NEW)에서 남긴다.
+ * 쓰기는 하지 않는다. 열람 기록은 이 읽기 트랜잭션이 끝난 뒤 {@link LocationQueryFacade}가 남긴다. 읽기 안에서
+ * 기록하면 요청 하나가 커넥션 두 개를 쥔다(LLD-0159).
  */
 @Slf4j
 @Service
@@ -51,7 +50,6 @@ public class LocationQueryService {
     private final SeniorProfileRepository seniorProfileRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final SeniorStayStateService stayStateService;
-    private final LocationAccessLogService locationAccessLogService;
 
     /**
      * 보호자가 추적 가능한 시니어 목록 조회
@@ -74,8 +72,6 @@ public class LocationQueryService {
         Map<Long, SeniorLocation> locationMap = new java.util.HashMap<>();
         seniorLocationRepository.findAllById(seniorMemberIds)
                 .forEach(l -> locationMap.put(l.getSeniorId(), l));
-
-        recordAccessQuietly(guardianId, seniorMemberIds, LocationAccessPath.REST_FAMILY);
 
         long nowMs = System.currentTimeMillis();
         return seniors.stream()
@@ -114,8 +110,6 @@ public class LocationQueryService {
      */
     public LocationUpdateResponse getLastLocation(Long memberId, Long guardianId) {
         SeniorProfile seniorProfile = findAccessibleSenior(memberId, guardianId);
-
-        recordAccessQuietly(guardianId, memberId, LocationAccessPath.REST_LAST);
 
         Member seniorMember = seniorProfile.getMember();
 
@@ -169,8 +163,6 @@ public class LocationQueryService {
      */
     public LocationTrailResponse getLocationTrail(Long memberId, Long guardianId) {
         SeniorProfile seniorProfile = findAccessibleSenior(memberId, guardianId);
-
-        recordAccessQuietly(guardianId, memberId, LocationAccessPath.REST_TRAIL);
 
         Member seniorMember = seniorProfile.getMember();
 
@@ -294,23 +286,5 @@ public class LocationQueryService {
             return n.doubleValue();
         }
         return null;
-    }
-
-    /**
-     * 위치 열람 사실을 남긴다(LLD-0056 5.1). 기록·통보가 깨져도 위치 조회는 성공해야 하므로
-     * 여기서 모든 예외를 삼킨다. 로그에는 좌표를 남기지 않는다.
-     */
-    private void recordAccessQuietly(Long guardianId, Long seniorMemberId, LocationAccessPath path) {
-        try {
-            locationAccessLogService.record(guardianId, seniorMemberId, path);
-        } catch (Exception e) {
-            log.warn("위치 열람 기록 실패: path={}, cause={}", path, e.getClass().getSimpleName());
-        }
-    }
-
-    private void recordAccessQuietly(Long guardianId, List<Long> seniorMemberIds, LocationAccessPath path) {
-        for (Long seniorMemberId : seniorMemberIds) {
-            recordAccessQuietly(guardianId, seniorMemberId, path);
-        }
     }
 }

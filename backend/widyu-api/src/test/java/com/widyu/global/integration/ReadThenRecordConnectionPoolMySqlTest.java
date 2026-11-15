@@ -9,7 +9,9 @@ import com.widyu.album.repository.AlbumRepository;
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.global.util.SecurityUtil;
 import com.widyu.home.controller.HomeController;
+import com.widyu.location.realtime.controller.RealtimeLocationRestController;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
@@ -52,7 +54,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 /**
  * 읽기 트랜잭션 안에서 열람 기록(REQUIRES_NEW)을 부르면 요청 하나가 커넥션 두 개를 쥔다. 동시 요청이 풀 크기를 넘으면
  * 모두 첫 커넥션을 쥔 채 두 번째를 기다리다 대기 한도(3000ms) 뒤 실패한다(#1056, #926과 같은 구조).
- * 앨범 상세와 보호자 홈 카드를 컨트롤러 진입점에서 동시에 불러 실패 수와 남은 기록 행 수를 센다.
+ * 앨범 상세, 보호자 홈 카드, 보호자 위치 REST 조회(LLD-0159)를 컨트롤러 진입점에서 동시에 불러 실패 수와 남은 기록 행 수를 센다.
  *
  * <p>풀은 4개로 줄이고 대기 한도는 운영과 같은 3000ms로 둔다. 동시 요청은 풀의 네 배인 16개 스레드로 보낸다.
  *
@@ -101,9 +103,11 @@ class ReadThenRecordConnectionPoolMySqlTest {
     @MockBean private net.bramp.ffmpeg.FFmpeg ffmpeg;
     @MockBean private net.bramp.ffmpeg.FFprobe ffprobe;
     @MockBean private MemberUtil memberUtil;
+    @MockBean private SecurityUtil securityUtil;
 
     @Autowired private AlbumController albumController;
     @Autowired private HomeController homeController;
+    @Autowired private RealtimeLocationRestController realtimeLocationRestController;
     @Autowired private AlbumRepository albumRepository;
     @Autowired private MemberRepository memberRepository;
     @Autowired private FamilyRepository familyRepository;
@@ -166,6 +170,35 @@ class ReadThenRecordConnectionPoolMySqlTest {
                 POOL, THREADS, REQUESTS, outcomes, rows, REQUESTS - rows);
         assertThat(outcomes).containsOnlyKeys("OK");
         assertThat(rows).isEqualTo(REQUESTS);
+    }
+
+    @Test
+    @DisplayName("보호자 32명이 같은 시니어의 위치 목록, 이동 경로를 동시에 조회해도 커넥션 대기로 실패하지 않고 경로마다 열람 기록이 32건 남는다")
+    void 보호자_32명이_위치를_동시에_조회해도_열람_기록이_빠지지_않는다() throws Exception {
+        // given
+        Family family = saveFamily();
+        Long seniorId = saveSenior(family);
+        List<Long> guardianIds = saveGuardians(family, REQUESTS);
+        given(securityUtil.getCurrentMemberId()).willAnswer(invocation -> CURRENT_MEMBER.get());
+
+        // when
+        Map<String, Integer> trackedOutcomes =
+                callAtOnce(guardianIds, guardianId -> realtimeLocationRestController.getTrackedSeniors());
+        Map<String, Integer> trailOutcomes =
+                callAtOnce(guardianIds, guardianId -> realtimeLocationRestController.getLocationTrail(seniorId));
+
+        // then
+        int familyRows = count("SELECT COUNT(*) FROM location_access_log WHERE senior_member_id = ? AND path = ?",
+                seniorId, "REST_FAMILY");
+        int trailRows = count("SELECT COUNT(*) FROM location_access_log WHERE senior_member_id = ? AND path = ?",
+                seniorId, "REST_TRAIL");
+        System.out.printf("[POOL-LOCATION-QUERY] pool=%d threads=%d requests=%d trackedOutcomes=%s familyRows=%d "
+                        + "trailOutcomes=%s trailRows=%d%n",
+                POOL, THREADS, REQUESTS, trackedOutcomes, familyRows, trailOutcomes, trailRows);
+        assertThat(trackedOutcomes).containsOnlyKeys("OK");
+        assertThat(trailOutcomes).containsOnlyKeys("OK");
+        assertThat(familyRows).isEqualTo(REQUESTS);
+        assertThat(trailRows).isEqualTo(REQUESTS);
     }
 
     @Test
