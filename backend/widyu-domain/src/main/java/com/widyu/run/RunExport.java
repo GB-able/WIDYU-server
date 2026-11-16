@@ -15,6 +15,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 측정회차 내보내기 잡(LLD-0050 4절, ADR-0032 결정 2).
@@ -46,6 +48,7 @@ public class RunExport extends BaseTimeEntity {
     private String runId;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 10)
     private RunExportStatus status;
 

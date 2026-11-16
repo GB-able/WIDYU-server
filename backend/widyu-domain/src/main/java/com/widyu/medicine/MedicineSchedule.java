@@ -16,6 +16,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -46,7 +48,8 @@ public class MedicineSchedule extends BaseTimeEntity {
     private List<MedicineCategory> categories = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
     private Status status = Status.ACTIVE;
 
     // 이 버전이 유효한 시작일 (수정 시 새 버전이 생기고, 과거 버전은 그대로 보존된다)

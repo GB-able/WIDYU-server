@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Getter
@@ -35,7 +37,8 @@ public class S3ObjectDeletionTask extends BaseTimeEntity {
     private String objectKey;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
     private S3ObjectDeletionTaskStatus status;
 
     @Column(name = "retry_count", nullable = false)
