@@ -31,8 +31,8 @@ class FcmAdminDeliveryContractTest {
     @InjectMocks private FcmService fcmService;
 
     @Test
-    @DisplayName("관리자 테스트를 요청하면 HTTP 성공 토큰 수만 반환한다")
-    void 관리자_테스트는_HTTP_성공_토큰_수만_반환한다() {
+    @DisplayName("관리자 테스트를 요청하면 토큰별로 성공과 실패 사유를 반환한다")
+    void 관리자_테스트는_토큰별_성공과_실패_사유를_반환한다() {
         // given
         FcmSendDto dto = new FcmSendDto("제목", "내용", FcmCategory.ALBUM, "", "");
         givenTimeouts(Duration.ofSeconds(10), Duration.ofSeconds(30));
@@ -40,13 +40,17 @@ class FcmAdminDeliveryContractTest {
         given(memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(1L)).willReturn(tokens);
         given(transport.send(eq("ok"), eq(dto), any(BooleanSupplier.class))).willReturn(FcmTransport.Result.delivered());
         given(transport.send(eq("retry"), eq(dto), any(BooleanSupplier.class))).willReturn(FcmTransport.Result.retry(Duration.ofSeconds(1)));
-        given(transport.send(eq("invalid"), eq(dto), any(BooleanSupplier.class))).willReturn(FcmTransport.Result.rejected(true));
+        given(transport.send(eq("invalid"), eq(dto), any(BooleanSupplier.class)))
+                .willReturn(FcmTransport.Result.rejected(true, "HTTP_404 NOT_FOUND UNREGISTERED"));
 
         // when
-        int sent = fcmService.sendTestMessageToUser(1L, dto);
+        List<FcmTestAttempt> attempts = fcmService.sendTestMessageToUser(1L, dto);
 
         // then
-        assertThat(sent).isEqualTo(1);
+        assertThat(attempts).extracting(FcmTestAttempt::outcome).containsExactly(
+                FcmTestAttempt.Outcome.SENT, FcmTestAttempt.Outcome.FAILED, FcmTestAttempt.Outcome.FAILED);
+        assertThat(attempts).extracting(FcmTestAttempt::detail)
+                .containsExactly(null, FcmTestAttempt.RETRYABLE, "HTTP_404 NOT_FOUND UNREGISTERED");
         then(transport).should().send(eq("ok"), eq(dto), any(BooleanSupplier.class));
         then(transport).should().send(eq("retry"), eq(dto), any(BooleanSupplier.class));
         then(transport).should().send(eq("invalid"), eq(dto), any(BooleanSupplier.class));
@@ -54,23 +58,23 @@ class FcmAdminDeliveryContractTest {
     }
 
     @Test
-    @DisplayName("활성 토큰이 없으면 관리자 테스트 성공 수로 영을 반환한다")
-    void 활성_토큰이_없으면_영을_반환한다() {
+    @DisplayName("활성 토큰이 없으면 관리자 테스트 결과로 빈 목록을 반환한다")
+    void 활성_토큰이_없으면_빈_목록을_반환한다() {
         // given
         FcmSendDto dto = new FcmSendDto("제목", "내용", FcmCategory.ALBUM, "", "");
         givenTimeouts(Duration.ofSeconds(10), Duration.ofSeconds(30));
         given(memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(1L)).willReturn(List.of());
 
         // when
-        int sent = fcmService.sendTestMessageToUser(1L, dto);
+        List<FcmTestAttempt> attempts = fcmService.sendTestMessageToUser(1L, dto);
 
         // then
-        assertThat(sent).isZero();
+        assertThat(attempts).isEmpty();
         verifyNoInteractions(transport, outboxService);
     }
 
     @Test
-    @DisplayName("관리자 전체 시간 예산이 소진되면 나머지 토큰을 보내지 않고 기존 성공 수를 반환한다")
+    @DisplayName("관리자 전체 시간 예산이 소진되면 나머지 토큰을 보내지 않고 미시도로 반환한다")
     void 전체_시간_예산이_소진되면_나머지_토큰을_보내지_않는다() {
         // given
         FcmSendDto dto = new FcmSendDto("제목", "내용", FcmCategory.ALBUM, "", "");
@@ -84,10 +88,12 @@ class FcmAdminDeliveryContractTest {
                 });
 
         // when
-        int sent = fcmService.sendTestMessageToUser(1L, dto);
+        List<FcmTestAttempt> attempts = fcmService.sendTestMessageToUser(1L, dto);
 
         // then
-        assertThat(sent).isEqualTo(1);
+        assertThat(attempts).extracting(FcmTestAttempt::outcome).containsExactly(
+                FcmTestAttempt.Outcome.SENT, FcmTestAttempt.Outcome.NOT_ATTEMPTED);
+        assertThat(attempts.get(1).detail()).isEqualTo(FcmTestAttempt.TIME_BUDGET_EXHAUSTED);
         then(transport).should(never()).send(eq("second"), eq(dto), any(BooleanSupplier.class));
         verifyNoInteractions(outboxService);
     }

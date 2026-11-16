@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -72,8 +73,8 @@ class FcmHttpTransportTest {
 
     @ParameterizedTest
     @EnumSource(value = NotificationType.class, names = {"SAFE_ZONE_EXITED", "SAFE_ZONE_ENTERED"})
-    @DisplayName("안심구역 소식을 전송하면 일반 채널과 보통 우선순위를 사용한다")
-    void 안심구역_소식을_전송하면_일반_채널을_사용한다(NotificationType type) throws Exception {
+    @DisplayName("안심구역 소식을 전송하면 기본 채널과 Android 보통 우선순위를 사용한다")
+    void 안심구역_소식을_전송하면_기본_채널을_사용한다(NotificationType type) throws Exception {
         // given
         ObjectMapper mapper = new ObjectMapper();
         List<JsonNode> bodies = new CopyOnWriteArrayList<>();
@@ -93,10 +94,10 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/priority").isMissingNode()).isTrue();
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("NORMAL");
             assertThat(body.at("/message/android/notification/channel_id").asText())
-                    .isEqualTo("widyu_general");
+                    .isEqualTo("widyu_default_channel");
             assertThat(body.at("/message/apns/payload/aps/interruption-level").asText())
                     .isEqualTo("active");
-            assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("5");
+            assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
         } finally {
             transport.close();
             server.stop(0);
@@ -128,7 +129,7 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/deepLink").asText()).isEmpty();
             assertThat(body.at("/message/data/notificationId").isMissingNode()).isTrue();
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("HIGH");
-            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_safety");
+            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_safety_channel");
             assertThat(body.at("/message/apns/payload/aps/interruption-level").asText())
                     .isEqualTo("time-sensitive");
         } finally {
@@ -166,7 +167,7 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/deepLink").asText()).isEqualTo("/location?seniorId=17");
             assertThat(body.at("/message/data/foregroundPresentation").isMissingNode()).isTrue();
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("HIGH");
-            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_safety");
+            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_safety_channel");
             assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
             assertThat(body.at("/message/apns/payload/aps/interruption-level").asText())
                     .isEqualTo("time-sensitive");
@@ -207,7 +208,7 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/effectiveFromDate").asText()).isEqualTo("2026-10-02");
             assertThat(body.at("/message/data/actorDisplayName").asText()).isEqualTo("보호자");
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("NORMAL");
-            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_general");
+            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_default_channel");
             assertThat(body.at("/message/apns/payload/aps/interruption-level").asText()).isEqualTo("active");
         } finally {
             transport.close();
@@ -215,70 +216,77 @@ class FcmHttpTransportTest {
         }
     }
 
-    @Test
-    @DisplayName("걸음 수 동기화 신호를 전송하면 표시 알림 없이 HIGH·안전 채널과 APNs 즉시 alert로 보낸다")
-    void 걸음_수_동기화_신호를_전송하면_즉시_전달_형식으로_보낸다() throws Exception {
+    @ParameterizedTest
+    @EnumSource(value = NotificationType.class, names = {"WALK_DATA_SYNC", "MEDICATION_SCHEDULE_SYNC"})
+    @DisplayName("무음 동기화를 전송하면 표시 설정 없이 Android HIGH와 APNs background 규격만 보낸다")
+    void 무음_동기화를_전송하면_표시_설정_없이_보낸다(NotificationType type) throws Exception {
         // given
         ObjectMapper mapper = new ObjectMapper();
         List<JsonNode> bodies = new CopyOnWriteArrayList<>();
         HttpServer server = payloadServer(mapper, bodies);
         FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
                 () -> "loopback-access-token", Duration.ofSeconds(2));
-        FcmSendDto message = FcmSendDto.builder().notificationType(NotificationType.WALK_DATA_SYNC)
-                .data(Map.of("eventId", "WALK_DATA_SYNC:2:2026-10-28")).build();
-        FcmDelivery delivery = new FcmDelivery(4075L, 1, "loopback-token", message,
-                Instant.now().plusSeconds(300), null);
+        FcmSendDto message = FcmSendDto.builder().notificationType(type)
+                .data(Map.of("eventId", "sync-event-1", "revision", "43")).build();
         try {
             // when
-            assertThat(transport.send(delivery, () -> true).success()).isTrue();
+            assertThat(transport.send("loopback-token", message).success()).isTrue();
 
             // then
             JsonNode body = bodies.getFirst();
             assertThat(body.at("/message/notification").isMissingNode()).isTrue();
-            assertThat(body.at("/message/data/notificationType").asText()).isEqualTo("WALK_DATA_SYNC");
-            assertThat(body.at("/message/data/deepLink").asText()).isEmpty();
-            assertThat(body.at("/message/android/priority").asText()).isEqualTo("HIGH");
-            assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_safety");
-            assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
-            assertThat(body.at("/message/apns/headers/apns-push-type").asText()).isEqualTo("alert");
-            assertThat(body.at("/message/apns/payload/aps/interruption-level").asText()).isEqualTo("active");
-            assertThat(body.at("/message/apns/payload/aps/sound").asText()).isEqualTo("default");
-            assertThat(body.at("/message/apns/payload/aps/content-available").isMissingNode()).isTrue();
-        } finally {
-            transport.close();
-            server.stop(0);
-        }
-    }
-
-    @Test
-    @DisplayName("동기화 타입을 전송하면 표시 알림 없이 data만 포함한다")
-    void 동기화_타입을_전송하면_표시_알림_없이_data만_포함한다() throws Exception {
-        // given
-        ObjectMapper mapper = new ObjectMapper();
-        List<JsonNode> bodies = new CopyOnWriteArrayList<>();
-        HttpServer server = payloadServer(mapper, bodies);
-        FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
-                () -> "loopback-access-token", Duration.ofSeconds(2));
-        FcmSendDto message = FcmSendDto.builder().notificationType(NotificationType.MEDICATION_SCHEDULE_SYNC)
-                .data(Map.of("eventId", "event-3", "revision", "43")).build();
-        FcmDelivery delivery = new FcmDelivery(4074L, 1, "loopback-token", message,
-                Instant.now().plusSeconds(300), null);
-        try {
-            // when
-            assertThat(transport.send(delivery, () -> true).success()).isTrue();
-
-            // then
-            JsonNode body = bodies.getFirst();
-            assertThat(body.at("/message/notification").isMissingNode()).isTrue();
-            assertThat(body.at("/message/data/notificationType").asText()).isEqualTo("MEDICATION_SCHEDULE_SYNC");
-            assertThat(body.at("/message/data/type").isMissingNode()).isTrue();
+            assertThat(body.at("/message/data/notificationType").asText()).isEqualTo(type.name());
             assertThat(body.at("/message/data/revision").asText()).isEqualTo("43");
             assertThat(body.at("/message/data/notificationId").isMissingNode()).isTrue();
-            assertThat(body.at("/message/data/foregroundPresentation").isMissingNode()).isTrue();
-            assertThat(body.at("/message/android/notification").isMissingNode()).isTrue();
-            assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("5");
-            assertThat(body.at("/message/apns/headers/apns-push-type").asText()).isEqualTo("background");
-            assertThat(body.at("/message/apns/payload/aps/content-available").asInt()).isEqualTo(1);
+            assertThat(body.at("/message/android")).isEqualTo(mapper.readTree("{\"priority\":\"HIGH\"}"));
+            assertThat(body.at("/message/apns")).isEqualTo(mapper.readTree("""
+                    {"headers":{"apns-priority":"5","apns-push-type":"background"},
+                     "payload":{"aps":{"content-available":1}}}"""));
+        } finally {
+            transport.close();
+            server.stop(0);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = NotificationType.class,
+            names = {"HEART_RATE_EMERGENCY", "MEDICATION_PROOF_MISSING", "ALBUM_CREATED", "WALK_GOAL_UNMET"})
+    @DisplayName("표시 알림을 전송하면 우선순위별 채널과 APNs 우선순위·소리를 규격대로 보낸다")
+    void 표시_알림을_전송하면_우선순위별_채널과_소리를_보낸다(NotificationType type) throws Exception {
+        // given
+        ObjectMapper mapper = new ObjectMapper();
+        List<JsonNode> bodies = new CopyOnWriteArrayList<>();
+        HttpServer server = payloadServer(mapper, bodies);
+        FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
+                () -> "loopback-access-token", Duration.ofSeconds(2));
+        FcmSendDto message = FcmSendDto.builder().title("제목").content("본문").notificationType(type).build();
+        Map<NotificationType, List<String>> expected = Map.of(
+                NotificationType.HEART_RATE_EMERGENCY, List.of(
+                        "{\"priority\":\"HIGH\",\"notification\":{\"channel_id\":\"widyu_safety_channel\"}}",
+                        "{\"headers\":{\"apns-priority\":\"10\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"
+                                + "{\"interruption-level\":\"time-sensitive\","
+                                + "\"sound\":{\"critical\":1,\"name\":\"safety_alert.caf\",\"volume\":1.0}}}}"),
+                NotificationType.MEDICATION_PROOF_MISSING, List.of(
+                        "{\"priority\":\"HIGH\",\"notification\":{\"channel_id\":\"widyu_default_channel\"}}",
+                        "{\"headers\":{\"apns-priority\":\"10\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"
+                                + "{\"interruption-level\":\"time-sensitive\",\"sound\":\"default\"}}}"),
+                NotificationType.ALBUM_CREATED, List.of(
+                        "{\"priority\":\"NORMAL\",\"notification\":{\"channel_id\":\"widyu_default_channel\"}}",
+                        "{\"headers\":{\"apns-priority\":\"10\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"
+                                + "{\"interruption-level\":\"active\",\"sound\":\"default\"}}}"),
+                NotificationType.WALK_GOAL_UNMET, List.of(
+                        "{\"priority\":\"NORMAL\",\"notification\":{\"channel_id\":\"widyu_quiet_channel\"}}",
+                        "{\"headers\":{\"apns-priority\":\"5\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"
+                                + "{\"interruption-level\":\"passive\"}}}"));
+        try {
+            // when
+            assertThat(transport.send("loopback-token", message).success()).isTrue();
+
+            // then
+            JsonNode body = bodies.getFirst();
+            assertThat(body.at("/message/notification/title").asText()).isEqualTo("제목");
+            assertThat(body.at("/message/android")).isEqualTo(mapper.readTree(expected.get(type).get(0)));
+            assertThat(body.at("/message/apns")).isEqualTo(mapper.readTree(expected.get(type).get(1)));
         } finally {
             transport.close();
             server.stop(0);
@@ -286,39 +294,58 @@ class FcmHttpTransportTest {
     }
 
     @Test
-    @DisplayName("복약 미인증·복약 리마인더는 HIGH·즉시로, 걷기 미달은 NORMAL·전력 고려로 전송한다")
-    void 복약_미인증과_후속_안내와_수동_타입을_전송하면_우선순위를_구분한다() throws Exception {
+    @DisplayName("복약 10·20분 리마인더를 전송하면 INTERACTION 규격인 Android NORMAL과 APNs 10·기본 소리로 보낸다")
+    void 복약_리마인더를_전송하면_INTERACTION_규격으로_보낸다() throws Exception {
         // given
         ObjectMapper mapper = new ObjectMapper();
         List<JsonNode> bodies = new CopyOnWriteArrayList<>();
         HttpServer server = payloadServer(mapper, bodies);
         FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
                 () -> "loopback-access-token", Duration.ofSeconds(2));
-        FcmSendDto missing = FcmSendDto.builder().title("복약 미인증").content("확인해주세요.")
-                .notificationType(NotificationType.MEDICATION_PROOF_MISSING).build();
-        FcmSendDto reminder = FcmSendDto.builder().title("복약 확인").content("인증해주세요.")
+        FcmSendDto reminder10 = FcmSendDto.builder().title("복약 확인").content("인증해주세요.")
                 .notificationType(NotificationType.MEDICATION_REMINDER_10).build();
-        FcmSendDto walk = FcmSendDto.builder().title("걷기 목표").content("확인해주세요.")
-                .notificationType(NotificationType.WALK_GOAL_UNMET).build();
+        FcmSendDto reminder20 = FcmSendDto.builder().title("복약 확인").content("인증해주세요.")
+                .notificationType(NotificationType.MEDICATION_REMINDER_20).build();
         try {
             // when
-            assertThat(transport.send("loopback-token", missing).success()).isTrue();
-            assertThat(transport.send("loopback-token", reminder).success()).isTrue();
-            assertThat(transport.send("loopback-token", walk).success()).isTrue();
+            assertThat(transport.send("loopback-token", reminder10).success()).isTrue();
+            assertThat(transport.send("loopback-token", reminder20).success()).isTrue();
 
             // then
-            assertThat(bodies.get(0).at("/message/android/priority").asText()).isEqualTo("HIGH");
-            assertThat(bodies.get(0).at("/message/apns/payload/aps/interruption-level").asText())
-                    .isEqualTo("time-sensitive");
-            assertThat(bodies.get(0).at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
-            assertThat(bodies.get(1).at("/message/android/priority").asText()).isEqualTo("HIGH");
-            assertThat(bodies.get(1).at("/message/apns/payload/aps/interruption-level").asText())
-                    .isEqualTo("time-sensitive");
-            assertThat(bodies.get(1).at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
-            assertThat(bodies.get(2).at("/message/android/priority").asText()).isEqualTo("NORMAL");
-            assertThat(bodies.get(2).at("/message/apns/payload/aps/interruption-level").asText())
-                    .isEqualTo("passive");
-            assertThat(bodies.get(2).at("/message/apns/headers/apns-priority").asText()).isEqualTo("5");
+            for (JsonNode body : bodies) {
+                assertThat(body.at("/message/android/priority").asText()).isEqualTo("NORMAL");
+                assertThat(body.at("/message/android/notification/channel_id").asText())
+                        .isEqualTo("widyu_default_channel");
+                assertThat(body.at("/message/apns/headers/apns-priority").asText()).isEqualTo("10");
+                assertThat(body.at("/message/apns/payload/aps/interruption-level").asText()).isEqualTo("active");
+                assertThat(body.at("/message/apns/payload/aps/sound").asText()).isEqualTo("default");
+            }
+        } finally {
+            transport.close();
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("FCM 응답을 받으면 실제 요청 본문에서 기기 토큰만 뺀 JSON을 결과에 담는다")
+    void FCM_응답을_받으면_토큰을_뺀_요청_본문을_결과에_담는다() throws Exception {
+        // given
+        ObjectMapper mapper = new ObjectMapper();
+        List<JsonNode> bodies = new CopyOnWriteArrayList<>();
+        HttpServer server = payloadServer(mapper, bodies);
+        FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
+                () -> "loopback-access-token", Duration.ofSeconds(2));
+        FcmSendDto message = FcmSendDto.builder().notificationType(NotificationType.WALK_DATA_SYNC).build();
+        try {
+            // when
+            FcmTransport.Result result = transport.send("device-token-secret", message);
+
+            // then
+            JsonNode sent = bodies.getFirst();
+            assertThat(sent.at("/message/token").asText()).isEqualTo("device-token-secret");
+            ((ObjectNode) sent.get("message")).remove("token");
+            assertThat(result.sentBody()).isEqualTo(sent);
+            assertThat(result.sentBody().toString()).doesNotContain("device-token-secret", "loopback-access-token");
         } finally {
             transport.close();
             server.stop(0);

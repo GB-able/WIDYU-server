@@ -110,9 +110,9 @@ class NotificationTypeTest {
         assertThat(emergency.priority()).isEqualTo(NotificationPriority.CRITICAL);
         assertThat(emergency.deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
         assertThat(emergency.deepLinkTemplate()).isEqualTo("/location?seniorId={seniorId}");
-        // 복약 리마인더는 Android HIGH·iOS time-sensitive로 보낸다(LLD-0109, 2026-10-27 사용자 결정).
-        assertThat(NotificationType.MEDICATION_REMINDER_10.priority()).isEqualTo(NotificationPriority.TIME_SENSITIVE);
-        assertThat(NotificationType.MEDICATION_REMINDER_20.priority()).isEqualTo(NotificationPriority.TIME_SENSITIVE);
+        // 복약 10·20분 리마인더는 공유 전송 규격대로 INTERACTION이다(LLD-0164가 LLD-0109의 TIME_SENSITIVE를 대체).
+        assertThat(NotificationType.MEDICATION_REMINDER_10.priority()).isEqualTo(NotificationPriority.INTERACTION);
+        assertThat(NotificationType.MEDICATION_REMINDER_20.priority()).isEqualTo(NotificationPriority.INTERACTION);
         assertThat(NotificationType.HEALTH_SCHEDULE_UPCOMING.priority())
                 .isEqualTo(NotificationPriority.INTERACTION);
         assertThat(NotificationType.MEDICATION_PROOF_MISSING.priority())

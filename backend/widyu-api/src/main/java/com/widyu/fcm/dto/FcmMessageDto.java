@@ -39,20 +39,16 @@ public record FcmMessageDto(
 
     public record ApnsPayload(Aps aps) {}
 
+    /** sound는 기본 소리 이름("default") 또는 {@link CriticalSound}다. 표시 알림이 아니면 null이다. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Aps(
             @JsonProperty("interruption-level") String interruptionLevel,
             @JsonProperty("content-available") Integer contentAvailable,
-            String sound
-    ) {
-        public Aps(String interruptionLevel) {
-            this(interruptionLevel, null, null);
-        }
+            Object sound
+    ) {}
 
-        public Aps(String interruptionLevel, Integer contentAvailable) {
-            this(interruptionLevel, contentAvailable, null);
-        }
-    }
+    /** iOS Critical Alerts 소리. Apple entitlement와 사용자 허용이 없으면 기기가 critical 표시를 무시한다. */
+    public record CriticalSound(int critical, String name, double volume) {}
 
     @Builder
     public record Notification(

@@ -3,10 +3,12 @@ package com.widyu.fcm.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.widyu.fcm.dto.FcmMessageDto;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.DeliveryMode;
+import com.widyu.fcm.NotificationPriority;
 import com.widyu.fcm.NotificationType;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,12 @@ public class FcmHttpTransport implements FcmTransport {
     private static final String FCM_ERROR_TYPE = "type.googleapis.com/google.firebase.fcm.v1.FcmError";
     private static final String APNS_ERROR_TYPE = "type.googleapis.com/google.firebase.fcm.v1.ApnsError";
     private static final Pattern ERROR_CODE = Pattern.compile("[A-Za-z][A-Za-z0-9_]{0,63}");
+    // 앱이 등록하는 Android 채널 ID다(위듀 App.kt·SafetyCheckService.kt).
+    static final String SAFETY_CHANNEL = "widyu_safety_channel";
+    static final String DEFAULT_CHANNEL = "widyu_default_channel";
+    static final String QUIET_CHANNEL = "widyu_quiet_channel";
+    // 앱 번들에 든 iOS Critical Alerts 음원이다.
+    static final String CRITICAL_SOUND = "safety_alert.caf";
 
     private final URI endpoint;
     private final ObjectMapper mapper;
@@ -163,9 +171,12 @@ public class FcmHttpTransport implements FcmTransport {
             message.android(android(null, type)).apns(apns(null, type));
         }
         FcmMessageDto body = FcmMessageDto.builder().validateOnly(false).message(message.build()).build();
+        ObjectNode sentBody = mapper.valueToTree(body);
         HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofNanos(remaining))
                 .header("Authorization", "Bearer " + accessToken).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build();
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(sentBody))).build();
+        // 보낸 본문 그대로 관리자 진단에 돌려주되 기기 토큰은 뺀다.
+        ((ObjectNode) sentBody.path("message")).remove("token");
         if (expiresAt != null && !expiresAt.isAfter(clock.instant())) {
             return Result.rejected(false, Result.EXPIRED_BEFORE_SEND);
         }
@@ -182,13 +193,15 @@ public class FcmHttpTransport implements FcmTransport {
             }
         }
         if (response.statusCode() == 200) {
-            return Result.delivered();
+            return Result.delivered().withSentBody(sentBody);
         }
         if (response.statusCode() == 429 || response.statusCode() >= 500) {
-            return Result.retry(retryAfter(response.headers().firstValue("Retry-After").orElse("")));
+            return Result.retry(retryAfter(response.headers().firstValue("Retry-After").orElse("")))
+                    .withSentBody(sentBody);
         }
         JsonNode error = errorOf(response.body());
-        return Result.rejected(permanentToken(error), rejectionDetail(response.statusCode(), error));
+        return Result.rejected(permanentToken(error), rejectionDetail(response.statusCode(), error))
+                .withSentBody(sentBody);
     }
 
     private void addTypeData(Map<String, String> data, NotificationType type) {
@@ -200,21 +213,17 @@ public class FcmHttpTransport implements FcmTransport {
     }
 
     private FcmMessageDto.Android android(String ttl, NotificationType type) {
-        // 앱을 바로 깨워야 하는 데이터 전용 신호(W03)는 표시 알림 없이 안전 채널·HIGH로 보낸다.
-        if (type.deliveryMode() == DeliveryMode.DATA_ONLY && type.priority().isSafety()) {
-            return new FcmMessageDto.Android(ttl, "HIGH", new FcmMessageDto.AndroidNotification("widyu_safety"));
-        }
+        // 무음 동기화는 앱을 깨우는 전달 우선순위만 HIGH로 주고 표시 채널은 붙이지 않는다.
         if (type.deliveryMode() == DeliveryMode.DATA_ONLY) {
-            return new FcmMessageDto.Android(ttl);
+            return new FcmMessageDto.Android(ttl, "HIGH", null);
         }
-        // FCM HTTP v1 AndroidMessagePriority 표기(HIGH/NORMAL)를 그대로 쓴다. 급한 알림만 HIGH로 즉시 깨운다.
-        if (type.priority().isSafety()) {
-            return new FcmMessageDto.Android(ttl, "HIGH", new FcmMessageDto.AndroidNotification("widyu_safety"));
-        }
-        if (type.priority().isTimeSensitive()) {
-            return new FcmMessageDto.Android(ttl, "HIGH", new FcmMessageDto.AndroidNotification("widyu_general"));
-        }
-        return new FcmMessageDto.Android(ttl, "NORMAL", new FcmMessageDto.AndroidNotification("widyu_general"));
+        // FCM HTTP v1 AndroidMessagePriority 표기(HIGH/NORMAL)를 그대로 쓴다. 소리·중요도는 앱 채널이 정한다.
+        return switch (type.priority()) {
+            case CRITICAL -> new FcmMessageDto.Android(ttl, "HIGH", new FcmMessageDto.AndroidNotification(SAFETY_CHANNEL));
+            case TIME_SENSITIVE -> new FcmMessageDto.Android(ttl, "HIGH", new FcmMessageDto.AndroidNotification(DEFAULT_CHANNEL));
+            case INTERACTION -> new FcmMessageDto.Android(ttl, "NORMAL", new FcmMessageDto.AndroidNotification(DEFAULT_CHANNEL));
+            case PASSIVE -> new FcmMessageDto.Android(ttl, "NORMAL", new FcmMessageDto.AndroidNotification(QUIET_CHANNEL));
+        };
     }
 
     private FcmMessageDto.Apns apns(Instant expiresAt, NotificationType type) {
@@ -222,27 +231,28 @@ public class FcmHttpTransport implements FcmTransport {
         if (expiresAt != null) {
             headers.put("apns-expiration", Long.toString(expiresAt.getEpochSecond()));
         }
-        if (type.deliveryMode() == DeliveryMode.DATA_ONLY && type.priority().isSafety()) {
-            headers.put("apns-priority", "10");
-            headers.put("apns-push-type", "alert");
-            return new FcmMessageDto.Apns(headers,
-                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps("active", null, "default")));
-        }
+        // 무음 동기화는 background 업데이트 규격(5, content-available=1)만 쓰고 표시·소리 설정을 넣지 않는다.
         if (type.deliveryMode() == DeliveryMode.DATA_ONLY) {
             headers.put("apns-priority", "5");
             headers.put("apns-push-type", "background");
             return new FcmMessageDto.Apns(headers,
-                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(null, 1)));
+                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(null, 1, null)));
         }
-        // Android HIGH와 같은 급한 알림만 즉시(10), 나머지는 전력 상황을 고려해 보내도 되는 5로 보낸다.
-        String apnsPriority = "5";
-        if (type.priority().isTimeSensitive()) {
-            apnsPriority = "10";
-        }
-        headers.put("apns-priority", apnsPriority);
+        NotificationPriority priority = type.priority();
         headers.put("apns-push-type", "alert");
+        // 조용한 알림만 전력 상황을 고려해 보내도 되는 5로 보내고 소리를 넣지 않는다.
+        if (priority == NotificationPriority.PASSIVE) {
+            headers.put("apns-priority", "5");
+            return new FcmMessageDto.Apns(headers,
+                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(priority.interruptionLevel(), null, null)));
+        }
+        headers.put("apns-priority", "10");
+        Object sound = "default";
+        if (priority == NotificationPriority.CRITICAL) {
+            sound = new FcmMessageDto.CriticalSound(1, CRITICAL_SOUND, 1.0);
+        }
         return new FcmMessageDto.Apns(headers,
-                new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(type.priority().interruptionLevel())));
+                new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(priority.interruptionLevel(), null, sound)));
     }
 
     private JsonNode errorOf(String body) {
