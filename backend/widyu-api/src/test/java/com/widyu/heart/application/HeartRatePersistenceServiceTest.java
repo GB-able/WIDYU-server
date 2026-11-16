@@ -5,13 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
-import org.springframework.context.ApplicationEventPublisher;
 import com.widyu.heart.HeartRateEmergency;
 import com.widyu.heart.HeartRateEvent;
 import com.widyu.heart.HeartRateResult;
@@ -48,7 +48,7 @@ class HeartRatePersistenceServiceTest {
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
     @Mock private MemberRepository memberRepository;
     @Mock private DecisionRecordRepository decisionRecordRepository;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private HeartRateEmergencyNotificationService emergencyNotificationService;
     @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
@@ -81,11 +81,11 @@ class HeartRatePersistenceServiceTest {
         then(latestResultWriter).shouldHaveNoInteractions();
         then(heartRateEventRepository).should().save(any(HeartRateEvent.class));
         then(heartRateEmergencyRepository).should(never()).save(any());
-        then(eventPublisher).should(never()).publishEvent(any(HeartRateEmergencyEvent.class));
+        then(emergencyNotificationService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("긴급 단건 판정을 저장하면 해당 심박수로 Emergency를 저장한다")
+    @DisplayName("긴급 단건 판정을 저장하면 해당 심박수로 Emergency를 저장하고 사건은 열지 않는다")
     void 긴급_단건_판정을_저장하면_해당_심박수로_Emergency를_저장한다() {
         // given
         Long memberId = 1L;
@@ -109,19 +109,19 @@ class HeartRatePersistenceServiceTest {
         assertThat(emergency.getHeartRate()).isEqualTo(180);
         assertThat(emergency.getMeasuredAt()).isEqualTo(measuredAt);
         assertThat(emergency.getLocation()).isEqualTo("서울시");
-        then(eventPublisher).should().publishEvent(new HeartRateEmergencyEvent(memberId, null));
+        // 사건은 이 트랜잭션이 커넥션을 돌려준 뒤 호출자가 연다(LLD-0160).
+        then(emergencyNotificationService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("배치 위급 샘플을 저장하면 판정 행을 같은 트랜잭션에 저장하고 그 판정을 가리키는 알림 신호를 낸다")
-    void 배치_위급_샘플을_저장하면_판정_행을_같은_트랜잭션에_저장하고_알림_신호를_낸다() {
+    @DisplayName("배치 위급 샘플을 저장하면 판정 행을 같은 트랜잭션에 저장하고 사건은 열지 않는다")
+    void 배치_위급_샘플을_저장하면_판정_행을_같은_트랜잭션에_저장하고_사건은_열지_않는다() {
         // given
         Long memberId = 1L;
         LocalDateTime measuredAt = LocalDateTime.of(2026, 9, 8, 10, 0);
         Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
         ReflectionTestUtils.setField(member, "id", memberId);
         DecisionRecord decision = alert();
-        given(decisionRecordRepository.save(decision)).willReturn(decision);
 
         // when
         heartRatePersistenceService.saveBatchSample(
@@ -129,19 +129,18 @@ class HeartRatePersistenceServiceTest {
                 "01j8zk3v9x2q4m7n8p1r5s6t7v", decision);
 
         // then
-        // 판정 저장·심박 이벤트·위급·알림 발행이 이 @Transactional 메서드 하나 안에서 일어난다.
+        // 판정 저장, 심박 이벤트, 위급이 이 @Transactional 메서드 하나 안에서 일어난다.
         // 어느 하나가 터지면 판정 행도 함께 롤백돼 「알림 없이 판정만 남는」 자료가 생기지 않는다.
-        InOrder inOrder = inOrder(decisionRecordRepository, heartRateEventRepository,
-                heartRateEmergencyRepository, eventPublisher);
+        InOrder inOrder = inOrder(decisionRecordRepository, heartRateEventRepository, heartRateEmergencyRepository);
         inOrder.verify(decisionRecordRepository).save(decision);
         inOrder.verify(heartRateEventRepository).save(any(HeartRateEvent.class));
         inOrder.verify(heartRateEmergencyRepository).save(any(HeartRateEmergency.class));
-        inOrder.verify(eventPublisher).publishEvent(new HeartRateEmergencyEvent(memberId, "dec-01"));
+        then(emergencyNotificationService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("판정 없는 배치 위급 샘플을 저장하면 판정 저장 없이 알림 신호만 낸다")
-    void 판정_없는_배치_위급_샘플을_저장하면_판정_저장_없이_알림_신호만_낸다() {
+    @DisplayName("판정 없는 배치 위급 샘플을 저장하면 판정을 저장하지 않는다")
+    void 판정_없는_배치_위급_샘플을_저장하면_판정을_저장하지_않는다() {
         // given
         Long memberId = 1L;
         LocalDateTime measuredAt = LocalDateTime.of(2026, 9, 8, 10, 0);
@@ -155,7 +154,7 @@ class HeartRatePersistenceServiceTest {
 
         // then
         then(decisionRecordRepository).should(never()).save(any(DecisionRecord.class));
-        then(eventPublisher).should().publishEvent(new HeartRateEmergencyEvent(memberId, null));
+        then(heartRateEmergencyRepository).should().save(any(HeartRateEmergency.class));
     }
 
     @Test
@@ -191,6 +190,29 @@ class HeartRatePersistenceServiceTest {
                 1L, HeartRateStatus.EMERGENCY, 185, LocalDateTime.of(2026, 9, 8, 10, 0)))
                 .doesNotThrowAnyException();
         assertThat(meterRegistry.counter("heart.latest.write.failed").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("위급 사건을 열면 판정 식별자를 실어 사건 열기를 부른다")
+    void 위급_사건을_열면_판정_식별자를_실어_사건_열기를_부른다() {
+        // when
+        heartRatePersistenceService.notifyEmergency(1L, alert());
+
+        // then
+        then(emergencyNotificationService).should().handleHeartRateEmergency(new HeartRateEmergencyEvent(1L, "dec-01"));
+    }
+
+    @Test
+    @DisplayName("위급 사건 열기가 실패하면 예외를 내지 않는다")
+    void 위급_사건_열기가_실패하면_예외를_내지_않는다() {
+        // given
+        willThrow(new IllegalStateException("incident down"))
+                .given(emergencyNotificationService).handleHeartRateEmergency(any(HeartRateEmergencyEvent.class));
+
+        // when & then
+        // 심박은 이미 커밋됐다. 던지면 단건은 DB 장애로 오인돼 저하 경로로 가고, 배치는 재전송이 반복된다.
+        assertThatCode(() -> heartRatePersistenceService.notifyEmergency(1L, null)).doesNotThrowAnyException();
+        then(emergencyNotificationService).should().handleHeartRateEmergency(new HeartRateEmergencyEvent(1L, null));
     }
 
     private DecisionRecord alert() {

@@ -3,7 +3,6 @@ package com.widyu.heart.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
@@ -11,7 +10,6 @@ import static org.mockito.Mockito.times;
 
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
-import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.application.FcmDeliveryProperties;
 import com.widyu.fcm.application.FcmEligibility;
@@ -19,8 +17,6 @@ import com.widyu.fcm.application.FcmOutboxDispatcher;
 import com.widyu.fcm.application.FcmOutboxService;
 import com.widyu.fcm.application.FirebaseProperties;
 import com.widyu.fcm.application.NotificationSettingService;
-import com.widyu.fcm.dto.FcmSendDto;
-import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
 import com.widyu.fcm.repository.FcmOutboxRepository;
 import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
@@ -53,7 +49,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.retry.annotation.EnableRetry;
@@ -64,13 +59,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 락 충돌 재시도가 실제 트랜잭션 위에서 한 번만 저장하고 한 번만 알리는지 확인한다(LLD-0076 7절).
+ * 락 충돌 재시도가 실제 트랜잭션 위에서 한 번만 저장하는지 확인한다(LLD-0076 7절).
  *
  * <p>위급 기록 저장에서 락 충돌을 일으킨다. 그 앞의 판정 기록·심박 이벤트 INSERT가 이미 실행된 뒤라,
  * 실패한 시도가 남긴 것이 롤백으로 지워지는지와 재시도가 판정 기록을 다시 저장할 수 있는지를 함께 본다.
  * 판정 기록은 첫 시도의 INSERT로 IDENTITY id가 채워진 채 재시도에 다시 넘어온다. Hibernate가 없는 행의
  * merge를 새 행 삽입으로 처리하기 때문에 저장된다(LLD-0076 5절 3). 이 동작이 바뀌면 배치 재시도 테스트가 실패한다.
- * 위급 알림 리스너는 실제 리스너처럼 같은 트랜잭션에서 outbox를 쌓는 대역으로 바꾼다.
+ * 위급 사건은 저장 트랜잭션이 끝난 뒤 호출자가 열므로(LLD-0160), 저장이 몇 번 시도되든 이 서비스는 사건을 열지 않는다.
  */
 @DataJpaTest(properties = {"fcm.delivery.max-retries=5", "fcm.delivery.normal-ttl=24h", "fcm.delivery.emergency-ttl=5m"})
 @ActiveProfiles("test")
@@ -98,6 +93,7 @@ class HeartRatePersistenceRetryIntegrationTest {
     @MockBean private HeartRateLatestResultWriter latestResultWriter;
     @MockBean private FcmOutboxDispatcher dispatcher;
     @MockBean private MemberUtil memberUtil;
+    @MockBean private HeartRateEmergencyNotificationService emergencyNotificationService;
 
     @AfterEach
     void cleanup() {
@@ -115,8 +111,8 @@ class HeartRatePersistenceRetryIntegrationTest {
     }
 
     @Test
-    @DisplayName("배치 위급 저장이 락 충돌 뒤 재시도로 성공하면 기록과 알림이 한 건씩만 남는다")
-    void 배치_위급_저장이_락_충돌_뒤_재시도로_성공하면_기록과_알림이_한_건씩만_남는다() {
+    @DisplayName("배치 위급 저장이 락 충돌 뒤 재시도로 성공하면 기록이 한 건씩만 남고 사건은 열지 않는다")
+    void 배치_위급_저장이_락_충돌_뒤_재시도로_성공하면_기록이_한_건씩만_남는다() {
         // given
         Member senior = seniorWithToken();
         failFirstEmergencySaveWithLockConflict();
@@ -130,17 +126,14 @@ class HeartRatePersistenceRetryIntegrationTest {
         assertThat(heartRateEmergencyRepository.count()).isEqualTo(1);
         assertThat(decisionRecordRepository.count()).isEqualTo(1);
         assertThat(decisionRecordRepository.findByDecisionId("dec-retry")).isPresent();
-        assertThat(outboxRepository.count()).isEqualTo(1);
-        Long outboxId = outboxRepository.findAll().getFirst().getId();
-        then(dispatcher).should(times(1)).submit(anyLong());
-        then(dispatcher).should().submit(outboxId);
+        then(emergencyNotificationService).shouldHaveNoInteractions();
         assertThat(counter("attempt_failed", "HeartRatePersistenceService.saveBatchSample")).isEqualTo(1.0);
         assertThat(counter("exhausted", "HeartRatePersistenceService.saveBatchSample")).isZero();
     }
 
     @Test
-    @DisplayName("단건 위급 저장이 락 충돌 뒤 재시도로 성공하면 기록과 알림이 한 건씩만 남는다")
-    void 단건_위급_저장이_락_충돌_뒤_재시도로_성공하면_기록과_알림이_한_건씩만_남는다() {
+    @DisplayName("단건 위급 저장이 락 충돌 뒤 재시도로 성공하면 기록이 한 건씩만 남고 사건은 열지 않는다")
+    void 단건_위급_저장이_락_충돌_뒤_재시도로_성공하면_기록이_한_건씩만_남는다() {
         // given
         Member senior = seniorWithToken();
         failFirstEmergencySaveWithLockConflict();
@@ -153,12 +146,11 @@ class HeartRatePersistenceRetryIntegrationTest {
         // then
         assertThat(heartRateEventRepository.count()).isEqualTo(1);
         assertThat(heartRateEmergencyRepository.count()).isEqualTo(1);
-        assertThat(outboxRepository.count()).isEqualTo(1);
-        then(dispatcher).should(times(1)).submit(anyLong());
+        then(emergencyNotificationService).shouldHaveNoInteractions();
     }
 
     @Test
-    @DisplayName("락 충돌이 세 번 이어지면 예외를 전파하고 기록과 알림을 남기지 않는다")
+    @DisplayName("락 충돌이 세 번 이어지면 예외를 전파하고 기록을 남기지 않는다")
     void 락_충돌이_세_번_이어지면_예외를_전파하고_기록과_알림을_남기지_않는다() {
         // given
         Member senior = seniorWithToken();
@@ -175,8 +167,7 @@ class HeartRatePersistenceRetryIntegrationTest {
         assertThat(heartRateEventRepository.count()).isZero();
         assertThat(heartRateEmergencyRepository.count()).isZero();
         assertThat(decisionRecordRepository.count()).isZero();
-        assertThat(outboxRepository.count()).isZero();
-        then(dispatcher).shouldHaveNoInteractions();
+        then(emergencyNotificationService).shouldHaveNoInteractions();
         assertThat(counter("attempt_failed", "HeartRatePersistenceService.saveBatchSample")).isEqualTo(3.0);
         assertThat(counter("exhausted", "HeartRatePersistenceService.saveBatchSample")).isEqualTo(1.0);
     }
@@ -263,33 +254,6 @@ class HeartRatePersistenceRetryIntegrationTest {
         @Bean
         TransientLockRetryListener transientLockRetryListener(MeterRegistry meterRegistry) {
             return new TransientLockRetryListener(meterRegistry);
-        }
-
-        @Bean
-        EmergencyOutboxListener emergencyOutboxListener(FcmOutboxService outboxService) {
-            return new EmergencyOutboxListener(outboxService);
-        }
-    }
-
-    /** 실제 위급 알림 리스너처럼 발행한 트랜잭션 안에서 outbox를 쌓는다. 가족 조회는 이 테스트의 관심사가 아니다. */
-    static class EmergencyOutboxListener {
-
-        private final FcmOutboxService outboxService;
-
-        EmergencyOutboxListener(FcmOutboxService outboxService) {
-            this.outboxService = outboxService;
-        }
-
-        @EventListener
-        public void on(HeartRateEmergencyEvent event) {
-            outboxService.enqueue(event.memberId(), FcmSendDto.builder()
-                    .title("심박 이상")
-                    .content("확인해 주세요")
-                    .fcmCategory(FcmCategory.HEART_MESSAGE)
-                    .scheme("")
-                    .emergency(true)
-                    .decisionId(event.decisionId())
-                    .build());
         }
     }
 }

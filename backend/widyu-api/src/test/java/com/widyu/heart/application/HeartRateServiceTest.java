@@ -560,8 +560,8 @@ class HeartRateServiceTest {
     }
 
     @Test
-    @DisplayName("단건 저장 트랜잭션이 끝나면 저장한 측정으로 최신값을 갱신한다")
-    void 단건_저장_트랜잭션이_끝나면_저장한_측정으로_최신값을_갱신한다() {
+    @DisplayName("단건 저장 트랜잭션이 끝나면 위급 사건을 열고 저장한 측정으로 최신값을 갱신한다")
+    void 단건_저장_트랜잭션이_끝나면_위급_사건을_열고_최신값을_갱신한다() {
         // given
         Long memberId = 1L;
         LocalDateTime measuredAt = LocalDateTime.of(2026, 10, 22, 3, 0, 0);
@@ -579,8 +579,10 @@ class HeartRateServiceTest {
 
         // then
         // 저장 트랜잭션(saveMeasurement)이 커밋된 뒤에 Redis를 쓴다. Redis 실패가 심박·위급 알림을 롤백시키지 않는다(LLD-0102).
+        // 위급 사건도 저장 트랜잭션이 끝난 뒤 연다. 커넥션 두 개를 동시에 쥐지 않는다(LLD-0160).
         InOrder inOrder = inOrder(heartRatePersistenceService);
         inOrder.verify(heartRatePersistenceService).saveMeasurement(memberId, request, HeartRateStatus.EMERGENCY, true);
+        inOrder.verify(heartRatePersistenceService).notifyEmergency(memberId, null);
         inOrder.verify(heartRatePersistenceService)
                 .updateLatestResult(memberId, HeartRateStatus.EMERGENCY, 185, measuredAt);
     }

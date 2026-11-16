@@ -3,7 +3,6 @@ package com.widyu.heart.application;
 import com.widyu.decision.DecisionRecord;
 import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.fcm.event.heart.dto.HeartRateEmergencyEvent;
-import org.springframework.context.ApplicationEventPublisher;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.retry.RetryOnTransientLockFailure;
@@ -35,7 +34,7 @@ public class HeartRatePersistenceService {
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
     private final MemberRepository memberRepository;
     private final DecisionRecordRepository decisionRecordRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final HeartRateEmergencyNotificationService emergencyNotificationService;
     private final MeterRegistry meterRegistry;
 
     /**
@@ -61,8 +60,6 @@ public class HeartRatePersistenceService {
         if (isEmergency) {
             heartRateEmergencyRepository.save(HeartRateEmergency.of(
                     member, request.heartRate(), request.measuredAt(), request.location()));
-            // 단건 경로는 판정 기록을 남기지 않는다. 가리킬 판정이 없으면 도달 사실도 채우지 않는다.
-            eventPublisher.publishEvent(new HeartRateEmergencyEvent(memberId, null));
         }
 
         return HeartRateResult.of(memberId, status, request.heartRate(), request.measuredAt());
@@ -70,16 +67,14 @@ public class HeartRatePersistenceService {
 
     /**
      * 배치 샘플 1건을 저장한다(LLD-0047 5절 6단계). 저장이 판정에 앞서므로 상태가 {@code UNKNOWN}이어도
-     * 그대로 저장한다. 위급이면 기존 단건 경로와 같은 이벤트를 발행해 알림 정책을 공유한다.
+     * 그대로 저장한다. 위급 사건은 호출자가 커밋 뒤 {@link #notifyEmergency}로 연다.
      * 배치에는 주소가 없어 {@code location}은 null이다(ADR-0031 후속).
      *
      * <p>{@code decision}은 이 위급을 낳은 판정 기록이며 <b>여기서 같은 트랜잭션으로 저장한다</b>.
      * 판정 행을 먼저 따로 커밋하면 이어지는 심박 저장이 실패했을 때 심박 이벤트도 위급 알림도 없이
-     * 판정만 남아, 「알림이 갔다고 적혔지만 아무것도 가지 않은」 자료가 생긴다. 판정 식별자는
-     * 알림이 나갔다는 사실을 그 행에 채우려고 이벤트에 싣는다(LLD-0053 5.2). 판정이 없으면 null이다.
+     * 판정만 남아, 「알림이 갔다고 적혔지만 아무것도 가지 않은」 자료가 생긴다. 판정이 없으면 null이다.
      *
-     * <p>락 충돌이면 새 트랜잭션으로 다시 시도한다(LLD-0076). 위급 알림 outbox도 같은 트랜잭션이라
-     * 실패한 시도의 알림은 남지 않는다.
+     * <p>락 충돌이면 새 트랜잭션으로 다시 시도한다(LLD-0076). 알림은 커밋 뒤에 열므로 실패한 시도의 알림은 없다.
      */
     @RetryOnTransientLockFailure
     @Transactional
@@ -94,9 +89,8 @@ public class HeartRatePersistenceService {
             String batchId,
             DecisionRecord decision
     ) {
-        String decisionId = null;
         if (decision != null) {
-            decisionId = decisionRecordRepository.save(decision).getDecisionId();
+            decisionRecordRepository.save(decision);
         }
 
         heartRateEventRepository.save(
@@ -105,7 +99,29 @@ public class HeartRatePersistenceService {
         if (isEmergency) {
             heartRateEmergencyRepository.save(
                     HeartRateEmergency.of(member, heartRate, measuredAt, null));
-            eventPublisher.publishEvent(new HeartRateEmergencyEvent(member.getId(), decisionId));
+        }
+    }
+
+    /**
+     * 저장이 커밋된 위급으로 사건을 열고 보호자 최초 알림을 낸다. 단건, 배치 모두 심박 저장 트랜잭션이 끝난 뒤
+     * 트랜잭션 없이 부른다(LLD-0160). 커밋 후 리스너로 열면 저장 트랜잭션의 커넥션을 돌려주기 전에 사건 트랜잭션이
+     * 커넥션을 하나 더 잡아, 동시 위급이 풀을 넘으면 사건이 열리지 않고 ERROR 로그만 남았다.
+     *
+     * <p>{@code decision}은 이 위급을 낳은 판정 기록이다. 전송이 성공하면 그 행에 알림 도달 사실을 채운다
+     * (LLD-0053 5.2). 판정 기록을 남기지 않는 단건 경로에서는 null이다.
+     *
+     * <p>실패는 이전 리스너처럼 호출자에게 전파하지 않는다. 심박은 이미 저장됐고, 던지면 단건은 DB 장애로 오인돼
+     * 저하 경로로 가고 배치는 재전송이 반복된다.
+     */
+    public void notifyEmergency(Long memberId, DecisionRecord decision) {
+        String decisionId = null;
+        if (decision != null) {
+            decisionId = decision.getDecisionId();
+        }
+        try {
+            emergencyNotificationService.handleHeartRateEmergency(new HeartRateEmergencyEvent(memberId, decisionId));
+        } catch (RuntimeException e) {
+            log.error("심박 위급 사건 열기 실패, 심박 저장은 유지: memberId={}", memberId, e);
         }
     }
 
