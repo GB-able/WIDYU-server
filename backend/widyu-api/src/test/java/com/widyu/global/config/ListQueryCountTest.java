@@ -102,7 +102,10 @@ class ListQueryCountTest {
         report("payment", small, large);
         assertThat(large).isEqualTo(small);
         assertThat(payments).hasSize(LARGE);
-        assertThat(payments.get(0).getCancellations()).hasSize(2);
+        assertThat(payments)
+                .filteredOn(payment -> payment.getPaymentKey().equals("large-key-0"))
+                .singleElement()
+                .satisfies(payment -> assertThat(payment.getCancellations()).hasSize(2));
     }
 
     @Test
