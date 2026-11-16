@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -286,6 +288,56 @@ class MedicationProofTransactionServiceTest {
 
         // then
         assertThat(savedProof().getVerifiedDate()).isEqualTo(alarmDate);
+    }
+
+    @ParameterizedTest(name = "{0} 알람을 {1}에 인증하면 복용 기준일은 {2}")
+    @CsvSource({
+            "23:50, 2026-08-11T00:10, 2026-08-10",
+            "23:50, 2026-08-10T23:59:59, 2026-08-10",
+            "23:50, 2026-08-11T00:00, 2026-08-10",
+            "23:50, 2026-08-11T00:20, 2026-08-10",
+            "00:10, 2026-08-10T23:40, 2026-08-11",
+            "00:10, 2026-08-10T23:59:59, 2026-08-11",
+            "00:10, 2026-08-11T00:00, 2026-08-11",
+            "00:10, 2026-08-11T00:40, 2026-08-11"
+    })
+    @DisplayName("자정 직전과 직후에 인증하면 인증 시각의 날짜가 아니라 알람 날짜로 저장한다")
+    void 자정_직전과_직후에_인증하면_알람_날짜로_저장한다(LocalTime alarmTime, LocalDateTime now, LocalDate alarmDate) {
+        // given: 창 양 끝(23:50 알람의 00:20, 00:10 알람의 23:40)도 포함한다.
+        Member member = lockedMember();
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(scheduleAt(member, alarmTime)));
+
+        // when
+        transactionService.verifyMedication(10L, 1L, List.of(), clockAt(now));
+
+        // then
+        MedicationProof saved = savedProof();
+        assertThat(saved.getVerifiedDate()).isEqualTo(alarmDate);
+        assertThat(saved.getVerifiedAt()).isEqualTo(now);
+        then(medicationProofRepository).should().existsByMedicineScheduleAndVerifiedDate(any(), eq(alarmDate));
+    }
+
+    @Test
+    @DisplayName("내일부터 적용되는 0시 10분 알람은 전날 밤 인증을 허용하고 오늘까지 마감된 버전은 거부한다")
+    void 내일부터_적용되는_알람은_전날_밤_인증을_허용하고_오늘까지_마감된_버전은_거부한다() {
+        // given: 23시대에 등록하거나 수정한 0시 10분 알람은 오늘 인증 시간이 지나 내일부터 적용된다(LLD-0113).
+        Member member = member();
+        MedicineSchedule startsTomorrow = MedicineSchedule.create(member, LocalTime.of(0, 10), LocalDate.of(2026, 8, 11));
+        MedicineSchedule closedToday = scheduleAt(member, LocalTime.of(0, 10));
+        closedToday.closeAsOf(LocalDate.of(2026, 8, 10));
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(startsTomorrow));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(2L, Status.ACTIVE))
+                .willReturn(Optional.of(closedToday));
+        Clock lateNight = clockAt(LocalDateTime.of(2026, 8, 10, 23, 50));
+
+        // when & then
+        transactionService.validateBeforeUpload(10L, 1L, lateNight);
+        assertThatThrownBy(() -> transactionService.validateBeforeUpload(10L, 2L, lateNight))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("유효하지 않은");
     }
 
     @Test

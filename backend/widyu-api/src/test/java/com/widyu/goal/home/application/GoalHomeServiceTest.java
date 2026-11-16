@@ -873,9 +873,7 @@ class GoalHomeServiceTest {
     }
 
     private MedicationProof verifiedOn(MedicineSchedule schedule, Member member, LocalDate date) {
-        MedicationProof proof = MedicationProof.create(schedule, member, List.of("proof.jpg"));
-        ReflectionTestUtils.setField(proof, "verifiedDate", date);
-        return proof;
+        return MedicationProof.create(schedule, member, List.of("proof.jpg"), date.atTime(8, 0), date);
     }
 
     private MedicineSchedule schedule(Member member, Long id, LocalDate effectiveFrom, LocalDate effectiveTo) {
