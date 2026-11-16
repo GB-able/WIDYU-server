@@ -3,10 +3,17 @@ spring:
     activate:
       on-profile: "dev"
 
+  # 개발 서버 DB는 Flyway 도입 전에 만든 테이블이 있다. 처음 한 번만 V1(기준 스키마)을 실행하지 않고
+  # 적용된 것으로 표시하고, 그 뒤 버전 파일만 적용한다(LLD-0154).
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 1
+
+  # 스키마는 db/migration 버전 파일로만 바꾼다. 엔티티와 테이블이 어긋나면 기동 시점에 멈춘다(LLD-0154).
   jpa:
     show-sql: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
 
 logging:
   level:
