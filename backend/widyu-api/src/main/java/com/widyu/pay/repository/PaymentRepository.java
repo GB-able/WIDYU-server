@@ -21,7 +21,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p WHERE p.paymentKey = :paymentKey")
     Optional<Payment> findByPaymentKeyForUpdate(@Param("paymentKey") String paymentKey);
 
-    List<Payment> findByMemberId(Long memberId);
+    // 결제 수단 4종(역방향 일대일, EAGER)과 취소 이력을 함께 읽어 결제마다 5건씩 더 나가지 않게 한다(LLD-0161).
+    @Query("SELECT p FROM Payment p " +
+           "LEFT JOIN FETCH p.card LEFT JOIN FETCH p.virtualAccount " +
+           "LEFT JOIN FETCH p.transfer LEFT JOIN FETCH p.easyPay " +
+           "LEFT JOIN FETCH p.cancellations " +
+           "WHERE p.member.id = :memberId")
+    List<Payment> findByMemberId(@Param("memberId") Long memberId);
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.status = :status AND p.approvedAt >= :since")
     long sumAmountSince(@Param("since") ZonedDateTime since, @Param("status") PaymentStatus status);
