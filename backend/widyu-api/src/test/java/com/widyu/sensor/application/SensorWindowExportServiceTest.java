@@ -229,6 +229,8 @@ class SensorWindowExportServiceTest {
         SensorBatch heart = mock(SensorBatch.class);
         given(heart.getStream()).willReturn("hr");
         given(heart.getSessionId()).willReturn("s-h1");
+        given(heart.getSeq()).willReturn(1L);
+        given(heart.getMeasuredAtEndMs()).willReturn(FROM_MS + 1_000);
         given(heart.getS3Key()).willReturn("sensor/h1.json");
         given(heart.getMeasuredAtStartMs()).willReturn(FROM_MS);
         given(sensorBatchRepository.findMemberWindowBatches(28L, startMs, endMs)).willReturn(List.of(heart));
@@ -299,8 +301,10 @@ class SensorWindowExportServiceTest {
         given(batch.getBatchId()).willReturn(batchId);
         given(batch.getStream()).willReturn(stream);
         given(batch.getSessionId()).willReturn("s-" + batchId);
+        given(batch.getSeq()).willReturn(1L);
         given(batch.getS3Key()).willReturn(s3Key);
         given(batch.getMeasuredAtStartMs()).willReturn(FROM_MS);
+        given(batch.getMeasuredAtEndMs()).willReturn(FROM_MS + 1_000);
         return batch;
     }
 

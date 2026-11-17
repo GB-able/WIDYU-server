@@ -72,6 +72,37 @@ class SensorSeqGapReportTest {
     }
 
     @Test
+    @DisplayName("재전송으로 채운 번호 바로 뒤가 비면 공백 시작 시각을 재전송 묶음의 측정 끝으로 적는다")
+    void 재전송으로_채운_번호_뒤_공백은_재전송_묶음_시각에서_시작한다() {
+        // given: s-01은 1번과 4번이 왔고, 2번은 재전송으로 채웠다. 3번이 빈다
+        SensorBatch resent = SensorBatch.builder()
+                .batchId("r%025d".formatted(0))
+                .member(Member.createMember(MemberType.SENIOR, "시니어", "01012345678"))
+                .stream("hr")
+                .deviceId("gw-1")
+                .sessionId("s-02")
+                .seq(0L)
+                .measuredAtStartMs(T0 + 2_000)
+                .measuredAtEndMs(T0 + 2_500)
+                .isResend(true)
+                .originalSessionId("s-01")
+                .originalSeq(2L)
+                .build();
+        List<SensorBatch> batches = List.of(
+                batch("hr", "s-01", 1L, SensorIngestChannel.WS),
+                batch("hr", "s-01", 4L, SensorIngestChannel.WS),
+                resent);
+
+        // when
+        SensorSeqGapReport.Lines lines = SensorSeqGapReport.build(batches, List.of(), List.of());
+
+        // then
+        assertThat(lines.gaps()).containsExactly(SensorWindowCsv.line("hr", "gw-1", "s-01", 3, 3, 1,
+                T0 + 2_500, SensorWindowCsv.kst(T0 + 2_500), T0 + 4_000, SensorWindowCsv.kst(T0 + 4_000),
+                0, "", 0, "", "", 1, "NO_RECORD"));
+    }
+
+    @Test
     @DisplayName("세션의 처음과 끝 번호 밖에서 버린 기록은 빠진 구간으로 적지 않는다")
     void 세션_경계_밖은_빠진_구간으로_적지_않는다() {
         // given: 10~12번이 왔고, 버림 기록은 세션 앞 0~9번과 뒤 13~20번이다

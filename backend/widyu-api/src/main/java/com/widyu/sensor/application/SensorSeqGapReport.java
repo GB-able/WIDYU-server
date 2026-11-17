@@ -42,7 +42,7 @@ final class SensorSeqGapReport {
 
     private record Key(String stream, String sessionId) {}
 
-    /** 한 세션의 재료. 시각은 그 번호 묶음의 측정 시작·끝이고 재전송으로만 채운 번호에는 없다. */
+    /** 한 세션의 재료. 시각은 그 번호 묶음(재전송으로 채운 번호는 재전송 묶음)의 측정 시작·끝이다. */
     private static final class Session {
         private String deviceId;
         private final TreeMap<Long, long[]> measured = new TreeMap<>();
@@ -85,11 +85,15 @@ final class SensorSeqGapReport {
             if (SensorIngestChannel.REST.equals(batch.getIngestChannel())) {
                 session.restCount++;
             }
-            // 재전송은 원 세션의 원 번호를 채운다. 그 번호는 빠진 것이 아니다(지시서 B4).
+            // 재전송은 원 세션의 원 번호를 채운다. 그 번호는 빠진 것이 아니고, 옆 공백의 경계 시각도 이 묶음이다(지시서 B4).
+            // 원 묶음이 함께 있으면 그 시각을 남긴다.
             if (Boolean.TRUE.equals(batch.getIsResend()) && batch.getOriginalSessionId() != null
                     && batch.getOriginalSeq() != null) {
-                session(sessions, batch.getStream(), batch.getOriginalSessionId(), batch.getDeviceId())
-                        .received.add(batch.getOriginalSeq());
+                Session original = session(sessions, batch.getStream(), batch.getOriginalSessionId(),
+                        batch.getDeviceId());
+                original.received.add(batch.getOriginalSeq());
+                original.measured.putIfAbsent(batch.getOriginalSeq(),
+                        new long[] {batch.getMeasuredAtStartMs(), batch.getMeasuredAtEndMs()});
             }
         }
         return sessions;
