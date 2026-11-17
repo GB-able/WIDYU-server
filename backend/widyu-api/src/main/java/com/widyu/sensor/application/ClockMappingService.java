@@ -7,7 +7,6 @@ import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.repository.ClockMappingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,16 +39,12 @@ public class ClockMappingService {
                 .orElse(null);
 
         if (registered == null) {
-            try {
-                clockMappingInsertService.insert(
-                        newMapping(clock, deviceId, observedMinElapsedNs, observedMaxElapsedNs, now));
-                // 새로 만든 행의 관측 범위가 곧 이 배치의 범위라 넓힐 것이 없다.
-                return;
-            } catch (DataIntegrityViolationException e) {
-                // 같은 매핑을 처음 보는 요청 둘이 동시에 왔다. 한 행만 남고 둘 다 대조로 넘어간다.
-                registered = clockMappingInsertService.findCommitted(clock.clockMappingId())
-                        .orElseThrow(() -> e);
-            }
+            // 같은 매핑을 처음 보는 요청 여럿이 동시에 와도 한 행만 남고 모두 대조로 넘어간다.
+            // 중복 키를 예외로 받지 않아 정상 경합이 ERROR 로그를 남기지 않는다(#1094).
+            clockMappingInsertService.insertIfAbsent(
+                    newMapping(clock, deviceId, observedMinElapsedNs, observedMaxElapsedNs, now));
+            registered = clockMappingInsertService.findCommitted(clock.clockMappingId())
+                    .orElseThrow(() -> new IllegalStateException("시계 매핑 등록 뒤 행이 없습니다: " + clock.clockMappingId()));
         }
 
         verifySameMapping(registered, clock, deviceId);

@@ -1,7 +1,6 @@
 package com.widyu.sensor.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -28,7 +27,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ClockMappingService 단위 테스트")
@@ -49,10 +47,11 @@ class ClockMappingServiceTest {
     @InjectMocks private ClockMappingService clockMappingService;
 
     @Test
-    @DisplayName("처음 보는 매핑이면 다섯 값과 관측 범위로 새 행을 저장한다")
-    void 처음_보는_매핑이면_다섯_값과_관측_범위로_새_행을_저장한다() {
+    @DisplayName("처음 보는 매핑이면 다섯 값과 관측 범위로 없을 때만 넣고 남은 행을 대조한다")
+    void 처음_보는_매핑이면_다섯_값과_관측_범위로_없을_때만_넣고_남은_행을_대조한다() {
         // given
         given(clockMappingRepository.findByClockMappingId(MAPPING_ID)).willReturn(Optional.empty());
+        given(clockMappingInsertService.findCommitted(MAPPING_ID)).willReturn(Optional.of(registeredMapping()));
         long before = System.currentTimeMillis();
 
         // when
@@ -60,7 +59,7 @@ class ClockMappingServiceTest {
 
         // then
         ArgumentCaptor<ClockMapping> saved = ArgumentCaptor.forClass(ClockMapping.class);
-        then(clockMappingInsertService).should().insert(saved.capture());
+        then(clockMappingInsertService).should().insertIfAbsent(saved.capture());
         ClockMapping mapping = saved.getValue();
         assertThat(mapping.getClockMappingId()).isEqualTo(MAPPING_ID);
         assertThat(mapping.getDeviceId()).isEqualTo(DEVICE_ID);
@@ -72,9 +71,9 @@ class ClockMappingServiceTest {
         assertThat(mapping.getObservedMaxElapsedNs()).isEqualTo(OBSERVED_MAX_NS);
         assertThat(mapping.getFirstSeenAtMs()).isBetween(before, System.currentTimeMillis());
         assertThat(mapping.getLastSeenAtMs()).isEqualTo(mapping.getFirstSeenAtMs());
-        // 새 행의 관측 범위가 곧 이 배치의 범위라 넓힐 것이 없다.
-        then(clockMappingRepository).should(never())
-                .widenObservedRange(anyString(), anyLong(), anyLong(), anyLong());
+        // 동시에 먼저 커밋된 행이 남았을 수 있어 넣은 뒤에도 관측 범위를 넓힌다. 내가 넣은 행이면 범위가 그대로다.
+        then(clockMappingRepository).should()
+                .widenObservedRange(eq(MAPPING_ID), eq(OBSERVED_MIN_NS), eq(OBSERVED_MAX_NS), anyLong());
     }
 
     @Test
@@ -91,7 +90,7 @@ class ClockMappingServiceTest {
         clockMappingService.register(clock(), DEVICE_ID, laterMinNs, laterMaxNs);
 
         // then
-        then(clockMappingInsertService).should(never()).insert(any());
+        then(clockMappingInsertService).should(never()).insertIfAbsent(any());
         ArgumentCaptor<Long> now = ArgumentCaptor.forClass(Long.class);
         then(clockMappingRepository).should()
                 .widenObservedRange(eq(MAPPING_ID), eq(laterMinNs), eq(laterMaxNs), now.capture());
@@ -142,36 +141,19 @@ class ClockMappingServiceTest {
     }
 
     @Test
-    @DisplayName("동시에 처음 보는 매핑이 들어와 유니크 키 경합이 나면 재조회해 대조하고 통과한다")
-    void 동시에_처음_보는_매핑이_들어와_유니크_키_경합이_나면_재조회해_대조하고_통과한다() {
-        // given
+    @DisplayName("처음 보는 매핑을 넣었는데 동시에 먼저 커밋된 행의 값이 다르면 충돌 예외가 발생한다")
+    void 처음_보는_매핑을_넣었는데_동시에_먼저_커밋된_행의_값이_다르면_충돌_예외가_발생한다() {
+        // given: 다른 기기가 같은 매핑 ID를 먼저 넣었다. 내 INSERT는 중복 키라 아무것도 바꾸지 않는다.
         given(clockMappingRepository.findByClockMappingId(MAPPING_ID)).willReturn(Optional.empty());
-        org.mockito.BDDMockito.willThrow(new DataIntegrityViolationException("uk_clock_mapping_id"))
-                .given(clockMappingInsertService).insert(any(ClockMapping.class));
-        // 재조회는 호출 트랜잭션의 스냅샷이 아니라 새 트랜잭션에서 읽어야 승자 행이 보인다.
         given(clockMappingInsertService.findCommitted(MAPPING_ID)).willReturn(Optional.of(registeredMapping()));
 
         // when & then
-        assertThatCode(() ->
-                clockMappingService.register(clock(), DEVICE_ID, OBSERVED_MIN_NS, OBSERVED_MAX_NS))
-                .doesNotThrowAnyException();
-        then(clockMappingRepository).should()
-                .widenObservedRange(eq(MAPPING_ID), eq(OBSERVED_MIN_NS), eq(OBSERVED_MAX_NS), anyLong());
-    }
-
-    @Test
-    @DisplayName("경합 뒤에도 매핑 행이 없으면 원래 예외가 전파된다")
-    void 경합_뒤에도_매핑_행이_없으면_원래_예외가_전파된다() {
-        // given
-        given(clockMappingRepository.findByClockMappingId(MAPPING_ID)).willReturn(Optional.empty());
-        org.mockito.BDDMockito.willThrow(new DataIntegrityViolationException("not_a_unique_key_conflict"))
-                .given(clockMappingInsertService).insert(any(ClockMapping.class));
-        given(clockMappingInsertService.findCommitted(MAPPING_ID)).willReturn(Optional.empty());
-
-        // when & then
         assertThatThrownBy(() ->
-                clockMappingService.register(clock(), DEVICE_ID, OBSERVED_MIN_NS, OBSERVED_MAX_NS))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                clockMappingService.register(clock(), "gw-other", OBSERVED_MIN_NS, OBSERVED_MAX_NS))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_CLOCK_MAPPING_CONFLICT);
+        then(clockMappingRepository).should(never())
+                .widenObservedRange(anyString(), anyLong(), anyLong(), anyLong());
     }
 
     private SensorBatchRequest.Clock clock() {
