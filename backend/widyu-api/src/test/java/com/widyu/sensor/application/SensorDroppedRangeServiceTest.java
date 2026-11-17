@@ -234,6 +234,26 @@ class SensorDroppedRangeServiceTest {
     }
 
     @Test
+    @DisplayName("옛 형식에 형식이 틀린 데이터 종류가 섞여 있어도 쓰지 않으므로 imu_watch로 저장한다")
+    void 옛_형식에_형식이_틀린_데이터_종류가_섞여_있어도_imu_watch로_저장한다() throws Exception {
+        // given
+        byte[] payload = dropped(10, 15, "\"queue_overflow\"")
+                .replace("\"stream\":\"imu_dropped\"", "\"stream\":\"imu_dropped\",\"dropped_stream\":\"BAD STREAM\"")
+                .getBytes(UTF_8);
+        given(sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(MEMBER_ID, "s-01", 10L))
+                .willReturn(false);
+
+        // when
+        SensorBatchResultResponse response = service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        ArgumentCaptor<SensorDroppedRange> saved = ArgumentCaptor.forClass(SensorDroppedRange.class);
+        then(sensorDroppedRangeRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getDroppedStream()).isEqualTo("imu_watch");
+    }
+
+    @Test
     @DisplayName("새 형식에 데이터 종류가 없으면 SENSOR_BATCH_INVALID 예외가 발생한다")
     void 새_형식에_데이터_종류가_없으면_예외가_발생한다() throws Exception {
         // given

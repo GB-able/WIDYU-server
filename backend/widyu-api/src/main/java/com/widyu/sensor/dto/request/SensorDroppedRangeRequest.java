@@ -19,9 +19,11 @@ public record SensorDroppedRangeRequest(
         @Pattern(regexp = "^[a-z0-9._-]{1,64}$", message = "세션 ID는 소문자·숫자·._- 1~64자여야 합니다.")
         String sessionId,
 
-        /** 버린 묶음의 stream. 있으면 형식을 보고, 새 형식에서만 필수다(서비스가 확인). 옛 형식은 저장에 쓰지 않는다. */
+        /**
+         * 버린 묶음의 stream. 새 형식에서만 필수이고 형식도 그때만 본다(서비스가 확인).
+         * 옛 형식은 이 값을 쓰지 않으므로 형식이 틀려도 거절하지 않는다.
+         */
         @JsonProperty("dropped_stream")
-        @Pattern(regexp = "^[a-z0-9_]{1,20}$", message = "데이터 종류는 소문자·숫자·_ 1~20자여야 합니다.")
         String droppedStream,
 
         @JsonProperty("from_seq")

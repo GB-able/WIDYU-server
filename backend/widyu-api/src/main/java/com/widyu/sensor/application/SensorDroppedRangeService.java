@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,8 @@ public class SensorDroppedRangeService {
     static final String STREAM_LEGACY_IMU_DROPPED = "imu_dropped";
     static final String STREAM_DROPPED = "dropped";
     private static final String LEGACY_DROPPED_STREAM = "imu_watch";
+    /** 거절 기록의 stream 칸과 같은 형식이다(LLD-0128 4.3). */
+    private static final Pattern DROPPED_STREAM_PATTERN = Pattern.compile("^[a-z0-9_]{1,20}$");
 
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
     private final Validator validator;
@@ -117,7 +120,7 @@ public class SensorDroppedRangeService {
         if (STREAM_LEGACY_IMU_DROPPED.equals(root.path("stream").asText())) {
             return LEGACY_DROPPED_STREAM;
         }
-        if (request.droppedStream() == null) {
+        if (request.droppedStream() == null || !DROPPED_STREAM_PATTERN.matcher(request.droppedStream()).matches()) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         return request.droppedStream();
