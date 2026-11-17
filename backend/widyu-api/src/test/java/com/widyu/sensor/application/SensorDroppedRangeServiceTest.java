@@ -234,11 +234,11 @@ class SensorDroppedRangeServiceTest {
     }
 
     @Test
-    @DisplayName("옛 형식에 형식이 틀린 데이터 종류가 섞여 있어도 쓰지 않으므로 imu_watch로 저장한다")
-    void 옛_형식에_형식이_틀린_데이터_종류가_섞여_있어도_imu_watch로_저장한다() throws Exception {
+    @DisplayName("옛 형식에 타입이 다른 데이터 종류가 섞여 있어도 쓰지 않으므로 imu_watch로 저장한다")
+    void 옛_형식에_타입이_다른_데이터_종류가_섞여_있어도_imu_watch로_저장한다() throws Exception {
         // given
         byte[] payload = dropped(10, 15, "\"queue_overflow\"")
-                .replace("\"stream\":\"imu_dropped\"", "\"stream\":\"imu_dropped\",\"dropped_stream\":\"BAD STREAM\"")
+                .replace("\"stream\":\"imu_dropped\"", "\"stream\":\"imu_dropped\",\"dropped_stream\":42")
                 .getBytes(UTF_8);
         given(sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(MEMBER_ID, "s-01", 10L))
                 .willReturn(false);
@@ -251,6 +251,16 @@ class SensorDroppedRangeServiceTest {
         ArgumentCaptor<SensorDroppedRange> saved = ArgumentCaptor.forClass(SensorDroppedRange.class);
         then(sensorDroppedRangeRepository).should().save(saved.capture());
         assertThat(saved.getValue().getDroppedStream()).isEqualTo("imu_watch");
+    }
+
+    @Test
+    @DisplayName("새 형식의 데이터 종류가 문자열이 아니면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 새_형식의_데이터_종류가_문자열이_아니면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = generic("42", "\"queue_overflow\"").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
     }
 
     @Test

@@ -10,7 +10,8 @@ import jakarta.validation.constraints.Size;
 /**
  * 기기가 버린 묶음 구간(LLD-0124 3절, LLD-0166 3.1). 센서 배치와 같은 endpoint로 오고
  * {@code stream: "dropped"}(새 형식) 또는 {@code "imu_dropped"}(워치 IMU 전용 옛 형식)로 갈린다.
- * 서버는 원문을 그대로 보관하므로 모르는 필드를 거절하지 않는다.
+ * 서버는 원문을 그대로 보관하므로 모르는 필드를 거절하지 않는다. 새 형식의 {@code dropped_stream}은 옛 형식에서
+ * 타입이 무엇이든 거절하지 않도록 이 DTO에 두지 않고 서비스가 트리에서 읽는다.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SensorDroppedRangeRequest(
@@ -18,13 +19,6 @@ public record SensorDroppedRangeRequest(
         @NotNull(message = "세션 ID는 필수입니다.")
         @Pattern(regexp = "^[a-z0-9._-]{1,64}$", message = "세션 ID는 소문자·숫자·._- 1~64자여야 합니다.")
         String sessionId,
-
-        /**
-         * 버린 묶음의 stream. 새 형식에서만 필수이고 형식도 그때만 본다(서비스가 확인).
-         * 옛 형식은 이 값을 쓰지 않으므로 형식이 틀려도 거절하지 않는다.
-         */
-        @JsonProperty("dropped_stream")
-        String droppedStream,
 
         @JsonProperty("from_seq")
         @NotNull(message = "시작 순번은 필수입니다.")

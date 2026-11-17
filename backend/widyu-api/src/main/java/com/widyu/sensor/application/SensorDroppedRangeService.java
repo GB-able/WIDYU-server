@@ -66,7 +66,7 @@ public class SensorDroppedRangeService {
     public SensorBatchResultResponse record(Long memberId, byte[] payload, JsonNode root, long serverReceivedAtMs) {
         SensorDroppedRangeRequest request = parse(root);
         validate(request);
-        String droppedStream = droppedStream(root, request);
+        String droppedStream = droppedStream(root);
 
         if (sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(
                 memberId, request.sessionId(), request.fromSeq())) {
@@ -115,15 +115,19 @@ public class SensorDroppedRangeService {
         }
     }
 
-    /** 옛 형식은 워치 IMU 전용이다. 새 형식은 버린 묶음의 stream이 있어야 어느 자료의 결측인지 안다. */
-    private String droppedStream(JsonNode root, SensorDroppedRangeRequest request) {
+    /**
+     * 옛 형식은 워치 IMU 전용이라 {@code dropped_stream}을 보지 않는다. 새 형식은 이 값이 있어야 어느 자료의 결측인지 안다.
+     */
+    private String droppedStream(JsonNode root) {
         if (STREAM_LEGACY_IMU_DROPPED.equals(root.path("stream").asText())) {
             return LEGACY_DROPPED_STREAM;
         }
-        if (request.droppedStream() == null || !DROPPED_STREAM_PATTERN.matcher(request.droppedStream()).matches()) {
+        JsonNode droppedStream = root.get("dropped_stream");
+        if (droppedStream == null || !droppedStream.isTextual()
+                || !DROPPED_STREAM_PATTERN.matcher(droppedStream.asText()).matches()) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
-        return request.droppedStream();
+        return droppedStream.asText();
     }
 
     private SensorBatchResultResponse logged(

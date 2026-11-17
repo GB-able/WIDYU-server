@@ -145,7 +145,7 @@ endpoint는 그대로다(WebSocket `/app/sensor/batches/send`, REST `POST /api/v
 
 Flyway `V3__sensor_dropped_range_stream.sql`: 기본값 `imu_watch`로 칸을 더해 기존 행을 채우고 기본값을 지운다(엔티티가 늘 값을 넣는다. 기본값이 남으면 빠뜨린 코드가 `imu_watch`로 조용히 저장된다).
 
-엔티티 `SensorDroppedRange.droppedStream`, DTO `SensorDroppedRangeRequest.droppedStream`.
+엔티티 `SensorDroppedRange.droppedStream`. 요청 DTO `SensorDroppedRangeRequest`에는 두지 않고 서비스가 본문 트리에서 읽는다. DTO에 두면 옛 형식에 타입이 다른 `dropped_stream`이 섞였을 때 쓰지도 않을 칸 때문에 역직렬화가 실패한다.
 
 ### 4.2 거절 기록 (PR B)
 
@@ -161,7 +161,7 @@ Flyway `V3__sensor_dropped_range_stream.sql`: 기본값 `imu_watch`로 칸을 �
 ### 5.1 버림 기록 저장 (PR A)
 
 1. `SensorBatchService.route`가 `stream`이 `imu_dropped` 또는 `dropped`면 `SensorDroppedRangeService.record`로 넘긴다
-2. `imu_dropped`면 데이터 종류를 `imu_watch`로 정한다. `dropped`면 `dropped_stream`을 읽고 없거나 형식이 틀리면 `SENSOR_BATCH_INVALID`
+2. `imu_dropped`면 `dropped_stream`을 보지 않고 데이터 종류를 `imu_watch`로 정한다. `dropped`면 본문 트리에서 `dropped_stream`을 읽고 없거나 문자열이 아니거나 형식이 틀리면 `SENSOR_BATCH_INVALID`
 3. 나머지 검증, 멱등, 저장은 LLD-0124 5절과 같다. 로그에 `droppedStream`을 더한다(센서 값 없음)
 
 ### 5.2 서비스 밖 거절 기록 (PR B)
