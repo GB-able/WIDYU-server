@@ -63,13 +63,21 @@ final class SensorSeqGapReport {
             gapRows.addAll(gaps);
             long first = session.received.first();
             long last = session.received.last();
-            long expected = last - first + 1;
+            long expected = count(first, last);
             long missing = expected - session.received.size();
             sessionRows.add(line(key.stream(), session.deviceId, key.sessionId(), first, last, expected,
                     session.received.size(), missing, Math.round(missing * 10000.0 / expected) / 10000.0,
                     gaps.size(), session.wsCount, session.restCount));
         }
         return new Lines(gapRows, sessionRows);
+    }
+
+    /** 번호는 0 이상 long이라 처음 0, 끝 {@code Long.MAX_VALUE}면 개수가 long을 넘는다. 그때는 상한으로 적는다. */
+    private static long count(long first, long last) {
+        if (last - first == Long.MAX_VALUE) {
+            return Long.MAX_VALUE;
+        }
+        return last - first + 1;
     }
 
     private static Map<Key, Session> sessions(List<SensorBatch> batches) {

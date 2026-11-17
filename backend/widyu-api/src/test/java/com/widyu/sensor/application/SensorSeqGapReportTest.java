@@ -103,6 +103,24 @@ class SensorSeqGapReportTest {
     }
 
     @Test
+    @DisplayName("번호가 0과 long 최댓값이면 기대 개수를 넘치지 않게 상한으로 적는다")
+    void 번호가_long_끝까지_벌어지면_기대_개수를_상한으로_적는다() {
+        // given
+        List<SensorBatch> batches = List.of(
+                batch("imu_watch", "s-01", 0L, SensorIngestChannel.WS),
+                batch("imu_watch", "s-01", Long.MAX_VALUE, SensorIngestChannel.WS));
+
+        // when
+        SensorSeqGapReport.Lines lines = SensorSeqGapReport.build(batches, List.of(), List.of());
+
+        // then
+        assertThat(lines.sessions().get(0)).startsWith(
+                "imu_watch,gw-1,s-01,0,%d,%d,2,%d,".formatted(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE - 2));
+        assertThat(lines.gaps().get(0)).startsWith(
+                "imu_watch,gw-1,s-01,1,%d,%d,".formatted(Long.MAX_VALUE - 1, Long.MAX_VALUE - 1));
+    }
+
+    @Test
     @DisplayName("세션의 처음과 끝 번호 밖에서 버린 기록은 빠진 구간으로 적지 않는다")
     void 세션_경계_밖은_빠진_구간으로_적지_않는다() {
         // given: 10~12번이 왔고, 버림 기록은 세션 앞 0~9번과 뒤 13~20번이다
@@ -144,7 +162,7 @@ class SensorSeqGapReportTest {
     }
 
     private static SensorBatch batch(String stream, String sessionId, long seq, SensorIngestChannel channel) {
-        long start = T0 + seq * 1_000;
+        long start = T0 + (seq % 1_000_000) * 1_000;
         return SensorBatch.builder()
                 .batchId("b%025d".formatted(seq))
                 .member(Member.createMember(MemberType.SENIOR, "시니어", "01012345678"))
