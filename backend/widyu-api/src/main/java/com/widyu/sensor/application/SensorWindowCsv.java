@@ -33,7 +33,7 @@ final class SensorWindowCsv {
             "on_body", "wear_state", "missing_reason", "watch_battery_pct", "quality_status", "collection_mode",
             "gyro_mode", "trigger_kind", "server_received_at_ms", "ingest_channel");
     static final String DROPPED_HEADER = line("phase", "ts_kst", "ts_ms", "session_id", "from_seq", "to_seq",
-            "reason", "server_received_at_ms");
+            "reason", "server_received_at_ms", "dropped_stream");
     static final String REJECTION_HEADER = line("phase", "ts_kst", "ts_ms", "stream", "device_id", "batch_id",
             "session_id", "seq", "error_code", "ingest_channel");
     static final String HEARTBEAT_HEADER = line("phase", "ts_kst", "ts_ms", "device_id", "watch_device_id",
@@ -97,11 +97,14 @@ final class SensorWindowCsv {
                 event.getAttributes(), event.getSessionId(), event.getServerReceivedAtMs());
     }
 
-    /** 워치가 버린 묶음 번호 구간(양 끝 포함). phase·시각은 워치가 버린 시각 기준이다(LLD-0124). */
+    /**
+     * 기기가 버린 묶음 번호 구간(양 끝 포함). phase·시각은 버린 시각 기준이다(LLD-0124).
+     * 데이터 종류는 기존 열 순서를 지키려고 끝에 붙인다(LLD-0166).
+     */
     static String dropped(SensorDroppedRange range, Window window) {
         long ts = range.getTsMs();
         return line(window.phase(ts), kst(ts), ts, range.getSessionId(), range.getFromSeq(), range.getToSeq(),
-                range.getReason(), range.getServerReceivedAtMs());
+                range.getReason(), range.getServerReceivedAtMs(), range.getDroppedStream());
     }
 
     /** 묶음의 phase·시각은 측정 시작 기준이다. 구간과 겹치는 묶음만 들어오므로 시작이 구간 앞일 수 있다. */

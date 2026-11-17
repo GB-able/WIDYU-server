@@ -1,5 +1,7 @@
 # LLD-0124: 워치 IMU 큐가 넘쳐 버린 구간(imu_dropped)을 저장
 
+> **2026-11-17:** 데이터 종류(`dropped_stream`)를 받는 새 형식 `stream: "dropped"`과 사유 기본 목록은 [LLD-0166](LLD-0166-sensor-loss-attribution.md) 3.1이다. 이 문서의 `imu_dropped` 형식은 계속 받는다.
+
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
 
 | 항목 | 값 |

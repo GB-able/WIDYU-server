@@ -268,10 +268,11 @@ erDiagram
     SensorDroppedRange {
         Long id PK
         Long memberId FK
-        String sessionId "버린 IMU 배치의 세션"
+        String sessionId "버린 배치의 세션"
+        String droppedStream "버린 배치의 stream (LLD-0166)"
         Long fromSeq "UK (member_id, session_id, from_seq)"
         Long toSeq "양 끝 포함"
-        String reason "결측 사유, 값 목록 S2 대기"
+        String reason "결측 사유, 기본 목록 합의 대기"
         Long tsMs "워치가 버린 시각"
         Long serverReceivedAtMs
         Long persistedAtMs
@@ -979,6 +980,7 @@ erDiagram
 |------|--------|-----------|-----|
 | 2026-11-13 | `senior_stay_state` | 신규 테이블 (LLD-0141). 체류, 안전구역 판정 상태와 30분 알림 묶음. `alert_state` VARCHAR. 배포 때 서버가 예전 Redis 체류 키를 한 번 옮긴다(`location.stay-state.import-legacy-redis`) | `scripts/mysql/create_senior_stay_state.sql` |
 | 2026-11-14 | 전체 73개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다. `senior_stay_state`도 V1에 들어 있다 | `db/migration/V1__baseline.sql` |
+| 2026-11-17 | `sensor_dropped_range` | `dropped_stream VARCHAR(20) NOT NULL` 추가 (LLD-0166). 버린 묶음의 데이터 종류, 기존 행은 `imu_watch`로 채우고 기본값을 지운다 | `db/migration/V3__sensor_dropped_range_stream.sql` |
 | 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 17개 테이블(`incident`, `study_participation`, `senior_stay_state` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 31개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |
 | 2026-11-12 | `activity_window` | 신규 테이블 (LLD-0138). 손목 움직임 5초 구간의 샘플 수·크기 합계·제곱합과 상태(`REST`/`LOW`/`ACTIVE`, VARCHAR). `sensor_batch.original_batch_id` 인덱스 추가. 운영 구축 때 적용 | `scripts/mysql/create_activity_window.sql` |
 | 2026-11-12 | `member`, `member_withdrawal_request` | `member.withdrawn_at` 추가와 기존 탈퇴자 백필, 어르신 탈퇴 요청 신규 테이블(`status` VARCHAR), `admin_audit_log.action` 값 2개 추가 (LLD-0137). 운영 구축 때 적용 | `scripts/mysql/alter_member_withdrawn_at.sql`, `scripts/mysql/create_member_withdrawal_request.sql`, `scripts/mysql/alter_admin_audit_log_action.sql` |

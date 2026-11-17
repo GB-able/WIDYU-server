@@ -38,8 +38,8 @@ class SensorDroppedRangeServiceTest {
     @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
 
     @Test
-    @DisplayName("버린 구간 기록을 받으면 원문과 함께 저장하고 STORED를 돌려준다")
-    void 버린_구간_기록을_받으면_원문과_함께_저장한다() throws Exception {
+    @DisplayName("옛 형식 imu_dropped 기록을 받으면 데이터 종류를 imu_watch로 채워 원문과 함께 저장하고 STORED를 돌려준다")
+    void 옛_형식_버린_구간_기록을_받으면_imu_watch로_원문과_함께_저장한다() throws Exception {
         // given
         byte[] payload = dropped(10, 15, "\"queue_overflow\"").getBytes(UTF_8);
         given(sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(MEMBER_ID, "s-01", 10L))
@@ -55,6 +55,7 @@ class SensorDroppedRangeServiceTest {
         then(sensorDroppedRangeRepository).should().save(saved.capture());
         assertThat(saved.getValue().getMemberId()).isEqualTo(MEMBER_ID);
         assertThat(saved.getValue().getSessionId()).isEqualTo("s-01");
+        assertThat(saved.getValue().getDroppedStream()).isEqualTo("imu_watch");
         assertThat(saved.getValue().getFromSeq()).isEqualTo(10L);
         assertThat(saved.getValue().getToSeq()).isEqualTo(15L);
         assertThat(saved.getValue().getReason()).isEqualTo("queue_overflow");
@@ -192,6 +193,66 @@ class SensorDroppedRangeServiceTest {
         assertInvalid(payload);
     }
 
+    @Test
+    @DisplayName("새 형식 dropped 기록을 받으면 보낸 데이터 종류와 사유로 저장하고 STORED를 돌려준다")
+    void 새_형식_버린_구간_기록을_받으면_데이터_종류와_사유로_저장한다() throws Exception {
+        // given
+        byte[] payload = generic("\"hr\"", "\"enqueue_failed\"").getBytes(UTF_8);
+        given(sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(MEMBER_ID, "hr-01", 7L))
+                .willReturn(false);
+
+        // when
+        SensorBatchResultResponse response = service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        ArgumentCaptor<SensorDroppedRange> saved = ArgumentCaptor.forClass(SensorDroppedRange.class);
+        then(sensorDroppedRangeRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getDroppedStream()).isEqualTo("hr");
+        assertThat(saved.getValue().getReason()).isEqualTo("enqueue_failed");
+        assertThat(saved.getValue().getFromSeq()).isEqualTo(7L);
+        assertThat(saved.getValue().getToSeq()).isEqualTo(7L);
+        assertThat(saved.getValue().getPayload()).isEqualTo(new String(payload, UTF_8));
+    }
+
+    @Test
+    @DisplayName("목록에 없는 사유와 데이터 종류도 거절하지 않고 그대로 저장한다")
+    void 목록에_없는_사유와_데이터_종류도_그대로_저장한다() throws Exception {
+        // given
+        byte[] payload = generic("\"imu_phone\"", "\"battery_saver\"").getBytes(UTF_8);
+        given(sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(MEMBER_ID, "hr-01", 7L))
+                .willReturn(false);
+
+        // when
+        service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L);
+
+        // then
+        ArgumentCaptor<SensorDroppedRange> saved = ArgumentCaptor.forClass(SensorDroppedRange.class);
+        then(sensorDroppedRangeRepository).should().save(saved.capture());
+        assertThat(saved.getValue().getDroppedStream()).isEqualTo("imu_phone");
+        assertThat(saved.getValue().getReason()).isEqualTo("battery_saver");
+    }
+
+    @Test
+    @DisplayName("새 형식에 데이터 종류가 없으면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 새_형식에_데이터_종류가_없으면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = generic("null", "\"queue_overflow\"").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
+    @Test
+    @DisplayName("새 형식의 데이터 종류 형식이 맞지 않으면 SENSOR_BATCH_INVALID 예외가 발생한다")
+    void 새_형식의_데이터_종류_형식이_맞지_않으면_예외가_발생한다() throws Exception {
+        // given
+        byte[] payload = generic("\"HR\\nINFO\"", "\"queue_overflow\"").getBytes(UTF_8);
+
+        // when & then
+        assertInvalid(payload);
+    }
+
     private void assertInvalid(byte[] payload) throws Exception {
         assertThatThrownBy(() -> service().record(MEMBER_ID, payload, JSON.readTree(payload), 1_000L))
                 .isInstanceOf(BusinessException.class)
@@ -208,5 +269,12 @@ class SensorDroppedRangeServiceTest {
         return """
             {"stream":"imu_dropped","session_id":"s-01","from_seq":%d,"to_seq":%d,"reason":%s,"ts_ms":1760000000200}"""
                 .formatted(fromSeq, toSeq, reason);
+    }
+
+    /** 새 형식(LLD-0166 3.1). 대기열에 넣지 못한 심박 묶음 하나다. */
+    private static String generic(String droppedStream, String reason) {
+        return """
+            {"stream":"dropped","dropped_stream":%s,"session_id":"hr-01","from_seq":7,"to_seq":7,"reason":%s,"ts_ms":1760000000200}"""
+                .formatted(droppedStream, reason);
     }
 }

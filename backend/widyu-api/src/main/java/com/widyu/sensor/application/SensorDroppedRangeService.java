@@ -24,8 +24,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * 워치 IMU 큐가 넘쳐 버린 구간({@code stream: "imu_dropped"})을 {@code sensor_dropped_range} 한 행으로 저장한다(LLD-0124).
- * 원문 바이트를 그대로 {@code payload}에 남긴다. 멱등 키는 {@code (member_id, session_id, from_seq)}다.
+ * 기기가 버린 묶음 구간({@code stream: "dropped"}, 옛 형식 {@code "imu_dropped"})을 {@code sensor_dropped_range} 한 행으로
+ * 저장한다(LLD-0124, LLD-0166). 원문 바이트를 그대로 {@code payload}에 남긴다. 멱등 키는 {@code (member_id, session_id, from_seq)}다.
+ * 옛 형식은 워치 IMU 큐 넘침만 보냈으므로 데이터 종류를 {@code imu_watch}로 채운다.
  *
  * <p>센서 배치처럼 {@code @Transactional}을 두지 않고 저장은 리포지토리의 자체 트랜잭션에서 돈다.
  * 이 기록에는 {@code batch_id}가 없어 결과 응답의 {@code batchId}·{@code seq}는 null이다.
@@ -33,6 +34,10 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 public class SensorDroppedRangeService {
+
+    static final String STREAM_LEGACY_IMU_DROPPED = "imu_dropped";
+    static final String STREAM_DROPPED = "dropped";
+    private static final String LEGACY_DROPPED_STREAM = "imu_watch";
 
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
     private final Validator validator;
@@ -58,16 +63,18 @@ public class SensorDroppedRangeService {
     public SensorBatchResultResponse record(Long memberId, byte[] payload, JsonNode root, long serverReceivedAtMs) {
         SensorDroppedRangeRequest request = parse(root);
         validate(request);
+        String droppedStream = droppedStream(root, request);
 
         if (sensorDroppedRangeRepository.existsByMemberIdAndSessionIdAndFromSeq(
                 memberId, request.sessionId(), request.fromSeq())) {
-            return logged(memberId, request, SensorBatchResult.DUPLICATE);
+            return logged(memberId, request, droppedStream, SensorBatchResult.DUPLICATE);
         }
 
         try {
             sensorDroppedRangeRepository.save(SensorDroppedRange.builder()
                     .memberId(memberId)
                     .sessionId(request.sessionId())
+                    .droppedStream(droppedStream)
                     .fromSeq(request.fromSeq())
                     .toSeq(request.toSeq())
                     .reason(request.reason())
@@ -83,9 +90,9 @@ public class SensorDroppedRangeService {
                     memberId, request.sessionId(), request.fromSeq())) {
                 throw e;
             }
-            return logged(memberId, request, SensorBatchResult.DUPLICATE);
+            return logged(memberId, request, droppedStream, SensorBatchResult.DUPLICATE);
         }
-        return logged(memberId, request, SensorBatchResult.STORED);
+        return logged(memberId, request, droppedStream, SensorBatchResult.STORED);
     }
 
     private SensorDroppedRangeRequest parse(JsonNode root) {
@@ -105,9 +112,21 @@ public class SensorDroppedRangeService {
         }
     }
 
-    private SensorBatchResultResponse logged(Long memberId, SensorDroppedRangeRequest request, SensorBatchResult result) {
-        log.info("IMU 버린 구간 수신: memberId={}, sessionId={}, fromSeq={}, toSeq={}, result={}",
-                memberId, request.sessionId(), request.fromSeq(), request.toSeq(), result);
+    /** 옛 형식은 워치 IMU 전용이다. 새 형식은 버린 묶음의 stream이 있어야 어느 자료의 결측인지 안다. */
+    private String droppedStream(JsonNode root, SensorDroppedRangeRequest request) {
+        if (STREAM_LEGACY_IMU_DROPPED.equals(root.path("stream").asText())) {
+            return LEGACY_DROPPED_STREAM;
+        }
+        if (request.droppedStream() == null) {
+            throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
+        }
+        return request.droppedStream();
+    }
+
+    private SensorBatchResultResponse logged(
+            Long memberId, SensorDroppedRangeRequest request, String droppedStream, SensorBatchResult result) {
+        log.info("버린 구간 수신: memberId={}, droppedStream={}, sessionId={}, fromSeq={}, toSeq={}, result={}",
+                memberId, droppedStream, request.sessionId(), request.fromSeq(), request.toSeq(), result);
         return SensorBatchResultResponse.of(null, null, result);
     }
 
