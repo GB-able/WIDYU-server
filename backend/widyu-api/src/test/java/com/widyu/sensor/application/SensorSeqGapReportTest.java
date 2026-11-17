@@ -103,8 +103,8 @@ class SensorSeqGapReportTest {
     }
 
     @Test
-    @DisplayName("번호가 0과 long 최댓값이면 기대 개수를 넘치지 않게 상한으로 적는다")
-    void 번호가_long_끝까지_벌어지면_기대_개수를_상한으로_적는다() {
+    @DisplayName("번호가 0과 long 최댓값이면 기대 개수와 빠진 수를 넘치지 않고 정확히 적는다")
+    void 번호가_long_끝까지_벌어져도_기대_개수와_빠진_수를_정확히_적는다() {
         // given
         List<SensorBatch> batches = List.of(
                 batch("imu_watch", "s-01", 0L, SensorIngestChannel.WS),
@@ -115,7 +115,7 @@ class SensorSeqGapReportTest {
 
         // then
         assertThat(lines.sessions().get(0)).startsWith(
-                "imu_watch,gw-1,s-01,0,%d,%d,2,%d,".formatted(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE - 2));
+                "imu_watch,gw-1,s-01,0,%d,9223372036854775808,2,%d,".formatted(Long.MAX_VALUE, Long.MAX_VALUE - 1));
         assertThat(lines.gaps().get(0)).startsWith(
                 "imu_watch,gw-1,s-01,1,%d,%d,".formatted(Long.MAX_VALUE - 1, Long.MAX_VALUE - 1));
     }
