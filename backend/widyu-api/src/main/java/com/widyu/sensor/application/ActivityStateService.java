@@ -18,6 +18,7 @@ import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -196,7 +197,11 @@ public class ActivityStateService {
      */
     private void write(Long memberId, String batchId, String rootBatchId, Map<Long, long[]> sums) {
         long windowMs = sensorProperties.activity().windowSec() * 1000L;
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+        // READ_COMMITTED는 없는 구간 행의 FOR UPDATE에 빈자리 잠금을 걸지 않는다. 같은 새 구간 INSERT가 교착 대신
+        // UK 충돌로 끝나 record의 재시도가 커밋된 행을 잠가 더한다(#1093). 계보 조회는 커밋 전 행의 잠금을 그대로 기다린다.
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        transaction.executeWithoutResult(status -> {
             if (!sensorBatchRepository.findEarlierInLineageForShare(memberId, rootBatchId, batchId).isEmpty()) {
                 return;
             }
