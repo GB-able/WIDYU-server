@@ -226,21 +226,30 @@ public class SensorBatchService {
                                  SensorIngestChannel channel, long serverReceivedAtMs) {
         String errorCode = cause.getErrorCode().getCode();
         try {
-            rejectionRecorder.record(SensorBatchRejection.builder()
-                    .memberId(memberId)
-                    .deviceId(textMatching(root, "device_id", SESSION_ID_PATTERN))
-                    .stream(textMatching(root, "stream", STREAM_NAME_PATTERN))
-                    .batchId(textMatching(root, "batch_id", BATCH_ID_PATTERN))
-                    .sessionId(textMatching(root, "session_id", SESSION_ID_PATTERN))
-                    .seq(seqOf(root))
-                    .errorCode(errorCode)
-                    .ingestChannel(channel)
-                    .receivedAtMs(serverReceivedAtMs)
-                    .build());
+            rejectionRecorder.record(rejectionOf(memberId, root, errorCode, channel, serverReceivedAtMs));
         } catch (RuntimeException e) {
             log.warn("센서 배치 거절 기록 실패: memberId={}, code={}, errorType={}",
                     memberId, errorCode, e.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * 거절 기록 한 행. 식별자는 본문 트리(못 읽었으면 null)에서 수신 검증과 같은 형식일 때만 채운다(LLD-0128 4.3).
+     * 서비스 밖 거절(WS 본문 크기 초과, 실행기 포화)도 같은 규칙을 쓴다(LLD-0166 5.2).
+     */
+    public static SensorBatchRejection rejectionOf(Long memberId, JsonNode root, String errorCode,
+                                                   SensorIngestChannel channel, long receivedAtMs) {
+        return SensorBatchRejection.builder()
+                .memberId(memberId)
+                .deviceId(textMatching(root, "device_id", SESSION_ID_PATTERN))
+                .stream(textMatching(root, "stream", STREAM_NAME_PATTERN))
+                .batchId(textMatching(root, "batch_id", BATCH_ID_PATTERN))
+                .sessionId(textMatching(root, "session_id", SESSION_ID_PATTERN))
+                .seq(seqOf(root))
+                .errorCode(errorCode)
+                .ingestChannel(channel)
+                .receivedAtMs(receivedAtMs)
+                .build();
     }
 
     /** 수신 검증과 같은 형식일 때만 값을 돌려준다. 거절된 본문이라 형식을 믿을 수 없다. */
