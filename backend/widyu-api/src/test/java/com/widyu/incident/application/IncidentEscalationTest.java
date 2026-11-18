@@ -70,7 +70,8 @@ class IncidentEscalationTest {
         assertThat(message.getValue().content()).isNull();
         assertThat(message.getValue().dataForEnqueue("inc-1"))
                 .containsEntry("deliveryStage", "INITIAL_ALERT")
-                .containsEntry("safetyEventId", "inc-1");
+                .containsEntry("safetyEventId", "inc-1")
+                .containsEntry("seniorName", "시니어");
     }
 
     @Test
@@ -106,7 +107,8 @@ class IncidentEscalationTest {
         then(outbox).should().enqueue(eq(2L), message.capture());
         assertThat(message.getValue().notificationType()).isEqualTo(NotificationType.SELF_HELP_REQUESTED);
         assertThat(message.getValue().dataForEnqueue("inc-1"))
-                .containsEntry("deliveryStage", "SECOND_ALERT");
+                .containsEntry("deliveryStage", "SECOND_ALERT")
+                .containsEntry("seniorName", "시니어");
     }
 
     @Test
@@ -152,6 +154,7 @@ class IncidentEscalationTest {
                     .containsEntry("safetyEventId", "inc-1")
                     .containsEntry("decisionId", "dec-1")
                     .containsEntry("deepLink", "/location?seniorId=1")
+                    .containsEntry("seniorName", "시니어")
                     .doesNotContainKey("incidentRef");
         });
     }
@@ -447,7 +450,8 @@ class IncidentEscalationTest {
                 .containsEntry("eventId", "inc-1")
                 .containsEntry("entityId", "inc-1")
                 .containsEntry("notificationType", "HEART_RATE_EMERGENCY")
-                .doesNotContainKeys("incidentRef", "type", "priority", "foregroundPresentation");
+                .containsEntry("seniorName", "시니어")
+                .doesNotContainKeys("incidentRef", "type", "priority", "foregroundPresentation", "phoneNumber");
         if (decisionId != null) {
             assertThat(message.dataForEnqueue("inc-1")).containsEntry("decisionId", decisionId);
         } else {

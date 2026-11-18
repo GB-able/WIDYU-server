@@ -110,7 +110,8 @@ class DegradedEmergencyAlertServiceTest {
                     .containsEntry("body", normalPathCopy.body())
                     .containsEntry("category", "HEART_MESSAGE")
                     .containsEntry("measuredAt", MEASURED_AT.toString())
-                    .containsEntry("image", "");
+                    .containsEntry("image", "")
+                    .containsEntry("seniorName", "김시니어");
             assertThat(Long.parseLong(field.get("expiresAt")))
                     .isBetween(before + Duration.ofMinutes(5).toMillis(), System.currentTimeMillis()
                             + Duration.ofMinutes(5).toMillis());

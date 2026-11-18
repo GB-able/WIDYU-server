@@ -11,7 +11,7 @@ import org.springframework.data.redis.connection.stream.MapRecord;
 
 /** 저하 경로 스트림 항목 1건(LLD-0086 5.3 필드). 토큰이 들어 있어 toString을 로그에 쓰지 않는다. */
 record DegradedDelivery(String streamId, Long seniorId, Long guardianId, Long tokenId, String token,
-        String title, String body, String image, String category, long expiresAtMs) {
+        String title, String body, String image, String category, long expiresAtMs, String seniorName) {
 
     static DegradedDelivery from(MapRecord<String, Object, Object> record) {
         Map<Object, Object> fields = record.getValue();
@@ -19,11 +19,16 @@ record DegradedDelivery(String streamId, Long seniorId, Long guardianId, Long to
         if (image.isEmpty()) {
             image = null;
         }
+        // 배포 전에 적재된 항목에는 seniorName 필드가 없으므로 필수로 읽지 않는다.
+        String seniorName = null;
+        if (fields.get("seniorName") != null) {
+            seniorName = fields.get("seniorName").toString();
+        }
         return new DegradedDelivery(record.getId().getValue(),
                 Long.valueOf(field(fields, "seniorId")), Long.valueOf(field(fields, "guardianId")),
                 Long.valueOf(field(fields, "tokenId")), field(fields, "token"),
                 field(fields, "title"), field(fields, "body"), image, field(fields, "category"),
-                Long.parseLong(field(fields, "expiresAt")));
+                Long.parseLong(field(fields, "expiresAt")), seniorName);
     }
 
     boolean expired(long nowMs) {
@@ -40,7 +45,7 @@ record DegradedDelivery(String streamId, Long seniorId, Long guardianId, Long to
                 .fcmCategory(FcmCategory.valueOf(category))
                 .notificationType(NotificationType.HEART_RATE_EMERGENCY)
                 .eventId(streamId).seniorId(seniorId).relatedMemberId(seniorId)
-                .emergency(true).build();
+                .data(nameData()).emergency(true).build();
         message = message.withData(message.dataForEnqueue(streamId));
         return new FcmDelivery(null, 0L, token, message, Instant.ofEpochMilli(expiresAtMs), null);
     }
@@ -58,6 +63,13 @@ record DegradedDelivery(String streamId, Long seniorId, Long guardianId, Long to
         values.put("sentAtMs", sentAtMs);
         values.put("streamId", streamId);
         return values;
+    }
+
+    private Map<String, String> nameData() {
+        if (seniorName == null) {
+            return Map.of();
+        }
+        return Map.of("seniorName", seniorName);
     }
 
     @Override

@@ -96,7 +96,31 @@ class DegradedEmergencyAlertConsumerTest {
                 .containsEntry("notificationType", "HEART_RATE_EMERGENCY")
                 .doesNotContainKeys("type", "priority", "foregroundPresentation")
                 .containsEntry("eventId", "1760000000000-0")
-                .containsEntry("deepLink", "/location?seniorId=31");
+                .containsEntry("deepLink", "/location?seniorId=31")
+                .containsEntry("seniorName", "김시니어");
+    }
+
+    @Test
+    @DisplayName("배포 전에 적재돼 시니어 이름 필드가 없는 항목이면 이름 키 없이 보낸다")
+    void 시니어_이름_필드가_없는_옛_항목이면_이름_키_없이_보낸다() {
+        // given
+        MapRecord<String, Object, Object> legacy = record(System.currentTimeMillis() + 60_000);
+        Map<Object, Object> fields = new HashMap<>(legacy.getValue());
+        fields.remove("seniorName");
+        givenStream(StreamRecords.newRecord().in(STREAM).withId(RECORD_ID).ofMap(fields));
+        given(redis.opsForList()).willReturn(list);
+        given(transport.send(any(FcmDelivery.class), any())).willReturn(FcmTransport.Result.delivered());
+
+        // when
+        consumer(new SimpleMeterRegistry()).poll();
+
+        // then
+        ArgumentCaptor<FcmDelivery> sent = ArgumentCaptor.forClass(FcmDelivery.class);
+        then(transport).should().send(sent.capture(), any());
+        assertThat(sent.getValue().message().data())
+                .containsEntry("notificationType", "HEART_RATE_EMERGENCY")
+                .doesNotContainKey("seniorName");
+        then(stream).should().acknowledge(STREAM, DegradedEmergencyAlertConsumer.GROUP, RECORD_ID);
     }
 
     @Test
@@ -191,6 +215,7 @@ class DegradedEmergencyAlertConsumerTest {
         fields.put("title", "김시니어 님의 심박 상태를 확인해주세요.");
         fields.put("body", "평소와 다른 심박이 감지됐어요. 현재 상태와 위치를 확인해주세요.");
         fields.put("image", "");
+        fields.put("seniorName", "김시니어");
         fields.put("category", "HEART_MESSAGE");
         fields.put("measuredAt", "2026-10-16T09:00");
         fields.put("expiresAt", Long.toString(expiresAtMs));
