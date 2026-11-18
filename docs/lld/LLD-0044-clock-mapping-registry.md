@@ -67,13 +67,13 @@
 ### 5.1 `ClockMappingService.register(clock, deviceId, observedMinElapsedNs, observedMaxElapsedNs)` — `@Transactional`
 
 1. `findByClockMappingId(clock.clockMappingId())` 조회.
-2. **없으면** 별도 `REQUIRES_NEW` 트랜잭션에서 INSERT: 다섯 값·`device_id`·관측 범위·`first/last_seen_at_ms = now`. `saveAndFlush`의 UK 경합(`DataIntegrityViolationException`)은 해당 삽입 트랜잭션만 롤백한다. 경합 뒤 재조회도 별도 `REQUIRES_NEW` 읽기 전용 트랜잭션(`ClockMappingInsertService.findCommitted`)에서 하고 3단계로 간다(동시에 처음 보는 같은 매핑 → 한 행만 남고 둘 다 통과). 호출 트랜잭션에서 다시 읽으면 MySQL REPEATABLE READ가 1단계 조회 때 고정한 스냅샷을 그대로 써서 승자 행이 보이지 않는다. 격리 수준만 READ COMMITTED로 낮추는 방법은 마커 등록처럼 바깥 트랜잭션에 합류하는 호출에서 지정이 무시되므로 쓰지 않는다(#905).
+2. **없으면** 별도 `REQUIRES_NEW` 트랜잭션에서 `INSERT ... ON DUPLICATE KEY UPDATE clock_mapping_id = clock_mapping_id`(`ClockMappingRepository.insertIfAbsent`, MySQL 전용)로 넣는다: 다섯 값·`device_id`·관측 범위·`first/last_seen_at_ms = now`. 같은 매핑을 동시에 처음 보는 요청이 여럿이면 한 행만 남고 나머지는 아무것도 바꾸지 않은 채 끝난다. 중복 키를 예외로 받지 않으므로 Hibernate `SqlExceptionHelper`가 정상 경합을 ERROR로 남기지 않는다(#1094). 중복 키 외의 제약 위반은 그대로 예외다(`INSERT IGNORE`는 다른 오류까지 경고로 낮춰 쓰지 않는다). 그 뒤 남은 행을 별도 `REQUIRES_NEW` 읽기 전용 트랜잭션(`ClockMappingInsertService.findCommitted`)에서 읽어 3단계로 간다. 호출 트랜잭션에서 다시 읽으면 MySQL REPEATABLE READ가 1단계 조회 때 고정한 스냅샷을 그대로 써서 먼저 커밋된 행이 보이지 않는다. 격리 수준만 READ COMMITTED로 낮추는 방법은 마커 등록처럼 바깥 트랜잭션에 합류하는 호출에서 지정이 무시되므로 쓰지 않는다(#905).
 3. **있으면** 대조: `device_id`·`boot_id`·`anchor_elapsed_ns`·`anchor_epoch_ms`·`uncertainty_ms`가 전부 같아야 한다. 하나라도 다르면 `SENSOR_CLOCK_MAPPING_CONFLICT`. 부동소수 `uncertainty_ms`는 `Double.compare == 0`.
 4. 관측 범위 갱신: `observed_min = min(observed_min, 배치 min)`, `observed_max = max(observed_max, 배치 max)`, `last_seen_at_ms = now`. 동시 갱신에 안전하도록 **JPQL bulk update** 한 문장으로: `UPDATE ClockMapping m SET m.observedMinElapsedNs = CASE WHEN m.observedMinElapsedNs < :min THEN m.observedMinElapsedNs ELSE :min END, m.observedMaxElapsedNs = CASE WHEN m.observedMaxElapsedNs > :max THEN m.observedMaxElapsedNs ELSE :max END, m.lastSeenAtMs = :now WHERE m.clockMappingId = :id`.
 
 배치 min·max는 `SensorBatchService`가 이미 계산하는 축 시각(`t0_elapsed_ns`, `t0 + Σdt_ns`, acc·gyro 합산)이다. 이 값을 매핑 등록에 넘기도록 `toEntity` 앞에서 한 번 계산해 재사용한다.
 
-새로 INSERT한 경로에서는 4단계를 생략한다. 방금 만든 행의 관측 범위가 곧 그 배치의 범위라 넓힐 것이 없다.
+처음 등록한 경로도 3·4단계를 거친다. 넣은 행이 내 것인지 먼저 커밋된 다른 요청의 것인지 구분하지 않기 때문이다(MySQL 영향 행 수는 Connector/J 기본 설정에서 두 경우가 같다). 내 행이면 대조는 그대로 통과하고 관측 범위도 바뀌지 않는다.
 
 **호출 계약**: `register`는 `clock.anchor_elapsed_ns`의 형식·범위(10진 정수 문자열, `0..Long.MAX`)를 검증하지 않고 `Long.parseLong`한다. 호출자가 먼저 검증해야 한다(LLD-0041 5.1 4단계). 심박·위치·마커(B5·B6·B8)가 이 메서드를 재사용할 때는 같은 검증을 호출 전에 둔다.
 
@@ -103,7 +103,8 @@
 - [x] 같은 매핑으로 두 번째 배치를 보내면 행이 늘지 않고 `observed_min/max`가 두 배치를 덮게 넓어지며 `last_seen_at_ms`가 갱신된다.
 - [x] 같은 `clock_mapping_id`로 `anchor_elapsed_ns`가 다른 배치는 `SENSOR_CLOCK_MAPPING_CONFLICT`이고 S3 업로드·배치 저장이 호출되지 않는다. `anchor_epoch_ms`·`boot_id`·`uncertainty_ms` 각각도 같다.
 - [x] 같은 `clock_mapping_id`를 다른 `device_id`가 보내면 `SENSOR_CLOCK_MAPPING_CONFLICT`다.
-- [x] 처음 보는 같은 매핑의 INSERT가 UK 경합으로 실패하면 재조회해 대조하고, 같으면 통과한다. 실제 MySQL에서 바깥 트랜잭션이 있을 때와 없을 때 모두 같다(`ClockMappingConcurrentRegisterMySqlTest`, #905).
+- [x] 처음 보는 같은 매핑의 INSERT가 UK 경합하면 재조회해 대조하고, 같으면 통과한다. 실제 MySQL에서 바깥 트랜잭션이 있을 때와 없을 때 모두 같다(`ClockMappingConcurrentRegisterMySqlTest`, #905).
+- [x] 같은 새 매핑을 여러 요청이 동시에 등록해도 `SqlExceptionHelper` ERROR 로그가 남지 않는다. 다른 기기가 먼저 커밋한 같은 매핑 ID는 `SENSOR_CLOCK_MAPPING_CONFLICT`다(`ClockMappingConcurrentRegisterMySqlTest`, #1094).
 - [x] `sensor_batch.clock_mapping_id`가 그 매핑의 `clock_mapping_id`와 같다.
 - [x] 로그에 앵커 시각·불확실성 값이 없다.
 - [x] `./gradlew compileJava`로 `QClockMapping`이 생성되고 `bash scripts/harness/run-module-tests.sh`가 통과한다.
