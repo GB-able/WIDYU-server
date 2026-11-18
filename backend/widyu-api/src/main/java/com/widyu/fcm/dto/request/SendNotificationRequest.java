@@ -9,7 +9,8 @@ public record SendNotificationRequest(
         Long receiverId,
 
         @NotBlank(message = "알림 내용은 필수입니다.")
-        @Size(max = 255, message = "알림 내용은 255자 이하로 입력해 주세요.")
+        // 50자(그래핌) 제한은 FcmSendDto.ofMessage가 정리 뒤에 센다. 255는 저장 칸(VARCHAR 255) 보호용 상한이다.
+        @Size(max = 255, message = "메시지는 50자 이하로 입력해 주세요.")
         String content
 ) {
 }

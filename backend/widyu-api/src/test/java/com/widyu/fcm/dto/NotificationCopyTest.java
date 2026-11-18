@@ -77,17 +77,106 @@ class NotificationCopyTest {
     }
 
     @Test
-    @DisplayName("앱 내부 메시지 문구를 만들면 미리보기를 40자로 제한한다")
-    void 앱_내부_메시지_문구를_만들면_미리보기를_제한한다() {
+    @DisplayName("40글자 메시지로 앱 안 문구를 만들면 자르지 않고 그대로 반환한다")
+    void 마흔글자_메시지는_그대로_반환한다() {
         // given
-        String preview = "가".repeat(41);
+        String message = "가".repeat(40);
 
         // when
-        NotificationCopy copy = NotificationCopy.of(NotificationType.HEART_MESSAGE_RECEIVED,
-                "X01-INAPP", Map.of("메시지 미리보기", preview));
+        String preview = previewOf(message);
 
         // then
-        assertThat(copy.body()).hasSize(40);
+        assertThat(preview).isEqualTo(message);
+        assertThat(previewOf("가".repeat(39))).isEqualTo("가".repeat(39));
+    }
+
+    @Test
+    @DisplayName("41글자 메시지로 앱 안 문구를 만들면 앞 39글자에 말줄임표를 붙여 40글자로 반환한다")
+    void 마흔한글자_메시지는_앞_39글자와_말줄임표를_반환한다() {
+        // given
+        String message = "가".repeat(41);
+
+        // when
+        String preview = previewOf(message);
+
+        // then
+        assertThat(preview).isEqualTo("가".repeat(39) + "…");
+        assertThat(NotificationCopy.graphemeCount(preview)).isEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("자르는 자리에 이모지가 있으면 이모지를 반으로 자르지 않는다")
+    void 자르는_자리의_이모지를_반으로_자르지_않는다() {
+        // given
+        String family = "👨‍👩‍👧";
+        String skinTone = "👍🏽";
+        String flag = "🇰🇷";
+        String message = "가".repeat(36) + family + skinTone + flag + "😀" + "끝";
+
+        // when
+        String preview = previewOf(message);
+
+        // then
+        assertThat(NotificationCopy.graphemeCount(message)).isEqualTo(41);
+        assertThat(preview).isEqualTo("가".repeat(36) + family + skinTone + flag + "…");
+    }
+
+    @Test
+    @DisplayName("이모지만 40글자인 메시지는 UTF-16 길이와 상관없이 그대로 반환한다")
+    void 이모지_40글자는_그대로_반환한다() {
+        // given
+        String message = "👨‍👩‍👧".repeat(40);
+
+        // when
+        String preview = previewOf(message);
+
+        // then
+        assertThat(preview).isEqualTo(message);
+    }
+
+    @Test
+    @DisplayName("분해된 한글 자모를 보내면 음절로 합쳐 한 글자씩 센다")
+    void 분해된_한글을_음절로_합쳐_센다() {
+        // given
+        String decomposed = java.text.Normalizer.normalize("한글", java.text.Normalizer.Form.NFD);
+
+        // when
+        String normalized = NotificationCopy.normalizeMessage(decomposed);
+
+        // then
+        assertThat(decomposed).hasSize(6);
+        assertThat(normalized).isEqualTo("한글");
+        assertThat(NotificationCopy.graphemeCount(normalized)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("줄바꿈과 연속 공백이 섞인 메시지를 정리하면 공백 하나로 바꾸고 제어 문자와 앞뒤 공백을 지운다")
+    void 줄바꿈과_연속_공백을_공백_하나로_정리한다() {
+        // given
+        String message = "  오늘도\n\n힘내요\r\n\t어머니\u2028사랑해요\u3000\u00A0  ♥\u0000 ";
+
+        // when
+        String normalized = NotificationCopy.normalizeMessage(message);
+
+        // then
+        assertThat(normalized).isEqualTo("오늘도 힘내요 어머니 사랑해요 ♥");
+    }
+
+    @Test
+    @DisplayName("공백이나 제로폭 문자만 있는 메시지를 정리하면 빈 값을 반환한다")
+    void 공백이나_제로폭_문자만_있으면_빈_값을_반환한다() {
+        // given / when / then
+        assertThat(NotificationCopy.normalizeMessage("\u3000 \n\t")).isEmpty();
+        assertThat(NotificationCopy.normalizeMessage("\u200B\u200D\uFEFF")).isEmpty();
+        assertThat(NotificationCopy.normalizeMessage(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("미리보기 값이 정리 뒤 비면 문구를 만들 때 예외가 발생한다")
+    void 미리보기가_비면_예외가_발생한다() {
+        // given / when / then
+        assertThatThrownBy(() -> previewOf("\u3000"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -108,5 +197,10 @@ class NotificationCopyTest {
         // then
         assertThat(copy.title()).isEqualTo("게시물 잠금을 해제했어요.");
         assertThat(copy.body()).isEqualTo("앨범에서 확인해보세요.");
+    }
+
+    private static String previewOf(String message) {
+        return NotificationCopy.of(NotificationType.CHEER_MESSAGE_RECEIVED, "X02-INAPP",
+                Map.of("보낸 사람 이름", "보호자", "메시지 미리보기", message)).body();
     }
 }

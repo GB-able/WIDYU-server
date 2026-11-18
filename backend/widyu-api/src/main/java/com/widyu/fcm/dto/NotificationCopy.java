@@ -1,6 +1,8 @@
 package com.widyu.fcm.dto;
 
 import com.widyu.fcm.NotificationType;
+import java.text.BreakIterator;
+import java.text.Normalizer;
 import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -9,9 +11,14 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 승인된 문구표 v0.4. 코드와 변형은 화면에 노출하지 않는다. */
+/** 알림 정책서(위듀 v12, 위듀케어 v18)의 문구표. 코드와 변형은 화면에 노출하지 않는다. */
 public record NotificationCopy(String title, String body) {
+    /** 메시지 미리보기 최대 글자 수(그래핌). 넘으면 앞 39글자에 「…」을 붙여 40글자를 넘지 않는다(LLD-0167). */
+    public static final int PREVIEW_MAX_LENGTH = 40;
     private static final Pattern VARIABLE = Pattern.compile("\\{([^}]+)}");
+    private static final Pattern CONTROLS = Pattern.compile("[\\p{Cc}&&[^\\s]]", Pattern.UNICODE_CHARACTER_CLASS);
+    private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
+    private static final Pattern FORMATS = Pattern.compile("\\p{Cf}");
     private static final Map<String, NotificationCopy> CATALOG = Map.ofEntries(
             copy("A01", "게시물 업로드가 완료됐어요!", "업로드한 게시물을 확인해보세요."),
             copy("A02-S", "{작성자 이름} 님이 게시물을 올렸어요!", "새로운 게시물을 확인하러 가보세요."),
@@ -156,6 +163,9 @@ public record NotificationCopy(String title, String body) {
         while (matcher.find()) {
             String key = matcher.group(1);
             String value = values.get(key);
+            if (key.equals("메시지 미리보기")) {
+                value = messagePreview(value);
+            }
             if ((value == null || value.isBlank()) && key.endsWith("이름")
                     && !key.equals("시니어 이름")) {
                 value = values.get("actorDisplayName");
@@ -166,13 +176,58 @@ public record NotificationCopy(String title, String body) {
             if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException("알림 문구 필수 값이 없습니다: " + key);
             }
-            if (key.equals("메시지 미리보기") && value.length() > 40) {
-                value = value.substring(0, 40);
-            }
             matcher.appendReplacement(result, Matcher.quoteReplacement(value));
         }
         matcher.appendTail(result);
         return result.toString();
+    }
+
+    /**
+     * 사용자 메시지를 한 줄로 정리한다(LLD-0167 5.2). NFC로 합치고, 공백이 아닌 제어 문자를 지우고,
+     * 줄바꿈과 연속 공백을 공백 하나로 바꾼 뒤 앞뒤 공백을 지운다. 형식 문자(ZWJ 등)는 이모지 조합에 필요해
+     * 남기지만 그것만 남으면 빈 값이다.
+     */
+    public static String normalizeMessage(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String text = Normalizer.normalize(raw, Normalizer.Form.NFC);
+        text = CONTROLS.matcher(text).replaceAll("");
+        text = SPACES.matcher(text).replaceAll(" ").strip();
+        if (FORMATS.matcher(text).replaceAll("").isBlank()) {
+            return "";
+        }
+        return text;
+    }
+
+    /** 사람이 보는 글자(확장 그래핌 클러스터) 수. Java 20부터 BreakIterator가 이 기준을 따른다. */
+    public static int graphemeCount(String text) {
+        BreakIterator graphemes = BreakIterator.getCharacterInstance();
+        graphemes.setText(text);
+        int count = 0;
+        while (graphemes.next() != BreakIterator.DONE) {
+            count++;
+        }
+        return count;
+    }
+
+    /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. 글자 경계에서만 자른다. */
+    private static String messagePreview(String raw) {
+        String text = normalizeMessage(raw);
+        BreakIterator graphemes = BreakIterator.getCharacterInstance();
+        graphemes.setText(text);
+        int cut = 0;
+        for (int i = 0; i < PREVIEW_MAX_LENGTH - 1; i++) {
+            int next = graphemes.next();
+            if (next == BreakIterator.DONE) {
+                return text;
+            }
+            cut = next;
+        }
+        if (graphemes.next() == BreakIterator.DONE || graphemes.next() == BreakIterator.DONE) {
+            return text;
+        }
+        return text.substring(0, cut).stripTrailing() + "…";
     }
 
     private static Entry<String, NotificationCopy> copy(String code, String title, String body) {

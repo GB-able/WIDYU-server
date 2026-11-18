@@ -3,10 +3,14 @@ package com.widyu.fcm.dto;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.NotificationType;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+import com.widyu.member.Member;
 import lombok.Builder;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 @Builder
 public record FcmSendDto(
@@ -68,6 +72,34 @@ public record FcmSendDto(
                 .fcmCategory(type.fcmCategory()).notificationType(type)
                 .entityId(entityId).deepLink(deepLink).relatedMemberId(relatedMemberId)
                 .seniorId(seniorId).image(image).build();
+    }
+
+    /** 응원(X02), 하트(X01) 메시지 최대 글자 수(그래핌). 앱 입력창 50자와 같은 기준이다(LLD-0167 6절). */
+    public static final int MESSAGE_MAX_LENGTH = 50;
+
+    /**
+     * 가족 메시지 알림. 잠금화면(title, content)에는 고정 문구만 두고 미리보기는 앱 안 문구(centerTitle,
+     * centerBody, data.inAppTitle/inAppBody)와 알림센터에만 싣는다. 원문은 어디에도 남기지 않는다(LLD-0167).
+     */
+    public static FcmSendDto ofMessage(NotificationType type, Member sender, String message) {
+        String text = NotificationCopy.normalizeMessage(message);
+        if (text.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "메시지 내용을 입력해 주세요.");
+        }
+        if (NotificationCopy.graphemeCount(text) > MESSAGE_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "메시지는 50자 이하로 입력해 주세요.");
+        }
+        Map<String, String> values = Map.of(
+                "보낸 사람 이름", Objects.requireNonNullElse(sender.getName(), ""),
+                "메시지 미리보기", text);
+        String code = type.copyCode().substring(0, 3);
+        NotificationCopy push = NotificationCopy.of(type, code + "-OS", values);
+        NotificationCopy inApp = NotificationCopy.of(type, code + "-INAPP", values);
+        return FcmSendDto.builder().title(push.title()).content(push.body())
+                .fcmCategory(type.fcmCategory()).notificationType(type)
+                .image(sender.getProfileImage()).relatedMemberId(sender.getId())
+                .actorDisplayName(sender.getName())
+                .centerTitle(inApp.title()).centerBody(inApp.body()).build();
     }
 
     /** type이 없는 기존 호출자의 data는 그대로 둔다. */
