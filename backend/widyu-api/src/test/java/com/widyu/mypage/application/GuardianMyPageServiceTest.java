@@ -363,6 +363,68 @@ class GuardianMyPageServiceTest {
     }
 
     @Test
+    @DisplayName("집 위치가 있는 시니어의 프로필을 조회하면 집 좌표를 함께 반환한다")
+    void 집_위치가_있는_시니어_프로필을_조회하면_좌표를_반환한다() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Member seniorMember = mock(Member.class);
+        ParentLocation homeLocation = ParentLocation.builder()
+                .member(seniorMember)
+                .locationType(LocationType.HOME)
+                .placeAddress("서울시 강서구")
+                .latitude(37.55)
+                .longitude(126.85)
+                .name("집")
+                .build();
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(seniorProfile.getAddress()).willReturn("서울시 강서구");
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.of(homeLocation));
+
+        // when
+        SeniorProfileForGuardianResponse response = guardianMyPageService.getSeniorProfile(10L);
+
+        // then
+        assertThat(response.address()).isEqualTo("서울시 강서구");
+        assertThat(response.latitude()).isEqualTo(37.55);
+        assertThat(response.longitude()).isEqualTo(126.85);
+    }
+
+    @Test
+    @DisplayName("집 위치가 없는 시니어의 프로필을 조회하면 좌표를 null로 반환한다")
+    void 집_위치가_없는_시니어_프로필을_조회하면_좌표가_null이다() {
+        // given
+        Member guardian = mock(Member.class);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        Member seniorMember = mock(Member.class);
+
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(guardian.getId()).willReturn(1L);
+        given(seniorProfileRepository.findByMemberId(10L)).willReturn(Optional.of(seniorProfile));
+        given(seniorProfile.getId()).willReturn(100L);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 100L)).willReturn(true);
+        given(seniorProfile.getMember()).willReturn(seniorMember);
+        given(seniorProfile.getAddress()).willReturn("서울시 강서구");
+        given(parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME))
+                .willReturn(Optional.empty());
+
+        // when
+        SeniorProfileForGuardianResponse response = guardianMyPageService.getSeniorProfile(10L);
+
+        // then
+        assertThat(response.address()).isEqualTo("서울시 강서구");
+        assertThat(response.latitude()).isNull();
+        assertThat(response.longitude()).isNull();
+    }
+
+    @Test
     @DisplayName("가족으로 연결되지 않은 시니어의 프로필을 조회하면 예외가 발생한다")
     void 시니어_프로필_조회_접근권한_없음() {
         // given

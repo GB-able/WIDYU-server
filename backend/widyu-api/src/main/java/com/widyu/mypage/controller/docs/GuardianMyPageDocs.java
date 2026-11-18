@@ -17,6 +17,9 @@ import com.widyu.mypage.dto.response.GuardianOrderUpdateResponse;
 import com.widyu.mypage.dto.response.GuardianProfileDetailResponse;
 import com.widyu.mypage.dto.response.SeniorProfileForGuardianResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -86,9 +89,28 @@ public interface GuardianMyPageDocs {
     @ApiResponses({@ApiResponse(responseCode = "200", description = "조회 성공")})
     ApiResponseTemplate<ConnectedSeniorResponse> getConnectedSeniors();
 
-    @Operation(summary = "시니어 프로필 조회", description = "특정 시니어의 상세 프로필을 조회합니다.")
+    @Operation(summary = "시니어 프로필 조회", description = "특정 시니어의 상세 프로필을 조회합니다. 위도(`latitude`)와 경도(`longitude`)는 집(HOME) 안심구역의 좌표이며, 집 위치가 없으면 null입니다.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseTemplate.class),
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "code": "MYPAGE_2015",
+                                      "message": "시니어 프로필 조회 성공",
+                                      "data": {
+                                        "memberId": 1,
+                                        "profileImage": "https://example.com/profile.jpg",
+                                        "name": "홍길동",
+                                        "birthDate": "1950-01-01",
+                                        "phoneNumber": "01012345678",
+                                        "address": "서울특별시 강남구 테헤란로 123",
+                                        "inviteCode": "1234567",
+                                        "latitude": 37.5012,
+                                        "longitude": 127.0396
+                                      }
+                                    }
+                                    """))),
             @ApiResponse(responseCode = "403", description = "접근 권한 없음")
     })
     ApiResponseTemplate<SeniorProfileForGuardianResponse> getSeniorProfile(

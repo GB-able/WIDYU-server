@@ -179,7 +179,9 @@ public class GuardianMyPageService {
     public SeniorProfileForGuardianResponse getSeniorProfile(Long memberId) {
         Member guardian = MyPageProfileService.getCurrentMember(memberUtil);
         SeniorProfile seniorProfile = getSeniorProfileWithAccessCheck(memberId, guardian.getId());
-        return SeniorProfileForGuardianResponse.of(seniorProfile.getMember(), seniorProfile);
+        Member seniorMember = seniorProfile.getMember();
+        return SeniorProfileForGuardianResponse.of(seniorMember, seniorProfile,
+                parentLocationRepository.findByMemberAndLocationType(seniorMember, LocationType.HOME));
     }
 
     public FamilyCodeResponse getFamilyCode() {
