@@ -144,6 +144,7 @@
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
+- **SUBSCRIBE 거부는 버리되 알린다**: 위치, 심박 토픽의 가족 인가가 실패하거나 허용 목록 밖이거나 목적지가 없으면 구독을 버리고, 인증된 세션이면 그 세션 `/user/queue/errors`에 `{error: "FORBIDDEN", message, destination}`을 보낸다. 대상이 없는 회원인지 가족이 아닌지는 가리지 않는다. STOMP ERROR 프레임은 연결을 닫으므로 쓰지 않는다 → LLD-0032 6절(#1027)
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 - **위치 원본은 새로 저장하지 않는다**(2026-11-13 사용자 결정, 실증 회차 포함): `/app/location/update`를 `Message<byte[]>`로 받아 파싱하고 실시간 처리만 한다. `location_fix`의 과거 행, 조회, 내보내기, 보관 기간 정리, 탈퇴 삭제는 그대로이고 새 행만 생기지 않는다. 회차 필드는 받되 쓰지 않는다. 내보내기는 위치가 없는 회차를 `LOCATION_RAW_NOT_COLLECTED`로 신고한다. 심박, IMU 원본은 그대로 저장한다 → ADR-0045, LLD-0143 (옛 저장 설계는 LLD-0048)
 - **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 한다(`LOCATION_4000`). **v2 위치의 ACK(`LocationAckResponse`)는 「서버가 이 위치의 처리를 끝냈다」는 뜻이다(보호자 수신 보장 아님)**: 요청의 `deviceId`, `sessionId`, `seq`와 `result`를 싣는다. `APPLIED`는 판정 커밋과 최신 위치 반영, `SKIPPED`는 정상 생략(15분 지남, 최신보다 먼저 잰 위치, 같은 위치 재전송, 밀린 위치), `REJECTED`는 요청 오류다. 저장하지 않고 `STORED`라고 답하지 않는다. 기술 오류는 ACK 없이 오류로 보내 앱이 재전송하게 한다. 이 경로에서 일시적 실패를 `BusinessException`으로 던지지 않는다 → LLD-0143 **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)
