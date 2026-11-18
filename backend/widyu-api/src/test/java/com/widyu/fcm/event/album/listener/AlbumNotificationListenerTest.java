@@ -93,6 +93,37 @@ class AlbumNotificationListenerTest {
     }
 
     @Test
+    @DisplayName("보호자가 게시물을 올리면 같은 가족의 다른 보호자에게 A02-C를 보내고 본인은 받지 않는다")
+    void 보호자가_게시물을_올리면_다른_보호자에게_A02_C를_보낸다() {
+        // given
+        Member author = member(1L, MemberType.GUARDIAN, "작성 보호자");
+        Member other = member(3L, MemberType.GUARDIAN, "다른 보호자");
+        FamilyMembership authorMembership = mock(FamilyMembership.class);
+        FamilyMembership otherMembership = mock(FamilyMembership.class);
+        given(authorMembership.getGuardian()).willReturn(author);
+        given(otherMembership.getGuardian()).willReturn(other);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(author));
+        given(familyMembershipRepository.findFamilyIdByGuardianId(1L)).willReturn(Optional.of(7L));
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(7L)).willReturn(List.of());
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(7L))
+                .willReturn(List.of(authorMembership, otherMembership));
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        listener.handleAlbumCreated(new AlbumCreatedEvent(10L, 1L));
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(3L), captor.capture());
+        FcmSendDto created = captor.getValue();
+        assertThat(created.notificationType()).isEqualTo(NotificationType.ALBUM_CREATED);
+        assertThat(created.title()).isEqualTo("작성 보호자 님이 새로운 소식을 전했어요!");
+        assertThat(created.relatedMemberId()).isEqualTo(1L);
+        assertThat(created.seniorId()).isNull();
+        assertThat(created.dataForEnqueue("e-1")).containsEntry("deepLink", GuardianDeepLinks.post("10"));
+        then(fcmService).should(times(1)).sendMessageToUser(eq(1L), any(FcmSendDto.class));
+    }
+
+    @Test
     @DisplayName("시니어가 게시물을 올리면 보호자에게 A02-C와 보호자 앱 딥링크를 만든다")
     void 시니어가_게시물을_올리면_보호자_앱_알림을_만든다() {
         // given
@@ -339,6 +370,49 @@ class AlbumNotificationListenerTest {
         assertThat(captor.getValue().notificationType()).isEqualTo(NotificationType.ALBUM_UNLOCKED);
         assertThat(captor.getValue().dataForEnqueue("e-4"))
                 .containsEntry("remainingLockedCount", "0");
+    }
+
+    @Test
+    @DisplayName("마지막 잠긴 게시물을 열어 이것만 보면 모두 본 상태면 A06-Z를 보내지 않고 본인 A08만 보낸다")
+    void 마지막_게시물을_열어_모두_본_상태가_되면_A06_Z를_보내지_않는다() {
+        // given
+        Member senior = member(1L, MemberType.SENIOR, "시니어");
+        Member writer = member(2L, MemberType.GUARDIAN, "보호자");
+        Album album = album(10L, writer);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
+        given(albumRepository.findByIdWithMember(10L)).willReturn(Optional.of(album));
+        given(albumUnlockRepository.countRemainingLockedByWriterAndSenior(2L, 1L, 10L)).willReturn(0L);
+        given(albumViewRepository.countViewedAlbumsByGuardianAndParent(1L, 2L)).willReturn(4L);
+        given(albumViewRepository.countTotalAlbumsByParent(2L)).willReturn(5L);
+
+        // when
+        listener.handleAlbumUnlocked(new AlbumUnlockedEvent(10L, 1L));
+
+        // then
+        then(fcmService).should(never()).sendMessageToUser(eq(2L), any(FcmSendDto.class));
+        then(fcmService).should().sendMessageToUser(eq(1L), any(FcmSendDto.class));
+    }
+
+    @Test
+    @DisplayName("마지막 잠긴 게시물을 열어도 열고 안 본 게시물이 남아 있으면 A06-Z를 보낸다")
+    void 열고_안_본_게시물이_남아_있으면_A06_Z를_보낸다() {
+        // given
+        Member senior = member(1L, MemberType.SENIOR, "시니어");
+        Member writer = member(2L, MemberType.GUARDIAN, "보호자");
+        Album album = album(10L, writer);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
+        given(albumRepository.findByIdWithMember(10L)).willReturn(Optional.of(album));
+        given(albumUnlockRepository.countRemainingLockedByWriterAndSenior(2L, 1L, 10L)).willReturn(0L);
+        given(albumViewRepository.countViewedAlbumsByGuardianAndParent(1L, 2L)).willReturn(3L);
+        given(albumViewRepository.countTotalAlbumsByParent(2L)).willReturn(5L);
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        listener.handleAlbumUnlocked(new AlbumUnlockedEvent(10L, 1L));
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
+        assertThat(captor.getValue().content()).isEqualTo("아직 잠금을 해제하지 않은 새 소식이 없어요.");
     }
 
     @Test

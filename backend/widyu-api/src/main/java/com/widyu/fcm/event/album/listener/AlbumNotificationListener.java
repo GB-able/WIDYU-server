@@ -68,13 +68,7 @@ public class AlbumNotificationListener {
             if (familyId.isEmpty()) {
                 return;
             }
-            for (FamilyMembership membership : familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId.get())) {
-                Member guardian = membership.getGuardian();
-                NotificationCopy copy = NotificationCopy.of(NotificationType.ALBUM_CREATED, "A02-C",
-                        Map.of("작성자 이름", author.getName()));
-                send(guardian.getId(), FcmSendDto.of(NotificationType.ALBUM_CREATED, copy, albumId,
-                        GuardianDeepLinks.post(albumId), author.getId(), author.getId(), author.getProfileImage()));
-            }
+            notifyGuardians(author, familyId.get(), albumId, author.getId());
             return;
         }
 
@@ -88,6 +82,22 @@ public class AlbumNotificationListener {
                     Map.of("작성자 이름", author.getName()));
             send(senior.getMember().getId(), FcmSendDto.of(NotificationType.ALBUM_CREATED, copy,
                     albumId, null, author.getId(), null, author.getProfileImage()));
+        }
+        // 정책서 A02-C는 「다른 가족이나 어르신이 올렸을 때」라 같은 가족의 다른 보호자에게도 보낸다.
+        notifyGuardians(author, familyId.get(), albumId, null);
+    }
+
+    /** 가족 보호자에게 A02-C를 보낸다. 올린 사람이 보호자면 본인은 뺀다. */
+    private void notifyGuardians(Member author, Long familyId, String albumId, Long seniorId) {
+        for (FamilyMembership membership : familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId)) {
+            Member guardian = membership.getGuardian();
+            if (guardian.getId().equals(author.getId())) {
+                continue;
+            }
+            NotificationCopy copy = NotificationCopy.of(NotificationType.ALBUM_CREATED, "A02-C",
+                    Map.of("작성자 이름", author.getName()));
+            send(guardian.getId(), FcmSendDto.of(NotificationType.ALBUM_CREATED, copy, albumId,
+                    GuardianDeepLinks.post(albumId), author.getId(), seniorId, author.getProfileImage()));
         }
     }
 
@@ -184,16 +194,20 @@ public class AlbumNotificationListener {
         Member writer = album.getMember();
         int remaining = Math.toIntExact(albumUnlockRepository.countRemainingLockedByWriterAndSenior(
                 writer.getId(), senior.getId(), album.getId()));
-        String code = "A06-L";
-        if (remaining == 0) {
-            code = "A06-Z";
+        // 마지막 잠긴 게시물을 열었고 이것만 보면 모두 본 상태면, 이어지는 첫 조회에서 A07이 가므로 A06-Z는 보내지 않는다
+        // (위듀케어 정책서 10절 추천). 해제 전 게시물은 조회로 치지 않아 이 게시물은 아직 조회 수에 없다.
+        if (remaining > 0 || !allViewedAfterThis(senior, writer)) {
+            String code = "A06-L";
+            if (remaining == 0) {
+                code = "A06-Z";
+            }
+            NotificationCopy copy = NotificationCopy.of(NotificationType.ALBUM_UNLOCKED, code,
+                    unlockCopyValues(senior.getName(), remaining));
+            send(writer.getId(), FcmSendDto.of(NotificationType.ALBUM_UNLOCKED, copy,
+                    album.getId().toString(), null,
+                    senior.getId(), senior.getId(), senior.getProfileImage())
+                    .withSeniorUnlockDetails(senior.getName(), remaining));
         }
-        NotificationCopy copy = NotificationCopy.of(NotificationType.ALBUM_UNLOCKED, code,
-                unlockCopyValues(senior.getName(), remaining));
-        send(writer.getId(), FcmSendDto.of(NotificationType.ALBUM_UNLOCKED, copy,
-                album.getId().toString(), null,
-                senior.getId(), senior.getId(), senior.getProfileImage())
-                .withSeniorUnlockDetails(senior.getName(), remaining));
 
         // 연 어르신 본인에게 쓴 포인트를 알린다(A08). 해제는 게시물마다 한 번이라 다시 접수돼도 센터 행은 하나다.
         NotificationCopy openedCopy = NotificationCopy.of(NotificationType.ALBUM_OPENED_BY_SENIOR, "A08",
@@ -203,6 +217,11 @@ public class AlbumNotificationListener {
                 .notificationType(NotificationType.ALBUM_OPENED_BY_SENIOR)
                 .eventId("A08:" + album.getId() + ":" + senior.getId())
                 .entityId(album.getId().toString()).image(writer.getProfileImage()).build());
+    }
+
+    private boolean allViewedAfterThis(Member senior, Member writer) {
+        long viewed = albumViewRepository.countViewedAlbumsByGuardianAndParent(senior.getId(), writer.getId());
+        return viewed + 1 == albumViewRepository.countTotalAlbumsByParent(writer.getId());
     }
 
     private Map<String, String> unlockCopyValues(String seniorName, int remaining) {
