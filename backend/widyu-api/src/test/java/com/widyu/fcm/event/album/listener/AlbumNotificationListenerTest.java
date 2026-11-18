@@ -288,6 +288,36 @@ class AlbumNotificationListenerTest {
     }
 
     @Test
+    @DisplayName("어르신이 게시물 잠금을 풀면 본인에게 쓴 포인트와 그 게시물 경로로 A08을 보낸다")
+    void 어르신이_게시물_잠금을_풀면_본인에게_A08을_보낸다() {
+        // given
+        Member senior = member(1L, MemberType.SENIOR, "시니어");
+        Member writer = member(2L, MemberType.GUARDIAN, "보호자");
+        Album album = album(10L, writer);
+        given(memberRepository.findById(1L)).willReturn(Optional.of(senior));
+        given(albumRepository.findByIdWithMember(10L)).willReturn(Optional.of(album));
+        given(albumUnlockRepository.countRemainingLockedByWriterAndSenior(2L, 1L, 10L)).willReturn(3L);
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        listener.handleAlbumUnlocked(new AlbumUnlockedEvent(10L, 1L));
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(1L), captor.capture());
+        FcmSendDto opened = captor.getValue();
+        assertThat(opened.notificationType()).isEqualTo(NotificationType.ALBUM_OPENED_BY_SENIOR);
+        assertThat(opened.notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
+        assertThat(opened.notificationType().centerFilter()).isEqualTo("ALBUM");
+        assertThat(opened.title()).isEqualTo("새 게시물을 열었어요.");
+        assertThat(opened.content()).isEqualTo("50P를 사용했어요.");
+        assertThat(opened.eventId()).isEqualTo("A08:10:1");
+        assertThat(opened.relatedMemberId()).isNull();
+        assertThat(opened.dataForEnqueue("e-8"))
+                .containsEntry("deepLink", "/album/post?postId=10")
+                .containsEntry("entityId", "10");
+    }
+
+    @Test
     @DisplayName("잠금 해제 뒤 남은 게시물이 없으면 A06-Z를 쓰고 모두 읽음은 만들지 않는다")
     void 잠금_해제_뒤_남은_게시물이_없으면_A06_Z만_만든다() {
         // given
