@@ -41,7 +41,7 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 | `ALBUM_UNLOCKED` | 게시물을 올린 보호자 한 명 | `PUSH_AND_CENTER` A06-L(남음)/A06-Z(0) | 위듀케어 해당 게시물, `entityId=albumId`, `seniorId`, `seniorDisplayName`, `remainingLockedCount`(0 포함) |
 | `ALBUM_ALL_VIEWED` | 작성자 GUARDIAN·독자 SENIOR 조합의 보호자 작성자만 | `PUSH_AND_CENTER` A07 | 총수·읽은 수를 ACTIVE 기준으로 일치, `/album`, `seniorId=읽은 시니어` |
 | `HEALTH_SCHEDULE_UPCOMING` | 시니어 일정 소유자만 | `PUSH_AND_CENTER` H01-S의 `-OS`/`-INAPP` | 시니어 일정 상세, `entityId=scheduleId`; 보호자 본인 일정은 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 발행하지 않음 |
-| `WALK_GOAL_UNMET` | 19시 목표 미달인 시니어(0걸음 포함, #801) | `PUSH_AND_CENTER` W01(#1106 전에는 `PUSH_ONLY`), `eventId=W01:{memberId}:{date}` | 걷기 목표, 실제 걸음 수 |
+| `WALK_GOAL_UNMET` | 19시 목표 미달인 시니어(1걸음 이상, 0걸음과 기록 없음은 보내지 않음, #1120) | `PUSH_AND_CENTER` W01(#1106 전에는 `PUSH_ONLY`), `eventId=W01:{memberId}:{date}` | 걷기 목표, 실제 걸음 수 |
 
 앨범 시니어 딥링크는 W2 제안 `widyu://albums/{entityId}`를 유지한다. 보호자 A01/A02/A05는 `/post?postId={albumId}`, A03/A04는 `/post?postId={albumId}&commentId={commentId}`, A06은 `/post?postId={entityId}`, A07은 `/album`을 사용한다. 보호자 역할별 경로는 `GuardianDeepLinks`가 만들고 A06/A07은 `NotificationType` 템플릿을 사용한다([LLD-0076](LLD-0076-guardian-deeplink-paths.md)). H01 보호자 본인 일정은 서버 미사용이며 W01은 `widyu://walk/goal`을 유지한다. `FcmCategory`는 기존 ALBUM/HEALTH_SCHEDULE/WALK를 사용한다.
 
@@ -117,6 +117,7 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 - A05를 `PUSH_AND_CENTER`로 바꾸고 설정 그룹을 `GENERAL`로 둔다(보호자는 「일반」, 시니어는 기존 `forSenior(ALBUM)` 판정). 정책서 우선순위 표는 조용히(`PASSIVE`)에 업로드 완료와 걷기 미달만 두므로 A05는 보통(`INTERACTION`), 앱 안 표시는 다른 앨범 알림과 같은 `BANNER`다.
 - 다시 접수돼도 센터 행이 하나만 남도록 `eventId`를 정한다. A01 `A01:{albumId}`, W01 `W01:{memberId}:{date}`. M02, M03은 이미 `{type}:{scheduleId}:{recipientId}:{date}` 기반이다. 같은 `eventId`로 다시 접수하면 센터 행은 재사용하고 기기별 푸시는 다시 만든다(기존 enqueue 동작).
 - W01 0걸음 발송(#801)은 그대로다. 정책서는 미정(추천: 안 보냄)이다.
+  - 2026-11-18 갱신(#1120): 사용자 결정으로 0걸음 기록과 오늘 기록 없음은 보내지 않는다.
 - 배포 순간 이미 `PUSH_ONLY`로 접수돼 미전송인 outbox 행은 `notification_id`가 없다. `FcmDelivery`는 지금까지 타입의 전달 방식이 센터 저장이면 outbox ID를 센터 ID로 대신 보냈다([LLD-0062](LLD-0062-notification-center-row-per-event.md) §5-6의 W3 이전 폴백). 그러면 이 행들이 존재하지 않거나 다른 센터 행 ID를 보내므로, 타입 있는 행은 FK가 없으면 `notificationId`를 보내지 않게 바꾼다. 폴백은 타입 없는 레거시 행에만 남는다. W3(2026-10-01) 이전에 접수된 미전송 outbox는 푸시 만료(TTL)가 지나 더 전송되지 않는다.
 - 인수조건
   - [x] A01, A05, M02, M03, W01 접수 시 센터 행 1건과 기기별 outbox가 만들어진다.
@@ -128,7 +129,7 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 - A06 두 필드의 응답 DTO 반영은 W4 머지 뒤 후속 작업에서 W4 위 stack 작업으로 변경했다. 응답은 DB 저장값을 그대로 사용하고 0과 null을 구분한다.
 - 계획 §5의 2026-10-02 임시 보호자 경로는 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 2026-10-03 FE 문서의 앱 내부 경로로 교체·확정했다. 위듀 경로는 FE 전달 대기다. H01-C-SELF 문구는 `NotificationCopy`에 정본표로 남지만 서버 미사용이다.
 - 계획 §5 가정표 원문: `시니어 푸시 설정 항목 | GENERAL 하나 | 그대로 | —`. 시니어 대상 A01·A02·H01·W01에도 이 가정을 따른다.
-- W01 0걸음 발송은 #801에서 보냄으로 바뀌었고, 정책서 v12는 미정(추천: 안 보냄)이다. #1106은 보냄을 유지한다.
+- W01 0걸음 발송은 #801에서 보냄으로 바뀌었고, 정책서 v12는 미정(추천: 안 보냄)이다. #1106은 보냄을 유지한다. #1120에서 안 보냄으로 바꿨다.
 - W01의 `신뢰 불가` 값 정의는 회신 대기다. 현재 `Walk.actualSteps`에 품질·출처 필드가 없으므로 **양수 동기화값을 신뢰**하는 작업 가정으로 구현한다(2026-10-02 코디네이터 답변). 0·Walk 행 없음은 발송하지 않으며 임의 상한·최신성 기준과 새 필드는 만들지 않는다. hemlo 회신이 다른 기준을 정하면 이 항목과 판정을 개정한다.
 - A06 남은 수는 서버가 같은 트랜잭션의 단순 count 쿼리로 항상 계산 가능하므로 대체 문구 경로가 없다. DB 오류는 트랜잭션 실패로 처리한다.
 - 기존 3/5/7일 앨범 비활성 알림은 type 없는 레거시 동작을 유지한다. hemlo 회신 뒤 지속 여부를 별도 PR에서 결정한다.
