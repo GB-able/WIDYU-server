@@ -40,6 +40,7 @@ import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -147,6 +148,11 @@ class MedicineScheduleServiceTest {
                 .containsExactly(currentMonth.getYear(), currentMonth.getMonthValue(), 5L, 11L, 45);
     }
 
+    private void fixClockAt(LocalDateTime dateTime) {
+        ReflectionTestUtils.setField(medicineScheduleService, "clock",
+                Clock.fixed(dateTime.atZone(SEOUL).toInstant(), SEOUL));
+    }
+
     private void fixClockAt(LocalDate date) {
         ReflectionTestUtils.setField(medicineScheduleService, "clock",
                 Clock.fixed(date.atTime(12, 0).atZone(SEOUL).toInstant(), SEOUL));
@@ -155,11 +161,7 @@ class MedicineScheduleServiceTest {
     /** 그 달 1일부터 days일까지 하루 한 번 인증한 기록. */
     private List<MedicationProof> proofsOn(MedicineSchedule schedule, Member member, YearMonth month, int days) {
         return month.atDay(1).datesUntil(month.atDay(days + 1))
-                .map(date -> {
-                    MedicationProof proof = MedicationProof.create(schedule, member, List.of("proof.jpg"));
-                    ReflectionTestUtils.setField(proof, "verifiedDate", date);
-                    return proof;
-                })
+                .map(date -> MedicationProof.create(schedule, member, List.of("proof.jpg"), date.atTime(8, 0), date))
                 .toList();
     }
 
@@ -336,7 +338,8 @@ class MedicineScheduleServiceTest {
         given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
         givenProvedToday(existing, true);
         givenSavedScheduleId(101L);
-        MedicationProof proof = MedicationProof.create(existing, targetMember, List.of());
+        MedicationProof proof = MedicationProof.create(
+                existing, targetMember, List.of(), today().atTime(OPEN_ALARM), today());
 
         // when
         MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
@@ -803,6 +806,125 @@ class MedicineScheduleServiceTest {
         // then
         assertThat(response.medicineSchedules()).extracting(MedicineHomeResponse.ScheduleItem::medicineScheduleId)
                 .containsExactly(100L);
+    }
+
+    @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 수정은 예외가 발생하고 버전을 바꾸지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_수정은_예외가_발생한다() {
+        // given: 23:50에 다음 날 00:10 알람을 미리 인증해 둔 상태(LLD-0101)
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(0, 10), today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.updateSchedule(scheduleId, updateRequest("09:00"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        assertThat(existing.isCurrent()).isTrue();
+        then(medicineScheduleRepository).should(never()).save(any());
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 삭제는 예외가 발생하고 마감하지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_삭제는_예외가_발생한다() {
+        // given
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(0, 10), today().minusDays(5));
+        given(medicineScheduleRepository.findById(scheduleId)).willReturn(Optional.of(existing));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today()))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.deleteSchedule(scheduleId, memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        assertThat(existing.isCurrent()).isTrue();
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("다음 날 복용분을 이미 인증했으면 자정 전 스케줄 등록은 예외가 발생하고 저장하지 않는다")
+    void 다음_날_복용분을_인증했으면_자정_전_스케줄_등록은_예외가_발생한다() {
+        // given: 다음 날 일정이 하나뿐일 때 미리 인증해 완주 보너스를 받은 상태. 일정을 더하면 보너스가 다시 나간다.
+        Long memberId = 1L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        given(medicationProofRepository.existsByMemberAndVerifiedDateAfter(targetMember, today())).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> medicineScheduleService.createSchedule(createRequest("08:00"), memberId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("자정이 지난 뒤");
+        then(medicineScheduleRepository).should(never()).save(any());
+        then(fcmService).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("자정 뒤에 전날 분을 인증한 23시 50분 알람을 수정하면 막지 않고 오늘부터 새 버전을 적용한다")
+    void 자정_뒤에_전날_분을_인증한_알람을_수정하면_오늘부터_새_버전을_적용한다() {
+        // given: 00:15에 어제 23:50 알람을 인증해 둔 상태다(복용 기준일 = 어제). 오늘 23:50 알람은 아직 안 끝났다.
+        fixClockAt(today().atTime(0, 15));
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(23, 50), today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
+        // 오늘 끝났는지는 오늘 날짜 인증으로만 본다. 어제 날짜로 조회하면 엄격한 스텁이 실패한다.
+        givenProvedToday(existing, false);
+        givenSavedScheduleId(101L);
+
+        // when
+        MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
+                scheduleId, updateRequest("09:00"), memberId);
+
+        // then: 옛 버전은 어제까지 유효해 어제 인증이 그대로 남는다.
+        assertThat(existing.getEffectiveTo()).isEqualTo(today().minusDays(1));
+        assertThat(existing.isEffectiveOn(today().minusDays(1))).isTrue();
+        assertThat(response.effectiveFromDate()).isEqualTo(today());
+        then(medicationProofRepository).should().existsByMemberAndVerifiedDateAfter(targetMember, today());
+    }
+
+    @Test
+    @DisplayName("전날 밤에 미리 인증한 0시 10분 알람을 자정 뒤에 수정하면 막지 않고 끝난 알람으로 보아 내일부터 적용한다")
+    void 전날_밤에_미리_인증한_알람을_자정_뒤에_수정하면_내일부터_적용한다() {
+        // given: 어제 23:50에 오늘 0시 10분 분을 인증했다(복용 기준일 = 오늘). 00:20은 아직 인증 가능 시간 안이다.
+        fixClockAt(today().atTime(0, 20));
+        Long memberId = 1L;
+        Long scheduleId = 100L;
+        Member targetMember = seniorWithId(memberId);
+        given(memberRepository.findByIdForUpdate(memberId)).willReturn(Optional.of(targetMember));
+        MedicineSchedule existing = scheduleEffectiveFrom(
+                scheduleId, targetMember, LocalTime.of(0, 10), today().minusDays(5));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(scheduleId, Status.ACTIVE))
+                .willReturn(Optional.of(existing));
+        given(medicineRepository.findByItemName("타이레놀")).willReturn(Optional.of(mock(Medicine.class)));
+        givenProvedToday(existing, true);
+        givenSavedScheduleId(101L);
+
+        // when
+        MedicineScheduleIdResponse response = medicineScheduleService.updateSchedule(
+                scheduleId, updateRequest("09:00"), memberId);
+
+        // then: 오늘 분 인증이 남은 옛 버전은 오늘까지 유효하다.
+        assertThat(existing.getEffectiveTo()).isEqualTo(today());
+        assertThat(existing.isEffectiveOn(today())).isTrue();
+        assertThat(response.effectiveFromDate()).isEqualTo(today().plusDays(1));
     }
 
     @Test
