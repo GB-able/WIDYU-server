@@ -10,6 +10,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.global.error.BusinessException;
@@ -21,7 +22,6 @@ import com.widyu.member.MemberType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("HeartMessageService 예외 처리 단위 테스트")
@@ -69,7 +70,8 @@ class HeartMessageServiceTest {
         assertThat(captor.getValue().relatedMemberId()).isEqualTo(1L);
         assertThat(captor.getValue().emergency()).isFalse();
         assertThat(captor.getValue().dataForEnqueue("heart-senior"))
-                .isEqualTo(Map.of("deepLink", "/notification", "notificationType", "HEART_MESSAGE_RECEIVED"));
+                .containsEntry("deepLink", "/notification")
+                .containsEntry("notificationType", "HEART_MESSAGE_RECEIVED");
     }
 
     @Test
@@ -95,9 +97,38 @@ class HeartMessageServiceTest {
 
         // then
         then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
-        assertThat(captor.getValue().notificationType()).isNull();
         assertThat(captor.getValue().dataForEnqueue("heart-guardian"))
                 .containsEntry("deepLink", "/notification");
+    }
+
+    @Test
+    @DisplayName("하트 메시지를 보내면 잠금화면 문구에는 원문을 넣지 않고 앱 안 문구와 알림센터에 미리보기를 싣는다")
+    void 하트_메시지를_보내면_잠금화면에_원문을_넣지_않는다() {
+        // given
+        Member sender = Member.createMember(MemberType.SENIOR, "어르신", "01011112222");
+        ReflectionTestUtils.setField(sender, "id", 1L);
+        Member receiver = mock(Member.class);
+        SeniorProfile profile = mock(SeniorProfile.class);
+        ReflectionTestUtils.setField(sender, "seniorProfile", profile);
+        given(memberUtil.getCurrentMember()).willReturn(sender);
+        given(memberRepository.findById(2L)).willReturn(Optional.of(receiver));
+        given(profile.getId()).willReturn(20L);
+        given(receiver.getId()).willReturn(2L);
+        given(receiver.getType()).willReturn(MemberType.GUARDIAN);
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(2L, 20L)).willReturn(true);
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        heartMessageService.sendHeartMessage(new HeartMessageRequest(2L, "고유원문\n오늘 병원 다녀왔어요"));
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
+        FcmSendDto dto = captor.getValue();
+        assertThat(dto.title()).isEqualTo("어르신 님이 메시지를 보냈어요!");
+        assertThat(dto.content()).isEqualTo("앱에서 메시지를 확인해주세요.");
+        assertThat(dto.notificationType()).isEqualTo(NotificationType.HEART_MESSAGE_RECEIVED);
+        assertThat(dto.centerBodyOrContent()).isEqualTo("고유원문 오늘 병원 다녀왔어요");
+        assertThat(dto.dataForEnqueue("heart-event")).containsEntry("inAppBody", "고유원문 오늘 병원 다녀왔어요");
     }
 
     @Test

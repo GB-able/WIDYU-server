@@ -1,6 +1,5 @@
 package com.widyu.heart.application;
 
-import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
@@ -12,7 +11,6 @@ import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,21 +34,8 @@ public class HeartMessageService {
 
         validateFamilyConnection(sender, receiver);
 
-        String title = sender.getName() + "님이 메시지를 보냈어요.";
-        NotificationType type = NotificationType.HEART_MESSAGE_RECEIVED;
-        Map<String, String> data = Map.of("deepLink", type.deepLinkTemplate(), "notificationType", type.name());
-
-        FcmSendDto fcmSendDto = FcmSendDto.builder()
-                .title(title)
-                .content(request.message())
-                .fcmCategory(FcmCategory.HEART_MESSAGE)
-                .scheme("")
-                .image(sender.getProfileImage())
-                .relatedMemberId(sender.getId())
-                .data(data)
-                .build();
-
-        fcmService.sendMessageToUser(receiver.getId(), fcmSendDto);
+        fcmService.sendMessageToUser(receiver.getId(),
+                FcmSendDto.ofMessage(NotificationType.HEART_MESSAGE_RECEIVED, sender, request.message()));
         log.info("하트 메시지 발송 요청 접수: senderId={}, receiverId={}", sender.getId(), receiver.getId());
     }
 

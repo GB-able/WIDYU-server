@@ -11,7 +11,6 @@ import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.album.repository.AlbumViewRepository;
-import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.member.FamilyMembership;
@@ -33,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -48,7 +46,6 @@ public class FcmService {
     private final FcmNotificationRepository fcmNotificationRepository;
     private final MemberFcmTokenRepository memberFcmTokenRepository;
     private final AlbumViewRepository albumViewRepository;
-    private final MemberRepository memberRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
@@ -192,7 +189,7 @@ public class FcmService {
             return ToastResDto.from(seniorName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요.");
     }
 
-    // 응원 알림 보내기
+    // 응원 알림 보내기. 잠금화면에는 고정 문구, 앱 안 문구와 알림센터에는 40자 미리보기만 싣는다(LLD-0167).
     @Transactional
     public void sendNotificationToMember(SendNotificationRequest sendNotificationRequest) {
         Member sender = memberUtil.getCurrentMember();
@@ -200,25 +197,7 @@ public class FcmService {
         if (!familyAccessService.getFamilyMemberIds(sender).contains(sendNotificationRequest.receiverId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "같은 가족에게만 응원 메시지를 보낼 수 있습니다.");
         }
-        Member receiver = memberRepository.findById(sendNotificationRequest.receiverId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-
-        // 알림 제목: "보내는사람님이 받는사람님에게 응원메시지를 보냈어요."
-        String title = sender.getName() + "님이 " + receiver.getName() + "님에게 응원메시지를 보냈어요.";
-        NotificationType type = NotificationType.CHEER_MESSAGE_RECEIVED;
-        Map<String, String> data = Map.of("deepLink", type.deepLinkTemplate(), "notificationType", type.name());
-
-        FcmSendDto fcmSendDto = FcmSendDto.builder()
-                .title(title)
-                .content(sendNotificationRequest.content())
-                .fcmCategory(type.fcmCategory())
-                .scheme("")
-                .image(sender.getProfileImage())
-                .relatedMemberId(sender.getId())
-                .data(data)
-                .build();
-
-        // 받는 사람에게 알림 전송
-        sendMessageToUser(sendNotificationRequest.receiverId(), fcmSendDto);
+        sendMessageToUser(sendNotificationRequest.receiverId(), FcmSendDto.ofMessage(
+                NotificationType.CHEER_MESSAGE_RECEIVED, sender, sendNotificationRequest.content()));
     }
 }
