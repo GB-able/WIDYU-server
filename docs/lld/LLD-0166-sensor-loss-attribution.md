@@ -105,10 +105,10 @@ endpoint는 그대로다(WebSocket `/app/sensor/batches/send`, REST `POST /api/v
 | `missing_count` | `to_seq - from_seq + 1` |
 | `gap_start_ms`, `gap_start_kst` | 구간 바로 앞 묶음의 측정 끝 시각 |
 | `gap_end_ms`, `gap_end_kst` | 구간 바로 뒤 묶음의 측정 시작 시각 |
-| `dropped_count`, `dropped_reasons` | 구간 안 번호 중 워치 버림 기록이 덮는 수, 그 사유(겹치는 기록의 사유를 `;`로) |
+| `dropped_count`, `dropped_reasons` | 구간 안 번호 중 기기 버림 기록(같은 세션, 같은 `dropped_stream`)이 덮는 수, 그 사유(겹치는 기록의 사유를 `;`로) |
 | `rejected_count`, `rejection_codes`, `rejection_channels` | 구간 안 번호 중 서버 거절 기록이 있는 수, 오류 코드, 경로(`;`로) |
 | `unexplained_count` | 두 기록 어디에도 없는 수 |
-| `cause` | `WATCH_DROPPED`, `SERVER_REJECTED`, `NO_RECORD` 중 해당하는 것을 `;`로. 예: `WATCH_DROPPED;NO_RECORD`는 일부만 버림 기록이 있다 |
+| `cause` | `DEVICE_DROPPED`(기기 버림), `SERVER_REJECTED`(서버 거절), `NO_RECORD`(둘 다 없음) 중 해당하는 것을 `;`로. 예: `DEVICE_DROPPED;NO_RECORD`는 일부만 버림 기록이 있다. 버림 기록은 폰(`imu_phone`)도 보낼 수 있어 `WATCH`가 아니라 `DEVICE`로 부른다 |
 
 `seq_sessions.csv` — 세션 한 줄씩. 세션 단위 누락률의 근거다:
 
@@ -181,7 +181,7 @@ Flyway `V3__sensor_dropped_range_stream.sql`: 기본값 `imu_watch`로 칸을 �
 
 1. 묶음을 `(stream, session_id)`로 묶는다. 세션의 번호 집합 = 각 묶음의 `seq` ∪ **재전송 계보**(`is_resend=true`인 묶음의 `(original_session_id, original_seq)`를 원 세션의 번호로 더한다). 재전송으로 채운 번호는 빠진 것이 아니다
 2. 세션 안에서 **처음과 끝 번호 사이**만 본다. 세션 앞(번호 0~처음 직전)과 뒤는 보지 않는다. 내보내기 구간이 세션 중간에서 시작하거나 끝날 수 있어, 앞뒤를 빠짐으로 적으면 구간 밖 묶음이 모두 빠진 것으로 잘못 나온다. 세션 끝에서 버린 묶음은 `dropped_ranges.csv`에서 본다
-3. 빈 번호를 이어진 구간으로 묶는다. 구간마다 같은 세션의 버림 기록(번호 범위가 겹치는 것), 거절 기록(`session_id`가 같고 `seq`가 구간 안, `stream`이 있으면 같은 것)을 찾아 3.3 열을 채운다
+3. 빈 번호를 이어진 구간으로 묶는다. 구간마다 같은 세션, 같은 자료 종류의 버림 기록(번호 범위가 겹치는 것), 거절 기록(`session_id`가 같고 `seq`가 구간 안, `stream`이 있으면 같은 것)을 찾아 3.3 열을 채운다. 버림과 거절이 같은 번호를 함께 덮으면 `unexplained_count`에서 한 번만 뺀다
 4. 버림, 거절 기록은 **세션으로** 찾는다(4.3). 시각으로 찾으면 큐 넘침 기록(`ts_ms`)은 버린 묶음보다 최대 30분 늦어 내보내기 구간 밖으로 빠지고, 그 구간이 "기록 없음"으로 잘못 나온다. 세션을 읽지 못한 거절(본문 해석 불가 등)은 대조할 수 없고 `rejections.csv`에만 나온다
 
 ### 5.4 내보내기 조립 (PR C)
@@ -212,20 +212,20 @@ PR A
 - [x] 기간 내보내기 `dropped_ranges.csv`에 `dropped_stream` 열이 있다
 
 PR B
-- [ ] WS 본문 크기 초과는 `SENSOR_4000`, `WS`, 읽을 수 있는 식별자와 함께 거절 기록 한 행을 남기고 ACK는 전과 같다
-- [ ] 센서 실행기 포화는 `SRV_5031`, `WS`, 식별자와 함께 거절 기록 한 행을 남기고 `TEMPORARILY_BUSY` 응답은 전과 같다
-- [ ] 거절 기록 쓰기는 수신 스레드가 아닌 기록 스레드에서 하고, 대기열이 가득 차면 버리고 카운터를 올린다
-- [ ] 기록 저장 실패가 응답을 바꾸지 않는다
-- [ ] 원문과 센서 값이 거절 기록, 로그에 없다
+- [x] WS 본문 크기 초과는 `SENSOR_4000`, `WS`, 읽을 수 있는 식별자와 함께 거절 기록 한 행을 남기고 ACK는 전과 같다
+- [x] 센서 실행기 포화는 `SRV_5031`, `WS`, 식별자와 함께 거절 기록 한 행을 남기고 `TEMPORARILY_BUSY` 응답은 전과 같다
+- [x] 거절 기록 쓰기는 수신 스레드가 아닌 기록 스레드에서 하고, 대기열이 가득 차면 버리고 카운터를 올린다
+- [x] 기록 저장 실패가 응답을 바꾸지 않는다
+- [x] 원문과 센서 값이 거절 기록, 로그에 없다
 
 PR C
-- [ ] 세션 안 빠진 번호 구간마다 버림 기록 수와 사유, 거절 기록 수와 오류 코드, 둘 다 없는 수와 원인을 `seq_gaps.csv`에 적는다
-- [ ] 재전송으로 채운 번호는 빠진 것으로 적지 않는다
-- [ ] 세션 앞뒤 경계 밖 번호는 빠진 것으로 적지 않는다
-- [ ] 버림 기록이 내보내기 구간 밖 시각이어도 세션이 같으면 대조한다
-- [ ] `seq_sessions.csv`에 세션별 처음, 끝 번호, 받은 수, 빠진 수와 비율, 경로별 수가 있다
-- [ ] 회차 내보내기 스트림 줄에 `_server.ingest_channel`이 있고 `diagnostics/` 네 파일이 있다. 0건이면 머리글만 있다
-- [ ] `bash scripts/harness/verify.sh`가 통과한다
+- [x] 세션 안 빠진 번호 구간마다 버림 기록 수와 사유, 거절 기록 수와 오류 코드, 둘 다 없는 수와 원인을 `seq_gaps.csv`에 적는다
+- [x] 재전송으로 채운 번호는 빠진 것으로 적지 않는다
+- [x] 세션 앞뒤 경계 밖 번호는 빠진 것으로 적지 않는다
+- [x] 버림 기록이 내보내기 구간 밖 시각이어도 세션이 같으면 대조한다
+- [x] `seq_sessions.csv`에 세션별 처음, 끝 번호, 받은 수, 빠진 수와 비율, 경로별 수가 있다
+- [x] 회차 내보내기 스트림 줄에 `_server.ingest_channel`이 있고 `diagnostics/` 네 파일이 있다. 0건이면 머리글만 있다
+- [x] `bash scripts/harness/verify.sh`가 통과한다
 
 ## 8. 영향 범위 / 마이그레이션
 

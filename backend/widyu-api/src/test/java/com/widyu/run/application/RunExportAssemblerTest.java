@@ -29,8 +29,14 @@ import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.run.CollectionRun;
 import com.widyu.run.repository.RunDeviceAssignmentRepository;
 import com.widyu.run.repository.RunMarkerRepository;
+import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.SensorDroppedRange;
+import com.widyu.sensor.SensorIngestChannel;
+import com.widyu.sensor.application.SensorLossDiagnostics;
 import com.widyu.sensor.repository.ClockMappingRepository;
+import com.widyu.sensor.repository.SensorBatchRejectionRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
+import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +73,8 @@ class RunExportAssemblerTest {
     @Mock private RunDeviceAssignmentRepository runDeviceAssignmentRepository;
     @Mock private RunMarkerRepository runMarkerRepository;
     @Mock private S3Service s3Service;
+    @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
+    @Mock private SensorBatchRejectionRepository sensorBatchRejectionRepository;
 
     @TempDir Path workDir;
 
@@ -91,6 +100,50 @@ class RunExportAssemblerTest {
                 "incidents.jsonl");
 
         keepZipIfRequested();
+    }
+
+    @Test
+    @DisplayName("회차를 조립하면 묶음 줄에 수신 경로를 싣고 diagnostics에 빠진 번호를 세션의 버림 기록과 대조해 적는다")
+    void 회차를_조립하면_수신_경로와_빠진_번호_대조를_싣는다() throws IOException {
+        // given: 워치 IMU 1번과 3번만 왔고 2번은 워치가 대기열에 넣지 못했다
+        CollectionRun run = RunExportFixture.closedRun();
+        SensorBatch first = RunExportFixture.imuBatch(1L, 1L, STARTED_AT_MS, STARTED_AT_MS + 1_000L, false);
+        SensorBatch third = RunExportFixture.imuBatch(3L, 3L, STARTED_AT_MS + 2_000L, STARTED_AT_MS + 3_000L, false);
+        ReflectionTestUtils.setField(first, "ingestChannel", SensorIngestChannel.WS);
+        ReflectionTestUtils.setField(third, "ingestChannel", SensorIngestChannel.REST);
+        given(sensorBatchRepository.findByRunIdAndStreamOrderByMeasuredAtStartMsAscSeqAsc(RUN_ID, "imu_watch"))
+                .willReturn(List.of(first, third));
+        given(sensorBatchRepository.findByRunIdOrderByMeasuredAtStartMsAsc(RUN_ID)).willReturn(List.of(first, third));
+        given(s3Service.downloadBytes(first.getS3Key())).willReturn(
+                RunExportFixture.imuPayload(1L, STARTED_AT_MS, false).getBytes(StandardCharsets.UTF_8));
+        given(s3Service.downloadBytes(third.getS3Key())).willReturn(
+                RunExportFixture.imuPayload(3L, STARTED_AT_MS + 2_000L, false).getBytes(StandardCharsets.UTF_8));
+        given(sensorDroppedRangeRepository.findByMemberIdAndSessionIdIn(
+                RunExportFixture.MEMBER_ID, Set.of(RunExportFixture.SESSION_ID)))
+                .willReturn(List.of(SensorDroppedRange.builder().memberId(RunExportFixture.MEMBER_ID)
+                        .sessionId(RunExportFixture.SESSION_ID).droppedStream("imu_watch").fromSeq(2L).toSeq(2L)
+                        .reason("enqueue_failed").tsMs(STARTED_AT_MS + 1_500L)
+                        .serverReceivedAtMs(STARTED_AT_MS + 5_000L).build()));
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        List<JsonNode> imu = readStream("imu_watch_%s.jsonl".formatted(WATCH_DEVICE));
+        assertThat(imu.get(0).get("_server").get("ingest_channel").asText()).isEqualTo("WS");
+        assertThat(imu.get(1).get("_server").get("ingest_channel").asText()).isEqualTo("REST");
+        Path diagnostics = workDir.resolve("diagnostics");
+        assertThat(Files.readAllLines(diagnostics.resolve("seq_gaps.csv"))).hasSize(2);
+        assertThat(Files.readAllLines(diagnostics.resolve("seq_gaps.csv")).get(1))
+                .startsWith("imu_watch,%s,%s,2,2,1,".formatted(WATCH_DEVICE, RunExportFixture.SESSION_ID))
+                .endsWith(",1,enqueue_failed,0,,,0,DEVICE_DROPPED");
+        assertThat(Files.readAllLines(diagnostics.resolve("seq_sessions.csv")).get(1))
+                .isEqualTo("imu_watch,%s,%s,1,3,3,2,1,0.3333,1,1,1".formatted(
+                        WATCH_DEVICE, RunExportFixture.SESSION_ID));
+        // 목록 파일은 회원과 회차 시각으로 고르므로, 이 테스트처럼 시각 조회에 없으면 머리글만 있다.
+        assertThat(Files.readAllLines(diagnostics.resolve("dropped_ranges.csv"))).hasSize(1);
+        assertThat(Files.readAllLines(diagnostics.resolve("rejections.csv"))).hasSize(1);
+        assertThat(readJson("manifest.json").get("files").toString()).doesNotContain("diagnostics");
     }
 
     @Test
@@ -638,7 +691,8 @@ class RunExportAssemblerTest {
         return new RunExportAssembler(
                 sensorBatchRepository, locationFixRepository, deviceHeartbeatRepository, decisionRecordRepository,
                 incidentRepository, clockMappingRepository, runDeviceAssignmentRepository, runMarkerRepository,
-                s3Service, MAPPER, RunExportFixture.properties());
+                s3Service, MAPPER, RunExportFixture.properties(),
+                new SensorLossDiagnostics(sensorDroppedRangeRepository, sensorBatchRejectionRepository));
     }
 
     // ── 도우미 ─────────────────────────────────────────────────────

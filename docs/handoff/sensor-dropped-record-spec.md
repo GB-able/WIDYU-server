@@ -1,6 +1,6 @@
 # 워치, 폰이 보낼 "버린 묶음" 기록 규격
 
-워치나 폰이 센서 묶음을 서버로 보내지 못하고 버렸을 때 남기는 기록의 형식이다. 서버는 이 기록을 저장해 기간 내보내기(`dropped_ranges.csv`)와 회차 내보내기(`diagnostics/dropped_ranges.csv`)에 넣고, 빠진 묶음 번호 구간마다 "워치가 버렸다", "서버가 거절했다", "기록 없음"을 가린다(`seq_gaps.csv`). 설계 근거는 [LLD-0166](../lld/LLD-0166-sensor-loss-attribution.md)이다.
+워치나 폰이 센서 묶음을 서버로 보내지 못하고 버렸을 때 남기는 기록의 형식이다. 서버는 이 기록을 저장해 기간 내보내기(`dropped_ranges.csv`)와 회차 내보내기(`diagnostics/dropped_ranges.csv`)에 넣고, 빠진 묶음 번호 구간마다 "기기가 버렸다", "서버가 거절했다", "기록 없음"을 가린다(`seq_gaps.csv`, 회차 내보내기는 `diagnostics/seq_gaps.csv`). 설계 근거는 [LLD-0166](../lld/LLD-0166-sensor-loss-attribution.md)이다.
 
 ## 무엇이 바뀌나
 
@@ -77,4 +77,4 @@
 
 ## 내보내기에서 보는 법
 
-`seq_gaps.csv` 한 줄이 한 세션의 빠진 번호 구간이다. `dropped_count`는 그 구간 중 이 기록이 덮는 번호 수, `dropped_reasons`는 사유, `cause`는 `WATCH_DROPPED`, `SERVER_REJECTED`, `NO_RECORD` 중 해당하는 것이다. 이 기록을 보내지 않으면 워치가 버린 구간도 `NO_RECORD`로 나온다.
+`seq_gaps.csv` 한 줄이 한 세션의 빠진 번호 구간이다. `dropped_count`는 그 구간 중 이 기록이 덮는 번호 수, `dropped_reasons`는 사유, `cause`는 `DEVICE_DROPPED`(기기가 버렸다고 알림), `SERVER_REJECTED`, `NO_RECORD` 중 해당하는 것이다. 이 기록을 보내지 않으면 워치가 버린 구간도 `NO_RECORD`로 나온다.

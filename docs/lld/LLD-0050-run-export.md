@@ -1,5 +1,7 @@
 # LLD-0050: 측정회차 내보내기 — `run_<run_id>.zip` (B9)
 
+> **2026-11-17:** IMU, 심박 줄의 `_server.ingest_channel`(처음 저장된 경로)과 빠진 묶음 원인을 가리는 `diagnostics/` CSV 네 개(`dropped_ranges`, `rejections`, `seq_gaps`, `seq_sessions`)를 더했다. 스트림 파일이 아니라 `manifest.files`, `streams_absent`에 넣지 않고 0건이어도 머리글만 쓴다(LLD-0166 3.4, 5.4).
+
 > **2026-11-13:** 위치 원본 신규 저장 중단(ADR-0045). 위치가 없는 회차는 `streams_absent`에 `LOCATION_RAW_NOT_COLLECTED`로 신고한다(LLD-0143 6절).
 
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
