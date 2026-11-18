@@ -22,14 +22,20 @@ import com.widyu.member.application.SeniorProfileService;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.medicine.MedicationProof;
 import com.widyu.medicine.MedicineSchedule;
-import java.time.LocalTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -239,6 +245,206 @@ class MedicationProofTransactionServiceTest {
         assertThatThrownBy(() -> transactionService.verifyMedication(10L, 1L, List.of()))
                 .isInstanceOf(BusinessException.class);
         then(seniorProfileService).should(never()).addPointsToMember(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("23시 45분 알람을 다음 날 0시 5분에 인증하면 허용하고 복용 기준일을 전날로 저장한다")
+    void 자정_전_알람을_자정_뒤에_인증하면_전날_분으로_저장한다() {
+        // given
+        Member member = lockedMember();
+        MedicineSchedule schedule = scheduleAt(member, LocalTime.of(23, 45));
+        LocalDate alarmDate = LocalDate.of(2026, 8, 10);
+        LocalDateTime now = LocalDateTime.of(2026, 8, 11, 0, 5);
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(schedule));
+        // 적립 판정도 알람 날짜로 센다. 다른 날짜로 세면 스텁이 맞지 않아 실패한다.
+        given(medicationProofRepository.countByMemberAndVerifiedDate(member, alarmDate)).willReturn(1L);
+        given(medicineScheduleRepository.countEffectiveByMemberAndDate(member, Status.ACTIVE, alarmDate)).willReturn(2L);
+
+        // when
+        transactionService.verifyMedication(10L, 1L, List.of(), clockAt(now));
+
+        // then
+        MedicationProof saved = savedProof();
+        assertThat(saved.getVerifiedDate()).isEqualTo(alarmDate);
+        assertThat(saved.getVerifiedAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("0시 10분 알람을 전날 23시 50분에 인증하면 허용하고 복용 기준일을 알람 날짜로 저장한다")
+    void 자정_뒤_알람을_자정_전에_인증하면_알람_날짜_분으로_저장한다() {
+        // given
+        Member member = lockedMember();
+        MedicineSchedule schedule = scheduleAt(member, LocalTime.of(0, 10));
+        LocalDate alarmDate = LocalDate.of(2026, 8, 11);
+        LocalDateTime now = LocalDateTime.of(2026, 8, 10, 23, 50);
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(schedule));
+        given(medicationProofRepository.countByMemberAndVerifiedDate(member, alarmDate)).willReturn(1L);
+        given(medicineScheduleRepository.countEffectiveByMemberAndDate(member, Status.ACTIVE, alarmDate)).willReturn(2L);
+
+        // when
+        transactionService.verifyMedication(10L, 1L, List.of(), clockAt(now));
+
+        // then
+        assertThat(savedProof().getVerifiedDate()).isEqualTo(alarmDate);
+    }
+
+    @ParameterizedTest(name = "{0} 알람을 {1}에 인증하면 복용 기준일은 {2}")
+    @CsvSource({
+            "23:50, 2026-08-11T00:10, 2026-08-10",
+            "23:50, 2026-08-10T23:59:59, 2026-08-10",
+            "23:50, 2026-08-11T00:00, 2026-08-10",
+            "23:50, 2026-08-11T00:20, 2026-08-10",
+            "00:10, 2026-08-10T23:40, 2026-08-11",
+            "00:10, 2026-08-10T23:59:59, 2026-08-11",
+            "00:10, 2026-08-11T00:00, 2026-08-11",
+            "00:10, 2026-08-11T00:40, 2026-08-11"
+    })
+    @DisplayName("자정 직전과 직후에 인증하면 인증 시각의 날짜가 아니라 알람 날짜로 저장한다")
+    void 자정_직전과_직후에_인증하면_알람_날짜로_저장한다(LocalTime alarmTime, LocalDateTime now, LocalDate alarmDate) {
+        // given: 창 양 끝(23:50 알람의 00:20, 00:10 알람의 23:40)도 포함한다.
+        Member member = lockedMember();
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(scheduleAt(member, alarmTime)));
+
+        // when
+        transactionService.verifyMedication(10L, 1L, List.of(), clockAt(now));
+
+        // then
+        MedicationProof saved = savedProof();
+        assertThat(saved.getVerifiedDate()).isEqualTo(alarmDate);
+        assertThat(saved.getVerifiedAt()).isEqualTo(now);
+        then(medicationProofRepository).should().existsByMedicineScheduleAndVerifiedDate(any(), eq(alarmDate));
+    }
+
+    @Test
+    @DisplayName("내일부터 적용되는 0시 10분 알람은 전날 밤 인증을 허용하고 오늘까지 마감된 버전은 거부한다")
+    void 내일부터_적용되는_알람은_전날_밤_인증을_허용하고_오늘까지_마감된_버전은_거부한다() {
+        // given: 23시대에 등록하거나 수정한 0시 10분 알람은 오늘 인증 시간이 지나 내일부터 적용된다(LLD-0113).
+        Member member = member();
+        MedicineSchedule startsTomorrow = MedicineSchedule.create(member, LocalTime.of(0, 10), LocalDate.of(2026, 8, 11));
+        MedicineSchedule closedToday = scheduleAt(member, LocalTime.of(0, 10));
+        closedToday.closeAsOf(LocalDate.of(2026, 8, 10));
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(startsTomorrow));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(2L, Status.ACTIVE))
+                .willReturn(Optional.of(closedToday));
+        Clock lateNight = clockAt(LocalDateTime.of(2026, 8, 10, 23, 50));
+
+        // when & then
+        transactionService.validateBeforeUpload(10L, 1L, lateNight);
+        assertThatThrownBy(() -> transactionService.validateBeforeUpload(10L, 2L, lateNight))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("유효하지 않은");
+    }
+
+    @Test
+    @DisplayName("자정을 넘는 알람이라도 알람 전후 30분 밖이면 인증할 수 없다")
+    void 자정을_넘는_알람이라도_전후_30분_밖이면_인증할_수_없다() {
+        // given
+        Member member = member();
+        MedicineSchedule lateAlarm = scheduleAt(member, LocalTime.of(23, 45));
+        MedicineSchedule earlyAlarm = scheduleAt(member, LocalTime.of(0, 10));
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(lateAlarm));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(2L, Status.ACTIVE))
+                .willReturn(Optional.of(earlyAlarm));
+
+        // when & then: 23:45 + 30분 = 00:15, 00:10 - 30분 = 23:40
+        assertThatThrownBy(() -> transactionService.validateBeforeUpload(
+                10L, 1L, clockAt(LocalDateTime.of(2026, 8, 11, 0, 16))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("전후 30분");
+        assertThatThrownBy(() -> transactionService.validateBeforeUpload(
+                10L, 2L, clockAt(LocalDateTime.of(2026, 8, 10, 23, 39))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("전후 30분");
+    }
+
+    @Test
+    @DisplayName("자정 뒤에 전날 알람을 인증할 때 전날 분이 이미 있으면 중복으로 거부한다")
+    void 자정_뒤에_전날_알람을_인증할_때_전날_분이_있으면_중복으로_거부한다() {
+        // given
+        Member member = member();
+        MedicineSchedule schedule = scheduleAt(member, LocalTime.of(23, 45));
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member));
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(schedule));
+        given(medicationProofRepository.existsByMedicineScheduleAndVerifiedDate(schedule, LocalDate.of(2026, 8, 10)))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> transactionService.validateBeforeUpload(
+                10L, 1L, clockAt(LocalDateTime.of(2026, 8, 11, 0, 5))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("이미");
+    }
+
+    @Test
+    @DisplayName("회원 잠금을 기다리는 동안 인증 창이 닫히면 잠금 뒤 시각으로 거부한다")
+    void 회원_잠금을_기다리는_동안_인증_창이_닫히면_거부한다() {
+        // given: 23:45 알람의 창 끝(00:15)에 들어와 잠금을 얻은 시각은 00:16이다.
+        Member member = mock(Member.class);
+        given(member.getId()).willReturn(10L);
+        MedicineSchedule schedule = scheduleAt(member, LocalTime.of(23, 45));
+        MutableClock clock = new MutableClock(LocalDateTime.of(2026, 8, 11, 0, 15));
+        given(memberRepository.findByIdForUpdate(10L)).willAnswer(invocation -> {
+            clock.set(LocalDateTime.of(2026, 8, 11, 0, 16));
+            return Optional.of(member);
+        });
+        given(medicineScheduleRepository.findByIdAndStatusWithDetails(1L, Status.ACTIVE))
+                .willReturn(Optional.of(schedule));
+
+        // when & then
+        assertThatThrownBy(() -> transactionService.verifyMedication(10L, 1L, List.of(), clock))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("전후 30분");
+        then(medicationProofRepository).should(never()).saveAndFlush(any());
+    }
+
+    private Clock clockAt(LocalDateTime now) {
+        return Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+    }
+
+    // 잠금 대기 중 시간이 흐르는 상황을 흉내 낸다.
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+
+        MutableClock(LocalDateTime now) {
+            set(now);
+        }
+
+        void set(LocalDateTime now) {
+            this.instant = now.atZone(ZoneId.systemDefault()).toInstant();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.systemDefault();
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
+    }
+
+    private MedicineSchedule scheduleAt(Member member, LocalTime alarmTime) {
+        return MedicineSchedule.create(member, alarmTime, LocalDate.of(2026, 8, 1));
+    }
+
+    private MedicationProof savedProof() {
+        ArgumentCaptor<MedicationProof> captor = ArgumentCaptor.forClass(MedicationProof.class);
+        then(medicationProofRepository).should().saveAndFlush(captor.capture());
+        return captor.getValue();
     }
 
     private void savedProofHasId(Long proofId) {

@@ -2,7 +2,10 @@ package com.widyu.sensor.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.mock;
 
 import com.widyu.global.config.JpaAuditingConfig;
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.AdditionalAnswers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
@@ -60,7 +64,7 @@ class ActivityStateServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ActivityStateService(windows, sensorBatches, fixes, sensorProperties, transactionManager);
+        service = new ActivityStateService(h2Windows(), sensorBatches, fixes, sensorProperties, transactionManager);
     }
 
     @ParameterizedTest(name = "{1}mg·{2}mg 교대면 {3}")
@@ -327,6 +331,23 @@ class ActivityStateServiceTest {
         assertThat(service.contexts(1101L, ts, ts).apply(ts)).isEqualTo("REST");
         assertThat(service.contexts(1102L, ts, ts).apply(ts)).isEqualTo("REST");
         assertThat(service.contexts(1103L, ts, ts).apply(ts)).isEqualTo("REST");
+    }
+
+    /**
+     * H2는 MySQL의 {@code ON DUPLICATE KEY UPDATE}를 모르므로 빈 행 선생성만 같은 결과를 내는 JPA 저장으로 바꾼다.
+     * 동시 저장에서의 실제 잠금 동작은 {@code ActivityWindowConcurrentRecordMySqlTest}가 본다.
+     */
+    private ActivityWindowRepository h2Windows() {
+        ActivityWindowRepository h2 = mock(ActivityWindowRepository.class, AdditionalAnswers.delegatesTo(windows));
+        willAnswer(invocation -> {
+            Long memberId = invocation.getArgument(0);
+            long startMs = invocation.getArgument(1);
+            if (windows.findForUpdate(memberId, startMs).isEmpty()) {
+                windows.save(ActivityWindow.empty(memberId, startMs, invocation.getArgument(2)));
+            }
+            return null;
+        }).given(h2).insertIfAbsent(anyLong(), anyLong(), anyLong(), any());
+        return h2;
     }
 
     private Member persistMember() {

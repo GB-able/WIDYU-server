@@ -855,9 +855,7 @@ class GoalHomeServiceTest {
     }
 
     private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
-        MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
-        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
-        return proof;
+        return MedicationProof.create(schedule, member, List.of(imageUrl), verifiedAt, verifiedAt.toLocalDate());
     }
 
     private MedicineSchedule alarmSchedule(Member member, Long id, LocalTime alarmTime) {
@@ -875,9 +873,7 @@ class GoalHomeServiceTest {
     }
 
     private MedicationProof verifiedOn(MedicineSchedule schedule, Member member, LocalDate date) {
-        MedicationProof proof = MedicationProof.create(schedule, member, List.of("proof.jpg"));
-        ReflectionTestUtils.setField(proof, "verifiedDate", date);
-        return proof;
+        return MedicationProof.create(schedule, member, List.of("proof.jpg"), date.atTime(8, 0), date);
     }
 
     private MedicineSchedule schedule(Member member, Long id, LocalDate effectiveFrom, LocalDate effectiveTo) {

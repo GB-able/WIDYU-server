@@ -57,7 +57,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -73,7 +72,7 @@ import org.springframework.transaction.support.TransactionTemplate;
         IncidentService.class, IncidentRespondTransaction.class, IncidentEscalation.class, FcmOutboxService.class})
 class HeartRateEmergencyAfterCommitOutboxTest {
     @Autowired private PlatformTransactionManager transactionManager;
-    @Autowired private ApplicationEventPublisher publisher;
+    @Autowired private HeartRateEmergencyNotificationService emergencyNotifications;
     @Autowired private MemberRepository members;
     @Autowired private MemberFcmTokenRepository tokens;
     @Autowired private HeartRateEventRepository heartEvents;
@@ -131,8 +130,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member senior = members.findById(ids[0]).orElseThrow();
             heartEvents.save(HeartRateEvent.of(senior, 180, LocalDateTime.of(2026, 10, 2, 3, 5),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(ids[0], null));
         Incident opened = incidents.findAll().stream().filter(row -> row.getMemberId().equals(ids[0]))
                 .findFirst().orElseThrow();
         assertThat(opened.getInitialAlertSentAtMs()).isNull();
@@ -212,8 +211,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member senior = members.findById(ids[0]).orElseThrow();
             heartEvents.save(HeartRateEvent.of(senior, 180, LocalDateTime.of(2026, 10, 2, 3, 1),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(ids[0], null));
         long firstOutboxCount = outbox.count();
         transactions.executeWithoutResult(status -> {
             Incident first = incidents.findAll().stream()
@@ -224,8 +223,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member senior = members.findById(ids[0]).orElseThrow();
             heartEvents.save(HeartRateEvent.of(senior, 181, LocalDateTime.of(2026, 10, 2, 3, 2),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(ids[0], null));
         Incident incident = incidents.findAll().stream().filter(row -> row.getMemberId().equals(ids[0]))
                 .findFirst().orElseThrow();
         assertThat(notifications.findByRecipientMemberIdAndEventId(ids[1], incident.getIncidentRef())).isEmpty();
@@ -271,8 +270,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member member = members.findById(memberId).orElseThrow();
             heartEvents.save(HeartRateEvent.of(member, 180, LocalDateTime.of(2026, 10, 2, 2, 1),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(memberId, null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(memberId, null));
 
         // then
         assertThat(heartEvents.count()).isEqualTo(previousHeartEvents + 1);
@@ -329,8 +328,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member member = members.findById(ids[0]).orElseThrow();
             heartEvents.save(HeartRateEvent.of(member, 180, LocalDateTime.of(2026, 10, 2, 2, 2),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(ids[0], null));
 
         // then
         assertThat(heartEvents.count()).isEqualTo(previousHeartEvents + 1);
@@ -381,8 +380,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member senior = members.findById(memberId).orElseThrow();
             heartEvents.save(HeartRateEvent.of(senior, 180, LocalDateTime.of(2026, 10, 2, 2, 3),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(memberId, null));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(memberId, null));
 
         // then
         assertThat(incidents.count()).isEqualTo(previousIncidents + 1);
@@ -427,8 +426,8 @@ class HeartRateEmergencyAfterCommitOutboxTest {
             Member senior = members.findById(ids[0]).orElseThrow();
             heartEvents.save(HeartRateEvent.of(senior, 22, LocalDateTime.of(2026, 11, 12, 3, 0),
                     HeartRateStatus.EMERGENCY, null, null));
-            publisher.publishEvent(new HeartRateEmergencyEvent(ids[0], "dec-hr-1016"));
         });
+        emergencyNotifications.handleHeartRateEmergency(new HeartRateEmergencyEvent(ids[0], "dec-hr-1016"));
 
         // then
         // 사유는 판정 기록 행에만 있다. 푸시 제목·본문·데이터와 알림센터 문구에 나가지 않는다(노션 5-1, ADR-0042 결정 5).

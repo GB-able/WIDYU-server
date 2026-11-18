@@ -102,6 +102,10 @@ public class HeartRateService {
             return respondWithoutDatabase(memberId, request, detection, exception);
         }
 
+        // 위급 사건은 저장 트랜잭션이 커넥션을 돌려준 뒤 연다. 요청 하나가 커넥션 두 개를 쥐지 않는다(LLD-0160).
+        if (detection.emergency()) {
+            heartRatePersistenceService.notifyEmergency(memberId, null);
+        }
         // 저장 트랜잭션이 커밋된 뒤라 Redis가 실패해도 심박·위급 알림은 남고, 이 호출은 예외를 내지 않는다(LLD-0102).
         heartRatePersistenceService.updateLatestResult(
                 memberId, result.getStatus(), result.getHeartRate(), result.getMeasuredAt());

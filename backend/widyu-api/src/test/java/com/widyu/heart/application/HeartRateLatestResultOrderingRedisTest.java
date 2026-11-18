@@ -44,7 +44,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -230,7 +229,7 @@ class HeartRateLatestResultOrderingRedisTest {
                 mock(HeartRateEmergencyRepository.class),
                 memberRepository,
                 mock(DecisionRecordRepository.class),
-                mock(ApplicationEventPublisher.class),
+                mock(HeartRateEmergencyNotificationService.class),
                 new SimpleMeterRegistry());
     }
 

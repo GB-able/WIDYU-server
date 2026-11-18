@@ -62,8 +62,10 @@ public interface MedicineScheduleRepository extends JpaRepository<MedicineSchedu
     );
 
     // 특정 알람 시각 + 특정 날짜에 유효한 스케줄만 조회 (복약 알림용)
+    // Member의 역방향 일대일(localAccount, seniorProfile)을 함께 읽어 시니어마다 2건씩 더 나가지 않게 한다(LLD-0161).
     @Query("SELECT DISTINCT ms FROM MedicineSchedule ms " +
-           "LEFT JOIN FETCH ms.member " +
+           "LEFT JOIN FETCH ms.member m " +
+           "LEFT JOIN FETCH m.localAccount LEFT JOIN FETCH m.seniorProfile " +
            "WHERE ms.alarmTime = :alarmTime AND ms.status = :status " +
            "AND (ms.effectiveFrom IS NULL OR ms.effectiveFrom <= :date) " +
            "AND (ms.effectiveTo IS NULL OR ms.effectiveTo >= :date)")

@@ -125,8 +125,8 @@ public class HeartRateBatchService {
                 }
             }
 
-            // 판정 행은 여기서 심박 이벤트·위급·알림 발행과 한 트랜잭션으로 저장된다. 따로 커밋하면
-            // 뒤이은 심박 저장이 실패했을 때 알림 없이 판정만 남는다(LLD-0053 5.1).
+            // 판정 행은 여기서 심박 이벤트, 위급과 한 트랜잭션으로 저장된다. 따로 커밋하면
+            // 뒤이은 심박 저장이 실패했을 때 알림 없이 판정만 남는다(LLD-0053 5.1). 위급 사건은 그 커밋 뒤에 연다.
             if (!saveUnlessConcurrentlyStored(member, sample, measuredAt, status, emergency, batchId, decision)) {
                 raceSkipped++;
                 continue;
@@ -177,6 +177,7 @@ public class HeartRateBatchService {
      * 드러난다(LLD-0089). 위반한 제약이 그 UK이고 행이 실제로 있을 때만 건너뛴다. 판정·위급 행의 다른 제약
      * 위반은 그 사이 심박 행이 생겼어도 그대로 던진다.
      * 이 메서드는 트랜잭션 밖이고 {@code saveBatchSample}이 자기 트랜잭션이라 예외가 호출 지점에서 난다.
+     * 저장했고 위급이면 그 커밋 뒤에 위급 사건을 연다.
      */
     private boolean saveUnlessConcurrentlyStored(
             Member member, HeartRateBatchRequest.Sample sample, LocalDateTime measuredAt,
@@ -184,13 +185,17 @@ public class HeartRateBatchService {
         try {
             heartRatePersistenceService.saveBatchSample(
                     member, sample.bpm(), measuredAt, status, emergency, sample.accuracy(), batchId, decision);
-            return true;
         } catch (DataIntegrityViolationException e) {
             if (HeartEventConflict.storedByConcurrentRequest(e, heartRateEventRepository, member.getId(), measuredAt)) {
                 return false;
             }
             throw e;
         }
+        // 저장 트랜잭션이 커넥션을 돌려준 뒤 사건을 연다(LLD-0160).
+        if (emergency) {
+            heartRatePersistenceService.notifyEmergency(member.getId(), decision);
+        }
+        return true;
     }
 
     /**

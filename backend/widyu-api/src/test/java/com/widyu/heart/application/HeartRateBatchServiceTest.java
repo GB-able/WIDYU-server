@@ -13,6 +13,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -262,7 +264,7 @@ class HeartRateBatchServiceTest {
     }
 
     @Test
-    @DisplayName("위급으로 판정하면 판정 행을 심박 저장과 같은 트랜잭션에 넘긴다")
+    @DisplayName("위급으로 판정하면 판정 행을 심박 저장과 같은 트랜잭션에 넘기고 커밋 뒤 사건을 연다")
     void 위급으로_판정하면_판정_행을_심박_저장과_같은_트랜잭션에_넘긴다() {
         // given
         Member member = member();
@@ -280,9 +282,12 @@ class HeartRateBatchServiceTest {
         then(decisionRecordPersistenceService).should(never()).save(any());
         DecisionRecord passed = decisionPassedToSave();
         assertThat(passed.getDecisionOutput()).isEqualTo("ALERT");
-        then(heartRatePersistenceService).should().saveBatchSample(
+        // 위급 사건은 그 저장이 커밋된 뒤 판정을 실어 연다(LLD-0160).
+        InOrder inOrder = inOrder(heartRatePersistenceService);
+        inOrder.verify(heartRatePersistenceService).saveBatchSample(
                 eq(member), eq(185), any(), eq(HeartRateStatus.EMERGENCY), eq(true),
                 eq("HIGH"), eq(BATCH_ID), eq(passed));
+        inOrder.verify(heartRatePersistenceService).notifyEmergency(MEMBER_ID, passed);
     }
 
     @Test

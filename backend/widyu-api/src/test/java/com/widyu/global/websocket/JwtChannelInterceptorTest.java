@@ -1,7 +1,10 @@
 package com.widyu.global.websocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -46,6 +49,7 @@ class JwtChannelInterceptorTest {
     @Mock private FamilyAccessService familyAccessService;
     @Mock private WebSocketSessionRegistry webSocketSessionRegistry;
     @Mock private LocationAccessLogService locationAccessLogService;
+    @Mock private WebSocketWorkDispatcher workDispatcher;
 
     @InjectMocks
     private JwtChannelInterceptor jwtChannelInterceptor;
@@ -109,6 +113,92 @@ class JwtChannelInterceptorTest {
 
         // then
         assertThat(result).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/topic/location/senior/42", "/topic/heart-rate/42"})
+    @DisplayName("가족이 아닌 회원의 구독이 거부되면 그 세션 오류 큐에 FORBIDDEN과 요청 목적지를 보낸다")
+    void 비가족_구독이_거부되면_발신_세션_오류_큐에_FORBIDDEN을_보낸다(String destination) {
+        // given
+        Message<?> message = buildSubscribeMessage(destination, 100L);
+        willThrow(new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 사용자입니다."))
+                .given(familyAccessService).verifyFamilyAccess(anyLong(), anyLong());
+
+        // when
+        Message<?> result = jwtChannelInterceptor.preSend(message, null);
+
+        // then
+        assertThat(result).isNull();
+        verify(workDispatcher).sendToSession("100", "test-session", "/queue/errors", Map.of(
+                "error", "FORBIDDEN",
+                "message", ErrorCode.FORBIDDEN.getMessage(),
+                "destination", destination));
+    }
+
+    @Test
+    @DisplayName("인증된 회원이 허용 목록 밖 목적지를 구독하면 그 세션 오류 큐에 FORBIDDEN을 보낸다")
+    void 허용_목록_밖_구독은_발신_세션_오류_큐에_FORBIDDEN을_보낸다() {
+        // given
+        Message<?> message = buildSubscribeMessage("/topic/location/**", 100L);
+
+        // when
+        Message<?> result = jwtChannelInterceptor.preSend(message, null);
+
+        // then
+        assertThat(result).isNull();
+        verify(workDispatcher).sendToSession("100", "test-session", "/queue/errors", Map.of(
+                "error", "FORBIDDEN",
+                "message", ErrorCode.FORBIDDEN.getMessage(),
+                "destination", "/topic/location/**"));
+    }
+
+    @Test
+    @DisplayName("인증된 회원이 목적지 없이 구독하면 그 세션 오류 큐에 빈 목적지로 FORBIDDEN을 보낸다")
+    void 목적지_없는_구독은_발신_세션_오류_큐에_FORBIDDEN을_보낸다() {
+        // given
+        Message<?> message = frame(StompCommand.SUBSCRIBE, null, true);
+
+        // when
+        Message<?> result = jwtChannelInterceptor.preSend(message, null);
+
+        // then
+        assertThat(result).isNull();
+        verify(workDispatcher).sendToSession("100", "test-session", "/queue/errors", Map.of(
+                "error", "FORBIDDEN",
+                "message", ErrorCode.FORBIDDEN.getMessage(),
+                "destination", ""));
+    }
+
+    @Test
+    @DisplayName("거부 오류를 보내다 실패해도 구독은 계속 거부한다")
+    void 거부_오류_전송이_실패해도_구독은_거부한다() {
+        // given
+        Message<?> message = buildSubscribeMessage("/topic/location/senior/42", 100L);
+        willThrow(new BusinessException(ErrorCode.FORBIDDEN))
+                .given(familyAccessService).verifyFamilyAccess(anyLong(), anyLong());
+        willThrow(new IllegalStateException("broker down"))
+                .given(workDispatcher).sendToSession(anyString(), anyString(), anyString(), any());
+
+        // when
+        Message<?> result = jwtChannelInterceptor.preSend(message, null);
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/topic/location/senior/42", "/topic/heart-rate/42", "/user/queue/errors"})
+    @DisplayName("허용된 구독에는 오류를 보내지 않는다")
+    void 허용된_구독에는_오류를_보내지_않는다(String destination) {
+        // given
+        Message<?> message = buildSubscribeMessage(destination, 100L);
+
+        // when
+        Message<?> result = jwtChannelInterceptor.preSend(message, null);
+
+        // then
+        assertThat(result).isNotNull();
+        verify(workDispatcher, never()).sendToSession(anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -415,7 +505,7 @@ class JwtChannelInterceptorTest {
         // given
         WebSocketSessionRegistry sessionRegistry = new WebSocketSessionRegistry();
         JwtChannelInterceptor brokerInterceptor = new JwtChannelInterceptor(
-                familyAccessService, sessionRegistry, locationAccessLogService);
+                familyAccessService, sessionRegistry, locationAccessLogService, workDispatcher);
         FamilyTopicOutboundInterceptor outboundInterceptor = new FamilyTopicOutboundInterceptor(
                 familyAccessService, sessionRegistry);
         ExecutorSubscribableChannel inbound = new ExecutorSubscribableChannel();

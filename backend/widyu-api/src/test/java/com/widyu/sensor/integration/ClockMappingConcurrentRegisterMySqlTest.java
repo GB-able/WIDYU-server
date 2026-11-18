@@ -2,19 +2,31 @@ package com.widyu.sensor.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
+
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.sensor.application.ClockMappingService;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,6 +34,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -39,7 +52,7 @@ import software.amazon.awssdk.services.s3.S3Client;
  *
  * <p>겹침은 타이밍이 아니라 잠금으로 만든다. 상대 요청 역할의 연결이 같은 매핑 행을 INSERT만 하고 커밋하지 않은 채
  * 기다리면, 검사 대상 요청은 첫 조회에서 행을 못 보고(커밋 전이라 스냅샷에 없다) INSERT에서 UK 잠금을 기다린다.
- * 그 대기를 {@code performance_schema.data_lock_waits}로 확인한 뒤 상대를 커밋하면 검사 대상은 UK 충돌을 거쳐 재조회한다.
+ * 그 대기를 {@code performance_schema.data_lock_waits}로 확인한 뒤 상대를 커밋하면 검사 대상은 중복 키를 넘기고 재조회한다.
  *
  * <p>실행: {@code CLOCK_MYSQL_URL=jdbc:mysql://127.0.0.1:<port>/clock_race_<name> DB_USERNAME=root DB_PASSWORD=
  * ./gradlew :backend:widyu-api:test --tests 'com.widyu.sensor.integration.ClockMappingConcurrentRegisterMySqlTest'}
@@ -95,6 +108,22 @@ class ClockMappingConcurrentRegisterMySqlTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private DataSource dataSource;
 
+    /** Hibernate가 JDBC 예외를 우리 코드보다 먼저 ERROR로 남기는 로거. alert-relay가 이 줄을 Discord 오류로 보낸다(#1094). */
+    private final Logger sqlExceptionLogger =
+            (Logger) LoggerFactory.getLogger("org.hibernate.engine.jdbc.spi.SqlExceptionHelper");
+    private final ListAppender<ILoggingEvent> sqlExceptionLogs = new ListAppender<>();
+
+    @BeforeEach
+    void captureSqlExceptionLogs() {
+        sqlExceptionLogs.start();
+        sqlExceptionLogger.addAppender(sqlExceptionLogs);
+    }
+
+    @AfterEach
+    void releaseSqlExceptionLogs() {
+        sqlExceptionLogger.detachAppender(sqlExceptionLogs);
+    }
+
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
         String url = System.getenv("CLOCK_MYSQL_URL");
@@ -118,6 +147,7 @@ class ClockMappingConcurrentRegisterMySqlTest {
         // then
         assertThat(failure).isNull();
         assertSingleRowCoversBothRanges(mappingId);
+        assertNoSqlErrorLog();
     }
 
     @Test
@@ -134,6 +164,77 @@ class ClockMappingConcurrentRegisterMySqlTest {
         // then
         assertThat(failure).isNull();
         assertSingleRowCoversBothRanges(mappingId);
+        assertNoSqlErrorLog();
+    }
+
+    @Test
+    @DisplayName("먼저 커밋된 같은 매핑 ID의 값이 다르면 충돌로 거부하고 먼저 저장된 행은 바뀌지 않는다")
+    void 먼저_커밋된_같은_매핑_ID의_값이_다르면_충돌로_거부한다() throws Exception {
+        // given
+        String mappingId = "cm-race-" + SEQ.incrementAndGet();
+
+        // when: 상대와 다른 기기가 같은 매핑 ID를 동시에 처음 등록한다
+        Throwable failure = registerWhileWinnerCommits(mappingId, () -> clockMappingService.register(
+                new SensorBatchRequest.Clock(
+                        BOOT_ID, mappingId, String.valueOf(ANCHOR_ELAPSED_NS), ANCHOR_EPOCH_MS, UNCERTAINTY_MS),
+                "gw-other", LOSER_MIN_NS, LOSER_MAX_NS));
+
+        // then
+        assertThat(failure).isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_CLOCK_MAPPING_CONFLICT);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT COUNT(*) AS cnt, MIN(device_id) AS device_id, MIN(observed_min_elapsed_ns) AS min_ns"
+                        + " FROM clock_mapping WHERE clock_mapping_id = ?",
+                mappingId);
+        assertThat(((Number) row.get("cnt")).longValue()).isEqualTo(1L);
+        assertThat(row.get("device_id")).isEqualTo(DEVICE_ID);
+        assertThat(((Number) row.get("min_ns")).longValue()).isEqualTo(WINNER_MIN_NS);
+        assertNoSqlErrorLog();
+    }
+
+    @Test
+    @DisplayName("재연결 직후처럼 여러 스레드가 같은 새 매핑을 한꺼번에 등록하면 모두 통과하고 SQL ERROR 로그가 남지 않는다")
+    void 여러_스레드가_같은_새_매핑을_한꺼번에_등록하면_모두_통과하고_SQL_ERROR_로그가_남지_않는다() throws Exception {
+        // given: 개발 서버 2026-11-18에 websocketSensor 스레드 7개가 같은 매핑을 동시에 INSERT했다
+        String mappingId = "cm-race-" + SEQ.incrementAndGet();
+        int threads = 8;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        List<Future<Throwable>> results = new ArrayList<>();
+        try {
+            for (int i = 0; i < threads; i++) {
+                results.add(executor.submit(() -> {
+                    start.await();
+                    try {
+                        register(mappingId);
+                        return null;
+                    } catch (Throwable t) {
+                        return t;
+                    }
+                }));
+            }
+
+            // when
+            start.countDown();
+
+            // then
+            for (Future<Throwable> result : results) {
+                assertThat(result.get(30, TimeUnit.SECONDS)).isNull();
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        Long rows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM clock_mapping WHERE clock_mapping_id = ?", Long.class, mappingId);
+        assertThat(rows).isEqualTo(1L);
+        assertNoSqlErrorLog();
+    }
+
+    private void assertNoSqlErrorLog() {
+        assertThat(sqlExceptionLogs.list)
+                .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.ERROR))
+                .extracting(ILoggingEvent::getFormattedMessage)
+                .isEmpty();
     }
 
     /** 상대 요청의 INSERT를 커밋 전으로 붙잡아 둔 채 검사 대상을 돌리고, 검사 대상이 UK 잠금을 기다리면 상대를 커밋한다. */

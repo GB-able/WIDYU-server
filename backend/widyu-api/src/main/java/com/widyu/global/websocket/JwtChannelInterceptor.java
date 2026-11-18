@@ -1,6 +1,7 @@
 package com.widyu.global.websocket;
 
 import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.global.security.PrincipalDetails;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.application.LocationAccessLogService;
@@ -10,8 +11,8 @@ import java.util.Set;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -23,12 +24,14 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class JwtChannelInterceptor implements ChannelInterceptor {
 
     // 대상 ID는 1~18자리 숫자만 허용한다. 18자리는 항상 Long 범위 안이라 parseLong 오버플로가 없다.
     private static final Pattern LOCATION_TOPIC = Pattern.compile("^/topic/location/senior/(\\d{1,18})$");
     private static final Pattern HEART_RATE_TOPIC = Pattern.compile("^/topic/heart-rate/(\\d{1,18})$");
+
+    /** 목적지 없는 SUBSCRIBE의 오류 본문 {@code destination} 값. 오류 본문은 null을 싣지 않는다. */
+    private static final String MISSING_DESTINATION = "";
 
     private static final Set<String> USER_SUBSCRIPTIONS = Set.of(
             "/user/queue/location/ack",
@@ -45,6 +48,23 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
     private final FamilyAccessService familyAccessService;
     private final WebSocketSessionRegistry webSocketSessionRegistry;
     private final LocationAccessLogService locationAccessLogService;
+    private final WebSocketWorkDispatcher workDispatcher;
+
+    /**
+     * 오류 응답을 보내는 {@link WebSocketWorkDispatcher}는 브로커 템플릿에 기대고, 그 템플릿은 이 인터셉터를 등록하는
+     * 설정 뒤에 만들어진다. 순환을 피하려고 지연 주입한다.
+     */
+    public JwtChannelInterceptor(
+            FamilyAccessService familyAccessService,
+            WebSocketSessionRegistry webSocketSessionRegistry,
+            LocationAccessLogService locationAccessLogService,
+            @Lazy WebSocketWorkDispatcher workDispatcher
+    ) {
+        this.familyAccessService = familyAccessService;
+        this.webSocketSessionRegistry = webSocketSessionRegistry;
+        this.locationAccessLogService = locationAccessLogService;
+        this.workDispatcher = workDispatcher;
+    }
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -94,8 +114,12 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
     private Message<?> handleSubscribe(Message<?> message, StompHeaderAccessor accessor) {
         String destination = accessor.getDestination();
         Long subscriberId = resolveSubscriberId(accessor);
-        if (destination == null || subscriberId == null) {
+        if (subscriberId == null) {
             return null;
+        }
+        if (destination == null) {
+            log.warn("WebSocket SUBSCRIBE 거부 - 목적지 없음, subscriberId: {}", subscriberId);
+            return deny(accessor, subscriberId, MISSING_DESTINATION);
         }
 
         webSocketSessionRegistry.register(accessor.getSessionId(), subscriberId);
@@ -107,7 +131,7 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
         Long targetMemberId = extractProtectedMemberId(destination);
         if (targetMemberId == null) {
             log.warn("WebSocket SUBSCRIBE 거부 - 허용되지 않은 목적지, destination: {}", destination);
-            return null;
+            return deny(accessor, subscriberId, destination);
         }
 
         try {
@@ -115,7 +139,7 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
             log.info("WebSocket SUBSCRIBE 인가 성공 - subscriberId: {}, destination: {}", subscriberId, destination);
         } catch (BusinessException e) {
             log.warn("WebSocket SUBSCRIBE 인가 거부 - subscriberId: {}, destination: {}", subscriberId, destination);
-            return null;
+            return deny(accessor, subscriberId, destination);
         }
 
         // 구독 한 번이 열람 한 번이다. 뒤따르는 위치 메시지는 같은 열람이라 세지 않는다(ADR-0036 대안 4).
@@ -124,6 +148,24 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
         }
 
         return message;
+    }
+
+    /**
+     * 구독은 버리되 발신 세션 오류 큐로 알린다. STOMP ERROR 프레임은 연결을 닫아 같은 연결의 다른 구독까지 끊는다.
+     * 대상이 없는 회원인지 가족이 아닌지는 드러내지 않고 같은 코드를 쓴다(#1027, LLD-0032 6절).
+     */
+    private Message<?> deny(StompHeaderAccessor accessor, Long subscriberId, String destination) {
+        try {
+            workDispatcher.sendToSession(subscriberId.toString(), accessor.getSessionId(),
+                    WebSocketWorkDispatcher.ERRORS_DESTINATION, Map.of(
+                            "error", ErrorCode.FORBIDDEN.name(),
+                            "message", ErrorCode.FORBIDDEN.getMessage(),
+                            "destination", destination));
+        } catch (Exception e) {
+            log.warn("WebSocket SUBSCRIBE 거부 응답 실패 - subscriberId: {}, cause: {}",
+                    subscriberId, e.getClass().getSimpleName());
+        }
+        return null;
     }
 
     /** 기록이 깨져도 구독은 성립해야 한다(LLD-0056 5.1). */

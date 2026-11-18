@@ -203,6 +203,7 @@ public class MedicineScheduleService {
                     "약 알람은 최대 " + MAX_ALARMS_PER_MEMBER + "개까지 등록할 수 있습니다.");
         }
         LocalDateTime now = LocalDateTime.now(clock);
+        validateNoNextDayProof(targetMember, now.toLocalDate(), "등록");
 
         // 오늘 인증 가능 시간이 이미 끝난 시각이면 오늘은 건너뛰고 내일부터 울린다.
         LocalDate effectiveFromDate = now.toLocalDate();
@@ -264,6 +265,7 @@ public class MedicineScheduleService {
         }
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
+        validateNoNextDayProof(targetMember, today, "수정");
 
         // 오늘 끝난 알람(인증 완료 또는 인증 가능 시간 종료)은 오늘 기록을 그대로 두고 내일부터 바꾼다.
         // 아직 시작 전인 버전은 원래 시작일을 유지한다.
@@ -355,6 +357,7 @@ public class MedicineScheduleService {
         // 오늘 끝난 알람은 오늘 기록(완료·미인증)을 남기고 내일부터, 아직 안 끝난 알람은 오늘부터 중단한다.
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
+        validateNoNextDayProof(targetMember, today, "삭제");
         LocalDate stopDate = today;
         if (schedule.isEffectiveOn(today) && isFinishedToday(schedule, now)) {
             stopDate = today.plusDays(1);
@@ -365,6 +368,21 @@ public class MedicineScheduleService {
         log.info("약 복용 스케줄 삭제: scheduleId={}, memberId={}, stopDate={}",
                 scheduleId, targetMember.getId(), stopDate);
         return MedicineScheduleChangeResponse.of(revision, stopDate);
+    }
+
+    /**
+     * 자정을 넘는 인증 창(LLD-0101)에서는 23:30 이후에 다음 날 00:30 이전 알람을 미리 인증할 수 있다.
+     * 이때 미리 인증한 알람은 오늘 인증 가능 시간이 이미 지나 "오늘 끝난 알람"이므로 수정·삭제가 내일부터 적용되고,
+     * 다른 알람의 변경도 내일 일정 구성을 바꾼다(LLD-0113). 그러면 이미 적립한 내일 몫(완주 보너스 포함)의 기준이 바뀌어
+     * 인증한 버전이 내일 유효하지 않게 되거나(같은 복약 이중 인증) 보너스가 중복·누락된다.
+     * 회원에게 내일 복용분 인증이 있으면 자정이 지난 뒤에만 허용한다. 호출부가 회원 행을 잠근 뒤 부르므로
+     * 같은 회원의 인증 저장과 순서가 정해진다.
+     */
+    private void validateNoNextDayProof(Member member, LocalDate today, String action) {
+        if (medicationProofRepository.existsByMemberAndVerifiedDateAfter(member, today)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "다음 날 복용분을 이미 인증해 자정이 지난 뒤에 스케줄을 " + action + "할 수 있습니다.");
+        }
     }
 
     private LocalTime parseAlarmTime(String alarmTimeStr) {

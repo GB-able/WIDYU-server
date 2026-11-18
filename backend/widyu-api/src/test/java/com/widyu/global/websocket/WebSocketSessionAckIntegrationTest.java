@@ -264,6 +264,40 @@ class WebSocketSessionAckIntegrationTest {
     }
 
     @Test
+    @DisplayName("다른 가족의 위치 토픽 구독이 거부되면 그 세션만 오류 큐에서 FORBIDDEN과 목적지를 받고, 연결은 유지돼 같은 세션의 다른 구독은 계속 응답을 받는다")
+    void 거부된_위치_구독은_그_세션만_오류_큐에서_FORBIDDEN을_받고_다른_구독은_유지된다() throws Exception {
+        // given
+        stubCollaborators();
+        String destination = "/topic/location/senior/987654321";
+        try (Harness harness = new Harness()) {
+            Client outsider = harness.connect("A", 9007L, null);
+            Client other = harness.connect("B", 9007L, null);
+
+            // when
+            outsider.subscribe(destination);
+            awaitQuiet(() -> outsider.total() + other.total(), 1);
+            outsider.sendHeart(0);
+            outsider.sendLocation(0);
+            awaitQuiet(() -> outsider.total() + other.total(), 3);
+
+            // then
+            List<JsonNode> outsiderErrors = List.copyOf(outsider.received(ERRORS));
+            System.out.printf("[MEASURE] S6 denied subscribe errors outsider=%d other=%d | after denial heart ack=%d "
+                            + "location ack=%d connected=%s%n",
+                    outsiderErrors.size(), other.received(ERRORS).size(), outsider.received(HEART_ACK).size(),
+                    outsider.received(LOCATION_ACK).size(), outsider.session.isConnected());
+            assertThat(outsiderErrors).hasSize(1);
+            assertThat(outsiderErrors.getFirst().get("error").asText()).isEqualTo("FORBIDDEN");
+            assertThat(outsiderErrors.getFirst().get("destination").asText()).isEqualTo(destination);
+            assertThat(outsiderErrors.getFirst().size()).as("error, message, destination만 싣는다").isEqualTo(3);
+            assertThat(other.received(ERRORS)).isEmpty();
+            assertThat(outsider.session.isConnected()).isTrue();
+            assertThat(outsider.received(HEART_ACK)).hasSize(1);
+            assertThat(outsider.received(LOCATION_ACK)).hasSize(1);
+        }
+    }
+
+    @Test
     @DisplayName("요청 본문 내용과 관계없이 연결 시 인증한 회원으로 처리한다")
     void 요청_본문과_관계없이_연결_시_인증한_회원으로_처리한다() throws Exception {
         // given
@@ -455,6 +489,12 @@ class WebSocketSessionAckIntegrationTest {
                     }
                 }
             }));
+        }
+
+        /** 응답을 세지 않는 구독. 거부되면 오류 큐로만 결과가 온다. */
+        private void subscribe(String destination) {
+            session.subscribe(destination, new StompSessionHandlerAdapter() {
+            });
         }
 
         private void sendHeart(int seq) {

@@ -84,7 +84,7 @@
  - `stream`으로 갈린다: `imu_watch`·`imu_phone`은 축 검증, `hr`는 심박 검증(1~60샘플·`ts_ms` 엄격 증가·`bpm 0`은 `UNRELIABLE`만·`location`/`context` 금지) 후 `HeartRateBatchService`로 넘긴다. 심박 인덱스 행은 축·충격·설정 대조가 null이고 `sample_count`를 쓴다
  - REST `POST /api/v1/sensor/batches`, WebSocket `/app/sensor/batches/send`(컨트롤러가 `Message<byte[]>`로 받아 같은 원문 바이트를 넘긴다) → ACK `/user/queue/sensor/result`의 `{batchId, seq, result}`. 검증 실패는 원문에서 `batch_id`·`seq`만 얕게 읽어 `REJECTED`, 못 읽으면 `/user/queue/errors`
  - `stream: "dropped"`(기기가 버린 `seq` 구간, 데이터 종류 `dropped_stream` 필수)와 옛 형식 `"imu_dropped"`(워치 IMU 전용, `imu_watch`로 저장)는 같은 endpoint로 와서 `sensor_batch`·S3가 아니라 `sensor_dropped_range`에 원문과 함께 저장한다. 사유는 목록 밖 값도 저장한다(기본 목록 `queue_overflow`, `enqueue_failed`, `expired`, 형식은 LLD-0166 3.1절). 멱등 키 `(member_id, session_id, from_seq)`, `batch_id`가 없어 응답 `batchId`·`seq`는 null → LLD-0124, LLD-0166
- - **활동 상태**: `imu_watch` 저장 직후 5초 구간마다 손목 가속도 크기의 정수 합계를 `activity_window`에 더하고 `REST`·`LOW`·`ACTIVE`를 다시 정한다(합계라 역순·늦은 묶음에도 결과가 같다). 실패는 WARN만. `RECOVERY`·`IN_VEHICLE`은 심박에 붙일 때 계산한다. AI `context`로 보내는 것은 `sensor.heart-ai.activity-context-enabled`(기본 false)가 켜질 때만이며, AI가 고정 기준 유지(노션 3-1)를 배포·검증하기 전에는 켜지 않는다 → ADR-0042, LLD-0138
+ - **활동 상태**: `imu_watch` 저장 직후 5초 구간마다 손목 가속도 크기의 정수 합계를 `activity_window`에 더하고 `REST`·`LOW`·`ACTIVE`를 다시 정한다(합계라 역순·늦은 묶음에도 결과가 같다). 빈 구간 행을 `ON DUPLICATE KEY UPDATE`로 먼저 만들고 있는 행만 시작 시각 오름차순으로 `FOR UPDATE`한다(`READ_COMMITTED`). 없는 행을 잠금 조회하면 빈자리 잠금 때문에 같은 새 구간 동시 INSERT가 교착했다(#1093). H2 테스트는 이 MySQL 문법을 JPA 저장으로 바꿔 돈다. 실패는 WARN만. `RECOVERY`·`IN_VEHICLE`은 심박에 붙일 때 계산한다. AI `context`로 보내는 것은 `sensor.heart-ai.activity-context-enabled`(기본 false)가 켜질 때만이며, AI가 고정 기준 유지(노션 3-1)를 배포·검증하기 전에는 켜지 않는다 → ADR-0042, LLD-0138
 
 ### `decision` — 판정 기록 (연구 수집)
 
@@ -144,6 +144,7 @@
 
 ### `location` — 실시간 위치
 - `realtime`(WebSocket), `parentlocation`(REST). 시니어 발신 → family 검증 → 보호자 `/topic/location/{seniorId}` 구독
+- **SUBSCRIBE 거부는 버리되 알린다**: 위치, 심박 토픽의 가족 인가가 실패하거나 허용 목록 밖이거나 목적지가 없으면 구독을 버리고, 인증된 세션이면 그 세션 `/user/queue/errors`에 `{error: "FORBIDDEN", message, destination}`을 보낸다. 대상이 없는 회원인지 가족이 아닌지는 가리지 않는다. STOMP ERROR 프레임은 연결을 닫으므로 쓰지 않는다 → LLD-0032 6절(#1027)
 - 위치 이력 Redis 저장. → LLD-0001, ADR-0007
 - **위치 원본은 새로 저장하지 않는다**(2026-11-13 사용자 결정, 실증 회차 포함): `/app/location/update`를 `Message<byte[]>`로 받아 파싱하고 실시간 처리만 한다. `location_fix`의 과거 행, 조회, 내보내기, 보관 기간 정리, 탈퇴 삭제는 그대로이고 새 행만 생기지 않는다. 회차 필드는 받되 쓰지 않는다. 내보내기는 위치가 없는 회차를 `LOCATION_RAW_NOT_COLLECTED`로 신고한다. 심박, IMU 원본은 그대로 저장한다 → ADR-0045, LLD-0143 (옛 저장 설계는 LLD-0048)
 - **정확도가 낮은 위치도 거르지 않는다**(정책 1.6.6, `accuracy_m > 100`도 저장). `reason`·좌표 범위 검증은 브로드캐스트 **앞**에서 한다(`LOCATION_4000`). **v2 위치의 ACK(`LocationAckResponse`)는 「서버가 이 위치의 처리를 끝냈다」는 뜻이다(보호자 수신 보장 아님)**: 요청의 `deviceId`, `sessionId`, `seq`와 `result`를 싣는다. `APPLIED`는 판정 커밋과 최신 위치 반영, `SKIPPED`는 정상 생략(15분 지남, 최신보다 먼저 잰 위치, 같은 위치 재전송, 밀린 위치), `REJECTED`는 요청 오류다. 저장하지 않고 `STORED`라고 답하지 않는다. 기술 오류는 ACK 없이 오류로 보내 앱이 재전송하게 한다. 이 경로에서 일시적 실패를 `BusinessException`으로 던지지 않는다 → LLD-0143 **좌표 값은 어떤 로그에도 남기지 않는다**(memberId·seq만, LLD-0029)

@@ -45,7 +45,9 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
             + "AND NOT EXISTS (SELECT w FROM Walk w WHERE w.member = sp.member AND w.walkDate = :date)")
     List<Member> findMembersWithWalkGoalButNoWalkOn(@Param("date") LocalDate date, @Param("status") Status status);
 
-    @Query("SELECT sp FROM SeniorProfile sp JOIN FETCH sp.member WHERE sp.family.id = :familyId")
+    // 시니어 Member의 역방향 일대일 localAccount도 함께 읽어 시니어마다 1건씩 더 나가지 않게 한다(LLD-0161).
+    @Query("SELECT sp FROM SeniorProfile sp JOIN FETCH sp.member m LEFT JOIN FETCH m.localAccount " +
+           "WHERE sp.family.id = :familyId")
     List<SeniorProfile> findAllByFamilyIdWithMember(@Param("familyId") Long familyId);
 
     List<SeniorProfile> findAllByFamilyId(Long familyId);

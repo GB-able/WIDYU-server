@@ -84,7 +84,7 @@ class SeniorHomeServiceMedicineTest {
                         alarmSchedule(senior, 70L, LocalTime.of(17, 15)),
                         alarmSchedule(senior, 71L, LocalTime.of(17, 20))));
         given(medicationProofRepository.findByMemberIdAndDateRange(any(), any(), any()))
-                .willReturn(List.of(MedicationProof.create(verified, senior, List.of("proof.jpg"))));
+                .willReturn(List.of(MedicationProof.create(verified, senior, List.of("proof.jpg"), TODAY.atTime(17, 0), TODAY)));
 
         // when
         SeniorHomeCardsResponse response = seniorHomeService().getHomeCards(LocalDateTime.of(TODAY, LocalTime.of(17, 14)));
@@ -138,9 +138,7 @@ class SeniorHomeServiceMedicineTest {
     }
 
     private MedicationProof proof(MedicineSchedule schedule, Member member, LocalDateTime verifiedAt, String imageUrl) {
-        MedicationProof proof = MedicationProof.create(schedule, member, List.of(imageUrl));
-        ReflectionTestUtils.setField(proof, "verifiedAt", verifiedAt);
-        return proof;
+        return MedicationProof.create(schedule, member, List.of(imageUrl), verifiedAt, verifiedAt.toLocalDate());
     }
 
     private Member senior() {

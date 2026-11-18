@@ -33,14 +33,20 @@ public interface FamilyMembershipRepository extends JpaRepository<FamilyMembersh
 
     long countByFamilyId(Long familyId);
 
-    @Query("SELECT fm FROM FamilyMembership fm JOIN FETCH fm.guardian WHERE fm.family.id = :familyId")
+    // 가족 알림 대상 조회. 보호자 Member의 역방향 일대일도 함께 읽어 보호자마다 2건씩 더 나가지 않게 한다(LLD-0161).
+    @Query("SELECT fm FROM FamilyMembership fm JOIN FETCH fm.guardian g " +
+           "LEFT JOIN FETCH g.localAccount LEFT JOIN FETCH g.seniorProfile " +
+           "WHERE fm.family.id = :familyId")
     List<FamilyMembership> findAllByFamilyIdWithGuardian(@Param("familyId") Long familyId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT fm FROM FamilyMembership fm WHERE fm.family.id = :familyId ORDER BY fm.id ASC")
     List<FamilyMembership> findAllByFamilyIdForUpdate(@Param("familyId") Long familyId);
 
-    @Query("SELECT fm FROM FamilyMembership fm JOIN FETCH fm.guardian WHERE fm.family.id = :familyId " +
+    // Member의 역방향 일대일(localAccount, seniorProfile)은 EAGER라 함께 읽지 않으면 보호자마다 2건씩 더 나간다(LLD-0161).
+    @Query("SELECT fm FROM FamilyMembership fm JOIN FETCH fm.guardian g " +
+           "LEFT JOIN FETCH g.localAccount LEFT JOIN FETCH g.seniorProfile " +
+           "WHERE fm.family.id = :familyId " +
            "ORDER BY fm.sortOrder ASC, fm.connectedAt ASC, fm.id ASC")
     List<FamilyMembership> findAllByFamilyIdWithGuardianOrdered(@Param("familyId") Long familyId);
 

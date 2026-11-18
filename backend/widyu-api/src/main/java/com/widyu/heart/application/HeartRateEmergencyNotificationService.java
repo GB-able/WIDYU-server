@@ -16,10 +16,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
-/** 심박 저장 커밋 뒤 사건을 열고 보호자 최초 알림을 사건에서만 발행한다. */
+/**
+ * 심박 저장 커밋 뒤 사건을 열고 보호자 최초 알림을 사건에서만 발행한다.
+ *
+ * <p>커밋 후 리스너가 아니라 저장 트랜잭션이 끝난 호출자가 {@link HeartRatePersistenceService#notifyEmergency}로 부른다.
+ * 커밋 후 콜백은 저장 트랜잭션의 커넥션을 돌려주기 전에 돌아 커넥션 두 개를 쥔다(LLD-0160).
+ */
 @Service
 @RequiredArgsConstructor
 public class HeartRateEmergencyNotificationService {
@@ -35,7 +38,6 @@ public class HeartRateEmergencyNotificationService {
      * REPEATABLE READ 스냅샷이 그 시점에 고정돼, 같은 시니어의 동시 위급이 잠금을 기다린 뒤에도 앞 트랜잭션이
      * 방금 연 사건을 보지 못하고 사건을 하나 더 연다.
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Timed("heart.emergency.notification")
     public void handleHeartRateEmergency(HeartRateEmergencyEvent event) {
