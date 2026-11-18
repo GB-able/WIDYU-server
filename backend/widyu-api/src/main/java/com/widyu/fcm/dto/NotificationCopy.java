@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 public record NotificationCopy(String title, String body) {
     /** 메시지 미리보기 최대 글자 수(그래핌). 넘으면 앞 39글자에 「…」을 붙여 40글자를 넘지 않는다(LLD-0167). */
     public static final int PREVIEW_MAX_LENGTH = 40;
+    /** 일정명 최대 글자 수(그래핌). 넘으면 앞 15글자에 「…」을 붙인다(정책서 공통 규칙 2). */
+    private static final int SCHEDULE_NAME_MAX_LENGTH = 15;
     /** 미리보기가 들어가는 알림센터 본문 칸(fcm_notification.body VARCHAR(255))의 코드포인트 상한. */
     public static final int PREVIEW_MAX_CODE_POINTS = 255;
     private static final Pattern VARIABLE = Pattern.compile("\\{([^}]+)}");
@@ -33,12 +35,12 @@ public record NotificationCopy(String title, String body) {
             copy("A06-FALLBACK", "게시물 잠금을 해제했어요.", "앨범에서 확인해보세요."),
             copy("A07", "{시니어 이름} 님이 새 게시물을 모두 확인했어요!", "새로운 소식을 올려주세요."),
             copy("M01", "약 복용하실 시간이에요!", null),
-            copy("M02", "약 복용 인증이 아직 안 됐어요.", "약을 복용하셨다면 인증해 주세요."),
-            copy("M03", "약 복용 인증 시간이 10분 남았어요.", "약을 복용하셨다면 지금 인증해 주세요."),
+            copy("M02", "약 복용 인증이 아직 안 됐어요.", "약을 복용하시기 전에 인증해 주세요."),
+            copy("M03", "약 복용 인증 시간이 10분 남았어요.", "지금 약을 복용하시기 전에 인증해 주세요."),
             copy("M04", "{시니어 이름} 님의 약 복용 인증이 아직 확인되지 않았어요.", "약을 드셨는지 직접 확인해보세요."),
-            copy("M05", "{보호자 이름} 님이 약 알람을 변경했어요.", "바뀐 약 알람은 오늘부터 적용돼요."),
-            copy("M08", "{보호자 이름} 님이 새 약 알람을 등록했어요.", "오늘부터 알람이 울려요."),
-            copy("M09", "{보호자 이름} 님이 약 알람을 삭제했어요.", "오늘부터 이 알람은 울리지 않아요."),
+            copy("M05", "약 알람이 변경되었습니다.", "이미 인증한 포인트는 사라지지 않아요."),
+            copy("M08", "약 알람이 생성되었습니다.", null),
+            copy("M09", "약 알람이 삭제되었습니다.", "이미 인증한 포인트는 사라지지 않아요."),
             copy("M05-NEXT", "{보호자 이름} 님이 약 알람을 변경했어요.", "바뀐 약 알람은 내일부터 적용돼요."),
             copy("M08-NEXT", "{보호자 이름} 님이 새 약 알람을 등록했어요.", "내일부터 알람이 울려요."),
             copy("M09-NEXT", "{보호자 이름} 님이 약 알람을 삭제했어요.", "내일부터 이 알람은 울리지 않아요."),
@@ -168,6 +170,9 @@ public record NotificationCopy(String title, String body) {
             if (key.equals("메시지 미리보기")) {
                 value = messagePreview(value);
             }
+            if (key.equals("일정명") && value != null) {
+                value = truncate(value.strip(), SCHEDULE_NAME_MAX_LENGTH, SCHEDULE_NAME_MAX_LENGTH);
+            }
             if ((value == null || value.isBlank()) && key.endsWith("이름")
                     && !key.equals("시니어 이름")) {
                 value = values.get("actorDisplayName");
@@ -213,23 +218,19 @@ public record NotificationCopy(String title, String body) {
         return count;
     }
 
-    /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. 글자 경계에서만 자른다. */
+    /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. */
     private static String messagePreview(String raw) {
-        String text = normalizeMessage(raw);
+        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1));
+    }
+
+    /** {@code maxLength}글자(그래핌)를 넘으면 앞 {@code keepLength}글자 + 「…」. 글자 경계에서만 자른다. */
+    private static String truncate(String text, int maxLength, int keepLength) {
+        if (graphemeCount(text) <= maxLength) {
+            return text;
+        }
         BreakIterator graphemes = BreakIterator.getCharacterInstance();
         graphemes.setText(text);
-        int cut = 0;
-        for (int i = 0; i < PREVIEW_MAX_LENGTH - 1; i++) {
-            int next = graphemes.next();
-            if (next == BreakIterator.DONE) {
-                return text;
-            }
-            cut = next;
-        }
-        if (graphemes.next() == BreakIterator.DONE || graphemes.next() == BreakIterator.DONE) {
-            return fitCodePoints(text);
-        }
-        return fitCodePoints(text.substring(0, cut).stripTrailing() + "…");
+        return text.substring(0, graphemes.next(keepLength)).stripTrailing() + "…";
     }
 
     /**

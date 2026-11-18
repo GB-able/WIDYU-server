@@ -52,11 +52,87 @@ class NotificationCopyTest {
     @DisplayName("보호자 이름 없이 문구를 만들면 가족으로 채운 완성 문장을 반환한다")
     void 보호자_이름_없이_문구를_만들면_가족으로_채운다() {
         // given / when
-        NotificationCopy copy = NotificationCopy.of(NotificationType.MEDICATION_SCHEDULE_CHANGED, "M05", Map.of());
+        NotificationCopy copy = NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_CREATED, "H02", Map.of());
 
         // then
-        assertThat(copy.title()).isEqualTo("가족 님이 약 알람을 변경했어요.");
-        assertThat(copy.body()).isEqualTo("바뀐 약 알람은 오늘부터 적용돼요.");
+        assertThat(copy.title()).isEqualTo("가족 님이 새 건강 일정을 등록했어요.");
+    }
+
+    @Test
+    @DisplayName("약 알람 생성, 변경, 삭제 문구를 만들면 보호자 이름 없이 정책서 문구를 반환한다")
+    void 약_알람_생성_변경_삭제_문구는_정책서_문구를_반환한다() {
+        // given
+        Map<String, String> values = Map.of("보호자 이름", "김보호");
+
+        // when
+        NotificationCopy created = NotificationCopy.of(NotificationType.MEDICATION_SCHEDULE_CREATED, "M08", values);
+        NotificationCopy changed = NotificationCopy.of(NotificationType.MEDICATION_SCHEDULE_CHANGED, "M05", values);
+        NotificationCopy deleted = NotificationCopy.of(NotificationType.MEDICATION_SCHEDULE_DELETED, "M09", values);
+
+        // then
+        assertThat(created.title()).isEqualTo("약 알람이 생성되었습니다.");
+        assertThat(created.body()).isNull();
+        assertThat(changed.title()).isEqualTo("약 알람이 변경되었습니다.");
+        assertThat(changed.body()).isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
+        assertThat(deleted.title()).isEqualTo("약 알람이 삭제되었습니다.");
+        assertThat(deleted.body()).isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
+    }
+
+    @Test
+    @DisplayName("복약 재알림 문구를 만들면 복용 전에 인증하라는 부제목을 반환한다")
+    void 복약_재알림_문구는_복용_전에_인증하라는_부제목을_반환한다() {
+        // given / when
+        NotificationCopy first = NotificationCopy.of(NotificationType.MEDICATION_REMINDER_10, "M02", Map.of());
+        NotificationCopy second = NotificationCopy.of(NotificationType.MEDICATION_REMINDER_20, "M03", Map.of());
+
+        // then
+        assertThat(first.title()).isEqualTo("약 복용 인증이 아직 안 됐어요.");
+        assertThat(first.body()).isEqualTo("약을 복용하시기 전에 인증해 주세요.");
+        assertThat(second.title()).isEqualTo("약 복용 인증 시간이 10분 남았어요.");
+        assertThat(second.body()).isEqualTo("지금 약을 복용하시기 전에 인증해 주세요.");
+    }
+
+    @Test
+    @DisplayName("15글자 일정명으로 앱 안 문구를 만들면 자르지 않고 그대로 반환한다")
+    void 열다섯글자_일정명은_그대로_반환한다() {
+        // given
+        String name = "가".repeat(15);
+
+        // when
+        NotificationCopy copy = scheduleCopy(name);
+
+        // then
+        assertThat(copy.title()).isEqualTo("오후 3시 30분에 " + name + " 일정이 있어요.");
+    }
+
+    @Test
+    @DisplayName("16글자 일정명으로 앱 안 문구를 만들면 앞 15글자에 말줄임표를 붙인다")
+    void 열여섯글자_일정명은_앞_15글자와_말줄임표를_반환한다() {
+        // given
+        String name = "서울대학교병원 정형외과 정기검진";
+
+        // when
+        NotificationCopy copy = scheduleCopy(name);
+        NotificationCopy guardian = NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING,
+                "H01-C-SENIOR-INAPP", Map.of("오전/오후 시각", "오후 3시 30분", "시니어 이름", "박춘자", "일정명", name));
+
+        // then
+        assertThat(copy.title()).isEqualTo("오후 3시 30분에 서울대학교병원 정형외과 정기… 일정이 있어요.");
+        assertThat(guardian.body()).isEqualTo("서울대학교병원 정형외과 정기… 일정을 확인해보세요.");
+    }
+
+    @Test
+    @DisplayName("일정명 15번째 글자가 결합 이모지면 반으로 자르지 않고 한 글자로 센다")
+    void 일정명의_결합_이모지를_반으로_자르지_않는다() {
+        // given
+        String family = "👨‍👩‍👧";
+        String name = "가".repeat(14) + family + "끝";
+
+        // when
+        NotificationCopy copy = scheduleCopy(name);
+
+        // then
+        assertThat(copy.title()).isEqualTo("오후 3시 30분에 " + "가".repeat(14) + family + "… 일정이 있어요.");
     }
 
     @Test
@@ -202,5 +278,10 @@ class NotificationCopyTest {
     private static String previewOf(String message) {
         return NotificationCopy.of(NotificationType.CHEER_MESSAGE_RECEIVED, "X02-INAPP",
                 Map.of("보낸 사람 이름", "보호자", "메시지 미리보기", message)).body();
+    }
+
+    private static NotificationCopy scheduleCopy(String name) {
+        return NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING, "H01-S-INAPP",
+                Map.of("오전/오후 시각", "오후 3시 30분", "일정명", name));
     }
 }

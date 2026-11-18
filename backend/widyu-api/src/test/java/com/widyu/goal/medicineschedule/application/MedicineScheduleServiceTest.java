@@ -319,7 +319,7 @@ class MedicineScheduleServiceTest {
                 .doesNotContainKey("type")
                 .containsKey("revision");
         assertThat(messageCaptor.getAllValues().getFirst().content())
-                .isEqualTo("바뀐 약 알람은 오늘부터 적용돼요.");
+                .isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
         assertThat(messageCaptor.getAllValues().get(1).notificationType())
                 .isEqualTo(NotificationType.MEDICATION_SCHEDULE_SYNC);
     }
@@ -465,7 +465,7 @@ class MedicineScheduleServiceTest {
         assertThat(messages.getAllValues().getFirst().notificationType())
                 .isEqualTo(NotificationType.MEDICATION_SCHEDULE_DELETED);
         assertThat(messages.getAllValues().getFirst().content())
-                .isEqualTo("오늘부터 이 알람은 울리지 않아요.");
+                .isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
         assertThat(messages.getAllValues().get(1).notificationType())
                 .isEqualTo(NotificationType.MEDICATION_SCHEDULE_SYNC);
     }
@@ -540,9 +540,8 @@ class MedicineScheduleServiceTest {
         assertThat(messages.getAllValues().getFirst().notificationType())
                 .isEqualTo(NotificationType.MEDICATION_SCHEDULE_CREATED);
         assertThat(messages.getAllValues().getFirst().title())
-                .isEqualTo("방장 님이 새 약 알람을 등록했어요.");
-        assertThat(messages.getAllValues().getFirst().content())
-                .isEqualTo("오늘부터 알람이 울려요.");
+                .isEqualTo("약 알람이 생성되었습니다.");
+        assertThat(messages.getAllValues().getFirst().content()).isNull();
         assertThat(messages.getAllValues().getFirst().actorDisplayName()).isEqualTo("방장");
         assertThat(messages.getAllValues().getFirst().effectiveFromDate())
                 .isEqualTo(today().toString());

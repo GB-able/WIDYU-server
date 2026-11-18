@@ -24,7 +24,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HealthScheduleNotificationListener {
 
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN);
+    /** 정책서 공통 규칙 3: 「오전/오후 N시 M분」. 정각은 분을 빼고 「오후 3시」로 쓴다(사용자 결정 2026-11-18). */
+    private static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("a h'시'", Locale.KOREAN);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h'시' m'분'", Locale.KOREAN);
     private static final int WINDOW_MINUTES = 10;
 
     private final FcmService fcmService;
@@ -84,11 +86,18 @@ public class HealthScheduleNotificationListener {
                 "H01-S-OS", Map.of());
         NotificationCopy inAppCopy = NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING,
                 "H01-S-INAPP", Map.of(
-                        "오전/오후 시각", schedule.getScheduledAt().format(TIME_FORMATTER),
+                        "오전/오후 시각", timeText(schedule.getScheduledAt()),
                         "일정명", schedule.getScheduleName()));
         FcmSendDto dto = FcmSendDto.of(NotificationType.HEALTH_SCHEDULE_UPCOMING, osCopy,
                 schedule.getId().toString(), null, null, null, recipient.getProfileImage())
                 .withCenterCopy(inAppCopy);
         fcmService.sendMessageToUser(recipient.getId(), dto);
+    }
+
+    private static String timeText(LocalDateTime scheduledAt) {
+        if (scheduledAt.getMinute() == 0) {
+            return scheduledAt.format(HOUR_FORMATTER);
+        }
+        return scheduledAt.format(TIME_FORMATTER);
     }
 }

@@ -54,10 +54,27 @@ class HealthScheduleNotificationListenerTest {
         assertThat(dto.title()).isEqualTo("건강 일정이 곧 있어요.");
         assertThat(dto.content()).isEqualTo("앱에서 일정 시간과 내용을 확인해주세요.");
         assertThat(dto.title()).doesNotContain("병원", "15:30");
-        assertThat(dto.centerTitle()).isEqualTo("오후 3:30에 병원 진료 일정이 있어요.");
+        assertThat(dto.centerTitle()).isEqualTo("오후 3시 30분에 병원 진료 일정이 있어요.");
         assertThat(dto.centerBody()).isEqualTo("잊지 않도록 일정을 확인해보세요.");
         assertThat(dto.image()).isEqualTo("https://cdn.widyu.store/profile/senior.png");
         assertThat(dto.dataForEnqueue("event-1")).containsEntry("inAppTitle", dto.centerTitle());
+    }
+
+    @Test
+    @DisplayName("오전 정각 일정이 임박하면 앱 안 문구의 시각을 분 없이 오전 N시로 쓴다")
+    void 오전_정각_일정은_오전_N시_0분으로_쓴다() {
+        // given
+        HealthSchedule schedule = scheduleAt(1L, LocalDateTime.of(2026, 10, 22, 9, 0));
+        given(healthScheduleRepository.findUpcomingSchedulesInTimeRange(any(), any()))
+                .willReturn(List.of(schedule));
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        listener.sendHealthScheduleReminderAt(LocalDateTime.of(2026, 10, 22, 8, 0));
+
+        // then
+        then(fcmService).should().sendMessageToUser(any(), captor.capture());
+        assertThat(captor.getValue().centerTitle()).isEqualTo("오전 9시에 병원 진료 일정이 있어요.");
     }
 
     @Test
