@@ -61,7 +61,7 @@ class HealthScheduleNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("오전 정각 일정이 임박하면 앱 안 문구의 시각을 오전 N시 0분으로 쓴다")
+    @DisplayName("오전 정각 일정이 임박하면 앱 안 문구의 시각을 분 없이 오전 N시로 쓴다")
     void 오전_정각_일정은_오전_N시_0분으로_쓴다() {
         // given
         HealthSchedule schedule = scheduleAt(1L, LocalDateTime.of(2026, 10, 22, 9, 0));
@@ -74,7 +74,7 @@ class HealthScheduleNotificationListenerTest {
 
         // then
         then(fcmService).should().sendMessageToUser(any(), captor.capture());
-        assertThat(captor.getValue().centerTitle()).isEqualTo("오전 9시 0분에 병원 진료 일정이 있어요.");
+        assertThat(captor.getValue().centerTitle()).isEqualTo("오전 9시에 병원 진료 일정이 있어요.");
     }
 
     @Test
