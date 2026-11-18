@@ -38,9 +38,7 @@ import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,8 +57,7 @@ class SensorWindowExportServiceTest {
     @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
     @Mock private SensorBatchRejectionRepository sensorBatchRejectionRepository;
     @Mock private S3Service s3Service;
-    @Spy private ObjectMapper objectMapper = new ObjectMapper();
-    @InjectMocks private SensorWindowExportService service;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     @DisplayName("시간대와 여유로 구간을 만들어 CSV 파일들을 zip으로 내려주고 손상 묶음은 요약에 남긴다")
@@ -85,7 +82,7 @@ class SensorWindowExportServiceTest {
                 """.formatted(FROM_MS + 60_000).getBytes(UTF_8));
         given(s3Service.downloadBytes("sensor/i1.json")).willReturn("{not json".getBytes(UTF_8));
         given(sensorDroppedRangeRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(28L, startMs, endMs))
-                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").fromSeq(10L)
+                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").droppedStream("hr").fromSeq(10L)
                         .toSeq(15L).reason("queue_overflow").tsMs(FROM_MS + 120_000)
                         .serverReceivedAtMs(FROM_MS + 125_000).build()));
         given(sensorBatchRejectionRepository.findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc(
@@ -95,13 +92,14 @@ class SensorWindowExportServiceTest {
                         .ingestChannel(SensorIngestChannel.REST).receivedAtMs(FROM_MS + 180_000).build()));
 
         // when
-        SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
+        SensorWindowExportFile file = service().export(28L, FROM, TO, 10);
 
         // then
         Map<String, String> entries = unzip(file.bytes());
         assertThat(file.fileName()).isEqualTo("sensor_member28_20261030T0900-20261030T0938.zip");
         assertThat(entries).containsOnlyKeys("location.csv", "sensor_batches.csv", "device_heartbeat.csv",
-                "device_events.csv", "dropped_ranges.csv", "rejections.csv", "hr.csv", "imu.csv", "summary.csv");
+                "device_events.csv", "dropped_ranges.csv", "rejections.csv", "seq_gaps.csv", "seq_sessions.csv",
+                "hr.csv", "imu.csv", "summary.csv");
         assertThat(entries.get("sensor_batches.csv").lines().findFirst().orElseThrow())
                 .endsWith(",server_received_at_ms,ingest_channel");
         assertThat(entries.get("sensor_batches.csv")).contains(",h1,").contains(",WS\n");
@@ -110,9 +108,9 @@ class SensorWindowExportServiceTest {
                 "during,2026-10-30 09:13:00.000," + (FROM_MS + 180_000)
                         + ",hr,gw-1,01j8zk3v9x2q4m7n8p1r5s6t7u,s-01,12,SENSOR_4001,REST");
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
-                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms",
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms,dropped_stream",
                 "during,2026-10-30 09:12:00.000," + (FROM_MS + 120_000) + ",s-01,10,15,queue_overflow,"
-                        + (FROM_MS + 125_000));
+                        + (FROM_MS + 125_000) + ",hr");
         assertThat(entries.get("location.csv")).contains("before,2026-10-30 09:09:00.000," + (FROM_MS - 60_000)
                 + ",phone-1,s,1,37.5,127.0,8.0,1.2");
         assertThat(entries.get("hr.csv")).contains("during,2026-10-30 09:11:00.000").contains(",h1,88,HIGH");
@@ -132,12 +130,12 @@ class SensorWindowExportServiceTest {
         given(memberRepository.existsById(28L)).willReturn(true);
 
         // when
-        SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
+        SensorWindowExportFile file = service().export(28L, FROM, TO, 10);
 
         // then
         Map<String, String> entries = unzip(file.bytes());
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
-                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms");
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms,dropped_stream");
         assertThat(entries.get("summary.csv")).contains("rows:dropped_ranges.csv,0");
         assertThat(entries.get("rejections.csv").lines()).containsExactly(
                 "phase,ts_kst,ts_ms,stream,device_id,batch_id,session_id,seq,error_code,ingest_channel");
@@ -158,7 +156,7 @@ class SensorWindowExportServiceTest {
                         .serverReceivedAtMs(FROM_MS + 90_000).build()));
 
         // when
-        SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
+        SensorWindowExportFile file = service().export(28L, FROM, TO, 10);
 
         // then
         Map<String, String> entries = unzip(file.bytes());
@@ -177,13 +175,44 @@ class SensorWindowExportServiceTest {
         given(memberRepository.existsById(28L)).willReturn(true);
 
         // when
-        SensorWindowExportFile file = service.export(28L, FROM, TO, 10);
+        SensorWindowExportFile file = service().export(28L, FROM, TO, 10);
 
         // then
         Map<String, String> entries = unzip(file.bytes());
         assertThat(entries.get("device_events.csv").lines()).containsExactly(
                 "phase,ts_kst,ts_ms,device_id,source,kind,attributes,session_id,server_received_at_ms");
         assertThat(entries.get("summary.csv")).contains("rows:device_events.csv,0");
+    }
+
+    @Test
+    @DisplayName("빠진 묶음 번호가 있으면 구간 밖 시각의 버림 기록도 세션으로 찾아 seq_gaps.csv와 seq_sessions.csv에 적는다")
+    void 빠진_묶음_번호를_세션으로_대조해_적는다() throws Exception {
+        // given: 1번과 4번만 있고, 2~3번을 버린 기록은 30분 뒤라 내보내는 구간 밖이다
+        long startMs = FROM_MS - 600_000;
+        long endMs = FROM_MS + 18 * 60_000 + 600_000;
+        given(memberRepository.existsById(28L)).willReturn(true);
+        SensorBatch first = gapBatch(1L, FROM_MS, SensorIngestChannel.WS);
+        SensorBatch fourth = gapBatch(4L, FROM_MS + 3_000, SensorIngestChannel.REST);
+        given(sensorBatchRepository.findMemberWindowBatches(28L, startMs, endMs)).willReturn(List.of(first, fourth));
+        given(sensorDroppedRangeRepository.findByMemberIdAndSessionIdIn(28L, java.util.Set.of("s-01")))
+                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01")
+                        .droppedStream("hr").fromSeq(2L).toSeq(3L).reason("queue_overflow")
+                        .tsMs(FROM_MS + 1_800_000).serverReceivedAtMs(FROM_MS + 1_801_000).build()));
+
+        // when
+        SensorWindowExportFile file = service().export(28L, FROM, TO, 10);
+
+        // then
+        Map<String, String> entries = unzip(file.bytes());
+        assertThat(entries.get("dropped_ranges.csv").lines()).hasSize(1);
+        assertThat(entries.get("seq_gaps.csv").lines()).containsExactly(
+                SensorSeqGapReport.GAP_HEADER.strip(),
+                "hr,gw-1,s-01,2,3,2," + (FROM_MS + 1_000) + ",2026-10-30 09:10:01.000," + (FROM_MS + 3_000)
+                        + ",2026-10-30 09:10:03.000,2,queue_overflow,0,,,0,DEVICE_DROPPED");
+        assertThat(entries.get("seq_sessions.csv").lines()).containsExactly(
+                SensorSeqGapReport.SESSION_HEADER.strip(),
+                "hr,gw-1,s-01,1,4,4,2,2,0.5,1,1,1");
+        assertThat(entries.get("summary.csv")).contains("rows:seq_gaps.csv,1").contains("rows:seq_sessions.csv,1");
     }
 
     @Test
@@ -199,6 +228,9 @@ class SensorWindowExportServiceTest {
                 .willReturn(List.of());
         SensorBatch heart = mock(SensorBatch.class);
         given(heart.getStream()).willReturn("hr");
+        given(heart.getSessionId()).willReturn("s-h1");
+        given(heart.getSeq()).willReturn(1L);
+        given(heart.getMeasuredAtEndMs()).willReturn(FROM_MS + 1_000);
         given(heart.getS3Key()).willReturn("sensor/h1.json");
         given(heart.getMeasuredAtStartMs()).willReturn(FROM_MS);
         given(sensorBatchRepository.findMemberWindowBatches(28L, startMs, endMs)).willReturn(List.of(heart));
@@ -206,14 +238,14 @@ class SensorWindowExportServiceTest {
         given(s3Service.downloadBytes("sensor/h1.json")).willThrow(failure);
 
         // when & then
-        assertThatThrownBy(() -> service.export(28L, FROM, TO, 10)).isSameAs(failure);
+        assertThatThrownBy(() -> service().export(28L, FROM, TO, 10)).isSameAs(failure);
     }
 
     @Test
     @DisplayName("시작 시각이 끝 시각보다 늦거나 같으면 시간대 오류가 발생한다")
     void 시작이_끝보다_늦으면_예외가_발생한다() {
         // when & then
-        assertThatThrownBy(() -> service.export(28L, TO, FROM, 10))
+        assertThatThrownBy(() -> service().export(28L, TO, FROM, 10))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_EXPORT_RANGE_INVALID);
         then(locationFixRepository).should(never())
@@ -224,7 +256,7 @@ class SensorWindowExportServiceTest {
     @DisplayName("앞뒤 여유를 포함한 구간이 90분을 넘으면 시간대 오류가 발생한다")
     void 구간이_90분을_넘으면_예외가_발생한다() {
         // when & then: 71분 + 앞뒤 10분 = 91분
-        assertThatThrownBy(() -> service.export(28L, FROM, FROM.plusMinutes(71), 10))
+        assertThatThrownBy(() -> service().export(28L, FROM, FROM.plusMinutes(71), 10))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SENSOR_EXPORT_RANGE_INVALID);
     }
@@ -236,17 +268,43 @@ class SensorWindowExportServiceTest {
         given(memberRepository.existsById(99L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> service.export(99L, FROM, TO, 10))
+        assertThatThrownBy(() -> service().export(99L, FROM, TO, 10))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEMBER_NOT_FOUND);
+    }
+
+    private SensorWindowExportService service() {
+        return new SensorWindowExportService(memberRepository, locationFixRepository, deviceHeartbeatRepository,
+                deviceEventRepository, sensorBatchRepository,
+                new SensorLossDiagnostics(sensorDroppedRangeRepository, sensorBatchRejectionRepository),
+                s3Service, objectMapper);
+    }
+
+    /** 대조에 쓰는 값만 채운 심박 묶음. 원문은 손상으로 두어 hr.csv 펼치기는 건너뛴다. */
+    private SensorBatch gapBatch(long seq, long measuredStartMs, SensorIngestChannel channel) {
+        SensorBatch batch = mock(SensorBatch.class);
+        given(batch.getBatchId()).willReturn("h" + seq);
+        given(batch.getStream()).willReturn("hr");
+        given(batch.getDeviceId()).willReturn("gw-1");
+        given(batch.getSessionId()).willReturn("s-01");
+        given(batch.getSeq()).willReturn(seq);
+        given(batch.getMeasuredAtStartMs()).willReturn(measuredStartMs);
+        given(batch.getMeasuredAtEndMs()).willReturn(measuredStartMs + 1_000);
+        given(batch.getIngestChannel()).willReturn(channel);
+        given(batch.getS3Key()).willReturn("sensor/h" + seq + ".json");
+        given(s3Service.downloadBytes("sensor/h" + seq + ".json")).willReturn("{not json".getBytes(UTF_8));
+        return batch;
     }
 
     private SensorBatch batch(String batchId, String stream, String s3Key) {
         SensorBatch batch = mock(SensorBatch.class);
         given(batch.getBatchId()).willReturn(batchId);
         given(batch.getStream()).willReturn(stream);
+        given(batch.getSessionId()).willReturn("s-" + batchId);
+        given(batch.getSeq()).willReturn(1L);
         given(batch.getS3Key()).willReturn(s3Key);
         given(batch.getMeasuredAtStartMs()).willReturn(FROM_MS);
+        given(batch.getMeasuredAtEndMs()).willReturn(FROM_MS + 1_000);
         return batch;
     }
 

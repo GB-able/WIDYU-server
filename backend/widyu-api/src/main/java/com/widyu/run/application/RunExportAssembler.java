@@ -21,6 +21,8 @@ import com.widyu.run.repository.RunDeviceAssignmentRepository;
 import com.widyu.run.repository.RunMarkerRepository;
 import com.widyu.sensor.ClockMapping;
 import com.widyu.sensor.SensorBatch;
+import com.widyu.sensor.application.SensorLossDiagnostics;
+import com.widyu.sensor.application.SensorLossDiagnostics.CsvFile;
 import com.widyu.sensor.repository.ClockMappingRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
 import java.io.BufferedWriter;
@@ -81,6 +83,8 @@ public class RunExportAssembler {
     private static final String REASON_UNKNOWN = "UNKNOWN";
     private static final String RETENTION_UNDECIDED = "UNDECIDED";
     private static final String STREAMS_DIR = "streams";
+    /** 빠진 묶음의 원인을 가리는 CSV. 스트림 파일이 아니라 manifest.files와 streams_absent에 넣지 않는다(LLD-0166 5.4). */
+    static final String DIAGNOSTICS_DIR = "diagnostics";
     private static final long MILLIS_PER_SECOND = 1000L;
 
     private final SensorBatchRepository sensorBatchRepository;
@@ -94,6 +98,7 @@ public class RunExportAssembler {
     private final S3Service s3Service;
     private final ObjectMapper objectMapper;
     private final SensorProperties sensorProperties;
+    private final SensorLossDiagnostics sensorLossDiagnostics;
 
     /** 한 (스트림, 기기)의 집계 재료. 파일을 다시 읽어도 알 수 없는 값(도착 순서)을 여기 모은다. */
     private static final class StreamAccumulator {
@@ -121,11 +126,31 @@ public class RunExportAssembler {
         writeHeartbeatStream(run, heartbeats, workDir, accumulators);
         writeDecisions(run, workDir);
         int incidentCount = writeIncidents(run, workDir);
+        writeDiagnostics(run, workDir);
 
         writeClockMappings(run, workDir);
         writeQuality(run, assignments, heartbeats, accumulators, incidentCount, workDir);
         writeRunJson(run, assignments, workDir);
         writeManifest(run, assignments, accumulators, incidentCount, workDir);
+    }
+
+    /**
+     * 버린 구간, 거절 기록, 빠진 번호 대조(LLD-0166 3.4). 0건이어도 머리글만 쓴다 — "찾아봤는데 없다"를 적는 자리라
+     * 파일이 없으면 "안 찾았다"와 구별되지 않는다. phase는 회차 시작~끝 기준이다.
+     */
+    private void writeDiagnostics(CollectionRun run, Path workDir) throws IOException {
+        long endedAtMs = endedAtMs(run);
+        List<SensorBatch> batches = sensorBatchRepository.findByRunIdOrderByMeasuredAtStartMsAsc(run.getRunId());
+        Path dir = Files.createDirectories(workDir.resolve(DIAGNOSTICS_DIR));
+        for (CsvFile file : sensorLossDiagnostics.files(run.getMember().getId(), batches,
+                run.getStartedAtMs(), endedAtMs, run.getStartedAtMs(), endedAtMs)) {
+            try (BufferedWriter writer = Files.newBufferedWriter(dir.resolve(file.name()), StandardCharsets.UTF_8)) {
+                writer.write(file.header());
+                for (String row : file.rows()) {
+                    writer.write(row);
+                }
+            }
+        }
     }
 
     /** 판정 기록은 센서 스트림이 아니므로 manifest.files에는 넣지 않는다(LLD-0051 5.3). */
@@ -310,6 +335,8 @@ public class RunExportAssembler {
             server.set("backfill_for", backfillForArray(batch.getBackfillFor()));
         }
         putNullableString(server, "collection_mode", batch.getCollectionMode());
+        // 처음 저장된 경로(WS, REST). 이 칸이 생기기 전 묶음은 null이다(LLD-0128, LLD-0166 3.4).
+        putNullableString(server, "ingest_channel", name(batch.getIngestChannel()));
         record.set("_server", server);
         return record;
     }

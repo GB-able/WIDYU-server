@@ -9,6 +9,7 @@ import com.widyu.global.security.PrincipalDetails;
 import com.widyu.global.websocket.WebSocketWorkDispatcher;
 import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.application.SensorBatchService;
+import com.widyu.sensor.application.SensorRejectionAsyncRecorder;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -44,6 +45,7 @@ public class SensorBatchWebSocketController {
     private final TaskExecutor websocketSensorExecutor;
     private final SensorProperties sensorProperties;
     private final MeterRegistry meterRegistry;
+    private final SensorRejectionAsyncRecorder rejectionRecorder;
 
     @MessageMapping("/sensor/batches/send")
     public void ingestBatch(
@@ -58,16 +60,22 @@ public class SensorBatchWebSocketController {
 
         if (payload.length > sensorProperties.maxPayloadBytes()) {
             // 대기열에 넣기 전에 거절해 센서 대기열 메모리 상한(본문 상한 × 칸 수, LLD-0091)을 지킨다(LLD-0122).
-            // 서비스 밖 거절이라 이번 단계에서는 거절 기록 없이 카운터와 로그로만 남긴다(LLD-0128 5.3).
+            // 거절 기록은 수신 스레드를 막지 않게 전용 기록 스레드로 넘긴다(LLD-0166 5.2).
             SensorBatchService.countReceived(meterRegistry, SensorIngestChannel.WS,
                     SensorBatchService.UNKNOWN_STREAM, SensorBatchResult.REJECTED.name());
+            rejectionRecorder.submit(memberId, payload, ErrorCode.SENSOR_BATCH_TOO_LARGE, serverReceivedAtMs);
             workDispatcher.sendToSession(memberId.toString(), sessionId, ACK_DESTINATION,
                     rejected(memberId, payload, new BusinessException(ErrorCode.SENSOR_BATCH_TOO_LARGE)));
             return;
         }
 
-        workDispatcher.dispatch(websocketSensorExecutor, API, headerAccessor, () -> workDispatcher.sendToSession(
-                memberId.toString(), sessionId, ACK_DESTINATION, process(memberId, payload, serverReceivedAtMs)));
+        boolean accepted = workDispatcher.dispatch(websocketSensorExecutor, API, headerAccessor,
+                () -> workDispatcher.sendToSession(memberId.toString(), sessionId, ACK_DESTINATION,
+                        process(memberId, payload, serverReceivedAtMs)));
+        if (!accepted) {
+            // 실행기 포화. 앱은 TEMPORARILY_BUSY를 받고 다시 보내야 한다. 끝내 안 오면 이 기록이 원인이다.
+            rejectionRecorder.submit(memberId, payload, ErrorCode.TEMPORARILY_BUSY, serverReceivedAtMs);
+        }
     }
 
     /**

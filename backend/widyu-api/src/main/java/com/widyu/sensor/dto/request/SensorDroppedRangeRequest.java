@@ -8,8 +8,10 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
- * 워치 IMU 큐가 넘쳐 버린 구간(LLD-0124 3절). 센서 배치와 같은 endpoint로 오고 {@code stream: "imu_dropped"}로 갈린다.
- * 서버는 원문을 그대로 보관하므로 모르는 필드를 거절하지 않는다.
+ * 기기가 버린 묶음 구간(LLD-0124 3절, LLD-0166 3.1). 센서 배치와 같은 endpoint로 오고
+ * {@code stream: "dropped"}(새 형식) 또는 {@code "imu_dropped"}(워치 IMU 전용 옛 형식)로 갈린다.
+ * 서버는 원문을 그대로 보관하므로 모르는 필드를 거절하지 않는다. 새 형식의 {@code dropped_stream}은 옛 형식에서
+ * 타입이 무엇이든 거절하지 않도록 이 DTO에 두지 않고 서비스가 트리에서 읽는다.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SensorDroppedRangeRequest(

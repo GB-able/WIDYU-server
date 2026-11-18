@@ -16,10 +16,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 워치 IMU 큐가 넘쳐 버린 배치 구간 1건(LLD-0124). 앱이 실제로 버린 구간을 직접 알려 주는 결측 근거다(정책 B 1.2.4, 1.2.6).
+ * 기기가 버린 센서 묶음 구간 1건(LLD-0124, LLD-0166). 앱이 실제로 버린 구간을 직접 알려 주는 결측 근거다(정책 B 1.2.4, 1.2.6).
  *
  * <p>워치가 구간마다 Data Layer 항목 하나({@code /imu/dropped/{session_id}/{from_seq}})를 남기고 폰이 그대로 보낸다.
- * 다시 보내도 같은 값이 오므로 멱등 키는 {@code (member_id, session_id, from_seq)}다.
+ * 다시 보내도 같은 값이 오므로 멱등 키는 {@code (member_id, session_id, from_seq)}다. 심박과 IMU는 세션 ID를 따로 만들어
+ * 데이터 종류를 키에 넣지 않는다.
  */
 @Entity
 @Getter
@@ -40,9 +41,13 @@ public class SensorDroppedRange extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false)
     private Long memberId;
 
-    /** 버린 IMU 배치의 {@code session_id}. 같은 세션의 {@code sensor_batch} 행과 이어진다. */
+    /** 버린 배치의 {@code session_id}. 같은 세션의 {@code sensor_batch} 행과 이어진다. */
     @Column(name = "session_id", nullable = false, length = 64)
     private String sessionId;
+
+    /** 버린 배치의 {@code stream}({@code imu_watch}, {@code hr} 등). 옛 {@code imu_dropped} 기록은 {@code imu_watch}다. */
+    @Column(name = "dropped_stream", nullable = false, length = 20)
+    private String droppedStream;
 
     /** 버린 배치 {@code seq}의 처음과 끝(양 끝 포함). */
     @Column(name = "from_seq", nullable = false)
@@ -51,11 +56,11 @@ public class SensorDroppedRange extends BaseTimeEntity {
     @Column(name = "to_seq", nullable = false)
     private Long toSeq;
 
-    /** 결측 사유. 값 목록은 합의 대기(S2)라 앱이 보낸 값을 그대로 둔다. */
+    /** 결측 사유. 기본 목록(LLD-0166 3.1)은 합의 대기라 목록 밖 값도 앱이 보낸 그대로 둔다. */
     @Column(name = "reason", nullable = false, length = 64)
     private String reason;
 
-    /** 워치가 버린 시각(워치 벽시계 epoch ms). */
+    /** 기기가 버린 시각(기기 벽시계 epoch ms). */
     @Column(name = "ts_ms", nullable = false)
     private Long tsMs;
 
@@ -75,11 +80,12 @@ public class SensorDroppedRange extends BaseTimeEntity {
 
     @Builder
     private SensorDroppedRange(
-            Long memberId, String sessionId, Long fromSeq, Long toSeq, String reason, Long tsMs,
+            Long memberId, String sessionId, String droppedStream, Long fromSeq, Long toSeq, String reason, Long tsMs,
             Long serverReceivedAtMs, Long persistedAtMs, String payload, String payloadSha256
     ) {
         this.memberId = memberId;
         this.sessionId = sessionId;
+        this.droppedStream = droppedStream;
         this.fromSeq = fromSeq;
         this.toSeq = toSeq;
         this.reason = reason;

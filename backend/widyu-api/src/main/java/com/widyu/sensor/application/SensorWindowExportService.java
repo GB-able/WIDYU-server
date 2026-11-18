@@ -14,15 +14,12 @@ import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.sensor.SensorBatch;
-import com.widyu.sensor.SensorBatchRejection;
-import com.widyu.sensor.SensorDroppedRange;
+import com.widyu.sensor.application.SensorLossDiagnostics.CsvFile;
 import com.widyu.sensor.application.SensorWindowCsv.Window;
 import com.widyu.sensor.dto.request.HeartRateBatchRequest;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.dto.response.SensorWindowExportFile;
-import com.widyu.sensor.repository.SensorBatchRejectionRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
-import com.widyu.sensor.repository.SensorDroppedRangeRepository;
 import jakarta.annotation.PreDestroy;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -73,8 +70,7 @@ public class SensorWindowExportService {
     private final DeviceHeartbeatRepository deviceHeartbeatRepository;
     private final DeviceEventRepository deviceEventRepository;
     private final SensorBatchRepository sensorBatchRepository;
-    private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
-    private final SensorBatchRejectionRepository sensorBatchRejectionRepository;
+    private final SensorLossDiagnostics sensorLossDiagnostics;
     private final S3Service s3Service;
     private final ObjectMapper objectMapper;
 
@@ -101,10 +97,9 @@ public class SensorWindowExportService {
                 .findByMemberIdAndOccurredAtMsBetweenOrderByOccurredAtMsAsc(memberId, window.startMs(), window.endMs());
         List<SensorBatch> batches = sensorBatchRepository.findMemberWindowBatches(
                 memberId, window.startMs(), window.endMs());
-        List<SensorDroppedRange> droppedRanges = sensorDroppedRangeRepository
-                .findByMemberIdAndTsMsBetweenOrderByTsMsAsc(memberId, window.startMs(), window.endMs());
-        List<SensorBatchRejection> rejections = sensorBatchRejectionRepository
-                .findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc(memberId, window.startMs(), window.endMs());
+        // 버린 구간, 거절 기록, 빠진 번호 대조(#983, LLD-0128, LLD-0166).
+        List<CsvFile> lossFiles = sensorLossDiagnostics.files(
+                memberId, batches, window.fromMs(), window.toMs(), window.startMs(), window.endMs());
 
         Map<String, Long> counts = new LinkedHashMap<>();
         List<String> skipped = new ArrayList<>();
@@ -124,13 +119,11 @@ public class SensorWindowExportService {
             counts.put("device_events.csv", writeEntry(zip, out, "device_events.csv",
                     SensorWindowCsv.DEVICE_EVENT_HEADER,
                     deviceEvents.stream().map(event -> SensorWindowCsv.deviceEvent(event, window)).toList()));
-            // 묶음 번호가 빠졌을 때 워치가 버린 것인지 서버가 못 받은 것인지 가르는 근거다(#983).
-            counts.put("dropped_ranges.csv", writeEntry(zip, out, "dropped_ranges.csv",
-                    SensorWindowCsv.DROPPED_HEADER,
-                    droppedRanges.stream().map(range -> SensorWindowCsv.dropped(range, window)).toList()));
-            // 빠진 묶음 번호가 서버 거절인지 가르는 근거다(LLD-0128).
-            counts.put("rejections.csv", writeEntry(zip, out, "rejections.csv", SensorWindowCsv.REJECTION_HEADER,
-                    rejections.stream().map(rejection -> SensorWindowCsv.rejection(rejection, window)).toList()));
+            // 묶음 번호가 빠졌을 때 기기가 버렸는지 서버가 거절했는지 가르는 근거다.
+            for (CsvFile lossFile : lossFiles) {
+                counts.put(lossFile.name(),
+                        writeEntry(zip, out, lossFile.name(), lossFile.header(), lossFile.rows()));
+            }
             counts.put("hr.csv", writeExpanded(zip, out, "hr.csv", SensorWindowCsv.HR_HEADER,
                     batches.stream().filter(batch -> HR.equals(batch.getStream())).toList(), window, skipped));
             counts.put("imu.csv", writeExpanded(zip, out, "imu.csv", SensorWindowCsv.IMU_HEADER,
@@ -143,9 +136,10 @@ public class SensorWindowExportService {
         }
 
         log.info("센서 시간대 내보내기: memberId={}, locations={}, batches={}, heartbeats={}, dropped={}, rejections={}, "
-                        + "hr={}, imu={}, skipped={}",
-                memberId, fixes.size(), batches.size(), heartbeats.size(), droppedRanges.size(), rejections.size(),
-                counts.get("hr.csv"), counts.get("imu.csv"), skipped.size());
+                        + "gaps={}, hr={}, imu={}, skipped={}",
+                memberId, fixes.size(), batches.size(), heartbeats.size(),
+                counts.get(SensorLossDiagnostics.DROPPED_FILE), counts.get(SensorLossDiagnostics.REJECTIONS_FILE),
+                counts.get(SensorLossDiagnostics.GAPS_FILE), counts.get("hr.csv"), counts.get("imu.csv"), skipped.size());
         return SensorWindowExportFile.of(fileName(memberId, window), zipBytes.toByteArray());
     }
 
