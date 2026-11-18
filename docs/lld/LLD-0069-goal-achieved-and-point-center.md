@@ -5,10 +5,12 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |
-| Issue | #704, #1025 |
+| Issue | #704, #1025, #1108 |
 | 관련 ADR | ADR-0037, ADR-0029 |
 | 작성자 | Codex / feature-704 |
 | 작성일 | 2026-10-02 |
+
+> **P01, P02 중단(#1108, 2026-11-18)**: 알림 정책서(위듀 v12 12절, 위듀케어 v18 9절)는 포인트 적립, 사용 알림을 쓰지 않는다. 목표 달성(G01, G02)과 게시물 해금 알림 안에 포인트가 들어가기 때문이다. `PointChangedEvent`와 그 발행(`SeniorProfileService.addPointsToMember`, `deductPointsFromMember`), `GoalPointNotificationListener.onPointChanged`를 지웠다. 포인트 잔액, 내역, 잠금, 재시도는 그대로다. `NotificationType.POINT_EARNED/POINT_USED`와 문구 P01, P02는 이미 저장된 센터 행을 읽기 위해 남긴다(`EnumType.STRING`). 아래 P01, P02 설계는 이력이다.
 
 ## 1. 목적 / 배경
 

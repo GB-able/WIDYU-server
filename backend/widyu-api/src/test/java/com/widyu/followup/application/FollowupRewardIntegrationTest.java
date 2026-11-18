@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.widyu.auth.repository.RefreshTokenRepository;
 import com.widyu.auth.repository.TemporaryMemberRepository;
-import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmTransport;
 import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.fcm.repository.FcmOutboxRepository;
@@ -88,8 +87,8 @@ class FollowupRewardIntegrationTest {
     }
 
     @Test
-    @DisplayName("첫 답변을 제출하면 10P와 P01을 한 건씩 남기고 재제출하면 상태를 유지한다")
-    void 첫_답변을_제출하면_포인트와_P01을_남기고_재제출하면_상태를_유지한다() {
+    @DisplayName("첫 답변을 제출하면 10P를 한 건 남기고 포인트 알림 없이 재제출하면 상태를 유지한다")
+    void 첫_답변을_제출하면_포인트를_남기고_재제출하면_상태를_유지한다() {
         // given
         Member senior = seniorWithProfile("01098110201", "F15101", "I151001");
         FollowupCard card = card(senior.getId(), "inc-reward-answer");
@@ -110,11 +109,7 @@ class FollowupRewardIntegrationTest {
             assertThat(history.getAmount()).isEqualTo(10L);
             assertThat(history.getOperationKey()).isEqualTo("FOLLOWUP:" + card.getId());
         });
-        assertThat(notifications.findAll()).singleElement().satisfies(notification -> {
-            assertThat(notification.getType()).isEqualTo(NotificationType.POINT_EARNED);
-            assertThat(notification.getRecipientMember().getId()).isEqualTo(senior.getId());
-            assertThat(notification.getBody()).isEqualTo("후속 질문 답변");
-        });
+        assertThat(notifications.count()).isZero();
         assertThat(outbox.count()).isZero();
 
         // when / then: 중복 요청은 커밋된 상태를 바꾸지 않는다.
@@ -124,13 +119,13 @@ class FollowupRewardIntegrationTest {
         assertThat(profiles.findByMemberId(senior.getId()).orElseThrow().getPoints())
                 .isEqualTo(startingPoints + 10);
         assertThat(histories.count()).isEqualTo(1);
-        assertThat(notifications.count()).isEqualTo(1);
+        assertThat(notifications.count()).isZero();
         assertThat(outbox.count()).isZero();
     }
 
     @Test
-    @DisplayName("첫 전체 거절을 제출하면 원답 내용 없이 10P와 P01을 남긴다")
-    void 첫_전체_거절을_제출하면_원답_내용_없이_포인트와_P01을_남긴다() {
+    @DisplayName("첫 전체 거절을 제출하면 원답 내용 없이 10P를 남기고 포인트 알림은 만들지 않는다")
+    void 첫_전체_거절을_제출하면_원답_내용_없이_포인트를_남긴다() {
         // given
         Member senior = seniorWithProfile("01098110202", "F15102", "I151002");
         FollowupCard card = card(senior.getId(), "inc-reward-decline");
@@ -149,8 +144,7 @@ class FollowupRewardIntegrationTest {
             assertThat(history.getAmount()).isEqualTo(10L);
             assertThat(history.getOperationKey()).isEqualTo("FOLLOWUP:" + card.getId());
         });
-        assertThat(notifications.findAll()).singleElement().satisfies(notification ->
-                assertThat(notification.getType()).isEqualTo(NotificationType.POINT_EARNED));
+        assertThat(notifications.count()).isZero();
         assertThat(outbox.count()).isZero();
     }
 
@@ -174,8 +168,8 @@ class FollowupRewardIntegrationTest {
     }
 
     @Test
-    @DisplayName("만료 전 제출한 전체 거절이 늦게 도착하면 10P와 P01을 남긴다")
-    void 만료_전_제출한_전체_거절이_늦게_도착하면_포인트와_P01을_남긴다() {
+    @DisplayName("만료 전 제출한 전체 거절이 늦게 도착하면 10P를 남기고 포인트 알림은 만들지 않는다")
+    void 만료_전_제출한_전체_거절이_늦게_도착하면_포인트를_남긴다() {
         // given
         Member senior = seniorWithProfile("01098110204", "F15104", "I151004");
         FollowupCard card = cards.save(FollowupCard.issue("inc-reward-late", senior.getId(),
@@ -192,7 +186,7 @@ class FollowupRewardIntegrationTest {
         assertThat(profiles.findByMemberId(senior.getId()).orElseThrow().getPoints()).isEqualTo(110L);
         assertThat(histories.findAll()).singleElement().satisfies(history ->
                 assertThat(history.getOperationKey()).isEqualTo("FOLLOWUP:" + card.getId()));
-        assertThat(notifications.count()).isEqualTo(1);
+        assertThat(notifications.count()).isZero();
         assertThat(outbox.count()).isZero();
     }
 

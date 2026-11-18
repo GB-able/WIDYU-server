@@ -2,11 +2,13 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Review (코드 리뷰 지적 기반 구현, 2026-10-22) |
+| 상태 | Deprecated (#1108, 2026-11-18 스케줄러 삭제) |
 | Issue | #816 |
 | 관련 ADR | ADR-0028 |
 | 작성자 | Claude / feature-816 |
 | 작성일 | 2026-10-22 |
+
+> **폐기(#1108, 2026-11-18)**: 위듀케어(보호자) 알림 정책서 v18 9절이 미업로드 알림을 쓰지 않기로 정해(09-23 회의) 스케줄러 `checkInactiveUsersAndSendNotification`, 대상 조회 `AlbumRepository.findGuardianLastActivityBetween`, `GuardianLastActivityRow`를 지웠다. 아래 설계는 이력으로만 남긴다. 이미 저장된 레거시 센터 행(`event_id = inactive:*`)은 따로 지우지 않는다.
 
 ## 1. 목적 / 배경
 

@@ -2,7 +2,6 @@ package com.widyu.member.application;
 
 import com.widyu.album.dto.response.UnlockedAlbumIdsResponse;
 import com.widyu.album.repository.AlbumUnlockRepository;
-import com.widyu.fcm.event.point.dto.PointChangedEvent;
 import com.widyu.member.dto.response.SeniorPointsResponse;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
@@ -17,7 +16,6 @@ import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.MemberUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +31,6 @@ public class SeniorProfileService {
     private final FamilyAccessService familyAccessService;
     private final SeniorProfileRepository seniorProfileRepository;
     private final PointHistoryRepository pointHistoryRepository;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public SeniorPointsResponse getLeftPoints() {
@@ -89,10 +86,7 @@ public class SeniorProfileService {
     @RetryOnPointConflict
     @Transactional
     public void addPointsToMember(Long memberId, Long points, String description, String operationKey) {
-        PointHistory history = applyEarnedPoints(memberId, points, description, operationKey);
-        if (history != null) {
-            eventPublisher.publishEvent(PointChangedEvent.from(memberId, history));
-        }
+        applyEarnedPoints(memberId, points, description, operationKey);
     }
 
     @RetryOnPointConflict
@@ -140,9 +134,7 @@ public class SeniorProfileService {
         }
 
         seniorProfile.deductPoints(points);
-        PointHistory history = pointHistoryRepository.save(
-                PointHistory.use(seniorProfile, points, description, operationKey));
-        eventPublisher.publishEvent(PointChangedEvent.from(memberId, history));
+        pointHistoryRepository.save(PointHistory.use(seniorProfile, points, description, operationKey));
         log.info("포인트 차감 완료: memberId={}, deductedPoints={}, totalPoints={}",
                 memberId, points, seniorProfile.getPoints());
     }

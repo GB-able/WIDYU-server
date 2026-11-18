@@ -4,18 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
-import com.widyu.fcm.DeliveryMode;
 import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmOutboxService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
-import com.widyu.fcm.event.point.dto.PointChangedEvent;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
-import com.widyu.member.PointHistory;
-import com.widyu.member.PointHistoryType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
@@ -40,64 +36,16 @@ class GoalPointNotificationListenerTest {
     @InjectMocks private GoalPointNotificationListener listener;
 
     @Test
-    @DisplayName("포인트와 목표 사건 키를 만들면 지정된 형식을 지키고 40자 이내로 만든다")
-    void 포인트와_목표_사건_키를_만들면_형식과_길이를_지킨다() {
-        PointHistory earned = PointHistory.earn(null, 10L, "적립");
-        PointHistory used = PointHistory.use(null, 50L, "사용");
-        ReflectionTestUtils.setField(earned, "id", Long.MAX_VALUE);
-        ReflectionTestUtils.setField(used, "id", Long.MAX_VALUE);
+    @DisplayName("목표 사건 키를 만들면 지정된 형식을 지키고 40자 이내로 만든다")
+    void 목표_사건_키를_만들면_형식과_길이를_지킨다() {
         List<String> eventIds = List.of(
-                PointChangedEvent.from(1L, earned).eventId(),
-                PointChangedEvent.from(1L, used).eventId(),
                 GoalAchievedEvent.forWalk(1L, Long.MAX_VALUE, 25L).eventId(),
                 GoalAchievedEvent.forHealthSchedule(1L, Long.MAX_VALUE, 100L).eventId(),
                 GoalAchievedEvent.forMedicationDay(1L, Long.MAX_VALUE, 30L).eventId());
 
         assertThat(eventIds).containsExactly(
-                "POINT:E:" + Long.MAX_VALUE, "POINT:U:" + Long.MAX_VALUE,
                 "G01:W:" + Long.MAX_VALUE, "G01:H:" + Long.MAX_VALUE, "G01:M:" + Long.MAX_VALUE);
         assertThat(eventIds).allMatch(id -> id.length() <= 40);
-    }
-
-    @Test
-    @DisplayName("일반 포인트를 적립하면 시니어 센터에만 P01을 기록한다")
-    void 일반_포인트를_적립하면_센터에만_P01을_기록한다() {
-        // given
-        PointChangedEvent event = new PointChangedEvent(1L, PointHistoryType.EARN,
-                10L, "약 복용 인증", "POINT:E:9");
-        ArgumentCaptor<FcmSendDto> message = ArgumentCaptor.forClass(FcmSendDto.class);
-
-        // when
-        listener.onPointChanged(event);
-
-        // then
-        then(outboxService).should().enqueue(org.mockito.ArgumentMatchers.eq(1L), message.capture());
-        assertThat(message.getValue().notificationType()).isEqualTo(NotificationType.POINT_EARNED);
-        assertThat(message.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.CENTER_ONLY);
-        assertThat(message.getValue().title()).isEqualTo("10P를 받았어요.");
-        assertThat(message.getValue().content()).isEqualTo("약 복용 인증");
-        assertThat(message.getValue().dataForEnqueue("event-1")).containsEntry("deepLink", "/my/point");
-        assertThat(message.getValue().eventId()).isEqualTo("POINT:E:9");
-    }
-
-    @Test
-    @DisplayName("앨범 해금 포인트를 차감하면 시니어 센터에만 P02를 기록한다")
-    void 앨범_해금_포인트를_차감하면_센터에만_P02를_기록한다() {
-        // given
-        PointChangedEvent event = new PointChangedEvent(1L, PointHistoryType.USE,
-                50L, "앨범 해금", "POINT:U:10");
-        ArgumentCaptor<FcmSendDto> message = ArgumentCaptor.forClass(FcmSendDto.class);
-
-        // when
-        listener.onPointChanged(event);
-
-        // then
-        then(outboxService).should().enqueue(org.mockito.ArgumentMatchers.eq(1L), message.capture());
-        assertThat(message.getValue().notificationType()).isEqualTo(NotificationType.POINT_USED);
-        assertThat(message.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.CENTER_ONLY);
-        assertThat(message.getValue().title()).isEqualTo("50P를 사용했어요.");
-        assertThat(message.getValue().content()).isEqualTo("앨범 해금");
-        assertThat(message.getValue().dataForEnqueue("event-1")).containsEntry("deepLink", "/my/point");
     }
 
     @Test

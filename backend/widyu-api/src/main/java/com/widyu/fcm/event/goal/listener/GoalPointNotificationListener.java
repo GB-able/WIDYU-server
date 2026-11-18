@@ -6,9 +6,7 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.dto.GuardianDeepLinks;
 import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
-import com.widyu.fcm.event.point.dto.PointChangedEvent;
 import com.widyu.member.FamilyMembership;
-import com.widyu.member.PointHistoryType;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
@@ -24,21 +22,6 @@ public class GoalPointNotificationListener {
     private final FcmOutboxService outboxService;
     private final SeniorProfileRepository seniorProfileRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
-
-    @EventListener
-    public void onPointChanged(PointChangedEvent event) {
-        NotificationType type = NotificationType.POINT_EARNED;
-        Map<String, String> values = Map.of("포인트", Long.toString(event.points()),
-                "적립 사유", event.description());
-        if (event.type() == PointHistoryType.USE) {
-            type = NotificationType.POINT_USED;
-            values = Map.of("포인트", Long.toString(event.points()), "사용 사유", event.description());
-        }
-        NotificationCopy copy = NotificationCopy.of(type, type.copyCode(), values);
-        outboxService.enqueue(event.seniorId(), FcmSendDto.builder()
-                .title(copy.title()).content(copy.body()).notificationType(type)
-                .eventId(event.eventId()).build());
-    }
 
     @EventListener
     public void onGoalAchieved(GoalAchievedEvent event) {
