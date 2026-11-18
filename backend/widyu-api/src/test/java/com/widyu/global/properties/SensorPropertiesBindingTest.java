@@ -43,7 +43,7 @@ class SensorPropertiesBindingTest {
         assertThat(properties.fallAi().enabled()).isFalse();
         assertThat(properties.incident().selfCheckSec()).isEqualTo(60L);
         assertThat(properties.incident().timeoutPollMs()).isEqualTo(5000L);
-        assertThat(properties.incident().selfCheckFirst()).isFalse();
+        assertThat(properties.incident().selfCheckFirst()).isTrue();
         assertThat(properties.incident().situationWindowMin()).isEqualTo(5);
         assertThat(properties.medication().onTimePush()).isTrue();
     }

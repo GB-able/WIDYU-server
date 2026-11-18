@@ -74,11 +74,11 @@ sensor:
     vehicle-sec: ${SENSOR_ACTIVITY_VEHICLE_SEC:60}
     vehicle-max-accuracy-m: ${SENSOR_ACTIVITY_VEHICLE_MAX_ACCURACY_M:50}
 
-  # 본인확인 선행은 시니어 앱 준비 뒤 운영에서 켠다(LLD-0070).
+  # 본인확인 선행: 심박 위급 때 어르신 본인확인을 먼저 받고 무응답, 도움 요청일 때만 보호자에게 알린다(LLD-0070, #1087).
   incident:
     self-check-sec: ${SENSOR_INCIDENT_SELF_CHECK_SEC:60}
     timeout-poll-ms: ${SENSOR_INCIDENT_TIMEOUT_POLL_MS:5000}
-    self-check-first: ${SENSOR_INCIDENT_SELF_CHECK_FIRST:false}
+    self-check-first: ${SENSOR_INCIDENT_SELF_CHECK_FIRST:true}
     situation-window-min: ${SENSOR_INCIDENT_SITUATION_WINDOW_MIN:5}
     # 확인 화면 수신 완료가 이 시간 안에 없으면 무응답으로 본다(LLD-0085).
     prompt-wait-sec: ${SENSOR_INCIDENT_PROMPT_WAIT_SEC:90}
