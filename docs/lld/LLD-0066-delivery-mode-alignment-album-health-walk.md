@@ -35,10 +35,10 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 | type | 수신자 | 방식·문구 | 딥링크·필드 |
 | --- | --- | --- | --- |
 | `ALBUM_UPLOAD_COMPLETE` | 업로더 | `PUSH_AND_CENTER` A01(#1106 전에는 `PUSH_ONLY`), `PASSIVE`, `foregroundPresentation=NONE`, `eventId=A01:{albumId}` | 업로더 역할별 딥링크: GUARDIAN은 `/post?postId={albumId}`, SENIOR는 `widyu://albums/{albumId}`; `entityId=albumId` |
-| `ALBUM_CREATED` | 반대 역할 가족 | `PUSH_AND_CENTER` A02-S(시니어 수신)/A02-C(보호자 수신) | 수신 앱의 게시물 상세, `entityId=albumId`; 보호자 수신이면 `seniorId` |
+| `ALBUM_CREATED` | 반대 역할 가족, 보호자 게시물이면 같은 가족의 다른 보호자도(#1115) | `PUSH_AND_CENTER` A02-S(시니어 수신)/A02-C(보호자 수신) | 수신 앱의 게시물 상세, `entityId=albumId`; 보호자 수신이면 `seniorId` |
 | `ALBUM_COMMENTED` / `ALBUM_REPLIED` | A03은 게시물 작성자, A04는 원댓글 작성자와 게시물 작성자(같은 사람이면 한 번, #1022). 본인 반응 제외 | `PUSH_AND_CENTER` A03/A04 | 해당 댓글·답글, `entityId=albumId`, `data.commentId=저장된 댓글/답글 ID` |
 | `ALBUM_LIKED` | 게시물 작성자, 본인 반응 제외 | `PUSH_AND_CENTER` A05(#1106 전에는 `CENTER_ONLY`, 설정 `NONE`), `INTERACTION`, 설정 `GENERAL`, `foregroundPresentation=BANNER` | 해당 게시물, `entityId=albumId` |
-| `ALBUM_UNLOCKED` | 게시물을 올린 보호자 한 명 | `PUSH_AND_CENTER` A06-L(남음)/A06-Z(0) | 위듀케어 해당 게시물, `entityId=albumId`, `seniorId`, `seniorDisplayName`, `remainingLockedCount`(0 포함) |
+| `ALBUM_UNLOCKED` | 게시물을 올린 보호자 한 명. A06-Z는 이 게시물만 보면 모두 본 상태면 보내지 않음(#1115) | `PUSH_AND_CENTER` A06-L(남음)/A06-Z(0) | 위듀케어 해당 게시물, `entityId=albumId`, `seniorId`, `seniorDisplayName`, `remainingLockedCount`(0 포함) |
 | `ALBUM_ALL_VIEWED` | 작성자 GUARDIAN·독자 SENIOR 조합의 보호자 작성자만 | `PUSH_AND_CENTER` A07 | 총수·읽은 수를 ACTIVE 기준으로 일치, `/album`, `seniorId=읽은 시니어` |
 | `HEALTH_SCHEDULE_UPCOMING` | 시니어 일정 소유자만 | `PUSH_AND_CENTER` H01-S의 `-OS`/`-INAPP` | 시니어 일정 상세, `entityId=scheduleId`; 보호자 본인 일정은 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 발행하지 않음 |
 | `WALK_GOAL_UNMET` | 19시 목표 미달인 시니어(0걸음 포함, #801) | `PUSH_AND_CENTER` W01(#1106 전에는 `PUSH_ONLY`), `eventId=W01:{memberId}:{date}` | 걷기 목표, 실제 걸음 수 |
@@ -110,6 +110,17 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
   - [x] A01, A05, M02, M03, W01 접수 시 센터 행 1건과 기기별 outbox가 만들어진다.
   - [x] 같은 A01, W01, M02, M03 `eventId`로 두 번 접수해도 센터 행은 1건이다.
   - [x] 센터 FK 없이 접수된 타입 outbox는 전달 방식과 무관하게 `notificationId`를 보내지 않는다.
+
+## 8.2 앨범 수신자 정렬 (#1115, 2026-11-18)
+
+위듀케어(보호자) 알림 정책서 v18 앨범 표와 10절에 맞춘다. 위 표와 §5의 A02, A06 항목은 이 절이 대체한다.
+
+- A02-C 수신자: 정책서는 「다른 가족이나 어르신이 게시물을 올렸을 때」다. 보호자가 올린 게시물도 같은 가족의 다른 보호자에게 A02-C(위듀케어 게시물 경로, `relatedMemberId=작성자`, `seniorId` 없음)를 보낸다. 올린 보호자 본인은 받지 않는다. 시니어에게 가는 A02-S, 시니어 게시물의 A02-C는 그대로다.
+- A06-Z와 A07 중복: 시니어가 보호자의 마지막 잠긴 게시물을 열면 A06-Z가 가고, 이어서 그 게시물을 처음 조회하면 모두 본 상태가 되어 A07이 간다. 정책서 10절 추천대로 A07만 남긴다. 잠금 해제 시점에 남은 수가 0이고 `조회한 게시물 수 + 1 == 전체 ACTIVE 게시물 수`이면 A06-Z를 보내지 않는다. 해제 전 게시물은 조회로 치지 않으므로(`AlbumFacadeImpl.getAlbumDetail`) 방금 연 게시물은 아직 조회 수에 없다. 열어 두고 안 본 다른 게시물이 있으면 조회해도 A07이 가지 않으므로 A06-Z를 그대로 보낸다.
+- 한계: 시니어가 마지막 게시물을 열고 조회하지 않으면(앱 종료 등) 보호자는 A06-Z도 A07도 받지 않는다.
+- 인수조건
+  - [x] 보호자 두 명 가족에서 한 보호자가 올리면 다른 보호자에게 A02-C 1건, 올린 보호자는 A01만 받는다.
+  - [x] 남은 수 0, `조회 + 1 == 전체`이면 A06 0건(시니어 본인 A08은 그대로), 아니면 A06-Z 1건이다.
 
 ## 9. 미결정 사항 (Open Questions)
 
