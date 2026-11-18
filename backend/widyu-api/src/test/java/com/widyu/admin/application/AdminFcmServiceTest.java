@@ -89,8 +89,8 @@ class AdminFcmServiceTest {
         // then
         FcmSendDto sent = sentMessage(28L);
         assertThat(sent.notificationType()).isEqualTo(NotificationType.MEDICATION_SCHEDULE_CHANGED);
-        assertThat(sent.title()).isEqualTo("방장 님이 약 알람을 변경했어요.");
-        assertThat(sent.content()).isEqualTo("바뀐 약 알람은 오늘부터 적용돼요.");
+        assertThat(sent.title()).isEqualTo("약 알람이 변경되었습니다.");
+        assertThat(sent.content()).isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
     }
 
     @Test
@@ -125,7 +125,7 @@ class AdminFcmServiceTest {
         adminFcmService.sendTestNotification(request);
 
         // then
-        assertThat(sentMessage(28L).title()).isEqualTo("관리자 님이 약 알람을 변경했어요.");
+        assertThat(sentMessage(28L).title()).isEqualTo("약 알람이 변경되었습니다.");
     }
 
     @Test

@@ -24,7 +24,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HealthScheduleNotificationListener {
 
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN);
+    /** 정책서 공통 규칙 3: 「오전/오후 N시 M분」. 정각도 「오후 3시 0분」으로 쓴다. */
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h'시' m'분'", Locale.KOREAN);
     private static final int WINDOW_MINUTES = 10;
 
     private final FcmService fcmService;
