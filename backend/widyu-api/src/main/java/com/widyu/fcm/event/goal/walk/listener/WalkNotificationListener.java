@@ -61,27 +61,20 @@ public class WalkNotificationListener {
 
         log.info("만보계 목표 미달성 알림 스케줄러 실행 - 대상 날짜: {}", today);
 
-        // 오늘 걸음 기록이 있는 미달성자와, 목표는 있는데 오늘 기록이 없는(0걸음) 시니어
+        // 오늘 걸음 기록이 있는 미달성자만 본다. 기록이 없거나 0걸음인 날은 보내지 않는다(#1120)
         List<Walk> unachievedWalks = walkRepository.findUnachievedWalksByDate(today);
-        List<Member> notSyncedMembers =
-                seniorProfileRepository.findMembersWithWalkGoalButNoWalkOn(today, Status.ACTIVE);
-
-        if (unachievedWalks.isEmpty() && notSyncedMembers.isEmpty()) {
+        if (unachievedWalks.isEmpty()) {
             log.info("오늘 만보계 목표 미달성자가 없습니다.");
             return;
         }
 
-        log.info("{}명의 시니어에게 만보계 목표 미달성 알림을 발송합니다.",
-                unachievedWalks.size() + notSyncedMembers.size());
+        log.info("{}명의 시니어에게 만보계 목표 미달성 알림을 발송합니다.", unachievedWalks.size());
 
         for (Walk walk : unachievedWalks) {
             if (walk.isGoalAchieved()) {
                 continue;
             }
             sendQuietly(walk.getMember(), walk.getActualSteps(), today);
-        }
-        for (Member member : notSyncedMembers) {
-            sendQuietly(member, 0, today);
         }
     }
 
@@ -94,11 +87,11 @@ public class WalkNotificationListener {
     }
 
     /**
-     * 개별 미달성자에게 알림 발송. 0걸음은 걷지 않았는지 동기화가 안 됐는지 서버가 구분할 수 없지만
-     * 목표가 있으면 보낸다(#801, 알림 문구 카탈로그 v0.4의 「0이면 만들지 않음」을 대체).
+     * 개별 미달성자에게 알림 발송. 0걸음은 걷지 않았는지 워치를 안 찼는지 동기화가 안 됐는지 서버가 구분할 수 없어
+     * 보내지 않는다(알림 정책서 위듀 v12 13절 추천, 사용자 결정 2026-11-18, #1120. #801의 0걸음 발송을 되돌림).
      */
     private void sendUnachievedNotification(Member member, Integer actualSteps, LocalDate today) {
-        if (member.getType() != MemberType.SENIOR || actualSteps == null) {
+        if (member.getType() != MemberType.SENIOR || actualSteps == null || actualSteps <= 0) {
             return;
         }
         NotificationCopy copy = NotificationCopy.of(NotificationType.WALK_GOAL_UNMET, "W01",

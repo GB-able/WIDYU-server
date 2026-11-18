@@ -4,7 +4,6 @@ import com.widyu.member.SeniorProfile;
 import jakarta.persistence.LockModeType;
 import com.widyu.member.Member;
 import com.widyu.global.entity.Status;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -40,10 +39,6 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
     List<Member> findMembersWithWalkGoal(@Param("status") Status status);
 
     /** 걷기 기본 목표가 있는데 그날 걸음 기록이 없는 회원. 19시 걷기 목표 미달 알림(W01)의 0걸음 대상이다. */
-    @Query("SELECT sp.member FROM SeniorProfile sp "
-            + "WHERE sp.defaultWalkGoal IS NOT NULL AND sp.member.status = :status "
-            + "AND NOT EXISTS (SELECT w FROM Walk w WHERE w.member = sp.member AND w.walkDate = :date)")
-    List<Member> findMembersWithWalkGoalButNoWalkOn(@Param("date") LocalDate date, @Param("status") Status status);
 
     // 시니어 Member의 역방향 일대일 localAccount도 함께 읽어 시니어마다 1건씩 더 나가지 않게 한다(LLD-0161).
     @Query("SELECT sp FROM SeniorProfile sp JOIN FETCH sp.member m LEFT JOIN FETCH m.localAccount " +

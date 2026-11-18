@@ -84,46 +84,10 @@ class WalkNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("오늘 걸음 기록이 0걸음이어도 목표 미달이면 W01 푸시를 만든다")
-    void 걸음_수가_0이어도_목표_미달이면_알림을_만든다() {
-        // given
+    @DisplayName("오늘 걸음 기록이 0걸음이면 목표 미달이어도 W01 푸시를 만들지 않는다")
+    void 걸음_수가_0이면_알림을_만들지_않는다() {
+        // given: 0걸음은 워치를 안 찼거나 동기화가 안 된 날과 구분할 수 없다(#1120)
         given(walkRepository.findUnachievedWalksByDate(any())).willReturn(List.of(walk(0)));
-        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
-
-        // when
-        listener.sendWalkGoalReminderToUnachieved();
-
-        // then
-        then(fcmService).should().sendMessageToUser(eq(1L), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("오늘 0걸음 걸으셨어요.");
-    }
-
-    @Test
-    @DisplayName("목표는 있는데 오늘 걸음 기록이 없는 시니어에게 0걸음 W01 푸시를 만든다")
-    void 오늘_걸음_기록이_없는_목표_보유_시니어에게_0걸음_알림을_만든다() {
-        // given
-        Member senior = member(2L, MemberType.SENIOR);
-        given(walkRepository.findUnachievedWalksByDate(any())).willReturn(List.of());
-        given(seniorProfileRepository.findMembersWithWalkGoalButNoWalkOn(LocalDate.now(), Status.ACTIVE))
-                .willReturn(List.of(senior));
-        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
-
-        // when
-        listener.sendWalkGoalReminderToUnachieved();
-
-        // then
-        then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
-        assertThat(captor.getValue().notificationType()).isEqualTo(NotificationType.WALK_GOAL_UNMET);
-        assertThat(captor.getValue().title()).isEqualTo("오늘 0걸음 걸으셨어요.");
-    }
-
-    @Test
-    @DisplayName("오늘 기록이 없는 대상이 시니어가 아니면 알림을 만들지 않는다")
-    void 오늘_기록이_없는_대상이_시니어가_아니면_알림을_만들지_않는다() {
-        // given
-        given(walkRepository.findUnachievedWalksByDate(any())).willReturn(List.of());
-        given(seniorProfileRepository.findMembersWithWalkGoalButNoWalkOn(LocalDate.now(), Status.ACTIVE))
-                .willReturn(List.of(member(3L, MemberType.GUARDIAN)));
 
         // when
         listener.sendWalkGoalReminderToUnachieved();
