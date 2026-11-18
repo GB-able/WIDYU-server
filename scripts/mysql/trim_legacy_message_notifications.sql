@@ -1,6 +1,22 @@
 -- #1103 / LLD-0167 8절. 응원(X02), 하트(X01) 메시지 원문이 남은 옛 알림센터 행과 재시도 큐 행을 정리한다.
 -- 적용 시점: 이 변경이 배포된 뒤 한 번(개발 DB). 운영 구축 때 이전 데이터를 옮겨 오면 그 DB에도 한 번.
 -- 배포 전에 실행하면 옛 코드가 다시 원문 행을 만든다. 실행 전에 두 테이블을 백업하고 대상 수를 센다.
+--
+-- 실행 절차(발송 작업자를 멈춘 채 실행한다):
+--   발송 작업자는 재시도 큐 행을 claim할 때 본문을 메모리에 복사해 보낸다. SQL이 DB 행만 바꾸면 이미 claim된 행은
+--   SQL 뒤에도 원문으로 나갈 수 있다. 그래서 작업자를 멈추고, 진행 중인 발송이 끝난 것을 확인한 뒤 실행한다.
+--   1. 이 변경이 배포된 것을 확인한다.
+--   2. API 컨테이너를 멈춘다(발송 작업자 정지). 개발 서버: docker stop widyu-api-dev
+--   3. claim된 채 남은 옛 행이 없는지 확인한다. 0이 아니면 lease_until이 지날 때까지 기다린 뒤 다시 센다.
+--        SELECT COUNT(*) FROM fcm_outbox WHERE notification_type IS NULL AND state = 'CLAIMED'
+--          AND lease_until > NOW()
+--          AND (data_type IN ('CHEER_MESSAGE_RECEIVED', 'HEART_MESSAGE_RECEIVED')
+--               OR title LIKE '%님에게 응원메시지를 보냈어요.'
+--               OR (fcm_category = 'HEART_MESSAGE' AND title LIKE '%님이 메시지를 보냈어요.'));
+--   4. 백업, 대상 수 확인, 이 스크립트 실행.
+--   5. 아래 대상 조회를 다시 돌려 원문이 남은 행이 0인지 확인하고 API 컨테이너를 다시 켠다. docker start widyu-api-dev
+--   남는 위험: 배포로 새 코드가 뜬 뒤 2번 전까지 재시도 중이던 옛 행이 원문으로 나갈 수 있다. 개발 서버의 시험 계정
+--   자료에만 해당한다. 운영 DB는 새 코드로 시작하므로 옛 행이 없다(이전 데이터를 옮겨 오면 같은 절차를 따른다).
 --   SELECT COUNT(*) FROM fcm_notification
 --   WHERE type IS NULL AND expires_at IS NULL
 --     AND (title LIKE '%님에게 응원메시지를 보냈어요.'
