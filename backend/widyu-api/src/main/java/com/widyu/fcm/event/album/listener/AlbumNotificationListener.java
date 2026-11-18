@@ -68,8 +68,11 @@ public class AlbumNotificationListener {
         if (author.getType() == MemberType.GUARDIAN) {
             uploadDeepLink = GuardianDeepLinks.post(albumId);
         }
-        send(author.getId(), FcmSendDto.of(NotificationType.ALBUM_UPLOAD_COMPLETE, uploadCopy,
-                albumId, uploadDeepLink, null, null, author.getProfileImage()));
+        // 같은 게시물의 업로드 완료가 다시 접수돼도 알림센터 행이 하나만 남게 게시물로 정한다.
+        send(author.getId(), FcmSendDto.builder().title(uploadCopy.title()).content(uploadCopy.body())
+                .fcmCategory(NotificationType.ALBUM_UPLOAD_COMPLETE.fcmCategory())
+                .notificationType(NotificationType.ALBUM_UPLOAD_COMPLETE).eventId("A01:" + albumId)
+                .entityId(albumId).deepLink(uploadDeepLink).image(author.getProfileImage()).build());
 
         if (author.getType() == MemberType.SENIOR) {
             Optional<Long> familyId = seniorProfileRepository.findFamilyIdByMemberId(author.getId());

@@ -78,16 +78,16 @@ public class WalkNotificationListener {
             if (walk.isGoalAchieved()) {
                 continue;
             }
-            sendQuietly(walk.getMember(), walk.getActualSteps());
+            sendQuietly(walk.getMember(), walk.getActualSteps(), today);
         }
         for (Member member : notSyncedMembers) {
-            sendQuietly(member, 0);
+            sendQuietly(member, 0, today);
         }
     }
 
-    private void sendQuietly(Member member, Integer actualSteps) {
+    private void sendQuietly(Member member, Integer actualSteps, LocalDate today) {
         try {
-            sendUnachievedNotification(member, actualSteps);
+            sendUnachievedNotification(member, actualSteps, today);
         } catch (Exception e) {
             log.error("만보계 미달성 알림 발송 실패 - memberId: {}", member.getId(), e);
         }
@@ -97,14 +97,18 @@ public class WalkNotificationListener {
      * 개별 미달성자에게 알림 발송. 0걸음은 걷지 않았는지 동기화가 안 됐는지 서버가 구분할 수 없지만
      * 목표가 있으면 보낸다(#801, 알림 문구 카탈로그 v0.4의 「0이면 만들지 않음」을 대체).
      */
-    private void sendUnachievedNotification(Member member, Integer actualSteps) {
+    private void sendUnachievedNotification(Member member, Integer actualSteps, LocalDate today) {
         if (member.getType() != MemberType.SENIOR || actualSteps == null) {
             return;
         }
         NotificationCopy copy = NotificationCopy.of(NotificationType.WALK_GOAL_UNMET, "W01",
                 Map.of("실제 걸음 수", actualSteps.toString()));
-        FcmSendDto dto = FcmSendDto.of(NotificationType.WALK_GOAL_UNMET, copy,
-                null, null, null, null, member.getProfileImage());
-        fcmService.sendMessageToUser(member.getId(), dto);
+        fcmService.sendMessageToUser(member.getId(), FcmSendDto.builder()
+                .title(copy.title()).content(copy.body())
+                .fcmCategory(NotificationType.WALK_GOAL_UNMET.fcmCategory())
+                .notificationType(NotificationType.WALK_GOAL_UNMET)
+                // 같은 날 다시 실행돼도 알림센터 행이 하나만 남게 회원과 날짜로 정한다.
+                .eventId("W01:" + member.getId() + ":" + today)
+                .image(member.getProfileImage()).build());
     }
 }

@@ -74,7 +74,8 @@ class WalkNotificationListenerTest {
         // then
         then(fcmService).should().sendMessageToUser(any(), captor.capture());
         assertThat(captor.getValue().notificationType()).isEqualTo(NotificationType.WALK_GOAL_UNMET);
-        assertThat(captor.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_ONLY);
+        assertThat(captor.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
+        assertThat(captor.getValue().eventId()).isEqualTo("W01:1:" + LocalDate.now());
         assertThat(captor.getValue().title()).isEqualTo("오늘 6500걸음 걸으셨어요.");
         assertThat(captor.getValue().content()).isEqualTo("가능하다면 조금 더 걸어보는 건 어떨까요?");
         assertThat(captor.getValue().image()).isEqualTo("https://cdn.widyu.store/profile/senior.png");

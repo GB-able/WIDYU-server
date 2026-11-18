@@ -218,11 +218,7 @@ class FcmSchedulerOutboxIntegrationTest {
             dispatcher.shutdown();
         }
         assertThat(outbox.findById(id).orElseThrow().getState()).isEqualTo(FcmOutbox.State.SENT);
-        if (category == FcmCategory.WALK) {
-            assertThat(notifications.count()).isZero();
-        } else {
-            assertThat(notifications.count()).isEqualTo(1);
-        }
+        assertThat(notifications.count()).isEqualTo(1);
     }
 
     private void assertRolledBackWithoutDispatch() {

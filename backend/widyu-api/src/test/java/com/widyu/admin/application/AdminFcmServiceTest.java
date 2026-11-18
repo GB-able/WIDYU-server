@@ -244,7 +244,7 @@ class AdminFcmServiceTest {
         givenMemberWithToken(28L);
         given(fcmService.sendTestMessageToUser(eq(28L), any())).willReturn(sentToOneToken());
         AdminFcmTestRequest request = new AdminFcmTestRequest(
-                28L, null, null, null, NotificationType.ALBUM_LIKED, null, null);
+                28L, null, null, null, NotificationType.POINT_USED, null, null);
 
         // when
         AdminFcmTestResponse response = adminFcmService.sendTestNotification(request);
