@@ -168,7 +168,7 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("복약 후속 푸시를 같은 분에 다시 enqueue하면 센터 없이 기기 작업이 중복된다")
+    @DisplayName("복약 후속 푸시를 같은 분에 다시 enqueue하면 센터 행은 하나이고 기기 작업만 중복된다")
     void 복약_후속_푸시를_같은_분에_다시_enqueue하면_기기_작업이_중복된다() {
         // given
         Long seniorId = memberWithToken();
@@ -183,10 +183,10 @@ class FcmOutboxIntegrationTest {
         service.enqueue(seniorId, reminder);
 
         // then
-        assertThat(notifications.count()).isZero();
+        assertThat(notifications.count()).isEqualTo(1);
         assertThat(outbox.count()).isEqualTo(2);
         FcmOutbox row = outbox.findAll().getFirst();
-        assertThat(row.getNotificationId()).isNull();
+        assertThat(row.getNotificationId()).isEqualTo(notifications.findAll().getFirst().getId());
         assertThat(transactions.claim(row.getId()).message().data())
                 .containsEntry("notificationType", "MEDICATION_REMINDER_10")
                 .doesNotContainKey("type");
@@ -683,10 +683,10 @@ class FcmOutboxIntegrationTest {
                         PushSettingGroup.MEDICATION_CHECK, false)));
 
         // when
-        service.enqueue(member, FcmSendDto.builder().title("업로드").content("본문")
-                .notificationType(NotificationType.ALBUM_UPLOAD_COMPLETE).entityId("31").build());
-        service.enqueue(member, FcmSendDto.builder().title("좋아요").content("본문")
-                .notificationType(NotificationType.ALBUM_LIKED).entityId("31").build());
+        service.enqueue(member, FcmSendDto.builder().title("자가 확인").content("본문")
+                .notificationType(NotificationType.SAFETY_SELF_CHECK).entityId("31").build());
+        service.enqueue(member, FcmSendDto.builder().title("포인트").content("본문")
+                .notificationType(NotificationType.POINT_EARNED).entityId("31").build());
         service.enqueue(member, FcmSendDto.builder().notificationType(NotificationType.MEDICATION_SCHEDULE_SYNC)
                 .data(Map.of("revision", "42")).build());
 
@@ -695,7 +695,7 @@ class FcmOutboxIntegrationTest {
         assertThat(notifications.findAll().getFirst().getPushEligible()).isFalse();
         assertThat(outbox.count()).isEqualTo(2);
         FcmOutbox pushOnly = outbox.findAll().stream()
-                .filter(row -> row.getNotificationType() == NotificationType.ALBUM_UPLOAD_COMPLETE)
+                .filter(row -> row.getNotificationType() == NotificationType.SAFETY_SELF_CHECK)
                 .findFirst().orElseThrow();
         FcmOutbox dataOnly = outbox.findAll().stream()
                 .filter(row -> row.getNotificationType() == NotificationType.MEDICATION_SCHEDULE_SYNC)

@@ -85,7 +85,8 @@ class AlbumNotificationListenerTest {
         then(fcmService).should().sendMessageToUser(eq(1L), captor.capture());
         FcmSendDto upload = captor.getValue();
         assertThat(upload.notificationType()).isEqualTo(NotificationType.ALBUM_UPLOAD_COMPLETE);
-        assertThat(upload.notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_ONLY);
+        assertThat(upload.notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
+        assertThat(upload.eventId()).isEqualTo("A01:10");
         assertThat(upload.title()).isEqualTo("게시물 업로드가 완료됐어요!");
         assertThat(upload.deepLink()).isEqualTo(GuardianDeepLinks.post("10"));
         assertThat(upload.dataForEnqueue("event-1"))
@@ -241,8 +242,8 @@ class AlbumNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("좋아요를 누르면 작성자 센터 전용 알림을 만든다")
-    void 좋아요를_누르면_센터_전용_알림을_만든다() {
+    @DisplayName("좋아요를 누르면 작성자에게 푸시와 센터 알림을 만든다")
+    void 좋아요를_누르면_푸시와_센터_알림을_만든다() {
         // given
         Member liker = member(1L, MemberType.SENIOR, "시니어");
         Member writer = member(2L, MemberType.GUARDIAN, "보호자");
@@ -255,10 +256,10 @@ class AlbumNotificationListenerTest {
 
         // then
         then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
-        assertThat(captor.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.CENTER_ONLY);
+        assertThat(captor.getValue().notificationType().deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
         assertThat(captor.getValue().title()).isEqualTo("시니어 님이 게시물에 좋아요를 눌렀어요.");
         assertThat(captor.getValue().content()).isNull();
-        assertThat(captor.getValue().notificationType().foregroundPresentation()).isEqualTo("NONE");
+        assertThat(captor.getValue().notificationType().foregroundPresentation()).isEqualTo("BANNER");
         assertThat(captor.getValue().dataForEnqueue("event-like"))
                 .containsEntry("deepLink", "/post?postId=10");
     }

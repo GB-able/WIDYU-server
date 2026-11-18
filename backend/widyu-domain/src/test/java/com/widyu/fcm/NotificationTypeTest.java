@@ -62,12 +62,17 @@ class NotificationTypeTest {
     }
 
     @Test
-    @DisplayName("센터 전용과 동기화 타입을 조회하면 푸시 전달 정책을 구분한다")
-    void 센터_전용과_동기화_타입을_조회하면_전달_정책을_구분한다() {
+    @DisplayName("정책서가 푸시+센터로 정한 타입을 조회하면 푸시와 센터를 모두 쓰고 동기화 타입은 데이터 전용이다")
+    void 정책서가_푸시_센터로_정한_타입을_조회하면_푸시와_센터를_모두_쓴다() {
         // given / when / then
-        assertThat(NotificationType.ALBUM_LIKED.deliveryMode()).isEqualTo(DeliveryMode.CENTER_ONLY);
-        assertThat(NotificationType.ALBUM_LIKED.foregroundPresentation()).isEqualTo("NONE");
-        assertThat(NotificationType.ALBUM_UPLOAD_COMPLETE.deliveryMode()).isEqualTo(DeliveryMode.PUSH_ONLY);
+        assertThat(List.of(NotificationType.ALBUM_UPLOAD_COMPLETE, NotificationType.ALBUM_LIKED,
+                NotificationType.MEDICATION_REMINDER_10, NotificationType.MEDICATION_REMINDER_20,
+                NotificationType.WALK_GOAL_UNMET))
+                .allSatisfy(type -> assertThat(type.deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER));
+        assertThat(NotificationType.ALBUM_LIKED.settingGroup()).isEqualTo(PushSettingGroup.GENERAL);
+        assertThat(NotificationType.ALBUM_LIKED.priority()).isEqualTo(NotificationPriority.INTERACTION);
+        assertThat(NotificationType.ALBUM_UPLOAD_COMPLETE.priority()).isEqualTo(NotificationPriority.PASSIVE);
+        assertThat(NotificationType.WALK_GOAL_UNMET.priority()).isEqualTo(NotificationPriority.PASSIVE);
         assertThat(NotificationType.MEDICATION_SCHEDULE_SYNC.deliveryMode()).isEqualTo(DeliveryMode.DATA_ONLY);
         assertThat(NotificationType.MEDICATION_SCHEDULE_SYNC.deepLinkTemplate()).isNull();
     }

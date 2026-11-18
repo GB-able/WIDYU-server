@@ -34,14 +34,14 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 
 | type | 수신자 | 방식·문구 | 딥링크·필드 |
 | --- | --- | --- | --- |
-| `ALBUM_UPLOAD_COMPLETE` | 업로더 | `PUSH_ONLY` A01, `foregroundPresentation=NONE` | 업로더 역할별 딥링크: GUARDIAN은 `/post?postId={albumId}`, SENIOR는 `widyu://albums/{albumId}`; `entityId=albumId` |
+| `ALBUM_UPLOAD_COMPLETE` | 업로더 | `PUSH_AND_CENTER` A01(#1106 전에는 `PUSH_ONLY`), `PASSIVE`, `foregroundPresentation=NONE`, `eventId=A01:{albumId}` | 업로더 역할별 딥링크: GUARDIAN은 `/post?postId={albumId}`, SENIOR는 `widyu://albums/{albumId}`; `entityId=albumId` |
 | `ALBUM_CREATED` | 반대 역할 가족 | `PUSH_AND_CENTER` A02-S(시니어 수신)/A02-C(보호자 수신) | 수신 앱의 게시물 상세, `entityId=albumId`; 보호자 수신이면 `seniorId` |
 | `ALBUM_COMMENTED` / `ALBUM_REPLIED` | A03은 게시물 작성자, A04는 원댓글 작성자와 게시물 작성자(같은 사람이면 한 번, #1022). 본인 반응 제외 | `PUSH_AND_CENTER` A03/A04 | 해당 댓글·답글, `entityId=albumId`, `data.commentId=저장된 댓글/답글 ID` |
-| `ALBUM_LIKED` | 게시물 작성자, 본인 반응 제외 | `CENTER_ONLY` A05, `foregroundPresentation=NONE` | 해당 게시물, `entityId=albumId` |
+| `ALBUM_LIKED` | 게시물 작성자, 본인 반응 제외 | `PUSH_AND_CENTER` A05(#1106 전에는 `CENTER_ONLY`, 설정 `NONE`), `INTERACTION`, 설정 `GENERAL`, `foregroundPresentation=BANNER` | 해당 게시물, `entityId=albumId` |
 | `ALBUM_UNLOCKED` | 게시물을 올린 보호자 한 명 | `PUSH_AND_CENTER` A06-L(남음)/A06-Z(0) | 위듀케어 해당 게시물, `entityId=albumId`, `seniorId`, `seniorDisplayName`, `remainingLockedCount`(0 포함) |
 | `ALBUM_ALL_VIEWED` | 작성자 GUARDIAN·독자 SENIOR 조합의 보호자 작성자만 | `PUSH_AND_CENTER` A07 | 총수·읽은 수를 ACTIVE 기준으로 일치, `/album`, `seniorId=읽은 시니어` |
 | `HEALTH_SCHEDULE_UPCOMING` | 시니어 일정 소유자만 | `PUSH_AND_CENTER` H01-S의 `-OS`/`-INAPP` | 시니어 일정 상세, `entityId=scheduleId`; 보호자 본인 일정은 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 발행하지 않음 |
-| `WALK_GOAL_UNMET` | 19시 당일 Walk 행에 양수·목표 미달인 시니어 | `PUSH_ONLY` W01 | 걷기 목표, 실제 걸음 수, `notificationId` 없음 |
+| `WALK_GOAL_UNMET` | 19시 목표 미달인 시니어(0걸음 포함, #801) | `PUSH_AND_CENTER` W01(#1106 전에는 `PUSH_ONLY`), `eventId=W01:{memberId}:{date}` | 걷기 목표, 실제 걸음 수 |
 
 앨범 시니어 딥링크는 W2 제안 `widyu://albums/{entityId}`를 유지한다. 보호자 A01/A02/A05는 `/post?postId={albumId}`, A03/A04는 `/post?postId={albumId}&commentId={commentId}`, A06은 `/post?postId={entityId}`, A07은 `/album`을 사용한다. 보호자 역할별 경로는 `GuardianDeepLinks`가 만들고 A06/A07은 `NotificationType` 템플릿을 사용한다([LLD-0076](LLD-0076-guardian-deeplink-paths.md)). H01 보호자 본인 일정은 서버 미사용이며 W01은 `widyu://walk/goal`을 유지한다. `FcmCategory`는 기존 ALBUM/HEALTH_SCHEDULE/WALK를 사용한다.
 
@@ -62,7 +62,7 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 ## 5. 처리 흐름
 
 1. `AlbumCreatedEvent`에서 업로더에게 A01을 한 번 enqueue하고, 가족 중 반대 역할 수신자마다 A02-S/C를 보낸다. 문구는 `NotificationCopy.of(type, code, values)`를 사용한다. 영상은 기존 업로드 완료 이벤트 시점을 유지한다.
-2. 댓글 저장 트랜잭션에서 ID와 답글 여부를 이벤트로 발행한다. 동기 `@EventListener`는 A03/A04 type을 고르고, 좋아요는 A05 type으로 센터에만 넣는다. 본인 댓글·좋아요에는 알림이 없다.
+2. 댓글 저장 트랜잭션에서 ID와 답글 여부를 이벤트로 발행한다. 동기 `@EventListener`는 A03/A04 type을 고르고, 좋아요는 A05 type으로 푸시와 센터에 넣는다(#1106). 본인 댓글·좋아요에는 알림이 없다.
 3. 잠금 해제 기록 저장 뒤 같은 트랜잭션에서 `AlbumUnlockRepository.countRemainingLockedByWriterAndSenior(...)`를 한 번 호출하고 원 작성자인 보호자 한 명에게 A06을 만든다. 남은 수가 1 이상이면 A06-L, 0이면 A06-Z다. 쿼리는 방금 해제한 albumId를 제외한다. DB 오류 시 잠금 해제 트랜잭션도 실패하며 별도 읽기 빈·대체 문구 분기는 두지 않는다.
 4. A07은 작성자 GUARDIAN·독자 SENIOR 조합일 때만 해당 보호자 작성자에게 보낸다. 다른 역할 조합은 조기 반환한다. A06 남은 수 0으로 A07을 자동 생성하지 않는다. 기존 `countByMemberId`가 비활성 게시물을 포함하므로 판정에 쓰는 총수·읽은 수를 모두 ACTIVE 기준으로 맞춘다.
 5. H01은 기존 `UPCOMING` 일정 시간 범위의 시니어 소유자에게만 간다. 보호자 **본인** 일정의 H01-C-SELF는 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 발행하지 않는다. `H01-C-SENIOR`는 보호자가 시니어 일정을 확인 책임자로 받는 별도 수신 경로가 현재 없어 생성하지 않는다. OS 제목·본문에는 일정명·시각·주소를 넣지 않고, INAPP 센터·앱 안 문구에만 오전/오후 시각과 일정명을 넣는다.
@@ -109,11 +109,26 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 
 운영 `ddl-auto=validate`에 앞서 W3 DDL 다음으로 `scripts/mysql/alter_fcm_notification_album_unlock.sql`을 적용한다. 이 스크립트는 `fcm_notification`에 `senior_display_name VARCHAR(255) NULL`과 `remaining_locked_count INT NULL`을 추가한다. 신규 `NotificationType`·`FcmCategory` 값은 없어 기존 native ENUM은 수정하지 않는다. **두 필드의 응답 노출은 W4 위 stack에서 반영한다.** H01은 outbox의 OS 문구와 센터 행의 INAPP 문구를 재시도·다중 기기에서도 유지한다. W3 위에 스택 순서대로 병합한다. 운영 MySQL에서 DDL을 실제 실행하는 검증은 배포 단계에 남는다.
 
+## 8.1 정책서 v12/v18 맞춤 (#1106, 2026-11-18)
+
+위듀(어르신) v12, 위듀케어(보호자) v18 알림 정책서는 사람에게 보이는 알림을 모두 「푸시+센터」로 정했다. 위 표와 §5, §7의 업로드 완료, 좋아요, 걷기 미달 항목은 이 절이 대체한다.
+
+- A01, W01, 복약 인증 재알림 M02, M03(`MEDICATION_REMINDER_10/20`)을 `PUSH_AND_CENTER`로 바꾼다. 우선순위는 그대로다(A01, W01 `PASSIVE`, M02, M03 `INTERACTION`).
+- A05를 `PUSH_AND_CENTER`로 바꾸고 설정 그룹을 `GENERAL`로 둔다(보호자는 「일반」, 시니어는 기존 `forSenior(ALBUM)` 판정). 정책서 우선순위 표는 조용히(`PASSIVE`)에 업로드 완료와 걷기 미달만 두므로 A05는 보통(`INTERACTION`), 앱 안 표시는 다른 앨범 알림과 같은 `BANNER`다.
+- 다시 접수돼도 센터 행이 하나만 남도록 `eventId`를 정한다. A01 `A01:{albumId}`, W01 `W01:{memberId}:{date}`. M02, M03은 이미 `{type}:{scheduleId}:{recipientId}:{date}` 기반이다. 같은 `eventId`로 다시 접수하면 센터 행은 재사용하고 기기별 푸시는 다시 만든다(기존 enqueue 동작).
+- W01 0걸음 발송(#801)은 그대로다. 정책서는 미정(추천: 안 보냄)이다.
+- 배포 순간 이미 `PUSH_ONLY`로 접수돼 미전송인 outbox 행은 `notification_id`가 없다. `FcmDelivery`는 지금까지 타입의 전달 방식이 센터 저장이면 outbox ID를 센터 ID로 대신 보냈다([LLD-0062](LLD-0062-notification-center-row-per-event.md) §5-6의 W3 이전 폴백). 그러면 이 행들이 존재하지 않거나 다른 센터 행 ID를 보내므로, 타입 있는 행은 FK가 없으면 `notificationId`를 보내지 않게 바꾼다. 폴백은 타입 없는 레거시 행에만 남는다. W3(2026-10-01) 이전에 접수된 미전송 outbox는 푸시 만료(TTL)가 지나 더 전송되지 않는다.
+- 인수조건
+  - [x] A01, A05, M02, M03, W01 접수 시 센터 행 1건과 기기별 outbox가 만들어진다.
+  - [x] 같은 A01, W01, M02, M03 `eventId`로 두 번 접수해도 센터 행은 1건이다.
+  - [x] 센터 FK 없이 접수된 타입 outbox는 전달 방식과 무관하게 `notificationId`를 보내지 않는다.
+
 ## 9. 미결정 사항 (Open Questions)
 
 - A06 두 필드의 응답 DTO 반영은 W4 머지 뒤 후속 작업에서 W4 위 stack 작업으로 변경했다. 응답은 DB 저장값을 그대로 사용하고 0과 null을 구분한다.
 - 계획 §5의 2026-10-02 임시 보호자 경로는 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)에 따라 2026-10-03 FE 문서의 앱 내부 경로로 교체·확정했다. 위듀 경로는 FE 전달 대기다. H01-C-SELF 문구는 `NotificationCopy`에 정본표로 남지만 서버 미사용이다.
 - 계획 §5 가정표 원문: `시니어 푸시 설정 항목 | GENERAL 하나 | 그대로 | —`. 시니어 대상 A01·A02·H01·W01에도 이 가정을 따른다.
+- W01 0걸음 발송은 #801에서 보냄으로 바뀌었고, 정책서 v12는 미정(추천: 안 보냄)이다. #1106은 보냄을 유지한다.
 - W01의 `신뢰 불가` 값 정의는 회신 대기다. 현재 `Walk.actualSteps`에 품질·출처 필드가 없으므로 **양수 동기화값을 신뢰**하는 작업 가정으로 구현한다(2026-10-02 코디네이터 답변). 0·Walk 행 없음은 발송하지 않으며 임의 상한·최신성 기준과 새 필드는 만들지 않는다. hemlo 회신이 다른 기준을 정하면 이 항목과 판정을 개정한다.
 - A06 남은 수는 서버가 같은 트랜잭션의 단순 count 쿼리로 항상 계산 가능하므로 대체 문구 경로가 없다. DB 오류는 트랜잭션 실패로 처리한다.
 - 기존 3/5/7일 앨범 비활성 알림은 type 없는 레거시 동작을 유지한다. hemlo 회신 뒤 지속 여부를 별도 PR에서 결정한다.
