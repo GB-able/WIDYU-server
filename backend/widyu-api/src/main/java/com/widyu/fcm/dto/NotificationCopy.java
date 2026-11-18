@@ -241,7 +241,10 @@ public record NotificationCopy(String title, String body) {
         if (preview.codePointCount(0, preview.length()) <= PREVIEW_MAX_CODE_POINTS) {
             return preview;
         }
-        String text = preview.endsWith("…") ? preview.substring(0, preview.length() - 1) : preview;
+        String text = preview;
+        if (preview.endsWith("…")) {
+            text = preview.substring(0, preview.length() - 1);
+        }
         BreakIterator graphemes = BreakIterator.getCharacterInstance();
         graphemes.setText(text);
         int cut = 0;
