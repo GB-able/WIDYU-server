@@ -105,9 +105,11 @@ HTTP 경로·요청·응답 래퍼는 바뀌지 않는다. 입력은 앨범 도�
 - A05를 `PUSH_AND_CENTER`로 바꾸고 설정 그룹을 `GENERAL`로 둔다(보호자는 「일반」, 시니어는 기존 `forSenior(ALBUM)` 판정). 정책서 우선순위 표는 조용히(`PASSIVE`)에 업로드 완료와 걷기 미달만 두므로 A05는 보통(`INTERACTION`), 앱 안 표시는 다른 앨범 알림과 같은 `BANNER`다.
 - 다시 접수돼도 센터 행이 하나만 남도록 `eventId`를 정한다. A01 `A01:{albumId}`, W01 `W01:{memberId}:{date}`. M02, M03은 이미 `{type}:{scheduleId}:{recipientId}:{date}` 기반이다. 같은 `eventId`로 다시 접수하면 센터 행은 재사용하고 기기별 푸시는 다시 만든다(기존 enqueue 동작).
 - W01 0걸음 발송(#801)은 그대로다. 정책서는 미정(추천: 안 보냄)이다.
+- 배포 순간 이미 `PUSH_ONLY`로 접수돼 미전송인 outbox 행은 `notification_id`가 없다. `FcmDelivery`는 지금까지 타입의 전달 방식이 센터 저장이면 outbox ID를 센터 ID로 대신 보냈다([LLD-0062](LLD-0062-notification-center-row-per-event.md) §5-6의 W3 이전 폴백). 그러면 이 행들이 존재하지 않거나 다른 센터 행 ID를 보내므로, 타입 있는 행은 FK가 없으면 `notificationId`를 보내지 않게 바꾼다. 폴백은 타입 없는 레거시 행에만 남는다. W3(2026-10-01) 이전에 접수된 미전송 outbox는 푸시 만료(TTL)가 지나 더 전송되지 않는다.
 - 인수조건
   - [x] A01, A05, M02, M03, W01 접수 시 센터 행 1건과 기기별 outbox가 만들어진다.
   - [x] 같은 A01, W01, M02, M03 `eventId`로 두 번 접수해도 센터 행은 1건이다.
+  - [x] 센터 FK 없이 접수된 타입 outbox는 전달 방식과 무관하게 `notificationId`를 보내지 않는다.
 
 ## 9. 미결정 사항 (Open Questions)
 

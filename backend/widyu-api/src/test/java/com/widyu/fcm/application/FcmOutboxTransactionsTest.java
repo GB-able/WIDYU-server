@@ -259,6 +259,20 @@ class FcmOutboxTransactionsTest {
     }
 
     @Test
+    @DisplayName("센터 행 없이 접수된 타입 outbox를 복원하면 전달 방식이 푸시+센터여도 센터 ID를 만들지 않는다")
+    void 센터_행_없이_접수된_타입_outbox는_센터_ID를_만들지_않는다() {
+        // given: 업로드 완료가 푸시 전용이던 때 접수돼 아직 전송되지 않은 행
+        FcmOutbox row = row(null);
+        ReflectionTestUtils.setField(row, "notificationType", NotificationType.ALBUM_UPLOAD_COMPLETE);
+
+        // when
+        FcmDelivery delivery = FcmDelivery.from(row);
+
+        // then
+        assertThat(delivery.notificationId()).isNull();
+    }
+
+    @Test
     @DisplayName("저장된 data JSON이 손상되면 빈 data로 전송하지 않고 예외가 발생한다")
     void 저장된_data_JSON이_손상되면_예외가_발생한다() {
         // given

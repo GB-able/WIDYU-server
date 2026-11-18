@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.widyu.fcm.FcmOutbox;
-import com.widyu.fcm.DeliveryMode;
 import com.widyu.fcm.dto.FcmSendDto;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -33,10 +32,8 @@ public record FcmDelivery(Long id, long fence, String token, FcmSendDto message,
         if (row.getNotificationType() == null) {
             return row.getId();
         }
-        DeliveryMode mode = row.getNotificationType().deliveryMode();
-        if (mode == DeliveryMode.PUSH_AND_CENTER || mode == DeliveryMode.CENTER_ONLY) {
-            return row.getId();
-        }
+        // 타입 있는 행은 enqueue가 센터 행을 만들 때 FK를 채운다. FK가 없으면 센터에 남지 않는 알림으로 접수된 행이다.
+        // 전달 방식을 푸시+센터로 바꾸기 전에 접수된 미전송 행(#1106)이 outbox ID를 센터 ID로 보내지 않게 한다.
         return null;
     }
 
