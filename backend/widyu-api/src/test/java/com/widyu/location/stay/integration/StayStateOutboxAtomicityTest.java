@@ -22,6 +22,7 @@ import com.widyu.location.realtime.dto.LocationUpdateResponse;
 import com.widyu.location.realtime.repository.SeniorLocationRepository;
 import com.widyu.location.stay.SafeZoneAlertState;
 import com.widyu.location.stay.SeniorStayState;
+import com.widyu.location.stay.application.SeniorStayStateService;
 import com.widyu.location.stay.repository.SeniorStayStateRepository;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
@@ -54,6 +55,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.util.AopTestUtils;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
@@ -94,7 +96,7 @@ class StayStateOutboxAtomicityTest {
     // 이동 경로 쓰기만 막는다. 빈을 통째로 대역으로 바꾸면 Redis 저장소 설정이 깨진다.
     @SpyBean(name = "redisTemplate") private RedisTemplate<String, Object> redisTemplate;
     @SpyBean private FcmOutboxService fcmOutboxService;
-    @SpyBean private com.widyu.location.stay.application.SeniorStayStateService stayStateService;
+    @SpyBean private SeniorStayStateService stayStateService;
 
     @Autowired private LocationIngestService ingestService;
     @Autowired private LocationJudgeService judgeService;
@@ -194,13 +196,17 @@ class StayStateOutboxAtomicityTest {
     void 첫_상태를_동시에_만들어도_행은_하나다() throws Exception {
         // given
         Long seniorId = seniorWithGuardianAndHome();
-        // 두 판정이 모두 "행 없음"을 읽은 뒤에 INSERT로 가게 맞춘다. 시작만 맞추면 한쪽이 먼저 커밋해 다른 쪽이 행을 읽을 수 있다.
+        // 두 판정이 모두 INSERT 직전의 마지막 읽기(lockForChange)에서 "행 없음"을 본 뒤에 INSERT로 가게 맞춘다.
+        // 첫 읽기(find)만 맞추면 한쪽이 먼저 커밋한 행을 다른 쪽이 lockForChange에서 읽어 UPDATE로 끝날 수 있다(H2는
+        // READ COMMITTED라 보이고, MySQL REPEATABLE READ는 트랜잭션 스냅숏이라 보이지 않는다). #1119
+        // lockForChange는 MANDATORY라 트랜잭션 프록시를 거치지 않게 프록시 안쪽 스파이에 스텁한다.
         java.util.concurrent.CyclicBarrier bothRead = new java.util.concurrent.CyclicBarrier(2);
+        SeniorStayStateService stayStateSpy = AopTestUtils.getUltimateTargetObject(stayStateService);
         org.mockito.BDDMockito.willAnswer(invocation -> {
             Object read = invocation.callRealMethod();
             bothRead.await(10, TimeUnit.SECONDS);
             return read;
-        }).given(stayStateService).find(seniorId);
+        }).given(stayStateSpy).lockForChange(seniorId);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<String>> results = new ArrayList<>();
