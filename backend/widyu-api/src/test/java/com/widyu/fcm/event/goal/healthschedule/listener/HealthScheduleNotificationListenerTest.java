@@ -2,6 +2,8 @@ package com.widyu.fcm.event.goal.healthschedule.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -13,10 +15,15 @@ import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.healthschedule.HealthSchedule;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +38,8 @@ class HealthScheduleNotificationListenerTest {
 
     @Mock private FcmService fcmService;
     @Mock private HealthScheduleRepository healthScheduleRepository;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
     @InjectMocks private HealthScheduleNotificationListener listener;
 
     @Test
@@ -75,6 +84,64 @@ class HealthScheduleNotificationListenerTest {
         // then
         then(fcmService).should().sendMessageToUser(any(), captor.capture());
         assertThat(captor.getValue().centerTitle()).isEqualTo("오전 9시 0분에 병원 진료 일정이 있어요.");
+    }
+
+    @Test
+    @DisplayName("가족이 있는 어르신 일정이 임박하면 같은 회차에 가족 보호자마다 H01-C를 보낸다")
+    void 어르신_일정이_임박하면_가족_보호자마다_H01C를_보낸다() {
+        // given
+        HealthSchedule schedule = schedule(MemberType.SENIOR, 1L);
+        given(healthScheduleRepository.findUpcomingSchedulesInTimeRange(any(), any()))
+                .willReturn(List.of(schedule));
+        given(seniorProfileRepository.findFamilyIdByMemberId(1L)).willReturn(Optional.of(7L));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(7L))
+                .willReturn(List.of(membership(21L), membership(22L)));
+        ArgumentCaptor<Long> recipients = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
+
+        // when
+        listener.sendHealthScheduleReminder();
+
+        // then
+        then(fcmService).should(times(3)).sendMessageToUser(recipients.capture(), captor.capture());
+        assertThat(recipients.getAllValues()).containsExactly(1L, 21L, 22L);
+        FcmSendDto guardian = captor.getAllValues().get(1);
+        assertThat(guardian.notificationType()).isEqualTo(NotificationType.HEALTH_SCHEDULE_UPCOMING);
+        assertThat(guardian.title()).isEqualTo("당사자 님의 건강 일정이 곧 있어요.");
+        assertThat(guardian.content()).isEqualTo("앱에서 일정 시간과 내용을 확인해주세요.");
+        assertThat(guardian.title() + guardian.content()).doesNotContain("병원", "3시");
+        assertThat(guardian.centerTitle()).isEqualTo("오후 3시 30분에 당사자 님의 일정이 있어요.");
+        assertThat(guardian.centerBody()).isEqualTo("병원 진료 일정을 확인해보세요.");
+        assertThat(guardian.dataForEnqueue("event-1"))
+                .containsEntry("seniorId", "1")
+                .containsEntry("deepLink", "/goal")
+                .containsEntry("entityId", "10");
+        assertThat(guardian.relatedMemberId()).isEqualTo(1L);
+        assertThat(captor.getAllValues().get(2).eventId()).isEqualTo(guardian.eventId()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("보호자 한 명의 H01-C 접수가 실패해도 다음 보호자에게 보낸다")
+    void 보호자_한_명이_실패해도_다음_보호자에게_보낸다() {
+        // given
+        HealthSchedule schedule = schedule(MemberType.SENIOR, 1L);
+        given(healthScheduleRepository.findUpcomingSchedulesInTimeRange(any(), any()))
+                .willReturn(List.of(schedule));
+        given(seniorProfileRepository.findFamilyIdByMemberId(1L)).willReturn(Optional.of(7L));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(7L))
+                .willReturn(List.of(membership(21L), membership(22L)));
+        willAnswer(invocation -> {
+            if (invocation.getArgument(0).equals(21L)) {
+                throw new IllegalStateException("enqueue failure");
+            }
+            return null;
+        }).given(fcmService).sendMessageToUser(any(), any());
+
+        // when
+        listener.sendHealthScheduleReminder();
+
+        // then
+        then(fcmService).should().sendMessageToUser(eq(22L), any());
     }
 
     @Test
@@ -139,5 +206,11 @@ class HealthScheduleNotificationListenerTest {
                 LocalDateTime.of(2026, 8, 25, 15, 30));
         ReflectionTestUtils.setField(schedule, "id", 10L);
         return schedule;
+    }
+
+    private FamilyMembership membership(Long guardianId) {
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "보호자", "01033334444");
+        ReflectionTestUtils.setField(guardian, "id", guardianId);
+        return FamilyMembership.createMembership(Family.createFamily("FAM001"), guardian);
     }
 }
