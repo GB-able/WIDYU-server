@@ -76,6 +76,8 @@ public record FcmSendDto(
 
     /** 응원(X02), 하트(X01) 메시지 최대 글자 수(그래핌). 앱 입력창 50자와 같은 기준이다(LLD-0167 6절). */
     public static final int MESSAGE_MAX_LENGTH = 50;
+    /** 알림센터 본문 칸(fcm_notification.body VARCHAR(255)) 상한. 결합 문자가 많은 한 글자는 NFC 뒤 255를 넘을 수 있다. */
+    private static final int CENTER_BODY_MAX_CODE_POINTS = 255;
 
     /**
      * 가족 메시지 알림. 잠금화면(title, content)에는 고정 문구만 두고 미리보기는 앱 안 문구(centerTitle,
@@ -95,6 +97,9 @@ public record FcmSendDto(
         String code = type.copyCode().substring(0, 3);
         NotificationCopy push = NotificationCopy.of(type, code + "-OS", values);
         NotificationCopy inApp = NotificationCopy.of(type, code + "-INAPP", values);
+        if (inApp.body().codePointCount(0, inApp.body().length()) > CENTER_BODY_MAX_CODE_POINTS) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "메시지에 쓸 수 없는 글자가 너무 많아요.");
+        }
         return FcmSendDto.builder().title(push.title()).content(push.body())
                 .fcmCategory(type.fcmCategory()).notificationType(type)
                 .image(sender.getProfileImage()).relatedMemberId(sender.getId())

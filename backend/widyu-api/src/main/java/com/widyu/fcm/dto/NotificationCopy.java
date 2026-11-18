@@ -17,6 +17,8 @@ public record NotificationCopy(String title, String body) {
     public static final int PREVIEW_MAX_LENGTH = 40;
     /** 일정명 최대 글자 수(그래핌). 넘으면 앞 15글자에 「…」을 붙인다(정책서 공통 규칙 2). */
     private static final int SCHEDULE_NAME_MAX_LENGTH = 15;
+    /** 미리보기가 들어가는 알림센터 본문 칸(fcm_notification.body VARCHAR(255))의 코드포인트 상한. */
+    public static final int PREVIEW_MAX_CODE_POINTS = 255;
     private static final Pattern VARIABLE = Pattern.compile("\\{([^}]+)}");
     private static final Pattern CONTROLS = Pattern.compile("[\\p{Cc}&&[^\\s]]", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
@@ -218,7 +220,7 @@ public record NotificationCopy(String title, String body) {
 
     /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. */
     private static String messagePreview(String raw) {
-        return truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1);
+        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1));
     }
 
     /** {@code maxLength}글자(그래핌)를 넘으면 앞 {@code keepLength}글자 + 「…」. 글자 경계에서만 자른다. */
@@ -229,6 +231,33 @@ public record NotificationCopy(String title, String body) {
         BreakIterator graphemes = BreakIterator.getCharacterInstance();
         graphemes.setText(text);
         return text.substring(0, graphemes.next(keepLength)).stripTrailing() + "…";
+    }
+
+    /**
+     * 가족 이모지처럼 한 글자가 코드포인트 여러 개인 글자가 많으면 40글자 미리보기도 본문 칸(255)을 넘을 수 있다.
+     * 넘으면 거절하지 않고 칸에 들어갈 때까지 뒤 글자를 줄여 「…」을 붙인다. 글자 하나가 혼자 칸을 넘는 비정상 입력은
+     * 그대로 돌려 FcmSendDto.ofMessage의 상한 검사가 400으로 막는다.
+     */
+    private static String fitCodePoints(String preview) {
+        if (preview.codePointCount(0, preview.length()) <= PREVIEW_MAX_CODE_POINTS) {
+            return preview;
+        }
+        String text = preview;
+        if (preview.endsWith("…")) {
+            text = preview.substring(0, preview.length() - 1);
+        }
+        BreakIterator graphemes = BreakIterator.getCharacterInstance();
+        graphemes.setText(text);
+        int cut = 0;
+        int next = graphemes.next();
+        while (next != BreakIterator.DONE && text.codePointCount(0, next) <= PREVIEW_MAX_CODE_POINTS - 1) {
+            cut = next;
+            next = graphemes.next();
+        }
+        if (cut == 0) {
+            return preview;
+        }
+        return text.substring(0, cut).stripTrailing() + "…";
     }
 
     private static Entry<String, NotificationCopy> copy(String code, String title, String body) {
