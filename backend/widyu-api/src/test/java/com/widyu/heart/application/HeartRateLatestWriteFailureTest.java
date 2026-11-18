@@ -27,8 +27,6 @@ import com.widyu.member.repository.MemberRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,13 +40,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Redis 최신값 쓰기가 실패해도 MySQL이 정상이면 단건 위급 심박이 저장되고 알림 신호가 나가는지 실제 트랜잭션에서 본다(LLD-0102).
- * AI 판정기·Redis 최신값·저하 경로만 대역이고 심박 저장은 H2 위의 실제 리포지토리다.
+ * Redis 최신값 쓰기가 실패해도 MySQL이 정상이면 단건 위급 심박이 저장되고 위급 사건을 여는지 실제 트랜잭션에서 본다(LLD-0102).
+ * AI 판정기·Redis 최신값·저하 경로·사건 열기만 대역이고 심박 저장은 H2 위의 실제 리포지토리다.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -66,16 +62,16 @@ class HeartRateLatestWriteFailureTest {
     @Autowired private HeartRateEmergencyRepository heartRateEmergencyRepository;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private MeterRegistry meterRegistry;
-    @Autowired private EmergencyEvents emergencyEvents;
     @MockBean private HeartRateAnomalyDetector detector;
     @MockBean private HeartRateLatestResultWriter latestResultWriter;
     @MockBean private HeartRateResultRepository heartRateResultRepository;
     @MockBean private DegradedEmergencyAlertService degradedEmergencyAlertService;
     @MockBean private SensorProperties sensorProperties;
+    @MockBean private HeartRateEmergencyNotificationService emergencyNotificationService;
 
     @Test
-    @DisplayName("Redis 최신값 쓰기가 실패해도 단건 위급 심박을 저장하고 커밋 뒤 위급 알림 신호를 낸다")
-    void Redis_최신값_쓰기가_실패해도_단건_위급_심박을_저장하고_위급_알림_신호를_낸다() {
+    @DisplayName("Redis 최신값 쓰기가 실패해도 단건 위급 심박을 저장하고 커밋 뒤 위급 사건을 연다")
+    void Redis_최신값_쓰기가_실패해도_단건_위급_심박을_저장하고_위급_사건을_연다() {
         // given
         Long memberId = new TransactionTemplate(transactionManager).execute(status -> memberRepository.save(
                 Member.createMember(MemberType.SENIOR, "시니어", "01000000000")).getId());
@@ -93,7 +89,7 @@ class HeartRateLatestWriteFailureTest {
         assertThat(response.heartRateStatus()).isEqualTo(HeartRateStatus.EMERGENCY);
         assertThat(heartRateEventRepository.count()).isEqualTo(1);
         assertThat(heartRateEmergencyRepository.count()).isEqualTo(1);
-        assertThat(emergencyEvents.received).containsExactly(new HeartRateEmergencyEvent(memberId, null));
+        then(emergencyNotificationService).should().handleHeartRateEmergency(new HeartRateEmergencyEvent(memberId, null));
         assertThat(meterRegistry.counter("heart.latest.write.failed").count()).isEqualTo(1.0);
         then(degradedEmergencyAlertService).should(never()).alertWithoutDatabase(anyLong(), any());
     }
@@ -104,22 +100,6 @@ class HeartRateLatestWriteFailureTest {
         @Bean
         MeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
-        }
-
-        @Bean
-        EmergencyEvents emergencyEvents() {
-            return new EmergencyEvents();
-        }
-    }
-
-    /** 실제 위급 리스너처럼 커밋 뒤에만 받는다. 롤백된 발행은 여기에 오지 않는다. */
-    static class EmergencyEvents {
-
-        private final List<HeartRateEmergencyEvent> received = new CopyOnWriteArrayList<>();
-
-        @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-        public void on(HeartRateEmergencyEvent event) {
-            received.add(event);
         }
     }
 }

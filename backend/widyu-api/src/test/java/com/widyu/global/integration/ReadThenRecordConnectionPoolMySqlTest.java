@@ -1,15 +1,24 @@
 package com.widyu.global.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 import com.widyu.album.Album;
 import com.widyu.album.controller.AlbumController;
 import com.widyu.album.repository.AlbumRepository;
 import com.widyu.fcm.application.FcmTransport;
+import com.widyu.fcm.application.degraded.DegradedEmergencyAlertService;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.global.util.SecurityUtil;
+import com.widyu.heart.HeartRateStatus;
+import com.widyu.heart.application.HeartRateAnomalyDetector;
+import com.widyu.heart.application.HeartRateAnomalyDetector.DetectionResult;
+import com.widyu.heart.application.HeartRateService;
+import com.widyu.heart.dto.request.HeartRateSingleRequest;
 import com.widyu.home.controller.HomeController;
 import com.widyu.location.realtime.controller.RealtimeLocationRestController;
 import com.widyu.member.Family;
@@ -21,7 +30,10 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,8 +45,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -55,6 +69,8 @@ import software.amazon.awssdk.services.s3.S3Client;
  * 읽기 트랜잭션 안에서 열람 기록(REQUIRES_NEW)을 부르면 요청 하나가 커넥션 두 개를 쥔다. 동시 요청이 풀 크기를 넘으면
  * 모두 첫 커넥션을 쥔 채 두 번째를 기다리다 대기 한도(3000ms) 뒤 실패한다(#1056, #926과 같은 구조).
  * 앨범 상세, 보호자 홈 카드, 보호자 위치 REST 조회(LLD-0159)를 컨트롤러 진입점에서 동시에 불러 실패 수와 남은 기록 행 수를 센다.
+ * 심박 위급(LLD-0160)은 저장 트랜잭션의 커밋 후 리스너가 사건 트랜잭션(REQUIRES_NEW)을 열던 구조라, 한 건의 최대 사용 커넥션 수와
+ * 동시 위급의 사건 누락을 센다. 커밋 후 리스너의 예외는 Spring이 ERROR 로그로 삼켜 호출자는 성공으로 본다.
  *
  * <p>풀은 4개로 줄이고 대기 한도는 운영과 같은 3000ms로 둔다. 동시 요청은 풀의 네 배인 16개 스레드로 보낸다.
  *
@@ -104,6 +120,8 @@ class ReadThenRecordConnectionPoolMySqlTest {
     @MockBean private net.bramp.ffmpeg.FFprobe ffprobe;
     @MockBean private MemberUtil memberUtil;
     @MockBean private SecurityUtil securityUtil;
+    @MockBean private HeartRateAnomalyDetector heartRateAnomalyDetector;
+    @MockBean private DegradedEmergencyAlertService degradedEmergencyAlertService;
 
     @Autowired private AlbumController albumController;
     @Autowired private HomeController homeController;
@@ -115,6 +133,8 @@ class ReadThenRecordConnectionPoolMySqlTest {
     @Autowired private SeniorProfileRepository seniorProfileRepository;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private DataSource dataSource;
+    @Autowired private HeartRateService heartRateService;
 
     @DynamicPropertySource
     static void infrastructure(DynamicPropertyRegistry registry) {
@@ -228,6 +248,78 @@ class ReadThenRecordConnectionPoolMySqlTest {
         assertThat(outcomes).containsOnlyKeys("OK");
         assertThat(rows).isEqualTo(RACE_ROUNDS);
         assertThat(counted).isEqualTo(RACE_ROUNDS);
+    }
+
+    @Test
+    @DisplayName("심박 위급 한 건을 저장하면 커밋 뒤 사건을 여는 동안 커넥션을 하나만 쥔다")
+    void 심박_위급_한_건을_저장하면_사건을_여는_동안_커넥션을_하나만_쥔다() throws Exception {
+        // given
+        Long seniorId = saveSenior(saveFamily());
+        givenEmergencyDetected();
+        HikariPoolMXBean hikari = dataSource.unwrap(HikariDataSource.class).getHikariPoolMXBean();
+        AtomicBoolean sampling = new AtomicBoolean(true);
+        AtomicInteger peakActive = new AtomicInteger();
+        Thread sampler = new Thread(() -> {
+            while (sampling.get()) {
+                peakActive.accumulateAndGet(hikari.getActiveConnections(), Math::max);
+            }
+        });
+        sampler.start();
+
+        // when
+        String outcome;
+        try {
+            outcome = callAs(seniorId, () -> saveEmergency(seniorId));
+        } finally {
+            sampling.set(false);
+            sampler.join();
+        }
+
+        // then
+        int incidents = count("SELECT COUNT(*) FROM incident WHERE member_id = ?", seniorId);
+        System.out.printf("[POOL-HEART-EMERGENCY-SINGLE] pool=%d outcome=%s peakActive=%d incidentRows=%d%n",
+                POOL, outcome, peakActive.get(), incidents);
+        assertThat(outcome).isEqualTo("OK");
+        assertThat(incidents).isEqualTo(1);
+        assertThat(peakActive.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("시니어 32명의 심박 위급이 동시에 저장돼도 커넥션 대기로 실패하지 않고 사건이 32건 열린다")
+    void 시니어_32명의_심박_위급이_동시에_저장돼도_사건이_빠지지_않는다() throws Exception {
+        // given
+        Family family = saveFamily();
+        List<Long> seniorIds = new ArrayList<>();
+        for (int i = 0; i < REQUESTS; i++) {
+            seniorIds.add(saveSenior(family));
+        }
+        givenEmergencyDetected();
+
+        // when
+        Map<String, Integer> outcomes = callAtOnce(seniorIds, this::saveEmergency);
+
+        // then
+        String ids = String.join(",", seniorIds.stream().map(String::valueOf).toList());
+        int emergencies = count("SELECT COUNT(*) FROM heart_rate_emergency WHERE member_id IN (" + ids + ")");
+        int incidents = count("SELECT COUNT(*) FROM incident WHERE member_id IN (" + ids + ")");
+        System.out.printf("[POOL-HEART-EMERGENCY] pool=%d threads=%d requests=%d outcomes=%s emergencyRows=%d "
+                        + "incidentRows=%d missingIncidents=%d%n",
+                POOL, THREADS, REQUESTS, outcomes, emergencies, incidents, emergencies - incidents);
+        assertThat(outcomes).containsOnlyKeys("OK");
+        assertThat(emergencies).isEqualTo(REQUESTS);
+        assertThat(incidents).isEqualTo(REQUESTS);
+    }
+
+    /** AI 판정만 대역이다. 저하 경로는 꺼서 DB 실패가 응답 성공으로 가려지지 않게 한다. */
+    private void givenEmergencyDetected() {
+        given(heartRateAnomalyDetector.detect(anyLong(), any(), anyString()))
+                .willReturn(new DetectionResult(HeartRateStatus.EMERGENCY, true, "EMERGENCY", null));
+        given(degradedEmergencyAlertService.enabled()).willReturn(false);
+    }
+
+    /** 단건 심박 수신(WebSocket, REST)이 부르는 진입점과 같다. */
+    private void saveEmergency(Long seniorId) {
+        heartRateService.processHeartRate(seniorId, HeartRateSingleRequest.of(180, LocalDateTime.now(), null, "REST"));
     }
 
     /** 실제 MemberUtil처럼 요청마다 회원을 DB에서 읽는다. 누구의 요청인지는 호출 스레드에 둔다. */
