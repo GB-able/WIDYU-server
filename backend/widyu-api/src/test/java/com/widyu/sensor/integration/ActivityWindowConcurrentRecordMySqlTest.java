@@ -43,7 +43,7 @@ import software.amazon.awssdk.services.s3.S3Client;
  *
  * <p>개발 서버에서 워치가 다시 연결되면 밀린 묶음이 센서 스레드 8개에서 동시에 처리됐다. REPEATABLE READ에서 아직 없는
  * 구간 행을 {@code SELECT ... FOR UPDATE}로 읽으면 빈자리 잠금이 걸리고, 두 트랜잭션이 같은 자리에 INSERT하며 교착했다.
- * H2로는 재현되지 않는다.
+ * 지금은 빈 행을 {@code ON DUPLICATE KEY UPDATE}로 먼저 만들고 있는 행만 잠근다. H2로는 재현되지 않는다.
  *
  * <p>실행: {@code ACTIVITY_MYSQL_URL=jdbc:mysql://127.0.0.1:<port>/activity_race_<name> DB_USERNAME=root DB_PASSWORD=
  * ./gradlew :backend:widyu-api:test --tests 'com.widyu.sensor.integration.ActivityWindowConcurrentRecordMySqlTest'}
@@ -126,12 +126,13 @@ class ActivityWindowConcurrentRecordMySqlTest {
     }
 
     @Test
-    @DisplayName("구간 경계에 걸친 묶음이 섞여 두 새 구간에 동시에 더해도 구간마다 샘플 수와 합계가 모두 더해진다")
+    @DisplayName("구간 경계에 걸친 묶음이 섞여 두 새 구간에 동시에 더해도 교착 없이 구간마다 샘플 수와 합계가 모두 더해진다")
     void 구간_경계에_걸친_묶음이_섞여_동시에_더해도_합계가_모두_더해진다() throws Exception {
         // when: 홀수 스레드 묶음을 4초 밀어 스레드 1 묶음(4.5초~)이 앞 구간 25개, 뒤 구간 25개로 걸친다
         Outcome outcome = recordRounds(31L, 4_000L);
 
-        // then: 이 배치에서는 앞 트랜잭션이 롤백할 때 드물게 교착이 남을 수 있어(LLD-0138 6절) 합계 누락이 없는지만 본다
+        // then
+        assertThat(outcome.deadlocks()).isZero();
         assertThat(outcome.windows()).isEqualTo(2 * ROUNDS);
         assertThat(outcome.matched()).isEqualTo(2 * ROUNDS);
     }
