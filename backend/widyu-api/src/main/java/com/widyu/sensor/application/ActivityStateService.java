@@ -7,6 +7,7 @@ import com.widyu.sensor.ActivityWindow;
 import com.widyu.sensor.dto.request.SensorBatchRequest;
 import com.widyu.sensor.repository.ActivityWindowRepository;
 import com.widyu.sensor.repository.SensorBatchRepository;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,9 +16,9 @@ import java.util.function.LongFunction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.ConcurrencyFailureException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -63,8 +64,8 @@ public class ActivityStateService {
             Map<Long, long[]> sums = sumByWindow(clock, acc);
             try {
                 write(memberId, batchId, rootBatchId, sums);
-            } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
-                // 같은 새 구간을 두 묶음이 동시에 INSERT했다. 다시 하면 잠금 조회로 합친다.
+            } catch (ConcurrencyFailureException e) {
+                // 잠금 대기 시간 초과 같은 일시 충돌이다. 트랜잭션 전체가 롤백됐으므로 한 번 다시 더한다.
                 write(memberId, batchId, rootBatchId, sums);
             }
         } catch (Exception e) {
@@ -196,15 +197,21 @@ public class ActivityStateService {
      */
     private void write(Long memberId, String batchId, String rootBatchId, Map<Long, long[]> sums) {
         long windowMs = sensorProperties.activity().windowSec() * 1000L;
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+        // 없는 구간 행을 잠금 조회하면 REPEATABLE READ의 빈자리 잠금끼리 INSERT에서 교착한다(#1093). 그래서 빈 행을
+        // ON DUPLICATE KEY UPDATE로 먼저 만들어 이미 있는 행만 잠근다. 구간은 시작 시각 오름차순(TreeMap)으로 잠가
+        // 여러 구간에 걸친 묶음끼리도 잠금 순서가 같다. READ_COMMITTED는 잠금 읽기가 빈자리를 잠그지 않게 한다.
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        transaction.executeWithoutResult(status -> {
             if (!sensorBatchRepository.findEarlierInLineageForShare(memberId, rootBatchId, batchId).isEmpty()) {
                 return;
             }
+            LocalDateTime now = LocalDateTime.now();
             for (Map.Entry<Long, long[]> entry : sums.entrySet()) {
                 long start = entry.getKey();
                 long[] sum = entry.getValue();
-                ActivityWindow window = activityWindowRepository.findForUpdate(memberId, start)
-                        .orElseGet(() -> ActivityWindow.empty(memberId, start, start + windowMs));
+                activityWindowRepository.insertIfAbsent(memberId, start, start + windowMs, now);
+                ActivityWindow window = activityWindowRepository.findForUpdate(memberId, start).orElseThrow();
                 long count = window.getSampleCount() + sum[0];
                 long sumMg = window.getMagnitudeSumMg() + sum[1];
                 long sqSumMg = window.getMagnitudeSqSumMg() + sum[2];
