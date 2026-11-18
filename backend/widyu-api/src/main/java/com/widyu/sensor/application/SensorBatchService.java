@@ -66,7 +66,8 @@ public class SensorBatchService {
     private static final String STREAM_WATCH = "imu_watch";
     private static final String STREAM_PHONE = "imu_phone";
     static final String STREAM_HR = "hr";
-    private static final String STREAM_IMU_DROPPED = "imu_dropped";
+    private static final String STREAM_IMU_DROPPED = SensorDroppedRangeService.STREAM_LEGACY_IMU_DROPPED;
+    private static final String STREAM_DROPPED = SensorDroppedRangeService.STREAM_DROPPED;
     /** 거절 기록에 남길 stream 이름. 목록 밖 값도 남겨 옛 앱이 보낸 이름을 찾는다(LLD-0128 4.3). */
     private static final Pattern STREAM_NAME_PATTERN = Pattern.compile("^[a-z0-9_]{1,20}$");
     /** 수신 시도 카운터(LLD-0128 3.2). 태그 키는 channel·stream·result로 고정한다. */
@@ -194,8 +195,8 @@ public class SensorBatchService {
             return heartRateBatchIngest.ingest(member, memberId, payload,
                     treeToValue(root, HeartRateBatchRequest.class), serverReceivedAtMs, channel);
         }
-        // 워치 IMU 큐가 넘쳐 버린 구간 기록. 배치가 아니라 결측 근거라 따로 저장한다(LLD-0124).
-        if (STREAM_IMU_DROPPED.equals(stream)) {
+        // 기기가 버린 구간 기록. 배치가 아니라 결측 근거라 따로 저장한다(LLD-0124, LLD-0166).
+        if (STREAM_IMU_DROPPED.equals(stream) || STREAM_DROPPED.equals(stream)) {
             return sensorDroppedRangeService.record(memberId, payload, root, serverReceivedAtMs);
         }
         return ingestImu(member, memberId, payload, root, serverReceivedAtMs, channel);
@@ -211,8 +212,7 @@ public class SensorBatchService {
             return UNKNOWN_STREAM;
         }
         String value = stream.asText();
-        if (STREAM_HR.equals(value) || STREAM_WATCH.equals(value) || STREAM_PHONE.equals(value)
-                || STREAM_IMU_DROPPED.equals(value)) {
+        if (isKnownStream(value)) {
             return value;
         }
         return UNKNOWN_STREAM;
@@ -346,11 +346,15 @@ public class SensorBatchService {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         String value = stream.asText();
-        if (!STREAM_HR.equals(value) && !STREAM_WATCH.equals(value) && !STREAM_PHONE.equals(value)
-                && !STREAM_IMU_DROPPED.equals(value)) {
+        if (!isKnownStream(value)) {
             throw new BusinessException(ErrorCode.SENSOR_BATCH_INVALID);
         }
         return value;
+    }
+
+    private static boolean isKnownStream(String value) {
+        return STREAM_HR.equals(value) || STREAM_WATCH.equals(value) || STREAM_PHONE.equals(value)
+                || STREAM_IMU_DROPPED.equals(value) || STREAM_DROPPED.equals(value);
     }
 
     private <T> T treeToValue(JsonNode root, Class<T> type) {

@@ -92,6 +92,21 @@ class FlywayMigrationMySqlTest {
         assertThat(checks).isEmpty();
     }
 
+    @Test
+    @DisplayName("버전 파일을 모두 적용하면 버린 구간의 데이터 종류 칸은 기본값 없는 NOT NULL이다")
+    void 버전_파일을_모두_적용하면_버린_구간의_데이터_종류_칸은_기본값_없는_NOT_NULL이다() {
+        // given: 기존 행은 imu_watch로 채우고 기본값은 지운다(LLD-0166 4.1)
+
+        // when
+        List<String> column = jdbc.queryForList(
+                "SELECT CONCAT(is_nullable, ':', COALESCE(column_default, 'none')) FROM information_schema.columns "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'sensor_dropped_range' "
+                        + "AND column_name = 'dropped_stream'", String.class);
+
+        // then
+        assertThat(column).containsExactly("NO:none");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({DataSourceAutoConfiguration.class, FlywayAutoConfiguration.class,
             HibernateJpaAutoConfiguration.class, JdbcTemplateAutoConfiguration.class})

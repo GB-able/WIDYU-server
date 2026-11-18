@@ -94,6 +94,28 @@ class SensorBatchServiceTest {
     }
 
     @Test
+    @DisplayName("stream이 dropped이면 버린 구간 저장으로 넘기고 수신 카운터에 dropped로 센다")
+    void stream이_dropped이면_버린_구간_저장으로_넘기고_dropped로_센다() {
+        // given
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", "01012345678");
+        byte[] payload = """
+            {"stream":"dropped","dropped_stream":"hr","session_id":"hr-01","from_seq":7,"to_seq":7,"reason":"enqueue_failed","ts_ms":1760000000200}"""
+                .getBytes(UTF_8);
+        given(memberRepository.findById(MEMBER_ID)).willReturn(Optional.of(member));
+        given(sensorDroppedRangeService.record(eq(MEMBER_ID), eq(payload), any(), anyLong()))
+                .willReturn(SensorBatchResultResponse.of(null, null, SensorBatchResult.STORED));
+
+        // when
+        SensorBatchResultResponse response = service().ingest(MEMBER_ID, payload, SensorIngestChannel.WS);
+
+        // then
+        assertThat(response.result()).isEqualTo(SensorBatchResult.STORED);
+        assertThat(meterRegistry.counter(SensorBatchService.RECEIVED_METRIC,
+                "channel", "WS", "stream", "dropped", "result", "STORED").count()).isEqualTo(1.0);
+        then(sensorBatchRepository).should(never()).save(any());
+    }
+
+    @Test
     @DisplayName("부록 A 배치를 저장하면 원문 바이트와 해시·환산 시각이 그대로 담긴 행을 남긴다")
     void 부록_A_배치를_저장하면_원문_바이트와_해시와_환산_시각이_그대로_담긴_행을_남긴다() {
         // given

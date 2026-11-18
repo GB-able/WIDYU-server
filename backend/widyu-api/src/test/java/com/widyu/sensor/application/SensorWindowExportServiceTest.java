@@ -85,7 +85,7 @@ class SensorWindowExportServiceTest {
                 """.formatted(FROM_MS + 60_000).getBytes(UTF_8));
         given(s3Service.downloadBytes("sensor/i1.json")).willReturn("{not json".getBytes(UTF_8));
         given(sensorDroppedRangeRepository.findByMemberIdAndTsMsBetweenOrderByTsMsAsc(28L, startMs, endMs))
-                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").fromSeq(10L)
+                .willReturn(List.of(SensorDroppedRange.builder().memberId(28L).sessionId("s-01").droppedStream("hr").fromSeq(10L)
                         .toSeq(15L).reason("queue_overflow").tsMs(FROM_MS + 120_000)
                         .serverReceivedAtMs(FROM_MS + 125_000).build()));
         given(sensorBatchRejectionRepository.findByMemberIdAndReceivedAtMsBetweenOrderByReceivedAtMsAsc(
@@ -110,9 +110,9 @@ class SensorWindowExportServiceTest {
                 "during,2026-10-30 09:13:00.000," + (FROM_MS + 180_000)
                         + ",hr,gw-1,01j8zk3v9x2q4m7n8p1r5s6t7u,s-01,12,SENSOR_4001,REST");
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
-                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms",
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms,dropped_stream",
                 "during,2026-10-30 09:12:00.000," + (FROM_MS + 120_000) + ",s-01,10,15,queue_overflow,"
-                        + (FROM_MS + 125_000));
+                        + (FROM_MS + 125_000) + ",hr");
         assertThat(entries.get("location.csv")).contains("before,2026-10-30 09:09:00.000," + (FROM_MS - 60_000)
                 + ",phone-1,s,1,37.5,127.0,8.0,1.2");
         assertThat(entries.get("hr.csv")).contains("during,2026-10-30 09:11:00.000").contains(",h1,88,HIGH");
@@ -137,7 +137,7 @@ class SensorWindowExportServiceTest {
         // then
         Map<String, String> entries = unzip(file.bytes());
         assertThat(entries.get("dropped_ranges.csv").lines()).containsExactly(
-                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms");
+                "phase,ts_kst,ts_ms,session_id,from_seq,to_seq,reason,server_received_at_ms,dropped_stream");
         assertThat(entries.get("summary.csv")).contains("rows:dropped_ranges.csv,0");
         assertThat(entries.get("rejections.csv").lines()).containsExactly(
                 "phase,ts_kst,ts_ms,stream,device_id,batch_id,session_id,seq,error_code,ingest_channel");
