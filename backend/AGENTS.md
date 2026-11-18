@@ -38,7 +38,6 @@
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
 - `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE
-- 비활성 유저 스케줄 알림(3/5/7일). → LLD-0002·0014
 
 ### `pay` — 결제·포인트
 - **불변식**: 결제는 포인트를 충전·환수하지 않는다(ADR-0029). 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동

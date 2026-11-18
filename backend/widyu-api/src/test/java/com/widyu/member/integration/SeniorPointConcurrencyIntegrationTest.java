@@ -118,8 +118,7 @@ class SeniorPointConcurrencyIntegrationTest {
 
         long earnHistoryCount = countHistoriesByType(seniorProfileId, PointHistoryType.EARN);
         assertThat(earnHistoryCount).isEqualTo(threadCount);
-        assertThat(notificationRepository.findAll()).hasSize(threadCount)
-                .allMatch(notification -> notification.getType() == NotificationType.POINT_EARNED);
+        assertThat(notificationRepository.count()).isZero();
     }
 
     @Test
@@ -147,8 +146,7 @@ class SeniorPointConcurrencyIntegrationTest {
 
         long useHistoryCount = countHistoriesByType(seniorProfileId, PointHistoryType.USE);
         assertThat(useHistoryCount).isEqualTo(expectedSuccess);
-        assertThat(notificationRepository.findAll()).hasSize(expectedSuccess)
-                .allMatch(notification -> notification.getType() == NotificationType.POINT_USED);
+        assertThat(notificationRepository.count()).isZero();
     }
 
     @Test
