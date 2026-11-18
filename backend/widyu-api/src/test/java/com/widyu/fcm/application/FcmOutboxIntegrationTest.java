@@ -301,8 +301,8 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("시니어가 목표 푸시를 끄면 일정 센터 행과 data-only 동기화를 유지한다")
-    void 시니어가_목표_푸시를_꺼도_일정_센터_행과_data_only_동기화를_유지한다() {
+    @DisplayName("시니어의 목표 푸시 OFF 행이 남아 있어도 일정 푸시와 data-only 동기화를 보낸다")
+    void 시니어의_목표_푸시_OFF_행이_남아_있어도_일정_푸시와_동기화를_보낸다() {
         // given
         Long seniorId = memberWithToken();
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
@@ -325,7 +325,7 @@ class FcmOutboxIntegrationTest {
                 .filter(row -> row.getNotificationType() == visibleType).findFirst().orElseThrow();
         FcmOutbox sync = outbox.findAll().stream()
                 .filter(row -> row.getNotificationType() == syncType).findFirst().orElseThrow();
-        assertThat(transactions.claim(visible.getId())).isNull();
+        assertThat(transactions.claim(visible.getId())).isNotNull();
         FcmDelivery syncDelivery = transactions.claim(sync.getId());
         assertThat(syncDelivery).isNotNull();
         assertThat(syncDelivery.notificationId()).isNull();
@@ -567,13 +567,13 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("푸시 설정을 끄면 센터를 유지하고 기기 작업을 취소한다")
+    @DisplayName("보호자가 푸시 설정을 끄면 센터를 유지하고 기기 작업을 취소한다")
     void 푸시_설정을_끄면_센터를_유지하고_작업을_취소한다() {
         // given
-        Long member = memberWithToken();
+        Long member = guardianWithToken();
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
                 settings.save(MemberNotificationSetting.create(members.findById(member).orElseThrow(),
-                        PushSettingGroup.ALBUM, false)));
+                        PushSettingGroup.GENERAL, false)));
 
         // when
         service.enqueue(member, FcmSendDto.builder().title("앨범").content("본문")
@@ -617,14 +617,14 @@ class FcmOutboxIntegrationTest {
     @DisplayName("claim 뒤 푸시를 끄면 preflight가 기기 작업을 취소하고 센터 행은 유지한다")
     void claim_뒤_푸시를_끄면_preflight가_작업을_취소한다() {
         // given
-        Long member = memberWithToken();
+        Long member = guardianWithToken();
         service.enqueue(member, FcmSendDto.builder().title("앨범").content("본문")
                 .notificationType(NotificationType.ALBUM_CREATED).entityId("31").build());
         Long id = outbox.findAll().getFirst().getId();
         FcmDelivery delivery = transactions.claim(id);
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
                 settings.save(MemberNotificationSetting.create(members.findById(member).orElseThrow(),
-                        PushSettingGroup.ALBUM, false)));
+                        PushSettingGroup.GENERAL, false)));
 
         // when
         boolean allowed = transactions.preflight(delivery);
@@ -639,7 +639,7 @@ class FcmOutboxIntegrationTest {
     @DisplayName("같은 revision으로 동시에 설정하면 한 요청만 저장하고 다른 요청은 거부한다")
     void 같은_revision으로_동시에_설정하면_한_요청만_저장한다() throws Exception {
         // given
-        Long member = memberWithToken();
+        Long member = guardianWithToken();
         given(memberUtil.getCurrentMember()).willReturn(members.findById(member).orElseThrow());
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -648,7 +648,7 @@ class FcmOutboxIntegrationTest {
                 start.await();
                 try {
                     return settingService.updateNotificationSetting(
-                            new UpdateNotificationSettingRequest("ALBUM", false, 0L)).policyRevision();
+                            new UpdateNotificationSettingRequest("GENERAL", false, 0L)).policyRevision();
                 } catch (BusinessException exception) {
                     if (exception.getErrorCode() == ErrorCode.NOTIFICATION_POLICY_REVISION_CONFLICT) {
                         return -1L;
@@ -666,7 +666,7 @@ class FcmOutboxIntegrationTest {
             // then
             assertThat(results).containsExactlyInAnyOrder(1L, -1L);
             assertThat(members.findById(member).orElseThrow().getNotificationPolicyRevision()).isEqualTo(1L);
-            assertThat(settings.findByMemberIdAndCategory(member, PushSettingGroup.ALBUM))
+            assertThat(settings.findByMemberIdAndCategory(member, PushSettingGroup.GENERAL))
                     .hasValueSatisfying(row -> assertThat(row.isEnabled()).isFalse());
         } finally {
             executor.shutdownNow();

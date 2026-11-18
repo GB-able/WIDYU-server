@@ -36,19 +36,6 @@ public enum PushSettingGroup {
         return this == SAFETY || this == SAFE_ZONE || this == MEDICATION_CHECK || this == GENERAL;
     }
 
-    public static PushSettingGroup forSenior(FcmCategory category) {
-        if (category == null) {
-            return null;
-        }
-        return switch (category) {
-            case ALBUM -> ALBUM;
-            case TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE -> GOAL;
-            case HEART_MESSAGE -> HOME;
-            case ETC -> ETC;
-            case ALL, UNREAD, SAFE_ZONE, INCIDENT_SELF_CHECK, LOCATION_NOTICE -> null;
-        };
-    }
-
     /** type이 없는 기존 outbox의 전환기 폴백. null은 개인 설정을 적용하지 않는다. */
     public static PushSettingGroup fromLegacy(FcmCategory category) {
         if (category == null) {
@@ -60,12 +47,5 @@ public enum PushSettingGroup {
             case ALBUM, TARGET, HEALTH_SCHEDULE, WALK, HEART_MESSAGE, ETC -> GENERAL;
             case ALL, UNREAD, INCIDENT_SELF_CHECK, LOCATION_NOTICE -> null;
         };
-    }
-
-    public static PushSettingGroup fromLegacy(FcmCategory category, MemberType memberType) {
-        if (memberType == MemberType.SENIOR) {
-            return forSenior(category);
-        }
-        return fromLegacy(category);
     }
 }
