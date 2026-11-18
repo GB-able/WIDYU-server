@@ -25,7 +25,7 @@ public record AlbumUnlockResponse(
                 albumTitle,
                 albumUnlock.getUnlockedAt(),
                 remainingPoints,
-                "앨범이 해금되었습니다."
+                "새 게시물을 열었어요."
         );
     }
 }

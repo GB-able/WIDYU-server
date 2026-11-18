@@ -194,6 +194,15 @@ public class AlbumNotificationListener {
                 album.getId().toString(), null,
                 senior.getId(), senior.getId(), senior.getProfileImage())
                 .withSeniorUnlockDetails(senior.getName(), remaining));
+
+        // 연 어르신 본인에게 쓴 포인트를 알린다(A08). 해제는 게시물마다 한 번이라 다시 접수돼도 센터 행은 하나다.
+        NotificationCopy openedCopy = NotificationCopy.of(NotificationType.ALBUM_OPENED_BY_SENIOR, "A08",
+                Map.of("포인트", Long.toString(Album.UNLOCK_PRICE)));
+        send(senior.getId(), FcmSendDto.builder().title(openedCopy.title()).content(openedCopy.body())
+                .fcmCategory(NotificationType.ALBUM_OPENED_BY_SENIOR.fcmCategory())
+                .notificationType(NotificationType.ALBUM_OPENED_BY_SENIOR)
+                .eventId("A08:" + album.getId() + ":" + senior.getId())
+                .entityId(album.getId().toString()).image(writer.getProfileImage()).build());
     }
 
     private Map<String, String> unlockCopyValues(String seniorName, int remaining) {

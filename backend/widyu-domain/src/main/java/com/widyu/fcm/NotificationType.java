@@ -9,6 +9,7 @@ public enum NotificationType {
     ALBUM_LIKED(FcmCategory.ALBUM, "ALBUM", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/album/post?postId={entityId}", "A05"),
     ALBUM_UNLOCKED(FcmCategory.ALBUM, "ALBUM", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/post?postId={entityId}", "A06-L/Z"),
     ALBUM_ALL_VIEWED(FcmCategory.ALBUM, "ALBUM", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/album", "A07"),
+    ALBUM_OPENED_BY_SENIOR(FcmCategory.ALBUM, "ALBUM", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/album/post?postId={entityId}", "A08"),
     MEDICATION_REMINDER_10(FcmCategory.MEDICINE_SCHEDULE, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/goal", "M02"),
     MEDICATION_REMINDER_20(FcmCategory.MEDICINE_SCHEDULE, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GENERAL, "BANNER", "/goal", "M03"),
     MEDICATION_PROOF_MISSING(FcmCategory.MEDICINE_SCHEDULE, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.TIME_SENSITIVE, RetentionClass.ROUTINE_90D, PushSettingGroup.MEDICATION_CHECK, "BANNER", "/goal/medicine?seniorId={seniorId}", "M04"),

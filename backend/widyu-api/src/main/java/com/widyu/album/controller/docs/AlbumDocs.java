@@ -854,7 +854,7 @@ public interface AlbumDocs {
                                                 "albumTitle": "오늘 소풍 다녀왔어요!",
                                                 "unlockedAt": "2025-09-13T12:00:00",
                                                 "remainingPoints": 50,
-                                                "message": "앨범이 해금되었습니다."
+                                                "message": "새 게시물을 열었어요."
                                               }
                                             }
                                             """
