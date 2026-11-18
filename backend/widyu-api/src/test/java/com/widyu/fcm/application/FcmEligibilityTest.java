@@ -189,6 +189,22 @@ class FcmEligibilityTest {
     }
 
     @Test
+    @DisplayName("시니어가 받는 타입 없는 응원 메시지를 판정하면 홈 그룹을 따른다")
+    void 시니어가_받는_타입_없는_응원_메시지를_판정하면_홈_그룹을_따른다() {
+        // given
+        FcmOutbox outbox = outbox(null);
+        ReflectionTestUtils.setField(outbox, "fcmCategory", FcmCategory.HEART_MESSAGE);
+        activeRecipient(outbox);
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.HOME)).willReturn(false);
+
+        // when
+        boolean allowed = eligibility.eligible(outbox);
+
+        // then
+        assertThat(allowed).isFalse();
+    }
+
+    @Test
     @DisplayName("긴급 본인확인을 판정하면 개인 푸시 설정을 건너뛴다")
     void 긴급_본인확인은_개인_설정을_건너뛴다() {
         // given

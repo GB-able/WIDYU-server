@@ -5,7 +5,6 @@ import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
 import com.widyu.fcm.dto.response.ToastResDto;
-import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.FcmNotification;
 import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.NotificationType;
@@ -210,7 +209,7 @@ public class FcmService {
         FcmSendDto fcmSendDto = FcmSendDto.builder()
                 .title(title)
                 .content(sendNotificationRequest.content())
-                .fcmCategory(FcmCategory.ETC)
+                .fcmCategory(type.fcmCategory())
                 .scheme("")
                 .image(sender.getProfileImage())
                 .relatedMemberId(sender.getId())
