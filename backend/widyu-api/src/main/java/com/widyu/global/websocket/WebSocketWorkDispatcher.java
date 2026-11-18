@@ -40,19 +40,23 @@ public class WebSocketWorkDispatcher {
 
     /**
      * 수신 스레드에서 부른다. {@code api}는 예외 로그의 Api 값(컨트롤러.메서드)으로, 기존 Grafana 규칙과 같은 이름을 쓴다.
+     *
+     * @return 실행기에 넣었으면 true, 가득 차 과부하 오류를 보냈으면 false. 센서는 거절 기록에 쓴다(LLD-0166 5.2)
      */
-    public void dispatch(Executor executor, String api, SimpMessageHeaderAccessor accessor, Runnable work) {
+    public boolean dispatch(Executor executor, String api, SimpMessageHeaderAccessor accessor, Runnable work) {
         Principal user = accessor.getUser();
         String sessionId = accessor.getSessionId();
         String destination = accessor.getDestination();
         Map<String, String> mdc = MDC.getCopyOfContextMap();
         try {
             executor.execute(() -> run(work, api, destination, user, sessionId, mdc));
+            return true;
         } catch (RejectedExecutionException e) {
             meterRegistry.counter(REJECTED_METRIC, "api", api).increment();
             log.warn("WebSocket 처리 대기열이 가득 차 요청을 거절했습니다: api={}, memberId={}, sessionId={}",
                     api, nameOf(user), sessionId);
             sendToSession(nameOf(user), sessionId, ERRORS_DESTINATION, OVERLOADED);
+            return false;
         }
     }
 

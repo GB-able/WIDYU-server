@@ -23,6 +23,7 @@ import com.widyu.global.websocket.WebSocketWorkDispatcher;
 import com.widyu.member.MemberRole;
 import com.widyu.sensor.SensorIngestChannel;
 import com.widyu.sensor.application.SensorBatchService;
+import com.widyu.sensor.application.SensorRejectionAsyncRecorder;
 import com.widyu.sensor.dto.response.SensorBatchResult;
 import com.widyu.sensor.dto.response.SensorBatchResultResponse;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -30,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +70,7 @@ class SensorBatchWebSocketControllerTest {
 
     @Mock private SensorBatchService sensorBatchService;
     @Mock private SimpMessagingTemplate messagingTemplate;
+    @Mock private SensorRejectionAsyncRecorder rejectionRecorder;
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @Test
@@ -299,8 +302,8 @@ class SensorBatchWebSocketControllerTest {
     }
 
     @Test
-    @DisplayName("본문 상한을 넘는 배치를 받으면 거절 기록 없이 WS 경로의 REJECTED로 센다")
-    void 본문_상한을_넘는_배치를_받으면_WS_경로의_REJECTED로_센다() {
+    @DisplayName("본문 상한을 넘는 배치를 받으면 WS 경로의 REJECTED로 세고 크기 초과 코드로 거절 기록을 넘긴다")
+    void 본문_상한을_넘는_배치를_받으면_WS_경로의_REJECTED로_세고_거절_기록을_넘긴다() {
         // given
         byte[] payload = oversized(BATCH_JSON);
         PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
@@ -308,10 +311,50 @@ class SensorBatchWebSocketControllerTest {
         // when
         controller(new ArrayList<Runnable>()::add).ingestBatch(message(payload), headerAccessor(principal));
 
-        // then: 서비스 밖 거절이라 서비스(거절 기록)를 부르지 않는다(LLD-0128 5.3)
+        // then: 서비스를 부르지 않고 기록 스레드로 넘긴다(LLD-0166 5.2)
         verifyNoInteractions(sensorBatchService);
         assertThat(meterRegistry.counter(SensorBatchService.RECEIVED_METRIC,
                 "channel", "WS", "stream", "unknown", "result", "REJECTED").count()).isEqualTo(1.0);
+        then(rejectionRecorder).should()
+                .submit(eq(42L), same(payload), eq(ErrorCode.SENSOR_BATCH_TOO_LARGE), anyLong());
+    }
+
+    @Test
+    @DisplayName("센서 실행기가 가득 차면 과부하 오류를 보내고 실행기 포화 코드로 거절 기록을 넘긴다")
+    void 센서_실행기가_가득_차면_과부하_오류를_보내고_거절_기록을_넘긴다() {
+        // given
+        byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
+        PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
+        TaskExecutor saturated = task -> {
+            throw new RejectedExecutionException("full");
+        };
+        ArgumentCaptor<Object> body = ArgumentCaptor.captor();
+
+        // when
+        controller(saturated).ingestBatch(message(payload), headerAccessor(principal));
+
+        // then
+        verifyNoInteractions(sensorBatchService);
+        then(messagingTemplate).should().convertAndSendToUser(
+                eq("42"), eq("/queue/errors"), body.capture(), anyMap());
+        assertThat(body.getValue()).isEqualTo(Map.of(
+                "error", ErrorCode.TEMPORARILY_BUSY.name(), "message", ErrorCode.TEMPORARILY_BUSY.getMessage()));
+        then(rejectionRecorder).should()
+                .submit(eq(42L), same(payload), eq(ErrorCode.TEMPORARILY_BUSY), anyLong());
+    }
+
+    @Test
+    @DisplayName("센서 실행기에 넣으면 거절 기록을 넘기지 않는다")
+    void 센서_실행기에_넣으면_거절_기록을_넘기지_않는다() {
+        // given
+        byte[] payload = BATCH_JSON.getBytes(StandardCharsets.UTF_8);
+        PrincipalDetails principal = new PrincipalDetails(42L, MemberRole.USER);
+
+        // when
+        controller(new ArrayList<Runnable>()::add).ingestBatch(message(payload), headerAccessor(principal));
+
+        // then
+        verifyNoInteractions(rejectionRecorder);
     }
 
     @Test
@@ -340,7 +383,8 @@ class SensorBatchWebSocketControllerTest {
                 new WebSocketWorkDispatcher(messagingTemplate, new WebSocketExceptionHandler(), meterRegistry);
         SensorProperties properties = new SensorProperties(MAX_PAYLOAD_BYTES, null, null, null, null, null, null, null, null);
         return new SensorBatchWebSocketController(
-                sensorBatchService, new ObjectMapper(), dispatcher, executor, properties, meterRegistry);
+                sensorBatchService, new ObjectMapper(), dispatcher, executor, properties, meterRegistry,
+                rejectionRecorder);
     }
 
     /** 본문 상한을 1바이트 넘는 배치. 식별자 뒤를 JSON 공백으로 채운다. */
