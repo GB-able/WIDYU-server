@@ -3,8 +3,10 @@ package com.widyu.admin.controller;
 import com.widyu.admin.application.AdminFcmService;
 import com.widyu.admin.application.AdminPointGrantService;
 import com.widyu.admin.application.InMemoryLogAppender;
+import com.widyu.admin.controller.docs.AdminFcmDocs;
 import com.widyu.admin.dto.request.AdminFcmTestRequest;
 import com.widyu.admin.dto.request.AdminPointGrantRequest;
+import com.widyu.admin.dto.response.AdminFcmTestResponse;
 import com.widyu.admin.dto.response.AdminLogEntryResponse;
 import com.widyu.admin.dto.response.AdminMemberResponse;
 import com.widyu.global.response.ApiResponseTemplate;
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin")
-public class AdminFcmController {
+public class AdminFcmController implements AdminFcmDocs {
 
     private final AdminFcmService adminFcmService;
     private final AdminPointGrantService adminPointGrantService;
@@ -45,9 +47,10 @@ public class AdminFcmController {
                 .body(members);
     }
 
+    @Override
     @PostMapping("/fcm/test")
-    public ApiResponseTemplate<String> sendTestNotification(@Valid @RequestBody AdminFcmTestRequest request) {
-        String result = adminFcmService.sendTestNotification(request);
+    public ApiResponseTemplate<AdminFcmTestResponse> sendTestNotification(@Valid @RequestBody AdminFcmTestRequest request) {
+        AdminFcmTestResponse result = adminFcmService.sendTestNotification(request);
         return ApiResponseTemplate.ok()
                 .code("200")
                 .message("FCM 테스트 발송 완료")

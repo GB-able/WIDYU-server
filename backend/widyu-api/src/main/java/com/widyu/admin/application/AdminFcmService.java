@@ -2,16 +2,16 @@ package com.widyu.admin.application;
 
 import com.widyu.admin.AdminAction;
 import com.widyu.admin.dto.request.AdminFcmTestRequest;
+import com.widyu.admin.dto.response.AdminFcmTestResponse;
 import com.widyu.admin.dto.response.AdminMemberDetailResponse;
 import com.widyu.admin.dto.response.AdminPageResponse;
 import com.widyu.fcm.DeliveryMode;
 import com.widyu.fcm.FcmCategory;
 import com.widyu.fcm.NotificationType;
-import com.widyu.fcm.MemberFcmToken;
 import com.widyu.fcm.application.FcmService;
+import com.widyu.fcm.application.FcmTestAttempt;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.dto.NotificationCopy;
-import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.member.MemberRole;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
@@ -35,7 +35,6 @@ public class AdminFcmService {
 
     private final FcmService fcmService;
     private final MemberRepository memberRepository;
-    private final MemberFcmTokenRepository memberFcmTokenRepository;
     private final AdminAuditLogService adminAuditLogService;
 
     @Transactional(readOnly = true)
@@ -60,13 +59,9 @@ public class AdminFcmService {
         return AdminPageResponse.from(result);
     }
 
-    public String sendTestNotification(AdminFcmTestRequest request) {
-        Member member = memberRepository.findById(request.memberId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-
-        List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(request.memberId());
-        if (tokens.isEmpty()) {
-            return member.getName() + "님의 등록된 FCM 토큰이 없습니다.";
+    public AdminFcmTestResponse sendTestNotification(AdminFcmTestRequest request) {
+        if (!memberRepository.existsById(request.memberId())) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND);
         }
 
         NotificationType type = request.notificationType();
@@ -93,18 +88,13 @@ public class AdminFcmService {
                 .image(null)
                 .build();
 
-        int sent = fcmService.sendTestMessageToUser(request.memberId(), fcmSendDto);
-        String resultMsg;
-        if (sent == 0) {
-            resultMsg = member.getName() + "님에게 전송 시도했으나 FCM 서버 응답 실패 (토큰 " + tokens.size() + "개)";
-        } else {
-            resultMsg = member.getName() + "님에게 알림을 전송했습니다. (" + sent + "/" + tokens.size() + "개 성공)";
-        }
+        List<FcmTestAttempt> attempts = fcmService.sendTestMessageToUser(request.memberId(), fcmSendDto);
+        AdminFcmTestResponse response = AdminFcmTestResponse.of(request.memberId(), type, attempts);
         adminAuditLogService.log(
                 AdminAction.FCM_TEST_SEND, "MEMBER", request.memberId(),
-                describe(type, title) + " → " + sent + "/" + tokens.size() + "개 성공"
+                describe(type, title) + " → " + response.sent() + "/" + response.tokenCount() + "개 성공"
         );
-        return resultMsg;
+        return response;
     }
 
     private NotificationCopy resolveCopy(NotificationType type, AdminFcmTestRequest request) {

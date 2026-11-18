@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -108,21 +109,22 @@ public class FcmService {
         outboxService.enqueue(memberId, fcmSendDto);
     }
 
+    /** 관리자 테스트 발송. 알림 설정과 알림센터를 거치지 않고 활성 토큰마다 FCM을 직접 호출한다. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public int sendTestMessageToUser(Long memberId, FcmSendDto fcmSendDto) {
-        int sent = 0;
+    public List<FcmTestAttempt> sendTestMessageToUser(Long memberId, FcmSendDto fcmSendDto) {
+        List<FcmTestAttempt> attempts = new ArrayList<>();
         long deadline = System.nanoTime() + deliveryProperties.adminTimeout().toNanos();
         List<MemberFcmToken> tokens = memberFcmTokenRepository.findAllByMemberIdAndActiveTrue(memberId);
         for (MemberFcmToken tokenEntity : tokens) {
             if (deadline - System.nanoTime() < firebaseProperties.http().totalTimeout().toNanos()) {
-                break;
+                attempts.add(FcmTestAttempt.timeBudgetExhausted(tokenEntity.getId()));
+                continue;
             }
-            if (transport.send(tokenEntity.getToken(), fcmSendDto,
-                    () -> memberFcmTokenRepository.isDeliverable(tokenEntity.getId(), memberId)).success()) {
-                sent++;
-            }
+            FcmTransport.Result result = transport.send(tokenEntity.getToken(), fcmSendDto,
+                    () -> memberFcmTokenRepository.isDeliverable(tokenEntity.getId(), memberId));
+            attempts.add(FcmTestAttempt.of(tokenEntity.getId(), result));
         }
-        return sent;
+        return attempts;
     }
 
     public List<FcmCategoryResponse> getNotificationCategories() {
