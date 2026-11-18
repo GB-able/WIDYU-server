@@ -38,7 +38,7 @@ PR 세 개로 나눈다(파일 15개 초과). 각 PR은 아래 절 번호만 구
 - WS 본문 크기 초과와 센서 실행기 포화 거절을 `sensor_batch_rejection`에 남긴다
 - 세션별 빠진 번호 구간과 원인 후보(워치 버림, 서버 거절, 기록 없음)를 적은 보고서를 기간, 회차 내보내기에 넣는다
 - 회차 내보내기에 버린 구간, 거절 기록, 묶음별 수신 경로를 넣는다
-- 워치, 폰이 보낼 형식 규격 문서 `docs/handoff/sensor-dropped-record-spec.md`
+- 워치, 폰이 보낼 형식은 3.1절이 정본이다. 워치, 폰 담당에게 전달하는 규격 문서는 저장소에 두지 않는다
 
 ### Out of scope
 - **앱 구현.** 워치가 심박 버림, 넣기 실패를 기록해 보내는 일은 앱 저장소에서 한다. 서버는 받을 준비만 한다
@@ -243,4 +243,4 @@ PR C
 
 - 팀 문서 "이슈 3. 묶음이 빠졌을 때 어디서 빠졌는지 가릴 수 없습니다" 3-1, 3-2, 3-3
 - 앱 develop: `android/wear/.../ImuRemoteDataSourceImpl.kt`(`recordDrop`), `ImuRepositoryImpl.kt`(`transmitOrThrow`), `HeartRateRepositoryImpl.kt`(`transmit`), `data/util/DataLayerQueue.kt`(`trimOldest`), `packages/heart_rate/.../HeartRatePlugin.kt`(`sensorItemToJson`)
-- 워치 규격 문서: `docs/handoff/sensor-dropped-record-spec.md`
+- 워치, 폰이 보낼 형식: 3.1절
