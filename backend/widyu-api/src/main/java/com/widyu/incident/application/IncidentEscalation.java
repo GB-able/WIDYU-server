@@ -167,18 +167,19 @@ public class IncidentEscalation {
             copyCode = "K01";
         }
         NotificationCopy copy = NotificationCopy.of(type, copyCode, Map.of("시니어 이름", senior.getName()));
-        Map<String, String> data = Map.of("deliveryStage", stage,
-                "safetyEventId", incident.getIncidentRef());
+        // 앱 위급 화면이 누구의 위급인지 보여 주도록 이름을 싣는다. 전화번호는 싣지 않는다(#1099).
+        HashMap<String, String> data = new HashMap<>();
+        data.put("deliveryStage", stage);
+        data.put("safetyEventId", incident.getIncidentRef());
+        data.put("seniorName", senior.getName());
         if (incident.getDecisionId() != null) {
-            HashMap<String, String> values = new HashMap<>(data);
-            values.put("decisionId", incident.getDecisionId());
-            data = Map.copyOf(values);
+            data.put("decisionId", incident.getDecisionId());
         }
         return FcmSendDto.builder()
                 .title(copy.title()).content(copy.body()).notificationType(type)
                 .eventId(incident.getIncidentRef()).seniorId(incident.getMemberId())
                 .entityId(incident.getIncidentRef()).relatedMemberId(incident.getMemberId())
                 .image(senior.getProfileImage()).decisionId(incident.getDecisionId())
-                .data(data).emergency(true).build();
+                .data(Map.copyOf(data)).emergency(true).build();
     }
 }

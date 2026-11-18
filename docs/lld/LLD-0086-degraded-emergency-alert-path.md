@@ -133,6 +133,7 @@ return HeartRateStatusResponse.from(result);
 2. `EmergencyRecipientSnapshotService.find(seniorId)` — 없으면 `skipped{no_snapshot}` 후 종료. 표식은 남겨 두지 않는다(**표식 삭제**해서 스냅샷이 생기면 다음 샘플이 다시 시도하게 한다).
 3. 수신자마다 `XADD fcm:degraded:stream *` 후 `XTRIM fcm:degraded:stream MAXLEN ~ streamMaxLen` 한 번(Spring Data Redis 3.3의 `StreamOperations`에 XADD MAXLEN 옵션이 없어 구현 시 변경). 필드:
    `seniorId, guardianId, tokenId, token, title, body, image, category=HEART_MESSAGE, measuredAt(ISO), expiresAt(epoch ms = now + emergencyTtl)`.
+   2026-11-18 추가(#1099): 스냅샷에 이름이 있으면 `seniorName` 필드를 더하고, 소비자가 FCM data `seniorName`으로 보낸다. 배포 전에 적재된 항목처럼 필드가 없으면 키 없이 보낸다.
    제목·본문은 정상 경로 최초 보호자 알림과 같은 승인 문구표 `NotificationCopy.of(HEART_RATE_EMERGENCY, "S04", {시니어 이름})`다. 정상 경로(`IncidentEscalation.notificationFor`)가 이미 이 문구표 하나를 쓰므로 옮길 상수가 없고 `HeartRateEmergencyNotificationService`는 바꾸지 않는다(설계 당시 문구 서술은 현재 코드와 달랐다). 이미지 null은 빈 문자열로 싣고 소비자가 null로 되돌린다.
 4. `published` 카운트. Redis 예외는 `skipped{redis_error}` + warn 로그 후 종료(요청은 실패시키지 않는다).
 

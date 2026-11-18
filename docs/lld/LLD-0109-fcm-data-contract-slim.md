@@ -56,6 +56,8 @@ HTTP API는 바뀌지 않는다. 바뀌는 계약은 FCM HTTP v1 `message.data`�
 
 `eventId`, `notificationId`, `deepLink`, `entityId`, `seniorId`, `revision`, `effectiveFromDate`, `actorDisplayName`, `safetyEventId`, `deliveryStage`, `decisionId` 등 나머지 키는 그대로다.
 
+> 2026-11-18 추가(#1099): 보호자 위급 알림(`HEART_RATE_EMERGENCY`, `SELF_HELP_REQUESTED`의 1차 `INITIAL_ALERT`, 2차 `SECOND_ALERT`, DB 장애 저하 경로)의 data에 `seniorName`(시니어 회원 이름)을 싣는다. 앱 위급 화면이 이 키로 누구의 위급인지 표시한다. 전화번호는 싣지 않으며 이름은 로그에 남기지 않는다. 저하 경로는 스냅샷에 이름이 없으면 키를 생략한다.
+
 앱이 받던 `type` 값이 바뀌는 알림:
 
 | 알림 | 변경 전 `type` | 변경 후 `notificationType` |

@@ -61,6 +61,10 @@ public class DegradedEmergencyAlertService {
                 fields.put("title", copy.title());
                 fields.put("body", copy.body());
                 fields.put("image", nullToEmpty(snapshot.image()));
+                // 정상 경로처럼 앱 data에 이름을 싣기 위해 넘긴다. 이름이 없는 스냅샷은 필드를 빼 소비자가 키를 생략한다.
+                if (snapshot.seniorName() != null) {
+                    fields.put("seniorName", snapshot.seniorName());
+                }
                 fields.put("category", FcmCategory.HEART_MESSAGE.name());
                 fields.put("measuredAt", measuredAt.toString());
                 fields.put("expiresAt", expiresAt);
