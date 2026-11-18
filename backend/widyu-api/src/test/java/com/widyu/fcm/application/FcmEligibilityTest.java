@@ -38,7 +38,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(null);
         activeRecipient(outbox);
-        enabled();
 
         // when
         boolean allowed = eligibility.eligible(outbox);
@@ -53,7 +52,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(2L);
         activeRecipient(outbox);
-        enabled();
         given(members.findById(2L)).willReturn(Optional.of(member(2L, Status.ACTIVE)));
         given(seniors.findFamilyIdByMemberId(1L)).willReturn(Optional.of(10L));
         given(seniors.findFamilyIdByMemberId(2L)).willReturn(Optional.of(10L));
@@ -110,18 +108,18 @@ class FcmEligibilityTest {
     }
 
     @Test
-    @DisplayName("수신자가 알림 설정을 끄면 발송을 차단한다")
-    void 설정을_끄면_차단한다() {
+    @DisplayName("보호자가 타입 없는 알림의 설정을 끄면 발송을 차단한다")
+    void 보호자가_타입_없는_알림_설정을_끄면_차단한다() {
         // given
-        FcmOutbox outbox = outbox(null);
+        FcmOutbox outbox = outbox(null, MemberType.GUARDIAN);
         activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.ALBUM)).willReturn(false);
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.GENERAL)).willReturn(false);
 
         // when
         boolean allowed = eligibility.eligible(outbox);
 
         // then
-        assertThat(allowed).isEqualTo(false);
+        assertThat(allowed).isFalse();
     }
 
     @Test
@@ -140,20 +138,20 @@ class FcmEligibilityTest {
     }
 
     @Test
-    @DisplayName("시니어 복약 변경 타입을 판정하면 목표 그룹을 따른다")
-    void 시니어_복약_변경_타입을_판정하면_목표_그룹을_따른다() {
+    @DisplayName("시니어가 받는 복약 재알림을 판정하면 개인 푸시 설정과 무관하게 허용한다")
+    void 시니어_복약_재알림은_개인_설정과_무관하게_허용한다() {
         // given
         FcmOutbox outbox = outbox(null);
-        ReflectionTestUtils.setField(outbox, "notificationType", NotificationType.MEDICATION_SCHEDULE_CHANGED);
+        ReflectionTestUtils.setField(outbox, "notificationType", NotificationType.MEDICATION_REMINDER_10);
         ReflectionTestUtils.setField(outbox, "fcmCategory", FcmCategory.MEDICINE_SCHEDULE);
         activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.GOAL)).willReturn(false);
 
         // when
         boolean allowed = eligibility.eligible(outbox);
 
         // then
-        assertThat(allowed).isFalse();
+        assertThat(allowed).isTrue();
+        verifyNoInteractions(settings);
     }
 
     @Test
@@ -173,35 +171,19 @@ class FcmEligibilityTest {
     }
 
     @Test
-    @DisplayName("시니어 하트 메시지를 판정하면 홈 그룹을 따른다")
-    void 시니어_하트_메시지를_판정하면_홈_그룹을_따른다() {
-        // given
-        FcmOutbox outbox = outbox(null);
-        ReflectionTestUtils.setField(outbox, "notificationType", NotificationType.HEART_MESSAGE_RECEIVED);
-        activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.HOME)).willReturn(false);
-
-        // when
-        boolean allowed = eligibility.eligible(outbox);
-
-        // then
-        assertThat(allowed).isFalse();
-    }
-
-    @Test
-    @DisplayName("시니어가 받는 타입 없는 응원 메시지를 판정하면 홈 그룹을 따른다")
-    void 시니어가_받는_타입_없는_응원_메시지를_판정하면_홈_그룹을_따른다() {
+    @DisplayName("시니어가 받는 타입 없는 응원 메시지를 판정하면 개인 푸시 설정과 무관하게 허용한다")
+    void 시니어가_받는_타입_없는_알림은_개인_설정과_무관하게_허용한다() {
         // given
         FcmOutbox outbox = outbox(null);
         ReflectionTestUtils.setField(outbox, "fcmCategory", FcmCategory.HEART_MESSAGE);
         activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.HOME)).willReturn(false);
 
         // when
         boolean allowed = eligibility.eligible(outbox);
 
         // then
-        assertThat(allowed).isFalse();
+        assertThat(allowed).isTrue();
+        verifyNoInteractions(settings);
     }
 
     @Test
@@ -259,7 +241,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(2L);
         activeRecipient(outbox);
-        enabled();
         given(members.findById(2L)).willReturn(Optional.of(member(2L, Status.INACTIVE)));
 
         // when
@@ -275,7 +256,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(2L);
         activeRecipient(outbox);
-        enabled();
         given(members.findById(2L)).willReturn(Optional.of(member(2L, Status.ACTIVE)));
         given(seniors.findFamilyIdByMemberId(1L)).willReturn(Optional.empty());
         given(memberships.findFamilyIdByGuardianId(1L)).willReturn(Optional.empty());
@@ -293,7 +273,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(2L);
         activeRecipient(outbox);
-        enabled();
         given(members.findById(2L)).willReturn(Optional.of(member(2L, Status.ACTIVE)));
         given(seniors.findFamilyIdByMemberId(1L)).willReturn(Optional.of(20L));
 
@@ -310,7 +289,6 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(2L);
         activeRecipient(outbox);
-        enabled();
         given(members.findById(2L)).willReturn(Optional.of(member(2L, Status.ACTIVE)));
         given(seniors.findFamilyIdByMemberId(1L)).willReturn(Optional.of(10L));
         given(seniors.findFamilyIdByMemberId(2L)).willReturn(Optional.empty());
@@ -325,10 +303,6 @@ class FcmEligibilityTest {
 
     private void activeRecipient(FcmOutbox outbox) {
         given(members.findById(1L)).willReturn(Optional.of(outbox.getRecipientMember()));
-    }
-
-    private void enabled() {
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.ALBUM)).willReturn(true);
     }
 
     private FcmOutbox outbox(Long relatedId) {

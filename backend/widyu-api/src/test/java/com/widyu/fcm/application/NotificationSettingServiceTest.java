@@ -59,8 +59,8 @@ class NotificationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("시니어가 설정을 조회하면 화면의 네 푸시 항목을 반환한다")
-    void 시니어가_설정을_조회하면_네_항목을_반환한다() {
+    @DisplayName("시니어가 설정을 조회하면 네 항목을 끌 수 없는 켜짐으로 반환한다")
+    void 시니어가_설정을_조회하면_네_항목을_잠긴_켜짐으로_반환한다() {
         // given
         Member member = member(MemberType.SENIOR);
         given(memberUtil.getCurrentMember()).willReturn(member);
@@ -72,46 +72,66 @@ class NotificationSettingServiceTest {
         // then
         assertThat(result).extracting(NotificationSettingResponse::group)
                 .containsExactly("ALBUM", "GOAL", "HOME", "ETC");
-        assertThat(result).allSatisfy(row -> assertThat(row.enabled()).isTrue());
+        assertThat(result).allSatisfy(row -> {
+            assertThat(row.enabled()).isTrue();
+            assertThat(row.mandatoryProductPush()).isTrue();
+            assertThat(row.canEditProductPush()).isFalse();
+        });
     }
 
     @Test
-    @DisplayName("시니어가 서로 다른 항목을 조회하면 저장된 켜짐 상태를 각각 반환한다")
-    void 시니어가_서로_다른_항목을_조회하면_각각의_상태를_반환한다() {
+    @DisplayName("시니어의 꺼진 행이 남아 있어도 조회하면 네 항목 모두 켜짐을 반환한다")
+    void 시니어의_꺼진_행이_남아_있어도_조회하면_켜짐을_반환한다() {
         // given
         Member member = member(MemberType.SENIOR);
         MemberNotificationSetting album = MemberNotificationSetting.create(member, PushSettingGroup.ALBUM, false);
-        MemberNotificationSetting home = MemberNotificationSetting.create(member, PushSettingGroup.HOME, false);
+        MemberNotificationSetting goal = MemberNotificationSetting.create(member, PushSettingGroup.GOAL, false);
         given(memberUtil.getCurrentMember()).willReturn(member);
-        given(settings.findAllByMemberId(1L)).willReturn(List.of(album, home));
+        given(settings.findAllByMemberId(1L)).willReturn(List.of(album, goal));
 
         // when
         List<NotificationSettingResponse> result = service.getNotificationSettings();
 
         // then
         assertThat(result).extracting(NotificationSettingResponse::enabled)
-                .containsExactly(false, true, false, true);
+                .containsExactly(true, true, true, true);
+        assertThat(result).extracting(NotificationSettingResponse::mandatoryProductPush)
+                .containsExactly(true, true, true, true);
     }
 
     @Test
-    @DisplayName("시니어가 앨범 푸시를 끄면 앨범만 꺼지고 revision이 증가한다")
-    void 시니어가_앨범_푸시를_끄면_앨범만_꺼진다() {
+    @DisplayName("시니어가 목표 푸시를 끄면 필수 알림 예외가 발생하고 revision이 그대로다")
+    void 시니어가_목표_푸시를_끄면_필수_알림_예외가_발생한다() {
         // given
         Member member = member(MemberType.SENIOR);
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(members.findByIdForUpdate(1L)).willReturn(Optional.of(member));
-        given(settings.findByMemberIdAndCategory(1L, PushSettingGroup.ALBUM))
-                .willReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> service.updateNotificationSetting(
+                new UpdateNotificationSettingRequest("GOAL", false, 0L)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MANDATORY_NOTIFICATION_PUSH);
+        assertThat(member.getNotificationPolicyRevision()).isZero();
+    }
+
+    @Test
+    @DisplayName("시니어가 앨범 푸시를 켜면 저장 없이 잠긴 켜짐을 반환한다")
+    void 시니어가_앨범_푸시를_켜면_잠긴_켜짐을_반환한다() {
+        // given
+        Member member = member(MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(members.findByIdForUpdate(1L)).willReturn(Optional.of(member));
 
         // when
         NotificationSettingResponse result = service.updateNotificationSetting(
-                new UpdateNotificationSettingRequest("ALBUM", false, 0L));
+                new UpdateNotificationSettingRequest("ALBUM", true, 0L));
 
         // then
-        assertThat(result.group()).isEqualTo("ALBUM");
-        assertThat(result.enabled()).isFalse();
-        assertThat(result.policyRevision()).isEqualTo(1L);
-        assertThat(member.getNotificationPolicyRevision()).isEqualTo(1L);
+        assertThat(result.enabled()).isTrue();
+        assertThat(result.mandatoryProductPush()).isTrue();
+        assertThat(result.canEditProductPush()).isFalse();
+        assertThat(member.getNotificationPolicyRevision()).isZero();
     }
 
     @Test

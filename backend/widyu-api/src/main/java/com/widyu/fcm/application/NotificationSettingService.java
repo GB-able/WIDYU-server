@@ -59,16 +59,16 @@ public class NotificationSettingService {
         if (!group.visibleFor(member.getType())) {
             throw new BusinessException(ErrorCode.INVALID_FCM_CATEGORY);
         }
-        boolean leader = isLeader(member);
-        if (leader && group.isMandatoryForLeader() && !request.enabled()) {
+        boolean locked = locked(member, group, isLeader(member));
+        if (locked && !request.enabled()) {
             throw new BusinessException(ErrorCode.MANDATORY_NOTIFICATION_PUSH);
+        }
+        if (locked) {
+            return NotificationSettingResponse.of(group, true, true, member.getNotificationPolicyRevision());
         }
 
         MemberNotificationSetting setting = notificationSettingRepository
                 .findByMemberIdAndCategory(memberId, group).orElse(null);
-        if (leader && group.isMandatoryForLeader()) {
-            return NotificationSettingResponse.of(group, true, true, member.getNotificationPolicyRevision());
-        }
         boolean previous = setting == null || setting.isEnabled();
         if (previous != request.enabled()) {
             if (setting == null) {
@@ -78,7 +78,7 @@ public class NotificationSettingService {
             }
             member.incrementNotificationPolicyRevision();
         }
-        return response(member, group, leader, request.enabled());
+        return NotificationSettingResponse.of(group, request.enabled(), false, member.getNotificationPolicyRevision());
     }
 
     public boolean isNotificationEnabled(Long memberId, PushSettingGroup group) {
@@ -116,17 +116,18 @@ public class NotificationSettingService {
                 .map(membership -> membership.isLeader()).orElse(false);
     }
 
-    private NotificationSettingResponse response(Member member, PushSettingGroup group, boolean leader,
-                                                  MemberNotificationSetting setting) {
-        boolean mandatory = leader && group.isMandatoryForLeader();
-        boolean enabled = mandatory || setting == null || setting.isEnabled();
-        return NotificationSettingResponse.of(group, enabled, mandatory, member.getNotificationPolicyRevision());
+    /** 끌 수 없는 항목: 시니어의 네 항목 전부(위듀 알림 정책 2절, LLD-0095), 방장의 안전 그룹. */
+    private boolean locked(Member member, PushSettingGroup group, boolean leader) {
+        if (member.getType() == MemberType.SENIOR) {
+            return true;
+        }
+        return leader && group.isMandatoryForLeader();
     }
 
     private NotificationSettingResponse response(Member member, PushSettingGroup group, boolean leader,
-                                                  boolean requestedEnabled) {
-        boolean mandatory = leader && group.isMandatoryForLeader();
-        boolean enabled = mandatory || requestedEnabled;
+                                                  MemberNotificationSetting setting) {
+        boolean mandatory = locked(member, group, leader);
+        boolean enabled = mandatory || setting == null || setting.isEnabled();
         return NotificationSettingResponse.of(group, enabled, mandatory, member.getNotificationPolicyRevision());
     }
 }

@@ -1,14 +1,14 @@
 # LLD-0095: 시니어 푸시 설정 네 항목
 
-> #881의 API, 발송 자격, 기존 데이터 이행을 검증하는 기준이다.
+> #881의 API, 발송 자격, 기존 데이터 이행을 검증하는 기준이다. #1105(2026-11-18)에서 네 항목을 켜짐 고정으로 바꿨다. 현재 동작은 §11이 정본이고, §3~§8의 「시니어가 끄면 막힌다」는 #881 당시 기록이다.
 
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |
-| Issue | #881 |
+| Issue | #881, #1105 |
 | 관련 ADR | ADR-0037 결정 5 |
-| 작성자 | Codex / feature/881 |
-| 작성일 | 2026-10-26 |
+| 작성자 | Codex / feature/881, Claude / feature/1105 |
+| 작성일 | 2026-10-26 (갱신 2026-11-18) |
 
 ## 1. 목적 / 배경
 
@@ -74,3 +74,33 @@
 - [기존 설정 설계](LLD-0065-notification-setting-groups.md)
 - [알림센터 결정](../adr/ADR-0037-notification-center-model.md)
 - [이슈 #881](https://github.com/GB-able/WIDYU-server/issues/881)
+
+## 11. 갱신: 시니어 네 항목 켜짐 고정 (#1105, 2026-11-18)
+
+### 11.1 배경
+
+위듀(어르신) 알림 정책서 2절은 앱 안 알림 설정 화면을 없애고 어르신이 받는 알림을 끌 수 없게 정했다. #881 구현대로면 시니어가 `GOAL`을 끄면 복약 인증 재알림(M02, M03)과 일정 임박(H01)이, `ALBUM`을 끄면 새 게시물(A02-S)이, `HOME`을 끄면 응원 메시지가 막힌다. 이미 저장된 OFF 행도 같은 효과를 낸다.
+
+### 11.2 변경 동작
+
+- 발송 판정(`FcmEligibility`): 수신자가 시니어면 타입 유무와 관계없이 개인 설정을 보지 않는다. ACTIVE, 토큰 owner, 관련 회원 가족 검증은 그대로다. 보호자 판정(타입의 `settingGroup()`, 타입 없으면 `fromLegacy(FcmCategory)`, 방장 필수 안전 그룹)은 바뀌지 않는다. 시니어 전용 매핑(`PushSettingGroup.forSenior`, `fromLegacy(category, memberType)`)은 쓰는 곳이 없어 지웠다.
+- `GET /api/v1/fcm/settings`: 시니어에게 `ALBUM`, `GOAL`, `HOME`, `ETC` 네 항목을 그대로 돌려주되 모두 `enabled=true`, `mandatoryProductPush=true`, `canEditProductPush=false`다. 저장된 OFF 행은 무시한다. 옛 앱이 화면을 그대로 그려도 잠긴 켜짐 스위치로 보이게 하려고 항목을 빼지 않았다.
+- `PATCH /api/v1/fcm/settings`: 시니어가 네 항목 중 하나를 끄면 방장 안전 그룹과 같은 `FCM_4090`(409)이다. 켜면 저장 없이 잠긴 켜짐을 돌려준다. 두 경우 모두 행과 revision이 바뀌지 않는다. 그룹 검사(`FCM_4001`)와 revision 검사(`FCM_4091`)는 잠금 판정보다 먼저다.
+- `FCM_4090`의 메시지는 「방장의 안전 알림 푸시는 끌 수 없습니다.」 그대로다. 위듀 앱은 설정 화면을 없애므로 메시지를 노출할 곳이 없고, 코드를 늘리지 않으려고 새 오류 코드를 만들지 않았다.
+
+### 11.3 데이터
+
+DDL 없음. 남은 시니어 설정 행은 판정에 쓰이지 않는다. `scripts/mysql/cleanup_senior_notification_settings.sql`은 시니어 설정 행을 지우는 선택 정리 스크립트다. 자동 실행하지 않고, 실행한다면 이 변경을 배포한 뒤에 백업 후 실행한다. #881의 `migrate_senior_notification_settings.sql`(옛 `GENERAL=false`를 네 OFF 행으로 복사)은 실행해도 결과가 무시되므로 더 실행할 필요가 없다.
+
+### 11.4 인수조건
+
+- [x] AC7: 시니어가 받는 타입 있는 푸시(예: M02)와 타입 없는 레거시 푸시가 개인 설정을 조회하지 않고 claim, preflight를 통과한다(`FcmEligibilityTest`).
+- [x] AC8: 시니어 설정 조회는 OFF 행이 있어도 네 항목 모두 켜짐, 끌 수 없음이다(`NotificationSettingServiceTest`).
+- [x] AC9: 시니어 OFF PATCH는 `FCM_4090`이고 revision이 그대로다. ON PATCH는 저장 없이 잠긴 켜짐이다(`NotificationSettingServiceTest`).
+- [x] AC10: 보호자 조회, 변경, 발송 판정과 방장 필수 안전 그룹은 기존 테스트 그대로 통과한다.
+
+### 11.5 앱 몫
+
+- 위듀 앱은 알림 설정 화면을 없앤다(정책서 2절). 옛 앱은 잠긴 켜짐으로 보인다.
+- 앱 로컬 「심박수 주의 알림」 스위치도 없애야 한다. 서버는 자가 확인(`SAFETY_SELF_CHECK`)을 #881 때부터 설정 없이 보내므로, 이 스위치로 자가 확인 화면이 뜨지 않는 문제는 앱 쪽에서만 생긴다.
+

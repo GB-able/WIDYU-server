@@ -19,10 +19,6 @@ class PushSettingGroupTest {
         assertThat(PushSettingGroup.fromLegacy(FcmCategory.ALBUM))
                 .isEqualTo(PushSettingGroup.GENERAL);
         assertThat(PushSettingGroup.fromLegacy(FcmCategory.LOCATION_NOTICE)).isNull();
-        assertThat(PushSettingGroup.fromLegacy(FcmCategory.ALBUM, MemberType.SENIOR))
-                .isEqualTo(PushSettingGroup.ALBUM);
-        assertThat(PushSettingGroup.fromLegacy(FcmCategory.MEDICINE_SCHEDULE, MemberType.SENIOR))
-                .isEqualTo(PushSettingGroup.GOAL);
     }
 
     @Test
@@ -35,10 +31,6 @@ class PushSettingGroupTest {
         assertThat(PushSettingGroup.stream().filter(group -> group.visibleFor(MemberType.GUARDIAN)).toList())
                 .containsExactly(PushSettingGroup.SAFETY, PushSettingGroup.SAFE_ZONE,
                         PushSettingGroup.MEDICATION_CHECK, PushSettingGroup.GENERAL);
-        assertThat(PushSettingGroup.forSenior(FcmCategory.HEART_MESSAGE))
-                .isEqualTo(PushSettingGroup.HOME);
-        assertThat(PushSettingGroup.forSenior(FcmCategory.ETC))
-                .isEqualTo(PushSettingGroup.ETC);
     }
 
     @Test
