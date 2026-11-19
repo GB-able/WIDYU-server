@@ -28,6 +28,9 @@ import org.hibernate.type.SqlTypes;
         @Index(name = "idx_followup_card_expiry", columnList = "state,expires_at_ms,id")
 })
 public class FollowupCard extends BaseTimeEntity {
+
+    /** 응답 기한. 위듀 정책서 3절 「3시간 동안 답할 수 있다」(LLD-0180, 이전 12시간은 LLD-0073). */
+    public static final long ANSWER_WINDOW_MS = 10_800_000L;
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -64,7 +67,7 @@ public class FollowupCard extends BaseTimeEntity {
         card.questionSetVersion = questionSetVersion;
         card.eventAtMs = eventAtMs;
         card.issuedAtMs = nowMs;
-        card.expiresAtMs = nowMs + 43_200_000L;
+        card.expiresAtMs = nowMs + ANSWER_WINDOW_MS;
         card.state = FollowupCardState.ISSUED;
         return card;
     }

@@ -84,7 +84,9 @@ public record NotificationCopy(String title, String body) {
             copy("R02", "{이름} 님이 가족 방장이 되었어요.", null),
             copy("R01", "이제 가족 방장이 되었어요.", "가족 관리와 중요한 알림을 확인해주세요."),
             copy("L01", "{보호자 이름} 님이 내 위치를 확인했어요.", "{오전/오후 시각}에 가족 안부 확인을 위해 위치를 봤어요."),
-            copy("L02", "보호자가 내 위치를 확인했어요.", "{시작 날짜}부터 보호자 {보호자 수}명이 가족 안부 확인을 위해 {횟수}회 봤어요."));
+            copy("L02", "보호자가 내 위치를 확인했어요.", "{시작 날짜}부터 보호자 {보호자 수}명이 가족 안부 확인을 위해 {횟수}회 봤어요."),
+            copy("F01", "아까 몸은 괜찮으셨나요?", "짧게 알려주시면 {포인트}포인트를 드려요."),
+            copy("F01-NOREWARD", "아까 몸은 괜찮으셨나요?", "짧게 알려주세요."));
 
     public static NotificationCopy of(NotificationType type, String code, Map<String, String> values) {
         if (code == null || code.isBlank()) {

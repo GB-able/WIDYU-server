@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class FollowupRewardService {
-    private static final long REWARD_POINTS = 10L;
+    static final long REWARD_POINTS = 10L;
     private static final String REWARD_DESCRIPTION = "후속 질문 답변";
 
     private final SensorProperties sensorProperties;

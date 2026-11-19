@@ -1,5 +1,9 @@
 package com.widyu.followup.application;
 
+import com.widyu.fcm.NotificationType;
+import com.widyu.fcm.application.FcmService;
+import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.followup.FollowupAnswer;
 import com.widyu.followup.FollowupCard;
 import com.widyu.followup.FollowupCardState;
@@ -17,8 +21,12 @@ import com.widyu.incident.IncidentKind;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +42,7 @@ public class FollowupCardService {
     private final MemberRepository memberRepository;
     private final SensorProperties sensorProperties;
     private final FollowupRewardService rewardService;
+    private final FcmService fcmService;
 
     @Transactional
     public void issueIfEnabled(Incident incident) {
@@ -51,8 +60,29 @@ public class FollowupCardService {
         if (incident.getKind() == IncidentKind.FALL_SUSPECTED) {
             version = "FALL_V1";
         }
-        cardRepository.save(FollowupCard.issue(incident.getIncidentRef(), incident.getMemberId(),
-                version, incident.getOpenedAtMs(), System.currentTimeMillis()));
+        FollowupCard card = cardRepository.save(FollowupCard.issue(incident.getIncidentRef(),
+                incident.getMemberId(), version, incident.getOpenedAtMs(), System.currentTimeMillis()));
+        notifyIssued(card);
+    }
+
+    /**
+     * 카드가 생기면 어르신에게 푸시+센터로 알린다(위듀 정책서 3절, LLD-0180). 보상이 꺼져 있으면 포인트를 약속하지
+     * 않는다. 기한이 지난 카드를 열라는 푸시가 늦게 닿지 않도록 푸시 만료를 카드 기한에 맞춘다.
+     */
+    private void notifyIssued(FollowupCard card) {
+        NotificationType type = NotificationType.FOLLOWUP_SURVEY_REQUESTED;
+        NotificationCopy copy = NotificationCopy.of(type, "F01-NOREWARD", Map.of());
+        if (sensorProperties.followup().rewardEnabled()) {
+            copy = NotificationCopy.of(type, "F01",
+                    Map.of("포인트", String.valueOf(FollowupRewardService.REWARD_POINTS)));
+        }
+        LocalDateTime expiresAt = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(card.getExpiresAtMs()), ZoneId.systemDefault());
+        fcmService.sendMessageToUser(card.getSeniorId(), FcmSendDto.builder()
+                .title(copy.title()).content(copy.body())
+                .fcmCategory(type.fcmCategory()).notificationType(type)
+                .eventId("F01:" + card.getId()).entityId(String.valueOf(card.getId()))
+                .pushExpiresAt(expiresAt).build());
     }
 
     @Transactional
