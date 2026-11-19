@@ -1,6 +1,7 @@
 package com.widyu.fcm.application;
 
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -184,7 +186,10 @@ public class FcmService {
 
     private ToastResDto createToastMessage(String seniorName, long unviewedCount) {
         if (unviewedCount == 0) {
-            return ToastResDto.from(seniorName + "님께서 모든 소식을 다 보셨어요.");
+            // 같은 순간 가는 모두 확인 푸시(A07)와 같은 문구를 쓴다(위듀케어 알림 정책서 10절).
+            NotificationCopy copy = NotificationCopy.of(NotificationType.ALBUM_ALL_VIEWED, "A07",
+                    Map.of("시니어 이름", seniorName));
+            return ToastResDto.of(copy.title(), copy.body());
         }
             return ToastResDto.from(seniorName + "님께서 보실 소식이 " + unviewedCount + "개밖에 남지 않았어요.");
     }

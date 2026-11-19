@@ -152,7 +152,11 @@ public interface FcmDocs {
 
     @Operation(
             summary = "토스트 알림 조회",
-            description = "현재 로그인한 유저의 토스트 알림을 조회합니다."
+            description = """
+                    현재 로그인한 보호자의 토스트 알림을 조회합니다. 보여 줄 토스트가 없으면 data가 null입니다.
+                    - 어르신이 게시물을 모두 봤을 때: 「{시니어 이름} 님이 새 게시물을 모두 확인했어요!」 / 「새로운 소식을 올려주세요.」
+                    - 남은 게시물이 1~6개일 때: 「{시니어}님께서 보실 소식이 N개밖에 남지 않았어요.」 / 「새로운 게시물을 올려주세요.」
+                    """
     )
     @ApiResponse(
             responseCode = "200",
@@ -165,8 +169,8 @@ public interface FcmDocs {
                                       "code": "FCM_2006",
                                       "message": "OK",
                                       "data": {
-                                        "title": "김아빠님께서 보실 소식이 2개밖에 남지 않았어요. ",
-                                        "content": "새로운 게시물을 전해주세요!.",
+                                        "title": "김아빠 님이 새 게시물을 모두 확인했어요!",
+                                        "content": "새로운 소식을 올려주세요.",
                                         "scheme": ""
                                       }
                                     }
