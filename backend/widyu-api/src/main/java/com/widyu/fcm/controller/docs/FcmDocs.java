@@ -1,5 +1,6 @@
 package com.widyu.fcm.controller.docs;
 
+import com.widyu.fcm.dto.request.DeliveryReceivedRequest;
 import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
@@ -91,6 +92,45 @@ public interface FcmDocs {
             )
     )
     ApiResponseTemplate<String> markAsRead(Long notificationId);
+
+    @Operation(
+            summary = "긴급 알림 폰 도착 신호",
+            description = """
+                    긴급 알림(심박 위급 1·2차, 본인확인, 워치 도움 요청)을 받은 즉시 앱이 부릅니다. 경로의 `deliveryId`는 FCM data의 `deliveryId`(문자열) 값입니다. 긴급 알림에만 실립니다.
+
+                    - 안드로이드: FCM 백그라운드·포그라운드 메시지 핸들러에서 부릅니다.
+                    - 아이폰: Notification Service Extension에서 부릅니다. 긴급 알림의 APNs `aps.mutable-content=1`이라 앱이 꺼져 있어도 확장이 실행됩니다.
+
+                    서버가 신호를 받은 시각을 도착 시각으로 남기고, 본문의 `deviceReceivedAtMs`(기기 시계, 선택)는 참고로만 저장합니다. 같은 건을 다시 보내도 첫 기록이 유지되고 200입니다. 본인에게 간 긴급 알림이 아니면 404입니다.
+                    """
+    )
+    @RequestBody(
+            description = "기기 시계 기준 도착 시각(선택). 본문을 생략해도 됩니다.",
+            required = false,
+            content = @Content(
+                    schema = @Schema(implementation = DeliveryReceivedRequest.class),
+                    examples = @ExampleObject(value = """
+                            {
+                              "deviceReceivedAtMs": 1763548800123
+                            }
+                            """)
+            )
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "도착 기록(이미 기록된 경우 포함)",
+            content = @Content(
+                    schema = @Schema(implementation = ApiResponseTemplate.class),
+                    examples = @ExampleObject(value = """
+                            {
+                              "code": "FCM_2012",
+                              "message": "알림 도착을 기록했습니다"
+                            }
+                            """)
+            )
+    )
+    @ApiResponse(responseCode = "404", description = "본인에게 간 긴급 알림 전송 건이 아님 (FCM_4041)")
+    ApiResponseTemplate<Void> markDeliveryReceived(Long deliveryId, DeliveryReceivedRequest request);
 
     @Operation(
             summary = "알림 카테고리 조회",

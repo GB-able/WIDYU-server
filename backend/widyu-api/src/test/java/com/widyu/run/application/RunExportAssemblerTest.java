@@ -163,6 +163,8 @@ class RunExportAssemblerTest {
                 MAPPER.getNodeFactory().textNode("01j8zimu000000000000000001"));
         assertThat(decisions.get(0).get("decision_output").asText()).isEqualTo("ALERT");
         assertThat(decisions.get(0).get("alert_delivered").asBoolean()).isTrue();
+        // 앱 도착 신호가 없으면 「도착 미확인」이라 null로 나간다(LLD-0181).
+        assertThat(decisions.get(0).get("alert_device_received_at_ms").isNull()).isTrue();
         assertThat(decisions.get(1).get("decision_output").asText())
                 .isEqualTo("ABSTAIN_INSUFFICIENT_INPUT");
         assertThat(decisions.get(1).get("alert_at_ms").isNull()).isTrue();

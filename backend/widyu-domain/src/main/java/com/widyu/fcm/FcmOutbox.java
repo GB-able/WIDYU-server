@@ -61,6 +61,15 @@ public class FcmOutbox extends BaseTimeEntity {
     /** 이 알림을 낳은 판정(LLD-0053 5.2). 완료 지점이 도달 사실을 채울 때만 읽는다. 인덱스는 두지 않는다. */
     @Column(name = "decision_id", length = 40)
     private String decisionId;
+    /**
+     * 앱이 이 푸시를 받았다고 알려 온 서버 시각. 긴급 알림만 받고 첫 신호만 남긴다(LLD-0181).
+     * 비어 있으면 「도착 미확인」이다. FCM 접수(state=SENT)와 다르다.
+     */
+    @Column(name = "device_received_at")
+    private LocalDateTime deviceReceivedAt;
+    /** 앱이 보낸 기기 시계 값. 기기 시계는 틀릴 수 있어 참고로만 둔다. */
+    @Column(name = "device_reported_at_ms")
+    private Long deviceReportedAtMs;
 
     public boolean claim(LocalDateTime now, Duration lease, int maxRetries) {
         if (state != State.PENDING && state != State.CLAIMED) {

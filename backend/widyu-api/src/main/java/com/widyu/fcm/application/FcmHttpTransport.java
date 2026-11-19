@@ -90,23 +90,25 @@ public class FcmHttpTransport implements FcmTransport {
 
     @Override
     public Result send(String token, FcmSendDto dto, BooleanSupplier beforeSend) {
-        return send(token, dto, beforeSend, null, null);
+        return send(token, dto, beforeSend, null, null, null);
     }
 
     @Override
     public Result send(FcmDelivery delivery, BooleanSupplier beforeSend) {
         return send(delivery.token(), delivery.message(), beforeSend,
-                delivery.notificationId(), delivery.expiresAt());
+                delivery.notificationId(), delivery.expiresAt(), delivery.id());
     }
 
-    private Result send(String token, FcmSendDto dto, BooleanSupplier beforeSend, Long notificationId, Instant expiresAt) {
+    private Result send(String token, FcmSendDto dto, BooleanSupplier beforeSend, Long notificationId, Instant expiresAt,
+            Long deliveryId) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("FCM HTTP 호출은 DB 트랜잭션 밖에서 실행해야 합니다.");
         }
         long deadline = System.nanoTime() + totalTimeout.toNanos();
         Future<Result> task = null;
         try {
-            task = executor.submit(() -> execute(token, dto, beforeSend, deadline, notificationId, expiresAt));
+            task = executor.submit(() -> execute(token, dto, beforeSend, deadline, notificationId, expiresAt,
+                    deliveryId));
             return task.get(totalTimeout.toNanos(), TimeUnit.NANOSECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -121,7 +123,7 @@ public class FcmHttpTransport implements FcmTransport {
     }
 
     private Result execute(String token, FcmSendDto dto, BooleanSupplier beforeSend, long deadline,
-            Long notificationId, Instant expiresAt) throws Exception {
+            Long notificationId, Instant expiresAt, Long deliveryId) throws Exception {
         String accessToken = credentials.get();
         if (!beforeSend.getAsBoolean()) {
             return Result.rejected(false, Result.PREFLIGHT);
@@ -149,6 +151,10 @@ public class FcmHttpTransport implements FcmTransport {
             data.remove("notificationId");
         }
         addTypeData(data, type);
+        // 긴급 알림만 이 전송 건 ID를 실어 앱이 폰 도착을 알려 올 수 있게 한다(LLD-0181).
+        if (deliveryId != null && type != null && type.priority() == NotificationPriority.CRITICAL) {
+            data.put("deliveryId", deliveryId.toString());
+        }
         if (type != null || !data.isEmpty()) {
             message.data(data);
         }
@@ -236,7 +242,7 @@ public class FcmHttpTransport implements FcmTransport {
             headers.put("apns-priority", "5");
             headers.put("apns-push-type", "background");
             return new FcmMessageDto.Apns(headers,
-                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(null, 1, null)));
+                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(null, 1, null, null)));
         }
         NotificationPriority priority = type.priority();
         headers.put("apns-push-type", "alert");
@@ -244,15 +250,18 @@ public class FcmHttpTransport implements FcmTransport {
         if (priority == NotificationPriority.PASSIVE) {
             headers.put("apns-priority", "5");
             return new FcmMessageDto.Apns(headers,
-                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(priority.interruptionLevel(), null, null)));
+                    new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(priority.interruptionLevel(), null, null, null)));
         }
         headers.put("apns-priority", "10");
         Object sound = "default";
+        Integer mutableContent = null;
         if (priority == NotificationPriority.CRITICAL) {
             sound = new FcmMessageDto.CriticalSound(1, CRITICAL_SOUND, 1.0);
+            // 앱이 꺼져 있어도 도착 순간 확장이 실행돼 도착 신호를 보낼 수 있다(LLD-0181).
+            mutableContent = 1;
         }
-        return new FcmMessageDto.Apns(headers,
-                new FcmMessageDto.ApnsPayload(new FcmMessageDto.Aps(priority.interruptionLevel(), null, sound)));
+        return new FcmMessageDto.Apns(headers, new FcmMessageDto.ApnsPayload(
+                new FcmMessageDto.Aps(priority.interruptionLevel(), null, sound, mutableContent)));
     }
 
     private JsonNode errorOf(String body) {

@@ -139,7 +139,7 @@ class FcmHttpTransportTest {
     }
 
     @Test
-    @DisplayName("안전 타입을 전송하면 Android 채널과 APNs 긴급 표시를 포함한다")
+    @DisplayName("안전 타입을 전송하면 Android 채널과 APNs 긴급 표시, 폰 도착 신호용 전송 건 ID를 포함한다")
     void 안전_타입을_전송하면_긴급_표시를_포함한다() throws Exception {
         // given
         ObjectMapper mapper = new ObjectMapper();
@@ -164,6 +164,8 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/type").isMissingNode()).isTrue();
             assertThat(body.at("/message/data/priority").isMissingNode()).isTrue();
             assertThat(body.at("/message/data/notificationId").asText()).isEqualTo("8111");
+            assertThat(body.at("/message/data/deliveryId").asText()).isEqualTo("4072");
+            assertThat(body.at("/message/apns/payload/aps/mutable-content").asInt()).isEqualTo(1);
             assertThat(body.at("/message/data/deepLink").asText()).isEqualTo("/location?seniorId=17");
             assertThat(body.at("/message/data/foregroundPresentation").isMissingNode()).isTrue();
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("HIGH");
@@ -207,6 +209,8 @@ class FcmHttpTransportTest {
             assertThat(body.at("/message/data/revision").asText()).isEqualTo("42");
             assertThat(body.at("/message/data/effectiveFromDate").asText()).isEqualTo("2026-10-02");
             assertThat(body.at("/message/data/actorDisplayName").asText()).isEqualTo("보호자");
+            assertThat(body.at("/message/data/deliveryId").isMissingNode()).isTrue();
+            assertThat(body.at("/message/apns/payload/aps/mutable-content").isMissingNode()).isTrue();
             assertThat(body.at("/message/android/priority").asText()).isEqualTo("NORMAL");
             assertThat(body.at("/message/android/notification/channel_id").asText()).isEqualTo("widyu_default_channel");
             assertThat(body.at("/message/apns/payload/aps/interruption-level").asText()).isEqualTo("active");
@@ -265,7 +269,8 @@ class FcmHttpTransportTest {
                         "{\"priority\":\"HIGH\",\"notification\":{\"channel_id\":\"widyu_safety_channel\"}}",
                         "{\"headers\":{\"apns-priority\":\"10\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"
                                 + "{\"interruption-level\":\"time-sensitive\","
-                                + "\"sound\":{\"critical\":1,\"name\":\"safety_alert.caf\",\"volume\":1.0}}}}"),
+                                + "\"sound\":{\"critical\":1,\"name\":\"safety_alert.caf\",\"volume\":1.0},"
+                                + "\"mutable-content\":1}}}"),
                 NotificationType.MEDICATION_PROOF_MISSING, List.of(
                         "{\"priority\":\"HIGH\",\"notification\":{\"channel_id\":\"widyu_default_channel\"}}",
                         "{\"headers\":{\"apns-priority\":\"10\",\"apns-push-type\":\"alert\"},\"payload\":{\"aps\":"

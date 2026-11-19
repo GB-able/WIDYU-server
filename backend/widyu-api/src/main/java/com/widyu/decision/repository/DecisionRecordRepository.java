@@ -32,4 +32,12 @@ public interface DecisionRecordRepository extends JpaRepository<DecisionRecord, 
             @Param("decisionId") String decisionId,
             @Param("alertId") String alertId,
             @Param("alertAtMs") Long alertAtMs);
+
+    /** 보호자 폰 가운데 처음 도착한 시각만 남긴다. 조건을 UPDATE 문에 넣은 이유는 {@link #markDeliveredIfFirst}와 같다(LLD-0181). */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update DecisionRecord d set d.alertDeviceReceivedAtMs = :receivedAtMs "
+            + "where d.decisionId = :decisionId and d.alertDeviceReceivedAtMs is null")
+    int markDeviceReceivedIfFirst(
+            @Param("decisionId") String decisionId,
+            @Param("receivedAtMs") Long receivedAtMs);
 }

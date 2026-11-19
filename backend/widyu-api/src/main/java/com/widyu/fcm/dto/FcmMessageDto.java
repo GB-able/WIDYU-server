@@ -39,12 +39,16 @@ public record FcmMessageDto(
 
     public record ApnsPayload(Aps aps) {}
 
-    /** sound는 기본 소리 이름("default") 또는 {@link CriticalSound}다. 표시 알림이 아니면 null이다. */
+    /**
+     * sound는 기본 소리 이름("default") 또는 {@link CriticalSound}다. 표시 알림이 아니면 null이다.
+     * mutable-content=1이면 iOS가 표시 전에 앱의 Notification Service Extension을 깨운다(LLD-0181).
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Aps(
             @JsonProperty("interruption-level") String interruptionLevel,
             @JsonProperty("content-available") Integer contentAvailable,
-            Object sound
+            Object sound,
+            @JsonProperty("mutable-content") Integer mutableContent
     ) {}
 
     /** iOS Critical Alerts 소리. Apple entitlement와 사용자 허용이 없으면 기기가 critical 표시를 무시한다. */

@@ -94,6 +94,10 @@ public class DecisionRecord extends BaseTimeEntity {
     @Column(name = "alert_delivered", nullable = false)
     private Boolean alertDelivered;
 
+    /** 보호자 폰 중 처음으로 알림 도착을 알려 온 서버 시각. 신호가 없으면 null(도착 미확인)이다(LLD-0181). */
+    @Column(name = "alert_device_received_at_ms")
+    private Long alertDeviceReceivedAtMs;
+
     @Column(name = "trigger_batch_id", nullable = false, length = 26)
     private String triggerBatchId;
 

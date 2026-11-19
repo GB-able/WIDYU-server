@@ -1,10 +1,12 @@
 package com.widyu.fcm.controller;
 
 import com.widyu.fcm.controller.docs.FcmDocs;
+import com.widyu.fcm.dto.request.DeliveryReceivedRequest;
 import com.widyu.fcm.dto.request.SendNotificationRequest;
 import com.widyu.fcm.dto.response.FcmCategoryResponse;
 import com.widyu.fcm.dto.response.FcmNotificationResponses;
 import com.widyu.fcm.dto.response.ToastResDto;
+import com.widyu.fcm.application.FcmDeliveryReceiptService;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.Valid;
@@ -21,6 +23,7 @@ import java.util.List;
 public class FcmController implements FcmDocs {
 
     private final FcmService fcmService;
+    private final FcmDeliveryReceiptService deliveryReceiptService;
 
     @GetMapping()
     public ApiResponseTemplate<FcmNotificationResponses> getNotification(
@@ -39,6 +42,22 @@ public class FcmController implements FcmDocs {
                 .code("200")
                 .message("OK")
                 .body(fcmService.markAsRead(notificationId));
+    }
+
+    @PostMapping("/deliveries/{deliveryId}/received")
+    public ApiResponseTemplate<Void> markDeliveryReceived(
+            @PathVariable Long deliveryId,
+            @RequestBody(required = false) DeliveryReceivedRequest request
+    ) {
+        Long deviceReceivedAtMs = null;
+        if (request != null) {
+            deviceReceivedAtMs = request.deviceReceivedAtMs();
+        }
+        deliveryReceiptService.recordReceived(deliveryId, deviceReceivedAtMs);
+        return ApiResponseTemplate.ok()
+                .code("FCM_2012")
+                .message("알림 도착을 기록했습니다")
+                .build();
     }
 
     @GetMapping("/categories")
