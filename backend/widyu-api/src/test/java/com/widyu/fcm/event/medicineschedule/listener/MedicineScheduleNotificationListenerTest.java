@@ -180,8 +180,8 @@ class MedicineScheduleNotificationListenerTest {
                 .containsExactly(null, NotificationType.MEDICATION_REMINDER_10,
                         NotificationType.MEDICATION_REMINDER_20);
         FcmSendDto onTime = seniorMessages.get(0);
-        assertThat(onTime.title()).isEqualTo("약 복용 시간이에요!");
-        assertThat(onTime.content()).isEqualTo("지금 약을 복용하고 인증해주세요.");
+        assertThat(onTime.title()).isEqualTo("약 복용하실 시간이에요!");
+        assertThat(onTime.content()).isNull();
         assertThat(onTime.fcmCategory()).isEqualTo(com.widyu.fcm.FcmCategory.MEDICINE_SCHEDULE);
         assertThat(onTime.image()).isEqualTo("https://cdn.widyu.store/profile/senior.png");
         assertThat(onTime.scheme()).isEmpty();

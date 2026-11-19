@@ -86,8 +86,7 @@ public class MedicineScheduleNotificationListener {
     private void sendLegacyOnTimeNotification(MedicineSchedule schedule, LocalDateTime dueAt) {
         Long seniorId = schedule.getMember().getId();
         FcmSendDto dto = FcmSendDto.builder()
-                .title("약 복용 시간이에요!")
-                .content("지금 약을 복용하고 인증해주세요.")
+                .title("약 복용하실 시간이에요!")
                 .fcmCategory(FcmCategory.MEDICINE_SCHEDULE)
                 .scheme("").image(schedule.getMember().getProfileImage())
                 .data(MedicationAlarmPayload.of(schedule.getMember().getMedicationAlarmRevision()))
