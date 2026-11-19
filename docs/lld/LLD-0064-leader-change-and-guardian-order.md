@@ -136,6 +136,7 @@ revision은 개별 보호자 행이 아니라 **가족 한 곳의 정렬 상태*
 - R02 문구: 「{이름} 님이 가족 방장이 되었어요.」 / 부제목 없음. `{이름}`은 새 방장 회원 이름이고, 비면 `NotificationCopy`의 기본 대체(「가족」)를 쓴다.
 - 타입과 전달: 기존 `FAMILY_LEADER_CHANGED`(기타 칩, `PUSH_AND_CENTER`, `GENERAL`, `ROUTINE_90D`)에 문구 코드 R02를 더한다. 어르신은 개인 스위치가 고정 켜짐이다(LLD-0095).
 - 수신자 조회: `changeLeader`는 가족 잠금 전에 일반 조회를 하므로 트랜잭션 스냅샷이 잠금보다 오래됐을 수 있다. 그 사이 가입한 가족을 놓치지 않도록 보호자는 이미 잡은 `findAllByFamilyIdForUpdate`로, 어르신은 `findAllByFamilyIdForShare`(공유 잠금)로 최신 커밋을 읽는다. 같은 이유로 R02에는 `relatedMemberId`를 싣지 않는다. 실으면 enqueue의 같은 가족 확인이 일반 조회(스냅샷)라 방금 가입한 가족을 걸러 낸다. 수신자는 잠근 가족에서 읽었으므로 같은 가족이다.
+- 남은 한계(수용): `FcmOutboxService.enqueue`는 수신자 `Member`를 일반 조회한다. 회원 가입과 가족 합류가 모두 방장 변경 트랜잭션의 첫 조회와 가족 잠금 사이(같은 요청 안의 수 ms)에 끝난 회원은 스냅샷에 없어 R02를 받지 못한다. 회원 행까지 잠그면 심박 위급 경로(`HeartRateEmergencyNotificationService`의 회원 `FOR UPDATE`)와 잠금이 겹쳐 안전 알림을 늦출 수 있고, 놓치는 것은 정보성 알림 한 건이며 가족 관리 화면에는 새 방장이 보이므로 수용한다. 같은 한계는 트랜잭션 안에서 enqueue하는 다른 알림에도 있다.
 - 딥링크: 보호자 `/family-manage`, 어르신 위듀 앱 가족 관리 `/my/management`(위듀 앱 `AppRoute.management`, develop 2026-11-12 기준).
 - eventId: 매 발송 무작위(R01과 같다). 리스너는 `changeLeader` 트랜잭션 안에서 동기로 한 번만 돌고 재처리 경로가 없다. 같은 요청을 다시 보내면 이전 방장은 더 이상 방장이 아니라 403이므로 중복 알림이 생기지 않는다.
 
