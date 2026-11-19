@@ -29,6 +29,7 @@ class NotificationCopyTest {
 
         // then
         assertThat(heart.title()).isEqualTo("평소와 다른 심박이 감지됐어요.");
+        assertThat(heart.body()).isEqualTo("괜찮으시면 밀어서 취소해주세요. 시간 안에 취소하지 않으면 보호자에게 알려드려요.");
         assertThatThrownBy(() -> NotificationCopy.of(NotificationType.SAFETY_SELF_CHECK, "Z01", Map.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }

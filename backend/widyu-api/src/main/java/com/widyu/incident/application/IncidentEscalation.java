@@ -162,6 +162,10 @@ public class IncidentEscalation {
     private FcmSendDto notificationFor(Incident incident, Member senior, String stage) {
         NotificationType type = NotificationType.HEART_RATE_EMERGENCY;
         String copyCode = "S04";
+        // 2차는 「아직 보호자 대응이 확인되지 않았어요」로 1차와 구분한다. eventId는 1차와 같다.
+        if ("SECOND_ALERT".equals(stage)) {
+            copyCode = "S06";
+        }
         if (incident.getKind() == IncidentKind.SELF_HELP_REQUEST) {
             type = NotificationType.SELF_HELP_REQUESTED;
             copyCode = "K01";

@@ -38,6 +38,8 @@
 
 ②도 S04 제목 `{시니어 이름} 님의 심박 상태를 확인해주세요.`, 본문 `평소와 다른 심박이 감지됐어요. 현재 상태와 위치를 확인해주세요.`를 쓴다. `eventId=incident_ref`, `entityId=incident_ref`, `relatedMemberId=seniorId`, `seniorId`, `deepLink=/location?seniorId={seniorId}`를 보낸다. data에는 `deliveryStage=SECOND_ALERT`, `safetyEventId=incident_ref`, `incidentRef=incident_ref`를 싣고 판정 ID가 있으면 기존 `decisionId`도 유지한다. ① data는 유지한다.
 
+> 2026-11-19 갱신(#1123): 위듀케어 알림 정책서 v18이 ②를 S06(미대응 재알림)으로 정했다. 심박 사건의 ②는 제목 `아직 보호자 대응이 확인되지 않았어요.`, 본문 `{시니어 이름} 님의 심박 상태와 위치를 바로 확인해주세요.`를 쓴다. 워치 도움 요청 ②는 K01 그대로다. `eventId`와 data는 바꾸지 않는다. 그래서 방장의 센터 행은 ①(S04) 행 하나로 남는다. 위 문단과 AC3의 「S04 문구」, 아래 「S06 0건」은 변경 전 기준이며 당시 S06은 옛 문구표의 다른 단계였다.
+
 > 2026-10-27 갱신(#900, [LLD-0109](LLD-0109-fcm-data-contract-slim.md)): `incidentRef`는 `safetyEventId`와 같은 값이라 더 싣지 않는다. 아래 예시와 AC3의 `incidentRef`는 변경 전 계약이다.
 
 ```json
