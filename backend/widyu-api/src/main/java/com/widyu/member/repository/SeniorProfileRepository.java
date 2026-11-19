@@ -56,6 +56,11 @@ public interface SeniorProfileRepository extends JpaRepository<SeniorProfile, Lo
     @Query("SELECT sp FROM SeniorProfile sp WHERE sp.family.id = :familyId")
     List<SeniorProfile> findAllByFamilyIdWithLock(@Param("familyId") Long familyId);
 
+    /** 가족 잠금 뒤 최신 커밋 어르신을 읽는다(current read). 일반 조회는 트랜잭션 첫 스냅샷을 본다. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT sp FROM SeniorProfile sp WHERE sp.family.id = :familyId")
+    List<SeniorProfile> findAllByFamilyIdForShare(@Param("familyId") Long familyId);
+
     /** 긴급 수신자 스냅샷을 다시 만들 시니어 회원 ID. familyId가 null이면 전체다(LLD-0086 5.1). */
     @Query("SELECT sp.member.id FROM SeniorProfile sp WHERE (:familyId IS NULL OR sp.family.id = :familyId)")
     List<Long> findSeniorMemberIds(@Param("familyId") Long familyId);

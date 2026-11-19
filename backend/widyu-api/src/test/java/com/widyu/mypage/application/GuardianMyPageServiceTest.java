@@ -954,7 +954,7 @@ class GuardianMyPageServiceTest {
         lockOrder.verify(familyMembershipRepository).findAllByFamilyIdForUpdate(10L);
         verify(familyMembershipRepository).findAllByFamilyIdForUpdate(10L);
         verify(familyMembershipRepository, never()).findAllByFamilyIdWithGuardian(10L);
-        verify(eventPublisher).publishEvent(FamilyLeaderChangedEvent.of(2L));
+        verify(eventPublisher).publishEvent(FamilyLeaderChangedEvent.of(10L, 1L, 2L));
     }
 
     @Test
