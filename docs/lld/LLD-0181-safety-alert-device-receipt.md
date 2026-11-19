@@ -24,7 +24,7 @@
 ### In scope
 
 - 변경 모듈: widyu-api, widyu-domain
-- 우선순위가 긴급(`CRITICAL`)인 알림(S01 본인확인, S04·S06 심박 위급, K01 워치 도움 요청)에 한해
+- 우선순위가 긴급(`CRITICAL`)이고 사람에게 보이는 알림(S01 본인확인, S04·S06 심박 위급, K01 워치 도움 요청)에 한해. 긴급으로 앱만 깨우는 데이터 신호(`WALK_DATA_SYNC`, `DATA_ONLY`)는 제외한다
   - FCM data에 전송 건 ID `deliveryId`(= `fcm_outbox.id`, 문자열)를 싣는다.
   - APNs `aps.mutable-content=1`을 붙인다. 기존 `interruption-level`, critical `sound`는 그대로다.
 - 도착 신호 API `POST /api/v1/fcm/deliveries/{deliveryId}/received`.
@@ -69,9 +69,9 @@ Flyway `V5__safety_alert_device_receipt.sql`.
 
 ## 5. 처리 흐름
 
-1. 전송(`FcmHttpTransport.execute`): 타입 우선순위가 `CRITICAL`이고 outbox 전송이면 data에 `deliveryId`를 넣고, APNs `aps`에 `mutable-content: 1`을 넣는다.
+1. 전송(`FcmHttpTransport.execute`): `FcmDeliveryReceiptService.tracksDeviceReceipt`(우선순위 `CRITICAL`이고 `DATA_ONLY`가 아님)이고 outbox 전송이면 data에 `deliveryId`를 넣고, APNs `aps`에 `mutable-content: 1`을 넣는다.
 2. 신호(`FcmDeliveryReceiptService.recordReceived`):
-   1. 현재 회원과 `deliveryId`로 outbox 행을 찾는다. 없거나 긴급 타입이 아니면 404.
+   1. 현재 회원과 `deliveryId`로 outbox 행을 찾는다. 없거나 같은 판정(`tracksDeviceReceipt`)에 맞지 않으면 404.
    2. `device_received_at IS NULL`을 조건으로 한 UPDATE로 첫 값만 남긴다. 0행이면(이미 기록) 그대로 끝.
    3. 행에 `decision_id`가 있으면 `alert_device_received_at_ms IS NULL` 조건부 UPDATE로 판정의 첫 폰 도착을 남긴다. 판정과 무관한 본인확인(S01)은 outbox에만 남는다.
 3. 전송 상태(SENT 여부)는 보지 않는다. FCM 200 직후 폰 도착 신호가 서버의 전송 완료 트랜잭션보다 먼저 올 수 있기 때문이다.
@@ -85,9 +85,9 @@ Flyway `V5__safety_alert_device_receipt.sql`.
 
 ## 7. 인수조건 (Acceptance Criteria)
 
-- [x] AC1: 긴급 알림 전송 본문에 `data.deliveryId`와 `aps.mutable-content=1`이 있고, 일반 알림에는 둘 다 없다(`FcmHttpTransportTest`).
+- [x] AC1: 긴급 알림 전송 본문에 `data.deliveryId`와 `aps.mutable-content=1`이 있고, 일반 알림과 긴급 데이터 신호(`WALK_DATA_SYNC`)에는 둘 다 없다(`FcmHttpTransportTest`).
 - [x] AC2: 본인 긴급 알림의 첫 신호는 판정 기록의 첫 폰 도착을 남기고, 이미 기록된 건은 판정을 다시 건드리지 않는다(`FcmDeliveryReceiptServiceTest`).
-- [x] AC3: 긴급이 아니거나 본인 것이 아닌 전송 건은 404 예외다(`FcmDeliveryReceiptServiceTest`).
+- [x] AC3: 긴급이 아니거나, 긴급 데이터 신호이거나, 본인 것이 아닌 전송 건은 404 예외다(`FcmDeliveryReceiptServiceTest`).
 - [x] AC4: 판정의 첫 폰 도착 시각은 두 번 기록해도 첫 값만 남고 FCM 접수 기록과 섞이지 않는다(`DecisionRecordRepositoryTest`).
 - [x] AC5: 회차 내보내기에 `alert_device_received_at_ms`가 나오고 신호가 없으면 null이다(`RunExportAssemblerTest`).
 - [ ] AC6(앱 배포 후): 안드로이드·아이폰 실기기에서 앱이 꺼진 상태로 S04를 받으면 도착 시각이 남는다.

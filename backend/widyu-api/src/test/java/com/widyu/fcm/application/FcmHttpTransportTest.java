@@ -252,6 +252,34 @@ class FcmHttpTransportTest {
         }
     }
 
+    @Test
+    @DisplayName("긴급으로 깨우는 걸음 수 동기화를 outbox로 전송해도 폰 도착용 전송 건 ID를 싣지 않는다")
+    void 긴급으로_깨우는_걸음_수_동기화를_전송해도_전송_건_ID를_싣지_않는다() throws Exception {
+        // given
+        ObjectMapper mapper = new ObjectMapper();
+        List<JsonNode> bodies = new CopyOnWriteArrayList<>();
+        HttpServer server = payloadServer(mapper, bodies);
+        FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper,
+                () -> "loopback-access-token", Duration.ofSeconds(2));
+        FcmSendDto message = FcmSendDto.builder().notificationType(NotificationType.WALK_DATA_SYNC)
+                .data(Map.of("eventId", "sync-event-2")).build();
+        FcmDelivery delivery = new FcmDelivery(4074L, 1, "loopback-token", message,
+                Instant.now().plusSeconds(300), null);
+        try {
+            // when
+            assertThat(transport.send(delivery, () -> true).success()).isTrue();
+
+            // then
+            // 사람에게 보이지 않는 데이터 신호라 도착을 재는 대상이 아니다(LLD-0181).
+            JsonNode body = bodies.getFirst();
+            assertThat(body.at("/message/data/deliveryId").isMissingNode()).isTrue();
+            assertThat(body.at("/message/apns/payload/aps/mutable-content").isMissingNode()).isTrue();
+        } finally {
+            transport.close();
+            server.stop(0);
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(value = NotificationType.class,
             names = {"HEART_RATE_EMERGENCY", "MEDICATION_PROOF_MISSING", "ALBUM_CREATED", "WALK_GOAL_UNMET"})

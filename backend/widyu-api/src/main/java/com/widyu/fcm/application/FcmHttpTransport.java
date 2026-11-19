@@ -152,7 +152,7 @@ public class FcmHttpTransport implements FcmTransport {
         }
         addTypeData(data, type);
         // 긴급 알림만 이 전송 건 ID를 실어 앱이 폰 도착을 알려 올 수 있게 한다(LLD-0181).
-        if (deliveryId != null && type != null && type.priority() == NotificationPriority.CRITICAL) {
+        if (deliveryId != null && FcmDeliveryReceiptService.tracksDeviceReceipt(type)) {
             data.put("deliveryId", deliveryId.toString());
         }
         if (type != null || !data.isEmpty()) {

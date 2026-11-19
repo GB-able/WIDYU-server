@@ -82,6 +82,19 @@ class FcmDeliveryReceiptServiceTest {
     }
 
     @Test
+    @DisplayName("긴급으로 깨우는 데이터 신호의 도착 신호를 보내면 예외가 발생한다")
+    void 긴급으로_깨우는_데이터_신호의_도착_신호를_보내면_예외가_발생한다() {
+        // given
+        signedIn();
+        given(outbox.findByIdAndRecipientMember_Id(DELIVERY_ID, GUARDIAN_ID))
+                .willReturn(Optional.of(row(NotificationType.WALK_DATA_SYNC, null)));
+
+        // when, then
+        assertThatThrownBy(() -> service.recordReceived(DELIVERY_ID, null))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
     @DisplayName("본인에게 간 전송 건이 아니면 예외가 발생한다")
     void 본인에게_간_전송_건이_아니면_예외가_발생한다() {
         // given
