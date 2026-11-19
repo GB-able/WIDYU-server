@@ -8,6 +8,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.widyu.fcm.NotificationType;
+import com.widyu.fcm.application.FcmService;
+import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.followup.FollowupAnswer;
 import com.widyu.followup.FollowupCard;
 import com.widyu.followup.FollowupCardState;
@@ -24,10 +27,14 @@ import com.widyu.incident.IncidentKind;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
 import com.widyu.member.repository.MemberRepository;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -39,6 +46,7 @@ class FollowupCardServiceTest {
     @Mock private MemberRepository members;
     @Mock private SensorProperties properties;
     @Mock private FollowupRewardService rewards;
+    @Mock private FcmService fcmService;
 
     @Test
     @DisplayName("미노출 카드를 조회하면 조건부 방문 키 배정 뒤 다시 읽어 반환한다")
@@ -59,7 +67,7 @@ class FollowupCardServiceTest {
         given(cards.assignVisitIfIssued(org.mockito.ArgumentMatchers.eq(10L),
                 org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(visitKey),
                 org.mockito.ArgumentMatchers.eq(FollowupCardState.ISSUED), anyLong())).willReturn(1);
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when
         CurrentFollowupResponse response = service.current(1L, visitKey);
@@ -87,7 +95,7 @@ class FollowupCardServiceTest {
         given(cards.findFirstBySeniorIdAndStateAndVisitKeyIsNullAndExpiresAtMsGreaterThanOrderByIssuedAtMsAscIdAsc(
                 org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(FollowupCardState.ISSUED),
                 anyLong())).willReturn(Optional.of(card));
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when
         CurrentFollowupResponse response = service.current(1L, visitKey);
@@ -102,7 +110,7 @@ class FollowupCardServiceTest {
     void 후속_기능을_끄면_발급과_만료가_저장소에_접근하지_않는다() {
         // given
         given(properties.followup()).willReturn(new SensorProperties.Followup(false, false));
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
         Incident incident = Incident.builder().incidentRef("inc-off").memberId(1L)
                 .kind(IncidentKind.HR_ANOMALY).openedAtMs(1L).respondByMs(60_001L).build();
 
@@ -119,7 +127,7 @@ class FollowupCardServiceTest {
     void 후속_기능을_끄면_시니어_API가_404로_종료한다() {
         // given
         given(properties.followup()).willReturn(new SensorProperties.Followup(false, false));
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when / then
         assertThatThrownBy(() -> service.current(1L, "00000000-0000-0000-0000-000000000001"))
@@ -150,7 +158,7 @@ class FollowupCardServiceTest {
                 org.mockito.ArgumentMatchers.eq(FollowupCardState.ANSWERED), anyLong(),
                 org.mockito.ArgumentMatchers.eq(submittedAtMs))).willReturn(1);
         given(answers.save(org.mockito.ArgumentMatchers.any(FollowupAnswer.class))).willReturn(answer);
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when
         service.answer(17L, 71L, new FollowupAnswerRequest("HR_V1", FollowupQ1.DONT_KNOW,
@@ -179,7 +187,7 @@ class FollowupCardServiceTest {
                 org.mockito.ArgumentMatchers.eq(FollowupCardState.DECLINED), anyLong(),
                 org.mockito.ArgumentMatchers.eq(submittedAtMs))).willReturn(1);
         given(answers.save(org.mockito.ArgumentMatchers.any(FollowupAnswer.class))).willReturn(answer);
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when
         service.decline(17L, 72L, submittedAtMs);
@@ -200,7 +208,7 @@ class FollowupCardServiceTest {
         given(members.findById(17L)).willReturn(Optional.of(
                 Member.createMember(MemberType.SENIOR, "시니어", "01098110119")));
         given(cards.findById(73L)).willReturn(Optional.of(card));
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when / then
         assertThatThrownBy(() -> service.decline(17L, 73L, System.currentTimeMillis()))
@@ -222,7 +230,7 @@ class FollowupCardServiceTest {
         given(members.findById(17L)).willReturn(Optional.of(
                 Member.createMember(MemberType.SENIOR, "시니어", "01098110120")));
         given(cards.findById(74L)).willReturn(Optional.of(issued), Optional.of(answered));
-        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards);
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
 
         // when / then
         assertThatThrownBy(() -> service.answer(17L, 74L,
@@ -230,5 +238,72 @@ class FollowupCardServiceTest {
                         null, submittedAtMs)))
                 .isInstanceOf(BusinessException.class);
         verifyNoInteractions(rewards);
+    }
+
+    @Test
+    @DisplayName("카드를 발급하면 어르신에게 F01 알림을 보내고 푸시 만료를 카드 기한에 맞춘다")
+    void 카드를_발급하면_어르신에게_알리고_푸시_만료를_카드_기한에_맞춘다() {
+        // given
+        given(properties.followup()).willReturn(new SensorProperties.Followup(true, true));
+        given(cards.save(org.mockito.ArgumentMatchers.any(FollowupCard.class))).willAnswer(invocation -> {
+            FollowupCard saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 31L);
+            return saved;
+        });
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
+
+        // when
+        service.issueIfEnabled(okClosed("inc-notify", IncidentKind.HR_ANOMALY));
+
+        // then
+        ArgumentCaptor<FollowupCard> card = ArgumentCaptor.forClass(FollowupCard.class);
+        then(cards).should().save(card.capture());
+        assertThat(card.getValue().getExpiresAtMs() - card.getValue().getIssuedAtMs())
+                .isEqualTo(FollowupCard.ANSWER_WINDOW_MS);
+        ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
+        then(fcmService).should().sendMessageToUser(org.mockito.ArgumentMatchers.eq(1L), sent.capture());
+        assertThat(sent.getValue().notificationType()).isEqualTo(NotificationType.FOLLOWUP_SURVEY_REQUESTED);
+        assertThat(sent.getValue().title()).isEqualTo("아까 몸은 괜찮으셨나요?");
+        assertThat(sent.getValue().content()).isEqualTo("짧게 알려주시면 10포인트를 드려요.");
+        assertThat(sent.getValue().eventId()).isEqualTo("F01:31");
+        assertThat(sent.getValue().pushExpiresAt()).isEqualTo(LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(card.getValue().getExpiresAtMs()), ZoneId.systemDefault()));
+    }
+
+    @Test
+    @DisplayName("응답 보상이 꺼져 있으면 알림에 포인트를 약속하지 않는다")
+    void 응답_보상이_꺼져_있으면_포인트를_약속하지_않는다() {
+        // given
+        given(properties.followup()).willReturn(new SensorProperties.Followup(true, false));
+        given(cards.save(org.mockito.ArgumentMatchers.any(FollowupCard.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
+
+        // when
+        service.issueIfEnabled(okClosed("inc-no-reward", IncidentKind.HR_ANOMALY));
+
+        // then
+        ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
+        then(fcmService).should().sendMessageToUser(org.mockito.ArgumentMatchers.eq(1L), sent.capture());
+        assertThat(sent.getValue().content()).isEqualTo("짧게 알려주세요.");
+    }
+
+    @Test
+    @DisplayName("후속 질문 기능이 꺼져 있으면 카드도 알림도 만들지 않는다")
+    void 기능이_꺼져_있으면_카드도_알림도_없다() {
+        // given
+        given(properties.followup()).willReturn(new SensorProperties.Followup(false, false));
+        FollowupCardService service = new FollowupCardService(cards, answers, members, properties, rewards, fcmService);
+
+        // when
+        service.issueIfEnabled(okClosed("inc-off", IncidentKind.HR_ANOMALY));
+
+        // then
+        verifyNoInteractions(cards, fcmService);
+    }
+
+    private Incident okClosed(String ref, IncidentKind kind) {
+        return Incident.builder().incidentRef(ref).memberId(1L).kind(kind)
+                .openedAtMs(1_000L).respondByMs(61_000L).build();
     }
 }

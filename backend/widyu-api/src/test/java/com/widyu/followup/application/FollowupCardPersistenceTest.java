@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import com.widyu.fcm.application.FcmService;
 import com.widyu.followup.FollowupAnswer;
 import com.widyu.followup.FollowupCard;
 import com.widyu.followup.FollowupCardState;
@@ -49,6 +50,7 @@ class FollowupCardPersistenceTest {
     @Autowired private PlatformTransactionManager transactionManager;
     @MockBean private SensorProperties properties;
     @MockBean private FollowupRewardService rewardService;
+    @MockBean private FcmService fcmService;
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -88,7 +90,7 @@ class FollowupCardPersistenceTest {
     }
 
     @Test
-    @DisplayName("OK 종료 사건에 카드를 발급하면 12시간 만료시각과 문항 판본을 저장한다")
+    @DisplayName("OK 종료 사건에 카드를 발급하면 3시간 만료시각과 문항 판본을 저장한다")
     void OK_종료_사건에_카드를_발급하면_만료시각과_판본을_저장한다() {
         // given
         given(properties.followup()).willReturn(new SensorProperties.Followup(true, false));
@@ -102,7 +104,7 @@ class FollowupCardPersistenceTest {
         // then
         assertThat(cards.count()).isEqualTo(1);
         FollowupCard card = cards.findAll().get(0);
-        assertThat(card.getExpiresAtMs() - card.getIssuedAtMs()).isEqualTo(43_200_000L);
+        assertThat(card.getExpiresAtMs() - card.getIssuedAtMs()).isEqualTo(10_800_000L);
         assertThat(card.getEventAtMs()).isEqualTo(incident.getOpenedAtMs());
         assertThat(card.getQuestionSetVersion()).isEqualTo("HR_V1");
     }
@@ -209,7 +211,7 @@ class FollowupCardPersistenceTest {
         Member senior = senior("01098110006");
         long nowMs = System.currentTimeMillis();
         FollowupCard due = cards.save(FollowupCard.issue("inc-followup-due", senior.getId(),
-                "HR_V1", 1L, nowMs - 43_200_000L));
+                "HR_V1", 1L, nowMs - FollowupCard.ANSWER_WINDOW_MS));
         FollowupCard pending = cards.save(FollowupCard.issue("inc-followup-pending", senior.getId(),
                 "HR_V1", 1L, nowMs));
 

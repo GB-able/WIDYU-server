@@ -15,7 +15,7 @@ class NotificationTypeTest {
         NotificationType[] types = NotificationType.values();
 
         // then
-        assertThat(types).hasSize(38);
+        assertThat(types).hasSize(39);
         assertThat(Arrays.stream(types).map(NotificationType::deliveryMode).distinct())
                 .containsExactlyInAnyOrder(DeliveryMode.values());
         assertThat(Arrays.stream(types).map(NotificationType::name))
@@ -74,6 +74,19 @@ class NotificationTypeTest {
                     assertThat(type.priority()).isEqualTo(NotificationPriority.INTERACTION);
                     assertThat(type.deepLinkTemplate()).isNull();
                 });
+    }
+
+    @Test
+    @DisplayName("후속 질문 알림 타입을 조회하면 기타 칩, 푸시+센터, 보통 우선순위를 반환한다")
+    void 후속_질문_알림_타입은_기타_칩이다() {
+        // given / when
+        NotificationType type = NotificationType.FOLLOWUP_SURVEY_REQUESTED;
+
+        // then
+        assertThat(type.centerFilter()).isEqualTo("ETC");
+        assertThat(type.deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
+        assertThat(type.priority()).isEqualTo(NotificationPriority.INTERACTION);
+        assertThat(type.retentionClass()).isEqualTo(RetentionClass.ROUTINE_90D);
     }
 
     @Test

@@ -43,7 +43,9 @@ public enum NotificationType {
     WALK_DATA_SYNC(FcmCategory.WALK, null, DeliveryMode.DATA_ONLY, NotificationPriority.CRITICAL, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "NONE", null, null),
     // 위치정보법 제3자 제공 통보라 끌 수 없다(NONE). 조용히(apns 5)는 도달이 늦을 수 있어 보통으로 둔다(LLD-0179).
     LOCATION_ACCESS_NOTICE(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L01"),
-    LOCATION_ACCESS_DIGEST(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L02");
+    LOCATION_ACCESS_DIGEST(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L02"),
+    // 앱에 설문 카드 경로가 없어 딥링크는 비운다. 어르신 스위치는 켜짐 고정이다(LLD-0180).
+    FOLLOWUP_SURVEY_REQUESTED(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.ETC, "BANNER", null, "F01");
 
     private final FcmCategory fcmCategory;
     private final String centerFilter;
