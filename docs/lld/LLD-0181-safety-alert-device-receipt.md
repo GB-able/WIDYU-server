@@ -90,7 +90,7 @@ Flyway `V5__safety_alert_device_receipt.sql`.
 - [x] AC3: 긴급이 아니거나, 긴급 데이터 신호이거나, 본인 것이 아닌 전송 건은 404 예외다(`FcmDeliveryReceiptServiceTest`).
 - [x] AC4: 판정의 첫 폰 도착 시각은 두 번 기록해도 첫 값만 남고 FCM 접수 기록과 섞이지 않는다(`DecisionRecordRepositoryTest`).
 - [x] AC5: 회차 내보내기에 `alert_device_received_at_ms`가 나오고 신호가 없으면 null이다(`RunExportAssemblerTest`).
-- [ ] AC6(앱 배포 후): 안드로이드·아이폰 실기기에서 앱이 꺼진 상태로 S04를 받으면 도착 시각이 남는다.
+- [ ] AC6(앱 배포 후): 안드로이드·아이폰 실기기에서 앱이 백그라운드·종료 상태로 S04를 받으면, 알림을 누르기 전에 도착 시각이 남는다(9절 2번).
 
 ## 8. 영향 범위 / 마이그레이션
 
@@ -101,6 +101,7 @@ Flyway `V5__safety_alert_device_receipt.sql`.
 ## 9. 미결정 사항 (Open Questions)
 
 1. 도착 시각과 표시 시각의 차이: 확장·핸들러는 표시 직전에 실행되므로 「표시」와 거의 같다고 본다. 사용자가 보았는지는 읽음 처리로 따로 남는다.
+2. 안드로이드 백그라운드 수신 시점: 긴급 알림은 notification+data 메시지다. 네이티브 `FirebaseMessagingService.onMessageReceived`는 앱이 백그라운드일 때 이 형식에서 호출되지 않는다. 두 앱(위듀, 위듀케어)은 Flutter `firebase_messaging`을 쓰며, 이 플러그인은 `com.google.android.c2dm.intent.RECEIVE` 브로드캐스트 리시버로 메시지를 받아 백그라운드에서도 `onBackgroundMessage` isolate를 띄운다는 전제로 설계했다. 실기기 확인(AC6)에서 탭 전에 호출되지 않으면, 안드로이드 긴급 알림만 data 전용으로 바꾸고 앱이 안전 채널 로컬 알림을 띄우는 방식으로 옮긴다(앱과 서버 동시 변경, 옛 앱 호환 검토 필요). Codex 검수가 이 위험을 BLOCKER로 지적했고, 앱 확인 전 서버 형식을 바꾸면 옛 앱의 긴급 알림 표시가 깨지므로 지금은 형식을 유지한다.
 
 ## 10. 참고
 
