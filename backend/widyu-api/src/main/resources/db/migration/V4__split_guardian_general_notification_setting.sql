@@ -18,11 +18,11 @@ CROSS JOIN (
     UNION ALL SELECT 'LEADER_CHANGED'
     UNION ALL SELECT 'SERVICE_NOTICE'
 ) g
+-- 대상 테이블은 서브쿼리가 아니라 FROM 절 조인으로만 다시 읽는다(MySQL INSERT ... SELECT 제약).
+LEFT JOIN `member_notification_setting` e
+  ON e.`member_id` = s.`member_id` AND e.`category` = g.`category`
 WHERE s.`category` = 'GENERAL' AND s.`enabled` = 0
-  AND NOT EXISTS (
-      SELECT 1 FROM `member_notification_setting` e
-      WHERE e.`member_id` = s.`member_id` AND e.`category` = g.`category`
-  );
+  AND e.`id` IS NULL;
 
 -- 「일반」은 더 이상 어떤 알림도 가리키지 않는다. 켜 둔 행은 기본값(켜짐)과 같아 지워도 동작이 같다.
 DELETE FROM `member_notification_setting` WHERE `category` = 'GENERAL';
