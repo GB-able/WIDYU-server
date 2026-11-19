@@ -125,3 +125,20 @@ revision은 개별 보호자 행이 아니라 **가족 한 곳의 정렬 상태*
 - ADR-0037(이 worktree에 없으면 `feature-691/docs/adr/ADR-0037-notification-center-model.md`), ADR-0038 결정 8.
 - 알림센터 승인판 `FE-HANDOFF-v0.4.md` §1-17·§4-21·§5.3, `NOTIFICATION-COPY-CATALOG-v0.4.md` §8 R01, `HEMLO-REVIEW-v0.5.md` §6·§8, `B-SELFCHECK-ORDER-SPEC-v0.1.md` §6.
 - `BE-IMPLEMENTATION-PLAN-2026-10-01.md` §1·§4.6·§5, `DEVTEAM-CODE-DIFF-HIGHLIGHT-2026-09-29.md` E21·E23.
+
+## 11. 개정 — 나머지 가족에게 방장 변경 알림(R02) (#1127, 2026-11-19)
+
+위듀 정책서 v12와 위듀케어 정책서 v18은 「다른 사람이 방장이 됨」을 가족에게 알리도록 적고, 미정 항목의 추천은 제안 문구를 부제목 없이 쓰는 것이다. 이 추천대로 구현한다. §5 4번의 「구 방장과 다른 보호자에게는 event/enqueue가 없다」와 §7 E21의 「타 보호자 enqueue 0회」는 이 절로 대체한다.
+
+- 이벤트: `FamilyLeaderChangedEvent(familyId, previousLeaderId, newLeaderId)`. 방장 변경 경로는 `GuardianMyPageService.changeLeader` 하나이고, 이전 방장은 가족에 남은 채 변경을 실행한 사람이다.
+- 새 방장: R01 그대로(문구, `/family-manage`).
+- R02 수신자: 같은 가족의 보호자 중 새 방장과 이전 방장을 뺀 사람, 그리고 같은 가족의 어르신 전원(다중 시니어 포함). 이전 방장은 본인 행동이라 보내지 않는다(댓글, 좋아요 등 본인 반응 제외 규칙과 같다).
+- R02 문구: 「{이름} 님이 가족 방장이 되었어요.」 / 부제목 없음. `{이름}`은 새 방장 회원 이름이고, 비면 `NotificationCopy`의 기본 대체(「가족」)를 쓴다.
+- 타입과 전달: 기존 `FAMILY_LEADER_CHANGED`(기타 칩, `PUSH_AND_CENTER`, `GENERAL`, `ROUTINE_90D`)에 문구 코드 R02를 더한다. `relatedMemberId`는 새 방장이라 enqueue의 같은 가족 확인을 거친다. 어르신은 개인 스위치가 고정 켜짐이다(LLD-0095).
+- 딥링크: 보호자 `/family-manage`, 어르신 위듀 앱 가족 관리 `/my/management`(위듀 앱 `AppRoute.management`, develop 2026-11-12 기준).
+- eventId: 매 발송 무작위(R01과 같다). 리스너는 `changeLeader` 트랜잭션 안에서 동기로 한 번만 돌고 재처리 경로가 없다. 같은 요청을 다시 보내면 이전 방장은 더 이상 방장이 아니라 403이므로 중복 알림이 생기지 않는다.
+
+### 인수조건
+
+- [x] AC-R02-1. 방장 변경 시 새 방장 R01 1건, 다른 보호자와 어르신 R02 1건씩이고 이전 방장에게는 enqueue가 없다(`FamilyLeaderChangedNotificationListenerTest`).
+- [x] AC-R02-2. R02 제목은 새 방장 이름을 넣은 정책서 문구이고 부제목이 없다. 보호자 `deepLink=/family-manage`, 어르신 `deepLink=/my/management`다.

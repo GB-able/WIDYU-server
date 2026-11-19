@@ -300,7 +300,7 @@ public class GuardianMyPageService {
         }
 
         memberships.forEach(m -> m.setLeader(m.getGuardian().getId().equals(targetMemberId)));
-        eventPublisher.publishEvent(FamilyLeaderChangedEvent.of(targetMemberId));
+        eventPublisher.publishEvent(FamilyLeaderChangedEvent.of(familyId, guardianId, targetMemberId));
     }
 
     @Transactional

@@ -123,6 +123,7 @@
 | 걷기 목표 미달·변경 W01/W02 | `WALK_GOAL_UNMET`·`WALK_GOAL_CHANGED` | `/goal` | 타입 이름 |
 | 목표 달성 G01-S(G02 미발행) | `GOAL_ACHIEVED`·`GOALS_ACHIEVED_GROUPED` | `/goal` | 타입 이름 |
 | 포인트 획득·사용 P01/P02 | `POINT_EARNED`·`POINT_USED` | `/my/point` | 타입 이름 |
+| 다른 가족이 방장이 됨 R02(#1127) | `FAMILY_LEADER_CHANGED` | `/my/management`(리스너 명시값) | 타입 이름 |
 | 하트·응원 메시지(비타입, 두 역할) | — | `/notification` | `HEART_MESSAGE_RECEIVED`·`CHEER_MESSAGE_RECEIVED`(data에 직접) |
 
 - 경로는 모두 `NotificationType` 템플릿 한 곳에 둔다. 포인트 리스너가 넘기던 명시 링크 `widyu://points`를 지워 템플릿이 적용되게 한다. 심박 본인확인은 `scheme`을 넘기지 않아 `deepLink`가 빈 문자열이다. 사건은 `data.entityId=incident_ref`로 찾는다.
