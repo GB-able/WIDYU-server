@@ -303,6 +303,24 @@ class NotificationCopyTest {
     }
 
     @Test
+    @DisplayName("이름이 20글자를 넘으면 앞 19글자와 말줄임표로 줄여 제목이 255자를 넘지 않는다")
+    void 긴_이름은_줄여서_제목_칸을_넘지_않는다() {
+        // given
+        String longName = "가".repeat(255);
+        String emojiName = "👨‍👩‍👧‍👦".repeat(30);
+
+        // when
+        NotificationCopy copy = NotificationCopy.of(NotificationType.LOCATION_ACCESS_NOTICE, "L01",
+                Map.of("보호자 이름", longName, "오전/오후 시각", "오후 3시"));
+        NotificationCopy emojiCopy = NotificationCopy.of(NotificationType.LOCATION_ACCESS_NOTICE, "L01",
+                Map.of("보호자 이름", emojiName, "오전/오후 시각", "오후 3시"));
+
+        // then
+        assertThat(copy.title()).isEqualTo("가".repeat(19) + "… 님이 내 위치를 확인했어요.");
+        assertThat(emojiCopy.title().codePointCount(0, emojiCopy.title().length())).isLessThanOrEqualTo(255);
+    }
+
+    @Test
     @DisplayName("시각 문구를 만들면 정각은 분을 빼고 오전, 오후를 붙인다")
     void 시각_문구는_정각이면_분을_뺀다() {
         // given / when / then

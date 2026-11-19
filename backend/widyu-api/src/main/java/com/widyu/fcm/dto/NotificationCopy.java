@@ -22,6 +22,9 @@ public record NotificationCopy(String title, String body) {
     private static final int SCHEDULE_NAME_MAX_LENGTH = 15;
     /** 미리보기가 들어가는 알림센터 본문 칸(fcm_notification.body VARCHAR(255))의 코드포인트 상한. */
     public static final int PREVIEW_MAX_CODE_POINTS = 255;
+    /** 이름 자리 상한. 255자까지 허용되는 회원 이름이 들어가도 제목·본문 칸(VARCHAR 255)을 넘지 않게 한다. */
+    private static final int NAME_MAX_LENGTH = 20;
+    private static final int NAME_MAX_CODE_POINTS = 100;
     private static final Pattern VARIABLE = Pattern.compile("\\{([^}]+)}");
     private static final Pattern CONTROLS = Pattern.compile("[\\p{Cc}&&[^\\s]]", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
@@ -197,6 +200,9 @@ public record NotificationCopy(String title, String body) {
             if ((value == null || value.isBlank()) && key.endsWith("이름")) {
                 value = "가족";
             }
+            if (key.endsWith("이름")) {
+                value = fitCodePoints(truncate(value.strip(), NAME_MAX_LENGTH, NAME_MAX_LENGTH - 1), NAME_MAX_CODE_POINTS);
+            }
             if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException("알림 문구 필수 값이 없습니다: " + key);
             }
@@ -237,7 +243,8 @@ public record NotificationCopy(String title, String body) {
 
     /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. */
     private static String messagePreview(String raw) {
-        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1));
+        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1),
+                PREVIEW_MAX_CODE_POINTS);
     }
 
     /** {@code maxLength}글자(그래핌)를 넘으면 앞 {@code keepLength}글자 + 「…」. 글자 경계에서만 자른다. */
@@ -255,8 +262,8 @@ public record NotificationCopy(String title, String body) {
      * 넘으면 거절하지 않고 칸에 들어갈 때까지 뒤 글자를 줄여 「…」을 붙인다. 글자 하나가 혼자 칸을 넘는 비정상 입력은
      * 그대로 돌려 FcmSendDto.ofMessage의 상한 검사가 400으로 막는다.
      */
-    private static String fitCodePoints(String preview) {
-        if (preview.codePointCount(0, preview.length()) <= PREVIEW_MAX_CODE_POINTS) {
+    private static String fitCodePoints(String preview, int maxCodePoints) {
+        if (preview.codePointCount(0, preview.length()) <= maxCodePoints) {
             return preview;
         }
         String text = preview;
@@ -267,7 +274,7 @@ public record NotificationCopy(String title, String body) {
         graphemes.setText(text);
         int cut = 0;
         int next = graphemes.next();
-        while (next != BreakIterator.DONE && text.codePointCount(0, next) <= PREVIEW_MAX_CODE_POINTS - 1) {
+        while (next != BreakIterator.DONE && text.codePointCount(0, next) <= maxCodePoints - 1) {
             cut = next;
             next = graphemes.next();
         }
