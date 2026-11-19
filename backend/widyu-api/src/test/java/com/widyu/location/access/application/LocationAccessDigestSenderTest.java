@@ -11,6 +11,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.location.access.LocationAccessLog;
@@ -37,16 +38,16 @@ class LocationAccessDigestSenderTest {
     private LocationAccessDigestSender locationAccessDigestSender;
 
     @Test
-    @DisplayName("미통보 행을 선점하면 선점한 행만 세어 FCM 한 건을 등록한다")
+    @DisplayName("미통보 행을 선점하면 첫 열람 날짜부터 보호자 수와 횟수, 목적을 담은 L02 한 건을 등록한다")
     void 선점한_행만_세어_한_건을_통보한다() {
         // given
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.of(2026, 11, 20, 9, 0);
         given(locationAccessLogRepository.claimUnnotified(7L, now)).willReturn(3);
         given(locationAccessLogRepository.findBySeniorMemberIdAndNotifiedAt(7L, now))
                 .willReturn(List.of(
-                        accessLog(7L, 55L, LocationAccessPath.REST_LAST),
-                        accessLog(7L, 55L, LocationAccessPath.WS_SUBSCRIBE),
-                        accessLog(7L, 66L, LocationAccessPath.HOME_OUTING)));
+                        accessLog(7L, 55L, LocationAccessPath.REST_LAST, LocalDateTime.of(2026, 11, 18, 14, 0)),
+                        accessLog(7L, 55L, LocationAccessPath.WS_SUBSCRIBE, LocalDateTime.of(2026, 11, 17, 8, 5)),
+                        accessLog(7L, 66L, LocationAccessPath.HOME_OUTING, LocalDateTime.of(2026, 11, 19, 20, 0))));
 
         // when
         locationAccessDigestSender.send(7L, now);
@@ -54,8 +55,11 @@ class LocationAccessDigestSenderTest {
         // then
         ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
         then(fcmService).should().sendMessageToUser(eq(7L), sent.capture());
+        assertThat(sent.getValue().notificationType()).isEqualTo(NotificationType.LOCATION_ACCESS_DIGEST);
         assertThat(sent.getValue().fcmCategory()).isEqualTo(FcmCategory.LOCATION_NOTICE);
-        assertThat(sent.getValue().content()).isEqualTo("지난 기간 보호자 2명이 위치를 3회 확인했어요");
+        assertThat(sent.getValue().title()).isEqualTo("보호자가 내 위치를 확인했어요.");
+        assertThat(sent.getValue().content())
+                .isEqualTo("11월 17일부터 보호자 2명이 가족 안부 확인을 위해 3회 봤어요.");
     }
 
     @Test
@@ -91,6 +95,11 @@ class LocationAccessDigestSenderTest {
     }
 
     private LocationAccessLog accessLog(Long seniorId, Long viewerId, LocationAccessPath path) {
-        return LocationAccessLog.of(viewerId, seniorId, path, LocalDateTime.now());
+        return accessLog(seniorId, viewerId, path, LocalDateTime.now());
+    }
+
+    private LocationAccessLog accessLog(Long seniorId, Long viewerId, LocationAccessPath path,
+            LocalDateTime accessedAt) {
+        return LocationAccessLog.of(viewerId, seniorId, path, accessedAt);
     }
 }

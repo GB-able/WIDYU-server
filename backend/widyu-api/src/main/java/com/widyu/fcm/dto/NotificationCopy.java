@@ -3,6 +3,9 @@ package com.widyu.fcm.dto;
 import com.widyu.fcm.NotificationType;
 import java.text.BreakIterator;
 import java.text.Normalizer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -23,6 +26,8 @@ public record NotificationCopy(String title, String body) {
     private static final Pattern CONTROLS = Pattern.compile("[\\p{Cc}&&[^\\s]]", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern FORMATS = Pattern.compile("\\p{Cf}");
+    private static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("a h'시'", Locale.KOREAN);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h'시' m'분'", Locale.KOREAN);
     private static final Map<String, NotificationCopy> CATALOG = Map.ofEntries(
             copy("A01", "게시물 업로드가 완료됐어요!", "업로드한 게시물을 확인해보세요."),
             copy("A02-S", "{작성자 이름} 님이 게시물을 올렸어요!", "새로운 게시물을 확인하러 가보세요."),
@@ -74,7 +79,9 @@ public record NotificationCopy(String title, String body) {
             copy("K01", "{시니어 이름} 님이 워치로 직접 도움을 요청했어요.", null),
             copy("K02", "{시니어 이름} 님이 도움 요청을 취소했어요.", null),
             copy("R02", "{이름} 님이 가족 방장이 되었어요.", null),
-            copy("R01", "이제 가족 방장이 되었어요.", "가족 관리와 중요한 알림을 확인해주세요."));
+            copy("R01", "이제 가족 방장이 되었어요.", "가족 관리와 중요한 알림을 확인해주세요."),
+            copy("L01", "{보호자 이름} 님이 내 위치를 확인했어요.", "{오전/오후 시각}에 가족 안부 확인을 위해 위치를 봤어요."),
+            copy("L02", "보호자가 내 위치를 확인했어요.", "{시작 날짜}부터 보호자 {보호자 수}명이 가족 안부 확인을 위해 {횟수}회 봤어요."));
 
     public static NotificationCopy of(NotificationType type, String code, Map<String, String> values) {
         if (code == null || code.isBlank()) {
@@ -117,6 +124,14 @@ public record NotificationCopy(String title, String body) {
                 .filter(code -> code.endsWith("-OS"))
                 .findFirst()
                 .orElse(codes.getFirst());
+    }
+
+    /** 정책서 공통 규칙 3: 「오전/오후 N시 M분」. 정각은 분을 빼고 「오후 3시」로 쓴다(사용자 결정 2026-11-18). */
+    public static String clockText(LocalDateTime at) {
+        if (at.getMinute() == 0) {
+            return at.format(HOUR_FORMATTER);
+        }
+        return at.format(TIME_FORMATTER);
     }
 
     /** 문구 코드의 제목·본문에 들어가는 변수 이름. 등록되지 않은 코드면 빈 목록이다. */

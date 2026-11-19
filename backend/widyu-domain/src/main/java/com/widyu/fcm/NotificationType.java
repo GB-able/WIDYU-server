@@ -40,7 +40,10 @@ public enum NotificationType {
     HEALTH_SCHEDULE_UPDATED(FcmCategory.HEALTH_SCHEDULE, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GOAL, "BANNER", "/goal", "H03"),
     HEALTH_SCHEDULE_DELETED(FcmCategory.HEALTH_SCHEDULE, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GOAL, "BANNER", "/goal", "H04"),
     WALK_GOAL_CHANGED(FcmCategory.WALK, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GOAL, "BANNER", "/goal", "W02"),
-    WALK_DATA_SYNC(FcmCategory.WALK, null, DeliveryMode.DATA_ONLY, NotificationPriority.CRITICAL, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "NONE", null, null);
+    WALK_DATA_SYNC(FcmCategory.WALK, null, DeliveryMode.DATA_ONLY, NotificationPriority.CRITICAL, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "NONE", null, null),
+    // 위치정보법 제3자 제공 통보라 끌 수 없다(NONE). 조용히(apns 5)는 도달이 늦을 수 있어 보통으로 둔다(LLD-0179).
+    LOCATION_ACCESS_NOTICE(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L01"),
+    LOCATION_ACCESS_DIGEST(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L02");
 
     private final FcmCategory fcmCategory;
     private final String centerFilter;

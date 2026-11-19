@@ -1,8 +1,9 @@
 package com.widyu.location.access.application;
 
-import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.dto.response.LocationAccessLogResponse;
@@ -47,7 +48,6 @@ public class LocationAccessLogService {
     /** 보호자 이름을 찾지 못했을 때 통보 문구에 쓰는 말. 이름이 없다고 통보를 거를 수는 없다. */
     private static final String UNKNOWN_VIEWER = "보호자";
 
-    private static final String NOTICE_TITLE = "위치 조회 알림";
     private static final int DEFAULT_RANGE_DAYS = 30;
 
     private final LocationAccessLogRepository locationAccessLogRepository;
@@ -70,16 +70,14 @@ public class LocationAccessLogService {
         notifyImmediately(accessLog, now);
     }
 
+    /** 제공받는 자(보호자 이름), 제공 일시, 제공 목적을 문구에 담는다(위치정보법 제19조③, LLD-0179). */
     private void notifyImmediately(LocationAccessLog accessLog, LocalDateTime now) {
-        fcmService.sendMessageToUser(accessLog.getSeniorMemberId(), FcmSendDto.builder()
-                .title(NOTICE_TITLE)
-                .content(viewerName(accessLog.getViewerMemberId()) + "님이 내 위치를 확인했어요")
-                .fcmCategory(FcmCategory.LOCATION_NOTICE)
-                .scheme("")
-                .image(null)
-                .relatedMemberId(accessLog.getViewerMemberId())
-                .emergency(false)
-                .build());
+        NotificationType type = NotificationType.LOCATION_ACCESS_NOTICE;
+        NotificationCopy copy = NotificationCopy.of(type, "L01", Map.of(
+                "보호자 이름", viewerName(accessLog.getViewerMemberId()),
+                "오전/오후 시각", NotificationCopy.clockText(accessLog.getAccessedAt())));
+        fcmService.sendMessageToUser(accessLog.getSeniorMemberId(),
+                FcmSendDto.of(type, copy, null, null, accessLog.getViewerMemberId(), null, null));
         accessLog.markNotified(now);
         log.info("위치 열람 즉시 통보 seniorMemberId={} viewerMemberId={} path={}",
                 accessLog.getSeniorMemberId(), accessLog.getViewerMemberId(), accessLog.getPath());

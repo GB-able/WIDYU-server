@@ -13,11 +13,9 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +28,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class HealthScheduleNotificationListener {
 
-    /** 정책서 공통 규칙 3: 「오전/오후 N시 M분」. 정각은 분을 빼고 「오후 3시」로 쓴다(사용자 결정 2026-11-18). */
-    private static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("a h'시'", Locale.KOREAN);
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h'시' m'분'", Locale.KOREAN);
     private static final int WINDOW_MINUTES = 10;
 
     private final FcmService fcmService;
@@ -90,7 +85,7 @@ public class HealthScheduleNotificationListener {
         if (recipient.getType() == MemberType.GUARDIAN) {
             return;
         }
-        String time = timeText(schedule.getScheduledAt());
+        String time = NotificationCopy.clockText(schedule.getScheduledAt());
         NotificationCopy osCopy = NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING,
                 "H01-S-OS", Map.of());
         NotificationCopy inAppCopy = NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING,
@@ -141,12 +136,5 @@ public class HealthScheduleNotificationListener {
                         schedule.getId(), guardianId, e);
             }
         }
-    }
-
-    private static String timeText(LocalDateTime scheduledAt) {
-        if (scheduledAt.getMinute() == 0) {
-            return scheduledAt.format(HOUR_FORMATTER);
-        }
-        return scheduledAt.format(TIME_FORMATTER);
     }
 }

@@ -1,12 +1,15 @@
 package com.widyu.location.access.application;
 
-import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.repository.LocationAccessLogRepository;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class LocationAccessDigestSender {
 
-    private static final String NOTICE_TITLE = "위치 조회 알림";
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("M'월' d'일'");
 
     private final LocationAccessLogRepository locationAccessLogRepository;
     private final FcmService fcmService;
@@ -42,14 +45,16 @@ public class LocationAccessDigestSender {
                 .distinct()
                 .count();
 
-        fcmService.sendMessageToUser(seniorMemberId, FcmSendDto.builder()
-                .title(NOTICE_TITLE)
-                .content(String.format("지난 기간 보호자 %d명이 위치를 %d회 확인했어요", viewerCount, logs.size()))
-                .fcmCategory(FcmCategory.LOCATION_NOTICE)
-                .scheme("")
-                .image(null)
-                .emergency(false)
-                .build());
+        LocalDateTime firstAccessedAt = logs.stream()
+                .map(LocationAccessLog::getAccessedAt)
+                .min(LocalDateTime::compareTo)
+                .orElse(now);
+        NotificationType type = NotificationType.LOCATION_ACCESS_DIGEST;
+        NotificationCopy copy = NotificationCopy.of(type, "L02", Map.of(
+                "시작 날짜", firstAccessedAt.format(DATE_FORMATTER),
+                "보호자 수", String.valueOf(viewerCount),
+                "횟수", String.valueOf(logs.size())));
+        fcmService.sendMessageToUser(seniorMemberId, FcmSendDto.of(type, copy, null, null, null, null, null));
 
         log.info("위치 열람 요약 통보 seniorMemberId={} viewerCount={} accessCount={}",
                 seniorMemberId, viewerCount, logs.size());
