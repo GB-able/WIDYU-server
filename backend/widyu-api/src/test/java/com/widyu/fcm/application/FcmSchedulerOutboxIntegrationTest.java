@@ -157,7 +157,7 @@ class FcmSchedulerOutboxIntegrationTest {
             memberships.save(FamilyMembership.createMembership(family, disabled));
             tokens.save(MemberFcmToken.builder().member(enabled).token("guardian-one").active(true).build());
             tokens.save(MemberFcmToken.builder().member(disabled).token("guardian-two").active(true).build());
-            settings.save(MemberNotificationSetting.create(disabled, PushSettingGroup.GENERAL, false));
+            settings.save(MemberNotificationSetting.create(disabled, PushSettingGroup.HEALTH_SCHEDULE, false));
             schedules.save(HealthSchedule.create(senior, "서울대학교병원 정형외과 정기검진", "주소", 37.0, 127.0,
                     SCHEDULED_AT));
             return List.of(senior.getId(), enabled.getId(), disabled.getId());

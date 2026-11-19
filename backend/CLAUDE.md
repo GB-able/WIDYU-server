@@ -32,6 +32,7 @@
 
 ### `fcm` — 푸시 알림
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
+- 보호자 설정은 위듀케어 알림 정책서 2절의 스위치 14개다(`PushSettingGroup`, 선언 순서가 화면 순서, `section`이 묶음). 새 보호자 알림 타입은 이 중 하나에 매핑하고 `GENERAL`은 쓰지 않는다 → LLD-0175
 - `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE, INCIDENT_SELF_CHECK
 - 알림 목록 탭은 저장 카테고리가 아니라 `NotificationCenterFilter`(전체, 안 읽음, 메시지, 목표, 앨범, 위치(보호자만), 기타)다. v1 `/api/v1/fcm`과 v2 `/api/v1/notifications`가 같은 분류를 쓴다. 새 `NotificationType`은 `centerFilter`를 정해야 탭에 보인다. → LLD-0117
 - **보호자가 끈 그룹의 알림은 접수(`FcmOutboxService.enqueue`) 때 센터 행도 만들지 않는다**. 판정은 발송과 같은 `FcmEligibility.settingAllows`다. 어르신 수신, 필수 그룹(`SAFETY` 보호자 전원, `SAFE_ZONE` 방장), `NONE`·`DATA_ONLY`·설정 그룹 없는 레거시는 판정하지 않는다. 접수 뒤 끄면 푸시만 취소된다 → ADR-0046, LLD-0171

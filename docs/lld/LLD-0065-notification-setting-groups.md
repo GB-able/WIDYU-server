@@ -3,6 +3,8 @@
 > Low-Level Design. 이 문서는 이슈 #700 구현과 PR 본문의 기준이다. W2의 `NotificationType.settingGroup()`과 W3의 수신자×이벤트 센터 행을 전제로 한다.
 >
 > 2026-11-19 #1125: `SAFETY`는 방장뿐 아니라 보호자 누구도 끌 수 없다. 이 문서의 「비방장은 안전 그룹을 끌 수 있다」는 `SAFE_ZONE`에만 남는다. 현재 동작은 [LLD-0170](LLD-0170-safety-push-locked-for-all-guardians.md)이 정본이다.
+>
+> 2026-11-19 #1137: 보호자 설정은 네 그룹이 아니라 위듀케어 알림 정책서 2절의 스위치 14개다. `GENERAL`은 나뉘어 어떤 알림도 가리키지 않는다. 보호자 그룹은 [LLD-0175](LLD-0175-guardian-notification-switches.md)가 정본이다.
 
 | 항목 | 값 |
 | --- | --- |

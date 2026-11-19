@@ -45,7 +45,7 @@ class NotificationTypeTest {
         assertThat(NotificationType.SELF_HELP_REQUEST_CANCELLED.priority())
                 .isEqualTo(NotificationPriority.INTERACTION);
         assertThat(NotificationType.SELF_HELP_REQUEST_CANCELLED.settingGroup())
-                .isEqualTo(PushSettingGroup.GENERAL);
+                .isEqualTo(PushSettingGroup.SAFETY);
         assertThat(heartOk.retentionClass()).isEqualTo(RetentionClass.HEART_EMERGENCY_180D);
         assertThat(zoneExit.retentionClass()).isEqualTo(RetentionClass.SAFE_ZONE_90D);
         assertThat(zoneEnter.retentionClass()).isEqualTo(RetentionClass.SAFE_ZONE_90D);
@@ -69,7 +69,7 @@ class NotificationTypeTest {
                 NotificationType.MEDICATION_REMINDER_10, NotificationType.MEDICATION_REMINDER_20,
                 NotificationType.WALK_GOAL_UNMET))
                 .allSatisfy(type -> assertThat(type.deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER));
-        assertThat(NotificationType.ALBUM_LIKED.settingGroup()).isEqualTo(PushSettingGroup.GENERAL);
+        assertThat(NotificationType.ALBUM_LIKED.settingGroup()).isEqualTo(PushSettingGroup.ALBUM_LIKE);
         assertThat(NotificationType.ALBUM_LIKED.priority()).isEqualTo(NotificationPriority.INTERACTION);
         assertThat(NotificationType.ALBUM_UPLOAD_COMPLETE.priority()).isEqualTo(NotificationPriority.PASSIVE);
         assertThat(NotificationType.WALK_GOAL_UNMET.priority()).isEqualTo(NotificationPriority.PASSIVE);

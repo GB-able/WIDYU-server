@@ -113,7 +113,7 @@ class FcmEligibilityTest {
         // given
         FcmOutbox outbox = outbox(null, MemberType.GUARDIAN);
         activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.GENERAL)).willReturn(false);
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.ALBUM_NEW_POST)).willReturn(false);
 
         // when
         boolean allowed = eligibility.eligible(outbox);
@@ -126,7 +126,7 @@ class FcmEligibilityTest {
     @DisplayName("보호자가 끈 그룹의 알림을 접수 판정하면 거부하고 설정 그룹이 없는 알림과 어르신 수신은 허용한다")
     void 접수_판정은_끈_그룹만_거부한다() {
         // given
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.GENERAL)).willReturn(false);
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.ALBUM_NEW_POST)).willReturn(false);
 
         // when
         boolean albumOff = eligibility.settingAllows(1L, MemberType.GUARDIAN, NotificationType.ALBUM_CREATED,
@@ -177,13 +177,13 @@ class FcmEligibilityTest {
     }
 
     @Test
-    @DisplayName("보호자의 복약 변경 타입을 판정하면 기존 일반 그룹을 따른다")
-    void 보호자_복약_변경_타입을_판정하면_일반_그룹을_따른다() {
+    @DisplayName("보호자가 시니어 전용 복약 변경 타입을 받으면 시니어 목표 그룹을 따른다")
+    void 보호자_복약_변경_타입을_판정하면_시니어_목표_그룹을_따른다() {
         // given
         FcmOutbox outbox = outbox(null, MemberType.GUARDIAN);
         ReflectionTestUtils.setField(outbox, "notificationType", NotificationType.MEDICATION_SCHEDULE_CHANGED);
         activeRecipient(outbox);
-        given(settings.isNotificationEnabled(1L, PushSettingGroup.GENERAL)).willReturn(false);
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.GOAL)).willReturn(false);
 
         // when
         boolean allowed = eligibility.eligible(outbox);
