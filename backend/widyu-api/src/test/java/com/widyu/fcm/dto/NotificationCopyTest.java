@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.widyu.fcm.NotificationType;
+import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -284,5 +285,46 @@ class NotificationCopyTest {
     private static NotificationCopy scheduleCopy(String name) {
         return NotificationCopy.of(NotificationType.HEALTH_SCHEDULE_UPCOMING, "H01-S-INAPP",
                 Map.of("오전/오후 시각", "오후 3시 30분", "일정명", name));
+    }
+
+    @Test
+    @DisplayName("위치 조회 통보 문구를 만들면 보호자 이름, 시각, 목적을 담는다")
+    void 위치_조회_통보_문구는_이름_시각_목적을_담는다() {
+        // given
+        String time = NotificationCopy.clockText(LocalDateTime.of(2026, 11, 20, 15, 20));
+
+        // when
+        NotificationCopy copy = NotificationCopy.of(NotificationType.LOCATION_ACCESS_NOTICE, "L01",
+                Map.of("보호자 이름", "김보호", "오전/오후 시각", time));
+
+        // then
+        assertThat(copy.title()).isEqualTo("김보호 님이 내 위치를 확인했어요.");
+        assertThat(copy.body()).isEqualTo("오후 3시 20분에 가족 안부 확인을 위해 위치를 봤어요.");
+    }
+
+    @Test
+    @DisplayName("이름이 20글자를 넘으면 앞 19글자와 말줄임표로 줄여 제목이 255자를 넘지 않는다")
+    void 긴_이름은_줄여서_제목_칸을_넘지_않는다() {
+        // given
+        String longName = "가".repeat(255);
+        String emojiName = "👨‍👩‍👧‍👦".repeat(30);
+
+        // when
+        NotificationCopy copy = NotificationCopy.of(NotificationType.LOCATION_ACCESS_NOTICE, "L01",
+                Map.of("보호자 이름", longName, "오전/오후 시각", "오후 3시"));
+        NotificationCopy emojiCopy = NotificationCopy.of(NotificationType.LOCATION_ACCESS_NOTICE, "L01",
+                Map.of("보호자 이름", emojiName, "오전/오후 시각", "오후 3시"));
+
+        // then
+        assertThat(copy.title()).isEqualTo("가".repeat(19) + "… 님이 내 위치를 확인했어요.");
+        assertThat(emojiCopy.title().codePointCount(0, emojiCopy.title().length())).isLessThanOrEqualTo(255);
+    }
+
+    @Test
+    @DisplayName("시각 문구를 만들면 정각은 분을 빼고 오전, 오후를 붙인다")
+    void 시각_문구는_정각이면_분을_뺀다() {
+        // given / when / then
+        assertThat(NotificationCopy.clockText(LocalDateTime.of(2026, 11, 20, 15, 0))).isEqualTo("오후 3시");
+        assertThat(NotificationCopy.clockText(LocalDateTime.of(2026, 11, 20, 9, 5))).isEqualTo("오전 9시 5분");
     }
 }

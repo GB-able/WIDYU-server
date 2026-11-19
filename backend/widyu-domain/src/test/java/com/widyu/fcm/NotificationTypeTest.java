@@ -15,7 +15,7 @@ class NotificationTypeTest {
         NotificationType[] types = NotificationType.values();
 
         // then
-        assertThat(types).hasSize(36);
+        assertThat(types).hasSize(38);
         assertThat(Arrays.stream(types).map(NotificationType::deliveryMode).distinct())
                 .containsExactlyInAnyOrder(DeliveryMode.values());
         assertThat(Arrays.stream(types).map(NotificationType::name))
@@ -59,6 +59,21 @@ class NotificationTypeTest {
                 .isEqualTo(DeliveryMode.PUSH_ONLY);
         assertThat(NotificationType.SAFETY_SELF_CHECK.settingGroup()).isEqualTo(PushSettingGroup.NONE);
         assertThat(NotificationType.FAMILY_LEADER_CHANGED.centerFilter()).isEqualTo("ETC");
+    }
+
+    @Test
+    @DisplayName("위치 조회 통보 타입을 조회하면 기타 칩, 끌 수 없는 설정, 보통 우선순위를 반환한다")
+    void 위치_조회_통보_타입은_끌_수_없고_기타_칩이다() {
+        // given / when / then
+        assertThat(List.of(NotificationType.LOCATION_ACCESS_NOTICE, NotificationType.LOCATION_ACCESS_DIGEST))
+                .allSatisfy(type -> {
+                    assertThat(type.fcmCategory()).isEqualTo(FcmCategory.LOCATION_NOTICE);
+                    assertThat(type.centerFilter()).isEqualTo("ETC");
+                    assertThat(type.deliveryMode()).isEqualTo(DeliveryMode.PUSH_AND_CENTER);
+                    assertThat(type.settingGroup()).isEqualTo(PushSettingGroup.NONE);
+                    assertThat(type.priority()).isEqualTo(NotificationPriority.INTERACTION);
+                    assertThat(type.deepLinkTemplate()).isNull();
+                });
     }
 
     @Test

@@ -3,6 +3,9 @@ package com.widyu.fcm.dto;
 import com.widyu.fcm.NotificationType;
 import java.text.BreakIterator;
 import java.text.Normalizer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -19,10 +22,15 @@ public record NotificationCopy(String title, String body) {
     private static final int SCHEDULE_NAME_MAX_LENGTH = 15;
     /** 미리보기가 들어가는 알림센터 본문 칸(fcm_notification.body VARCHAR(255))의 코드포인트 상한. */
     public static final int PREVIEW_MAX_CODE_POINTS = 255;
+    /** 이름 자리 상한. 255자까지 허용되는 회원 이름이 들어가도 제목·본문 칸(VARCHAR 255)을 넘지 않게 한다. */
+    private static final int NAME_MAX_LENGTH = 20;
+    private static final int NAME_MAX_CODE_POINTS = 100;
     private static final Pattern VARIABLE = Pattern.compile("\\{([^}]+)}");
     private static final Pattern CONTROLS = Pattern.compile("[\\p{Cc}&&[^\\s]]", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
     private static final Pattern FORMATS = Pattern.compile("\\p{Cf}");
+    private static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("a h'시'", Locale.KOREAN);
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("a h'시' m'분'", Locale.KOREAN);
     private static final Map<String, NotificationCopy> CATALOG = Map.ofEntries(
             copy("A01", "게시물 업로드가 완료됐어요!", "업로드한 게시물을 확인해보세요."),
             copy("A02-S", "{작성자 이름} 님이 게시물을 올렸어요!", "새로운 게시물을 확인하러 가보세요."),
@@ -74,7 +82,9 @@ public record NotificationCopy(String title, String body) {
             copy("K01", "{시니어 이름} 님이 워치로 직접 도움을 요청했어요.", null),
             copy("K02", "{시니어 이름} 님이 도움 요청을 취소했어요.", null),
             copy("R02", "{이름} 님이 가족 방장이 되었어요.", null),
-            copy("R01", "이제 가족 방장이 되었어요.", "가족 관리와 중요한 알림을 확인해주세요."));
+            copy("R01", "이제 가족 방장이 되었어요.", "가족 관리와 중요한 알림을 확인해주세요."),
+            copy("L01", "{보호자 이름} 님이 내 위치를 확인했어요.", "{오전/오후 시각}에 가족 안부 확인을 위해 위치를 봤어요."),
+            copy("L02", "보호자가 내 위치를 확인했어요.", "{시작 날짜}부터 보호자 {보호자 수}명이 가족 안부 확인을 위해 {횟수}회 봤어요."));
 
     public static NotificationCopy of(NotificationType type, String code, Map<String, String> values) {
         if (code == null || code.isBlank()) {
@@ -117,6 +127,14 @@ public record NotificationCopy(String title, String body) {
                 .filter(code -> code.endsWith("-OS"))
                 .findFirst()
                 .orElse(codes.getFirst());
+    }
+
+    /** 정책서 공통 규칙 3: 「오전/오후 N시 M분」. 정각은 분을 빼고 「오후 3시」로 쓴다(사용자 결정 2026-11-18). */
+    public static String clockText(LocalDateTime at) {
+        if (at.getMinute() == 0) {
+            return at.format(HOUR_FORMATTER);
+        }
+        return at.format(TIME_FORMATTER);
     }
 
     /** 문구 코드의 제목·본문에 들어가는 변수 이름. 등록되지 않은 코드면 빈 목록이다. */
@@ -182,6 +200,9 @@ public record NotificationCopy(String title, String body) {
             if ((value == null || value.isBlank()) && key.endsWith("이름")) {
                 value = "가족";
             }
+            if (key.endsWith("이름")) {
+                value = fitCodePoints(truncate(value.strip(), NAME_MAX_LENGTH, NAME_MAX_LENGTH - 1), NAME_MAX_CODE_POINTS);
+            }
             if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException("알림 문구 필수 값이 없습니다: " + key);
             }
@@ -222,7 +243,8 @@ public record NotificationCopy(String title, String body) {
 
     /** 정리한 메시지가 40글자를 넘으면 앞 39글자 + 「…」. */
     private static String messagePreview(String raw) {
-        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1));
+        return fitCodePoints(truncate(normalizeMessage(raw), PREVIEW_MAX_LENGTH, PREVIEW_MAX_LENGTH - 1),
+                PREVIEW_MAX_CODE_POINTS);
     }
 
     /** {@code maxLength}글자(그래핌)를 넘으면 앞 {@code keepLength}글자 + 「…」. 글자 경계에서만 자른다. */
@@ -240,8 +262,8 @@ public record NotificationCopy(String title, String body) {
      * 넘으면 거절하지 않고 칸에 들어갈 때까지 뒤 글자를 줄여 「…」을 붙인다. 글자 하나가 혼자 칸을 넘는 비정상 입력은
      * 그대로 돌려 FcmSendDto.ofMessage의 상한 검사가 400으로 막는다.
      */
-    private static String fitCodePoints(String preview) {
-        if (preview.codePointCount(0, preview.length()) <= PREVIEW_MAX_CODE_POINTS) {
+    private static String fitCodePoints(String preview, int maxCodePoints) {
+        if (preview.codePointCount(0, preview.length()) <= maxCodePoints) {
             return preview;
         }
         String text = preview;
@@ -252,7 +274,7 @@ public record NotificationCopy(String title, String body) {
         graphemes.setText(text);
         int cut = 0;
         int next = graphemes.next();
-        while (next != BreakIterator.DONE && text.codePointCount(0, next) <= PREVIEW_MAX_CODE_POINTS - 1) {
+        while (next != BreakIterator.DONE && text.codePointCount(0, next) <= maxCodePoints - 1) {
             cut = next;
             next = graphemes.next();
         }

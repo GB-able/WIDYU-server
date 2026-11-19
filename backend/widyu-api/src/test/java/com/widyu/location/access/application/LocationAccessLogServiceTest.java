@@ -10,8 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
+import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.dto.response.LocationAccessLogResponse;
@@ -81,13 +83,32 @@ class LocationAccessLogServiceTest {
         // then
         ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
         then(fcmService).should().sendMessageToUser(eq(SENIOR_ID), sent.capture());
+        LocalDateTime accessedAt = savedLog().getAccessedAt();
+        assertThat(sent.getValue().notificationType()).isEqualTo(NotificationType.LOCATION_ACCESS_NOTICE);
         assertThat(sent.getValue().fcmCategory()).isEqualTo(FcmCategory.LOCATION_NOTICE);
-        assertThat(sent.getValue().title()).isEqualTo("위치 조회 알림");
-        assertThat(sent.getValue().content()).isEqualTo("김보호님이 내 위치를 확인했어요");
+        assertThat(sent.getValue().title()).isEqualTo("김보호 님이 내 위치를 확인했어요.");
+        assertThat(sent.getValue().content()).isEqualTo(
+                NotificationCopy.clockText(accessedAt) + "에 가족 안부 확인을 위해 위치를 봤어요.");
         assertThat(sent.getValue().relatedMemberId()).isEqualTo(VIEWER_ID);
         assertThat(sent.getValue().emergency()).isFalse();
         assertThat(savedLog().getNotifiedAt()).isNotNull();
         assertThat(savedLog().getPath()).isEqualTo(LocationAccessPath.REST_LAST);
+    }
+
+    @Test
+    @DisplayName("보호자 이름을 찾지 못해도 통보를 거르지 않고 「보호자」로 채워 보낸다")
+    void 보호자_이름이_없어도_통보한다() {
+        // given
+        givenSaveReturnsArgument();
+        given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.empty());
+
+        // when
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
+
+        // then
+        ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
+        then(fcmService).should().sendMessageToUser(eq(SENIOR_ID), sent.capture());
+        assertThat(sent.getValue().title()).isEqualTo("보호자 님이 내 위치를 확인했어요.");
     }
 
     @Test
