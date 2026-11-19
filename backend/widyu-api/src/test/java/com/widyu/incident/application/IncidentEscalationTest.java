@@ -106,6 +106,7 @@ class IncidentEscalationTest {
         ArgumentCaptor<FcmSendDto> message = ArgumentCaptor.forClass(FcmSendDto.class);
         then(outbox).should().enqueue(eq(2L), message.capture());
         assertThat(message.getValue().notificationType()).isEqualTo(NotificationType.SELF_HELP_REQUESTED);
+        assertThat(message.getValue().title()).isEqualTo("시니어 님이 워치로 직접 도움을 요청했어요.");
         assertThat(message.getValue().dataForEnqueue("inc-1"))
                 .containsEntry("deliveryStage", "SECOND_ALERT")
                 .containsEntry("seniorName", "시니어");
@@ -148,6 +149,8 @@ class IncidentEscalationTest {
         then(outbox).should().enqueue(eq(2L), messages.capture());
         then(outbox).should().enqueue(eq(3L), messages.capture());
         assertThat(messages.getAllValues()).allSatisfy(message -> {
+            assertThat(message.title()).isEqualTo("아직 보호자 대응이 확인되지 않았어요.");
+            assertThat(message.content()).isEqualTo("시니어 님의 심박 상태와 위치를 바로 확인해주세요.");
             assertThat(message.eventId()).isEqualTo("inc-1");
             assertThat(message.dataForEnqueue("inc-1"))
                     .containsEntry("deliveryStage", "SECOND_ALERT")
