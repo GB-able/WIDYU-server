@@ -6,20 +6,29 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
+import com.widyu.album.repository.AlbumViewRepository;
 import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.dto.request.SendNotificationRequest;
+import com.widyu.fcm.dto.response.ToastResDto;
 import com.widyu.fcm.repository.FcmNotificationRepository;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.member.Family;
+import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
+import com.widyu.member.SeniorProfile;
 import com.widyu.member.application.FamilyAccessService;
+import com.widyu.member.repository.FamilyMembershipRepository;
+import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +45,9 @@ class FcmServiceTest {
     @Mock private FcmOutboxService outboxService;
     @Mock private FcmNotificationRepository fcmNotificationRepository;
     @Mock private FamilyAccessService familyAccessService;
+    @Mock private AlbumViewRepository albumViewRepository;
+    @Mock private FamilyMembershipRepository familyMembershipRepository;
+    @Mock private SeniorProfileRepository seniorProfileRepository;
     @InjectMocks private FcmService service;
 
     private static final String NOT_FAMILY_MESSAGE = "접근 권한이 없습니다. - 같은 가족에게만 응원 메시지를 보낼 수 있습니다.";
@@ -152,6 +164,51 @@ class FcmServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.FORBIDDEN);
         then(outboxService).should(never()).enqueue(any(), any());
+    }
+
+    @Test
+    @DisplayName("어르신이 보호자 게시물을 모두 봤으면 토스트를 모두 확인 알림(A07)과 같은 문구로 돌려준다")
+    void 어르신이_모두_봤으면_A07_문구_토스트를_돌려준다() {
+        // given
+        givenToastFamily(5L, 5L);
+
+        // when
+        ToastResDto toast = service.getToastNotification();
+
+        // then
+        assertThat(toast.title()).isEqualTo("김어른 님이 새 게시물을 모두 확인했어요!");
+        assertThat(toast.content()).isEqualTo("새로운 소식을 올려주세요.");
+        assertThat(toast.scheme()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("어르신이 볼 게시물이 조금 남았으면 토스트는 기존 남은 소식 문구를 그대로 쓴다")
+    void 남은_게시물이_조금_있으면_기존_토스트_문구를_쓴다() {
+        // given
+        givenToastFamily(5L, 3L);
+
+        // when
+        ToastResDto toast = service.getToastNotification();
+
+        // then
+        assertThat(toast.title()).isEqualTo("김어른님께서 보실 소식이 2개밖에 남지 않았어요.");
+        assertThat(toast.content()).isEqualTo("새로운 게시물을 올려주세요.");
+    }
+
+    private void givenToastFamily(long totalCount, long viewedCount) {
+        Member guardian = member(1L, MemberType.GUARDIAN, "김보호");
+        Member senior = member(2L, MemberType.SENIOR, "김어른");
+        Family family = mock(Family.class);
+        given(family.getId()).willReturn(10L);
+        FamilyMembership membership = mock(FamilyMembership.class);
+        given(membership.getFamily()).willReturn(family);
+        SeniorProfile seniorProfile = mock(SeniorProfile.class);
+        given(seniorProfile.getMember()).willReturn(senior);
+        given(memberUtil.getCurrentMember()).willReturn(guardian);
+        given(familyMembershipRepository.findByGuardianId(1L)).willReturn(Optional.of(membership));
+        given(seniorProfileRepository.findAllByFamilyIdWithMember(10L)).willReturn(List.of(seniorProfile));
+        given(albumViewRepository.countTotalAlbumsByParent(1L)).willReturn(totalCount);
+        given(albumViewRepository.countViewedAlbumsByGuardianAndParent(2L, 1L)).willReturn(viewedCount);
     }
 
     private Member member(Long id, MemberType type) {

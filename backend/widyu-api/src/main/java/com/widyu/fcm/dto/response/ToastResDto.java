@@ -9,9 +9,13 @@ public record ToastResDto(
         String scheme
 ) {
     public static ToastResDto from(String title) {
+        return of(title, "새로운 게시물을 올려주세요.");
+    }
+
+    public static ToastResDto of(String title, String content) {
         return ToastResDto.builder()
                 .title(title)
-                .content("새로운 게시물을 올려주세요.")
+                .content(content)
                 .scheme("")
                 .build();
     }
