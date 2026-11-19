@@ -6,6 +6,7 @@ import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
+import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.util.List;
@@ -30,10 +31,12 @@ public class FamilyLeaderChangedNotificationListener {
     public void onLeaderChanged(FamilyLeaderChangedEvent event) {
         NotificationType type = NotificationType.FAMILY_LEADER_CHANGED;
         NotificationCopy copy = NotificationCopy.of(type, "R01", Map.of());
-        outboxService.enqueue(event.newLeaderId(), message(copy, type.deepLinkTemplate(), event.newLeaderId()));
+        outboxService.enqueue(event.newLeaderId(), message(copy, type.deepLinkTemplate()));
 
         // R02: 새 방장과 방장을 넘긴 본인을 뺀 같은 가족의 보호자와 어르신(위듀·위듀케어 정책서 「다른 사람이 방장이 됨」).
-        List<FamilyMembership> memberships = familyMembershipRepository.findAllByFamilyIdWithGuardian(event.familyId());
+        // 방장 변경 트랜잭션은 가족 잠금 전에 일반 조회를 해 스냅샷이 오래됐을 수 있다. 수신자는 잠금 조회(current read)로
+        // 읽고, enqueue의 같은 가족 확인(일반 조회)에 걸리지 않도록 relatedMemberId를 싣지 않는다.
+        List<FamilyMembership> memberships = familyMembershipRepository.findAllByFamilyIdForUpdate(event.familyId());
         String newLeaderName = memberships.stream()
                 .map(FamilyMembership::getGuardian)
                 .filter(guardian -> guardian.getId().equals(event.newLeaderId()))
@@ -47,14 +50,14 @@ public class FamilyLeaderChangedNotificationListener {
             if (guardianId.equals(event.newLeaderId()) || guardianId.equals(event.previousLeaderId())) {
                 continue;
             }
-            outboxService.enqueue(guardianId, message(others, type.deepLinkTemplate(), event.newLeaderId()));
+            outboxService.enqueue(guardianId, message(others, type.deepLinkTemplate()));
         }
-        for (Long seniorId : seniorProfileRepository.findSeniorMemberIds(event.familyId())) {
-            outboxService.enqueue(seniorId, message(others, SENIOR_FAMILY_MANAGE, event.newLeaderId()));
+        for (SeniorProfile senior : seniorProfileRepository.findAllByFamilyIdForShare(event.familyId())) {
+            outboxService.enqueue(senior.getMember().getId(), message(others, SENIOR_FAMILY_MANAGE));
         }
     }
 
-    private FcmSendDto message(NotificationCopy copy, String deepLink, Long newLeaderId) {
+    private FcmSendDto message(NotificationCopy copy, String deepLink) {
         NotificationType type = NotificationType.FAMILY_LEADER_CHANGED;
         return FcmSendDto.builder()
                 .title(copy.title())
@@ -63,7 +66,6 @@ public class FamilyLeaderChangedNotificationListener {
                 .notificationType(type)
                 .scheme(deepLink)
                 .deepLink(deepLink)
-                .relatedMemberId(newLeaderId)
                 .build();
     }
 }
