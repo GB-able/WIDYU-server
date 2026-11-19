@@ -63,7 +63,7 @@ public interface NotificationSettingDocs {
 
     @Operation(
             summary = "알림 설정 변경",
-            description = "로그인한 본인의 제품 푸시만 변경합니다. 보호자는 SAFETY·SAFE_ZONE·MEDICATION_CHECK·GENERAL을 사용합니다. 시니어의 ALBUM·GOAL·HOME·ETC는 끌 수 없어 켜기는 저장 없이 켜짐을 돌려주고 끄기는 409(FCM_4090)입니다. policyRevision이 최신값과 다르거나, 보호자가 안전(SAFETY) 푸시를 끄거나, 방장이 안심구역 푸시를 끄면 409입니다. 푸시를 꺼도 센터 저장 대상 알림은 남습니다."
+            description = "로그인한 본인의 제품 푸시만 변경합니다. 보호자는 SAFETY·SAFE_ZONE·MEDICATION_CHECK·GENERAL을 사용합니다. 시니어의 ALBUM·GOAL·HOME·ETC는 끌 수 없어 켜기는 저장 없이 켜짐을 돌려주고 끄기는 409(FCM_4090)입니다. policyRevision이 최신값과 다르거나, 보호자가 안전(SAFETY) 푸시를 끄거나, 방장이 안심구역 푸시를 끄면 409입니다. 끈 뒤에 접수되는 알림은 푸시와 알림센터 어디에도 남지 않고, 끄기 전에 접수된 알림센터 항목은 그대로 둡니다."
     )
     @ApiResponse(
             responseCode = "200",
