@@ -156,18 +156,66 @@ class NotificationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("방장의 안전 푸시 자격을 판정하면 꺼진 저장값과 무관하게 허용한다")
-    void 방장의_안전_푸시를_판정하면_저장값과_무관하게_허용한다() {
+    @DisplayName("방장의 안심구역 푸시 자격을 판정하면 꺼진 저장값과 무관하게 허용한다")
+    void 방장의_안심구역_푸시를_판정하면_저장값과_무관하게_허용한다() {
         // given
         FamilyMembership membership = mock(FamilyMembership.class);
         given(memberships.findByGuardianId(1L)).willReturn(Optional.of(membership));
         given(membership.isLeader()).willReturn(true);
 
         // when
+        boolean enabled = service.isNotificationEnabled(1L, PushSettingGroup.SAFE_ZONE);
+
+        // then
+        assertThat(enabled).isTrue();
+    }
+
+    @Test
+    @DisplayName("비방장의 안전 푸시 자격을 판정하면 꺼진 저장값이 있어도 허용한다")
+    void 비방장의_안전_푸시를_판정하면_꺼진_저장값이_있어도_허용한다() {
+        // when
         boolean enabled = service.isNotificationEnabled(1L, PushSettingGroup.SAFETY);
 
         // then
         assertThat(enabled).isTrue();
+    }
+
+    @Test
+    @DisplayName("비방장이 설정을 조회하면 안전은 꺼진 저장값과 무관하게 잠금 켜짐이고 안심구역은 수정할 수 있다")
+    void 비방장이_설정을_조회하면_안전만_잠금_켜짐이다() {
+        // given
+        Member member = member(MemberType.GUARDIAN);
+        MemberNotificationSetting safetyOff = MemberNotificationSetting.create(member, PushSettingGroup.SAFETY, false);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(settings.findAllByMemberId(1L)).willReturn(List.of(safetyOff));
+
+        // when
+        List<NotificationSettingResponse> result = service.getNotificationSettings();
+
+        // then
+        NotificationSettingResponse safety = result.get(0);
+        NotificationSettingResponse safeZone = result.get(1);
+        assertThat(safety.productPushEnabled()).isTrue();
+        assertThat(safety.mandatoryProductPush()).isTrue();
+        assertThat(safety.canEditProductPush()).isFalse();
+        assertThat(safeZone.mandatoryProductPush()).isFalse();
+        assertThat(safeZone.canEditProductPush()).isTrue();
+    }
+
+    @Test
+    @DisplayName("비방장이 안전 푸시를 끄면 충돌 예외가 발생하고 revision이 그대로다")
+    void 비방장이_안전_푸시를_끄면_충돌_예외가_발생한다() {
+        // given
+        Member member = member(MemberType.GUARDIAN);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(members.findByIdForUpdate(1L)).willReturn(Optional.of(member));
+
+        // when / then
+        assertThatThrownBy(() -> service.updateNotificationSetting(
+                new UpdateNotificationSettingRequest("SAFETY", false, 0L)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MANDATORY_NOTIFICATION_PUSH);
+        assertThat(member.getNotificationPolicyRevision()).isZero();
     }
 
     @Test
@@ -190,8 +238,8 @@ class NotificationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("비방장이 안전 푸시를 끄면 자기 설정과 revision이 바뀐다")
-    void 비방장이_안전_푸시를_끄면_자기_설정과_revision이_바뀐다() {
+    @DisplayName("비방장이 안심구역 푸시를 끄면 자기 설정과 revision이 바뀐다")
+    void 비방장이_안심구역_푸시를_끄면_자기_설정과_revision이_바뀐다() {
         // given
         Member member = member(MemberType.GUARDIAN);
         given(memberUtil.getCurrentMember()).willReturn(member);
@@ -211,8 +259,8 @@ class NotificationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("비방장이 꺼진 안전 푸시를 켜면 저장값과 revision이 바뀐다")
-    void 비방장이_꺼진_안전_푸시를_켜면_저장값이_바뀐다() {
+    @DisplayName("비방장이 꺼진 안심구역 푸시를 켜면 저장값과 revision이 바뀐다")
+    void 비방장이_꺼진_안심구역_푸시를_켜면_저장값이_바뀐다() {
         // given
         Member member = member(MemberType.GUARDIAN);
         MemberNotificationSetting setting = MemberNotificationSetting.create(member, PushSettingGroup.SAFE_ZONE, false);

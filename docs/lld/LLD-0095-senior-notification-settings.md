@@ -86,7 +86,7 @@
 - 발송 판정(`FcmEligibility`): 수신자가 시니어면 타입 유무와 관계없이 개인 설정을 보지 않는다. ACTIVE, 토큰 owner, 관련 회원 가족 검증은 그대로다. 보호자 판정(타입의 `settingGroup()`, 타입 없으면 `fromLegacy(FcmCategory)`, 방장 필수 안전 그룹)은 바뀌지 않는다. 시니어 전용 매핑(`PushSettingGroup.forSenior`, `fromLegacy(category, memberType)`)은 쓰는 곳이 없어 지웠다.
 - `GET /api/v1/fcm/settings`: 시니어에게 `ALBUM`, `GOAL`, `HOME`, `ETC` 네 항목을 그대로 돌려주되 모두 `enabled=true`, `mandatoryProductPush=true`, `canEditProductPush=false`다. 저장된 OFF 행은 무시한다. 옛 앱이 화면을 그대로 그려도 잠긴 켜짐 스위치로 보이게 하려고 항목을 빼지 않았다.
 - `PATCH /api/v1/fcm/settings`: 시니어가 네 항목 중 하나를 끄면 방장 안전 그룹과 같은 `FCM_4090`(409)이다. 켜면 저장 없이 잠긴 켜짐을 돌려준다. 두 경우 모두 행과 revision이 바뀌지 않는다. 그룹 검사(`FCM_4001`)와 revision 검사(`FCM_4091`)는 잠금 판정보다 먼저다.
-- `FCM_4090`의 메시지는 「방장의 안전 알림 푸시는 끌 수 없습니다.」 그대로다. 위듀 앱은 설정 화면을 없애므로 메시지를 노출할 곳이 없고, 코드를 늘리지 않으려고 새 오류 코드를 만들지 않았다.
+- `FCM_4090`의 메시지는 「방장의 안전 알림 푸시는 끌 수 없습니다.」 그대로다. 위듀 앱은 설정 화면을 없애므로 메시지를 노출할 곳이 없고, 코드를 늘리지 않으려고 새 오류 코드를 만들지 않았다. #1125([LLD-0170](LLD-0170-safety-push-locked-for-all-guardians.md))에서 방장이 아닌 보호자도 같은 코드를 받게 되어 메시지를 「끌 수 없는 알림입니다.」로 바꿨다.
 
 ### 11.3 데이터
 

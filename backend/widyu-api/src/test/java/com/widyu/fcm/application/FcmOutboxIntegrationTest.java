@@ -490,8 +490,8 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("안전 푸시를 끈 보호자에게 2차를 넣으면 센터만 남고 기기 작업을 취소한다")
-    void 안전_푸시를_끈_보호자에게_이차를_넣으면_센터만_남긴다() {
+    @DisplayName("예전에 안전 푸시를 끈 비방장에게 2차를 넣으면 센터와 기기 작업이 모두 살아 있다")
+    void 안전_푸시를_끈_기록이_남은_비방장에게_이차를_넣으면_푸시도_보낸다() {
         // given
         Long seniorId = memberWithToken();
         Long guardianId = new TransactionTemplate(transactionManager).execute(status -> {
@@ -517,9 +517,9 @@ class FcmOutboxIntegrationTest {
         FcmDelivery claimed = transactions.claim(outboxId);
 
         // then
-        assertThat(claimed).isNull();
+        assertThat(claimed).isNotNull();
         assertThat(notifications.findByRecipientMemberIdAndEventId(guardianId, "inc-stage-off")).isPresent();
-        assertThat(outbox.findById(outboxId).orElseThrow().getState()).isEqualTo(FcmOutbox.State.CANCELLED);
+        assertThat(outbox.findById(outboxId).orElseThrow().getState()).isNotEqualTo(FcmOutbox.State.CANCELLED);
     }
 
     @Test

@@ -53,7 +53,7 @@ class EmergencyRecipientSnapshotServiceTest {
     @Autowired private PlatformTransactionManager transactionManager;
 
     @Test
-    @DisplayName("스냅샷을 만들면 탈퇴 회원, 비활성 토큰, 안전 알림을 끈 보호자를 빼고 방장은 설정과 무관하게 넣는다")
+    @DisplayName("스냅샷을 만들면 탈퇴 회원과 비활성 토큰을 빼고 안전 알림 끔 기록이 남은 보호자는 넣는다")
     void 스냅샷을_만들면_받을_수_없는_보호자를_뺀다() throws Exception {
         // given
         Family family = entityManager.persist(Family.createFamily("SNP001"));
@@ -64,7 +64,7 @@ class EmergencyRecipientSnapshotServiceTest {
         Member member = guardian(family, false);
         MemberFcmToken memberToken = token(member, "member-token", true);
         Member optedOut = guardian(family, false);
-        token(optedOut, "opted-out-token", true);
+        MemberFcmToken optedOutToken = token(optedOut, "opted-out-token", true);
         entityManager.persist(MemberNotificationSetting.create(optedOut, PushSettingGroup.SAFETY, false));
         Member withdrawn = guardian(family, false);
         token(withdrawn, "withdrawn-token", true);
@@ -90,9 +90,9 @@ class EmergencyRecipientSnapshotServiceTest {
                 EmergencyRecipientSnapshot.class);
         assertThat(snapshot.seniorName()).isEqualTo("김시니어");
         assertThat(snapshot.recipients()).extracting(EmergencyRecipientSnapshot.Recipient::tokenId)
-                .containsExactlyInAnyOrder(leaderToken.getId(), memberToken.getId());
+                .containsExactlyInAnyOrder(leaderToken.getId(), memberToken.getId(), optedOutToken.getId());
         assertThat(snapshot.recipients()).extracting(EmergencyRecipientSnapshot.Recipient::guardianId)
-                .containsExactlyInAnyOrder(leader.getId(), member.getId());
+                .containsExactlyInAnyOrder(leader.getId(), member.getId(), optedOut.getId());
     }
 
     @Test

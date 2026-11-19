@@ -46,6 +46,14 @@ class PushSettingGroupTest {
     }
 
     @Test
+    @DisplayName("그룹의 보호자 전원 필수 속성을 조회하면 안전 그룹만 필수로 반환한다")
+    void 그룹의_보호자_전원_필수_속성을_조회하면_안전_그룹만_필수로_반환한다() {
+        // when / then
+        assertThat(PushSettingGroup.stream().filter(PushSettingGroup::isMandatoryForGuardians).toList())
+                .containsExactly(PushSettingGroup.SAFETY);
+    }
+
+    @Test
     @DisplayName("NONE 그룹을 설정 행으로 만들면 예외가 발생한다")
     void NONE_그룹을_설정_행으로_만들면_예외가_발생한다() {
         // when / then

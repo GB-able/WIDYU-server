@@ -1,6 +1,8 @@
 # LLD-0065: 푸시 설정 4분류와 방장 안전 알림 필수
 
 > Low-Level Design. 이 문서는 이슈 #700 구현과 PR 본문의 기준이다. W2의 `NotificationType.settingGroup()`과 W3의 수신자×이벤트 센터 행을 전제로 한다.
+>
+> 2026-11-19 #1125: `SAFETY`는 방장뿐 아니라 보호자 누구도 끌 수 없다. 이 문서의 「비방장은 안전 그룹을 끌 수 있다」는 `SAFE_ZONE`에만 남는다. 현재 동작은 [LLD-0170](LLD-0170-safety-push-locked-for-all-guardians.md)이 정본이다.
 
 | 항목 | 값 |
 | --- | --- |

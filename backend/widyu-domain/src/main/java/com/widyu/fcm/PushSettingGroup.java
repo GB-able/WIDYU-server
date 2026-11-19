@@ -7,22 +7,25 @@ import lombok.Getter;
 /** 알림 타입과 회원별 푸시 설정에 공통으로 쓰는 그룹. */
 @Getter
 public enum PushSettingGroup {
-    SAFETY("안전 알림", true),
-    SAFE_ZONE("안심구역", true),
-    MEDICATION_CHECK("복약 확인", false),
-    GENERAL("일반 알림", false),
-    ALBUM("앨범", false),
-    GOAL("목표", false),
-    HOME("홈", false),
-    ETC("기타", false),
-    NONE("", false);
+    SAFETY("안전 알림", true, true),
+    SAFE_ZONE("안심구역", true, false),
+    MEDICATION_CHECK("복약 확인", false, false),
+    GENERAL("일반 알림", false, false),
+    ALBUM("앨범", false, false),
+    GOAL("목표", false, false),
+    HOME("홈", false, false),
+    ETC("기타", false, false),
+    NONE("", false, false);
 
     private final String description;
     private final boolean mandatoryForLeader;
+    /** 방장이 아니어도 보호자 누구도 끌 수 없다. 심박 안전 알림(위듀케어 알림 정책서 10절, LLD-0170). */
+    private final boolean mandatoryForGuardians;
 
-    PushSettingGroup(String description, boolean mandatoryForLeader) {
+    PushSettingGroup(String description, boolean mandatoryForLeader, boolean mandatoryForGuardians) {
         this.description = description;
         this.mandatoryForLeader = mandatoryForLeader;
+        this.mandatoryForGuardians = mandatoryForGuardians;
     }
 
     public static Stream<PushSettingGroup> stream() {

@@ -18,7 +18,7 @@ public interface NotificationSettingDocs {
 
     @Operation(
             summary = "알림 설정 조회",
-            description = "본인의 제품 푸시 설정을 조회합니다. 보호자는 안전·안심구역·복약 확인·일반, 시니어는 앨범·목표·홈·기타 푸시 4그룹이며 항상 켜짐, 변경 불가(mandatoryProductPush=true)로 내려갑니다. 기기 상태 unknown은 OS 권한을 알 수 없다는 뜻입니다."
+            description = "본인의 제품 푸시 설정을 조회합니다. 보호자는 안전·안심구역·복약 확인·일반, 시니어는 앨범·목표·홈·기타 푸시 4그룹입니다. 시니어의 네 그룹과 보호자 누구든의 안전(SAFETY), 방장의 안심구역은 항상 켜짐, 변경 불가(mandatoryProductPush=true)로 내려갑니다. 기기 상태 unknown은 OS 권한을 알 수 없다는 뜻입니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -63,7 +63,7 @@ public interface NotificationSettingDocs {
 
     @Operation(
             summary = "알림 설정 변경",
-            description = "로그인한 본인의 제품 푸시만 변경합니다. 보호자는 SAFETY·SAFE_ZONE·MEDICATION_CHECK·GENERAL을 사용합니다. 시니어의 ALBUM·GOAL·HOME·ETC는 끌 수 없어 켜기는 저장 없이 켜짐을 돌려주고 끄기는 409(FCM_4090)입니다. policyRevision이 최신값과 다르거나 방장이 안전 푸시를 끄면 409입니다. 푸시를 꺼도 센터 저장 대상 알림은 남습니다."
+            description = "로그인한 본인의 제품 푸시만 변경합니다. 보호자는 SAFETY·SAFE_ZONE·MEDICATION_CHECK·GENERAL을 사용합니다. 시니어의 ALBUM·GOAL·HOME·ETC는 끌 수 없어 켜기는 저장 없이 켜짐을 돌려주고 끄기는 409(FCM_4090)입니다. policyRevision이 최신값과 다르거나, 보호자가 안전(SAFETY) 푸시를 끄거나, 방장이 안심구역 푸시를 끄면 409입니다. 푸시를 꺼도 센터 저장 대상 알림은 남습니다."
     )
     @ApiResponse(
             responseCode = "200",
@@ -109,7 +109,7 @@ public interface NotificationSettingDocs {
     )
     @ApiResponse(
             responseCode = "409",
-            description = "방장 안전 푸시·시니어 푸시 필수(FCM_4090) 또는 낡은 policyRevision(FCM_4091)"
+            description = "보호자 안전 푸시·방장 안심구역 푸시·시니어 푸시 필수(FCM_4090) 또는 낡은 policyRevision(FCM_4091)"
     )
     ApiResponseTemplate<NotificationSettingResponse> updateNotificationSetting(
             @RequestBody(

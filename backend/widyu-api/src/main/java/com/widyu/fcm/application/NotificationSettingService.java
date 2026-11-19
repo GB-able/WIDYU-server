@@ -82,7 +82,7 @@ public class NotificationSettingService {
     }
 
     public boolean isNotificationEnabled(Long memberId, PushSettingGroup group) {
-        if (group == null || group == PushSettingGroup.NONE) {
+        if (group == null || group == PushSettingGroup.NONE || group.isMandatoryForGuardians()) {
             return true;
         }
         if (group.isMandatoryForLeader() && familyMembershipRepository.findByGuardianId(memberId)
@@ -116,9 +116,9 @@ public class NotificationSettingService {
                 .map(membership -> membership.isLeader()).orElse(false);
     }
 
-    /** 끌 수 없는 항목: 시니어의 네 항목 전부(위듀 알림 정책 2절, LLD-0095), 방장의 안전 그룹. */
+    /** 끌 수 없는 항목: 시니어의 네 항목 전부(위듀 알림 정책 2절, LLD-0095), 보호자 전원의 심박 안전(LLD-0170), 방장의 안심구역. */
     private boolean locked(Member member, PushSettingGroup group, boolean leader) {
-        if (member.getType() == MemberType.SENIOR) {
+        if (member.getType() == MemberType.SENIOR || group.isMandatoryForGuardians()) {
             return true;
         }
         return leader && group.isMandatoryForLeader();
