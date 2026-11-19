@@ -48,6 +48,8 @@
 
 > 2026-11-18 갱신(#1107): 알림 정책서(위듀 v12)의 확정 문구로 바꿨다. M02 부제목 「약을 복용하시기 전에 인증해 주세요.」, M03 부제목 「지금 약을 복용하시기 전에 인증해 주세요.」, M08 「약 알람이 생성되었습니다.」(부제목 없음), M05 「약 알람이 변경되었습니다.」 / 「이미 인증한 포인트는 사라지지 않아요.」, M09 「약 알람이 삭제되었습니다.」 / 같은 부제목. 제목에서 보호자 이름이 빠지지만 `data.actorDisplayName`, `revision`, `effectiveFromDate`는 그대로 싣는다. 오늘 끝난 알람을 바꿔 내일부터 적용될 때 쓰는 `-NEXT` 변형(LLD-0113)은 정책서가 「쓰지 않음」으로 적었으나 그 경로가 살아 있어 옛 문구 그대로 두고 확인을 요청했다.
 
+> 2026-11-19 갱신(#1124): 내일 적용 경우에도 위 새 문구를 쓰고 `-NEXT` 변형을 지웠다(LLD-0113 갱신 참고).
+
 `NotificationCopy`는 문구표 v0.4 §3의 제목·본문을 그대로 렌더링한다. 특히 M04는 **`{시니어 이름} 님의 약 복용 인증이 아직 확인되지 않았어요.` / `약을 드셨는지 직접 확인해보세요.`**이다. M02·M03·M08·M05·M09에도 각각 지정된 문구만 쓰며 옛 `복약 알람 변경` 문구나 미복용 단정 문구를 쓰지 않는다. 잠금화면에는 약 이름·복용량을 싣지 않는다.
 
 모든 typed FCM의 `data.notificationType`은 논리 `NotificationType.name()`이다. `data.type`은 레지스트리의 nullable `legacyDataType`이 있으면 그 값이고, 없으면 논리 타입 이름이다. M08/M05/M09·SYNC만 `legacyDataType=MEDICATION_SCHEDULE_CHANGED`로 두어 구 앱의 `type`·`revision` 재조회 계약을 지킨다. M08/M05/M09에는 `revision`, `effectiveFromDate`, `actorDisplayName`을, SYNC에는 `revision`을 싣는다. 모든 FCM에 `eventId`가 있고 센터 미저장 이벤트에는 `notificationId`가 없다. 새 앱은 `notificationType`을 우선 파싱한다. 이 이중 키는 계획 §5의 호환 가정을 실현하는 LLD 제안이다.

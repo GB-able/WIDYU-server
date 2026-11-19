@@ -432,12 +432,8 @@ public class MedicineScheduleService {
         if (actorName == null || actorName.isBlank()) {
             actorName = "가족";
         }
-        String copyCode = type.copyCode();
-        // 끝난 알람의 변경처럼 내일부터 적용되면 "내일부터" 문구를 쓴다(LLD-0113)
-        if (effectiveFromDate.isAfter(LocalDate.now(clock))) {
-            copyCode = copyCode + "-NEXT";
-        }
-        NotificationCopy copy = NotificationCopy.of(type, copyCode,
+        // 내일부터 적용돼도 같은 문구다. 적용일은 effectiveFromDate로 따로 싣는다(LLD-0113)
+        NotificationCopy copy = NotificationCopy.of(type, type.copyCode(),
                 Map.of("보호자 이름", actorName));
         fcmService.sendMessageToUser(member.getId(), FcmSendDto.builder()
                 .title(copy.title()).content(copy.body())

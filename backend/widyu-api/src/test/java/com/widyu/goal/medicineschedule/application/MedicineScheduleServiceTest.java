@@ -359,8 +359,10 @@ class MedicineScheduleServiceTest {
         ArgumentCaptor<FcmSendDto> messageCaptor = ArgumentCaptor.forClass(FcmSendDto.class);
         then(fcmService).should(times(2)).sendMessageToUser(
                 org.mockito.ArgumentMatchers.eq(memberId), messageCaptor.capture());
-        assertThat(messageCaptor.getAllValues().getFirst().content())
-                .isEqualTo("바뀐 약 알람은 내일부터 적용돼요.");
+        FcmSendDto changed = messageCaptor.getAllValues().getFirst();
+        assertThat(changed.title()).isEqualTo("약 알람이 변경되었습니다.");
+        assertThat(changed.content()).isEqualTo("이미 인증한 포인트는 사라지지 않아요.");
+        assertThat(changed.effectiveFromDate()).isEqualTo(today().plusDays(1).toString());
     }
 
     @Test
