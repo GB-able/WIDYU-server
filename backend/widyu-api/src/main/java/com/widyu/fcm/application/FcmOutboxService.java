@@ -47,6 +47,11 @@ public class FcmOutboxService {
                 return;
             }
         }
+        NotificationType type = message.notificationType();
+        // 끈 알림은 푸시도 알림센터도 남기지 않는다(ADR-0046). 접수 시점 설정 기준이다.
+        if (!eligibility.settingAllows(recipientId, recipient.getType(), type, category(message))) {
+            return;
+        }
         String eventId = message.eventId();
         if (eventId == null || eventId.isBlank()) {
             eventId = UUID.randomUUID().toString();
@@ -56,7 +61,6 @@ public class FcmOutboxService {
         }
         Map<String, String> data = message.dataForEnqueue(eventId);
         String dataPayload = FcmDelivery.encodeData(data);
-        NotificationType type = message.notificationType();
         DeliveryMode mode = DeliveryMode.PUSH_AND_CENTER;
         if (type != null) {
             mode = type.deliveryMode();

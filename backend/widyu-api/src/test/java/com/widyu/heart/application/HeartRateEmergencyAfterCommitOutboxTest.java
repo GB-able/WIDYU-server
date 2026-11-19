@@ -118,6 +118,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, true, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         given(eligibility.familyId(ids[0])).willReturn(ids[3]);
         given(eligibility.sameActiveFamily(ids[2], ids[0], ids[3])).willReturn(true);
         willAnswer(invocation -> {
@@ -197,6 +198,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, true, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         given(deliveryProperties.ttl(false)).willReturn(Duration.ofHours(1));
         given(eligibility.familyId(ids[0])).willReturn(ids[2]);
         given(eligibility.sameActiveFamily(ids[1], ids[0], ids[2])).willReturn(true);
@@ -257,6 +259,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, true, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         willAnswer(invocation -> {
             outboxService.enqueue(invocation.getArgument(0), invocation.getArgument(1));
             return null;
@@ -312,6 +315,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, false, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         given(eligibility.familyId(ids[0])).willReturn(ids[2]);
         given(eligibility.sameActiveFamily(ids[1], ids[0], ids[2])).willReturn(true);
         willAnswer(invocation -> {
@@ -367,6 +371,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, false, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         willAnswer(invocation -> {
             outboxService.enqueue(invocation.getArgument(0), invocation.getArgument(1));
             return null;
@@ -414,6 +419,7 @@ class HeartRateEmergencyAfterCommitOutboxTest {
         });
         given(sensorProperties.incident()).willReturn(new SensorProperties.Incident(60, 5000, false, 5, 90));
         given(deliveryProperties.ttl(true)).willReturn(Duration.ofMinutes(5));
+        given(eligibility.settingAllows(any(), any(), any(), any())).willReturn(true);
         given(eligibility.familyId(ids[0])).willReturn(ids[2]);
         given(eligibility.sameActiveFamily(ids[1], ids[0], ids[2])).willReturn(true);
         willAnswer(invocation -> {

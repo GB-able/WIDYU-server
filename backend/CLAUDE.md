@@ -34,6 +34,7 @@
 - `@EventListener` 이벤트 아키텍처. `MemberNotificationSetting`(회원×카테고리 unique)
 - `FcmCategory`: ALL, ALBUM, TARGET, HEALTH_SCHEDULE, WALK, MEDICINE_SCHEDULE, HEART_MESSAGE, SAFE_ZONE, INCIDENT_SELF_CHECK
 - 알림 목록 탭은 저장 카테고리가 아니라 `NotificationCenterFilter`(전체, 안 읽음, 메시지, 목표, 앨범, 위치(보호자만), 기타)다. v1 `/api/v1/fcm`과 v2 `/api/v1/notifications`가 같은 분류를 쓴다. 새 `NotificationType`은 `centerFilter`를 정해야 탭에 보인다. → LLD-0117
+- **보호자가 끈 그룹의 알림은 접수(`FcmOutboxService.enqueue`) 때 센터 행도 만들지 않는다**. 판정은 발송과 같은 `FcmEligibility.settingAllows`다. 어르신 수신, 필수 그룹(`SAFETY` 보호자 전원, `SAFE_ZONE` 방장), `NONE`·`DATA_ONLY`·설정 그룹 없는 레거시는 판정하지 않는다. 접수 뒤 끄면 푸시만 취소된다 → ADR-0046, LLD-0171
 
 ### `pay` — 결제·포인트
 - **불변식**: 결제는 포인트를 충전·환수하지 않는다(ADR-0029). 시니어 가입 시 100포인트 지급, 앨범 잠금해제 50포인트 차감. TossPayments 연동

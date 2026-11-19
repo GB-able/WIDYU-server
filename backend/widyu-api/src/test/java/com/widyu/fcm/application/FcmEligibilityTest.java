@@ -123,6 +123,28 @@ class FcmEligibilityTest {
     }
 
     @Test
+    @DisplayName("보호자가 끈 그룹의 알림을 접수 판정하면 거부하고 설정 그룹이 없는 알림과 어르신 수신은 허용한다")
+    void 접수_판정은_끈_그룹만_거부한다() {
+        // given
+        given(settings.isNotificationEnabled(1L, PushSettingGroup.GENERAL)).willReturn(false);
+
+        // when
+        boolean albumOff = eligibility.settingAllows(1L, MemberType.GUARDIAN, NotificationType.ALBUM_CREATED,
+                FcmCategory.ALBUM);
+        boolean legacyNotice = eligibility.settingAllows(1L, MemberType.GUARDIAN, null, FcmCategory.LOCATION_NOTICE);
+        boolean dataOnly = eligibility.settingAllows(1L, MemberType.GUARDIAN,
+                NotificationType.MEDICATION_SCHEDULE_SYNC, FcmCategory.MEDICINE_SCHEDULE);
+        boolean senior = eligibility.settingAllows(1L, MemberType.SENIOR, NotificationType.ALBUM_CREATED,
+                FcmCategory.ALBUM);
+
+        // then
+        assertThat(albumOff).isFalse();
+        assertThat(legacyNotice).isTrue();
+        assertThat(dataOnly).isTrue();
+        assertThat(senior).isTrue();
+    }
+
+    @Test
     @DisplayName("data 전용 동기화이면 설정을 건너뛰고 수신 자격을 유지한다")
     void data_전용_동기화이면_설정을_건너뛰고_수신을_허용한다() {
         // given

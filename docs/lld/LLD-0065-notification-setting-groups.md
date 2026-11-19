@@ -80,7 +80,7 @@ W2의 `NotificationType.settingGroup()`이 반환하는 `PushSettingGroup`을 �
 2. PATCH는 저장 트랜잭션에서 본인 회원 행을 `findByIdForUpdate`로 잠그고 요청 `policyRevision`과 최신 값을 비교한다. 다르면 409이며 행·revision은 그대로다. 현재 `FamilyMembership`을 읽어 방장 여부를 판정한다. 방장이 `SAFETY/SAFE_ZONE`을 끄면 409, 시니어가 `GENERAL` 외 그룹 또는 누구든 `NONE`을 쓰면 400이다. 다른 회원을 지정하는 입력은 허용하지 않는다.
 3. 허용된 PATCH는 `(member_id,category)` 한 행을 upsert한다. 현재값(행 없으면 true)이 달라질 때만 회원 revision을 1 올리고 새 값을 응답한다. 동일 값 재요청도 요청 revision은 검사한다. 회원 행 잠금으로 같은 revision의 동시 PATCH 두 건이 모두 저장되지 않게 한다.
 4. W3의 `claim`과 `preflight`는 모두 `FcmEligibility.eligible`을 호출한다. 판정 순서는 ACTIVE·토큰 owner → type이 있으면 `type.settingGroup()`(`NONE/DATA_ONLY`는 설정 건너뜀, 필수 그룹이고 현재 방장이면 true, 아니면 저장 행 또는 기본 true) → type이 없으면 `PushSettingGroup.fromLegacy(fcmCategory)`(null이면 설정 건너뜀) → 관련 회원 ACTIVE·같은 가족이다. claim 뒤 역할·설정 변경은 preflight에서 다시 잡는다.
-5. `FcmOutboxService.enqueue`는 W3대로 수신자·가족을 확인한 뒤 센터 저장 타입 행을 토큰 루프 앞에서 만든다. 설정 OFF여도 센터 행은 남고 outbox만 claim/preflight에서 취소된다. `pushEligible`은 타입의 enqueue 정책 스냅샷이며 개인 설정이나 최종 전송 결과가 아니다. 새 이벤트 리스너·외부 호출은 없다.
+5. `FcmOutboxService.enqueue`는 W3대로 수신자·가족을 확인한 뒤 센터 저장 타입 행을 토큰 루프 앞에서 만든다. ~~설정 OFF여도 센터 행은 남고 outbox만 claim/preflight에서 취소된다.~~ 2026-11-19 #1126부터는 접수 시점에 설정이 꺼져 있으면 센터 행과 outbox 행을 모두 만들지 않는다([ADR-0046](../adr/ADR-0046-setting-off-skips-notification-center.md), [LLD-0171](LLD-0171-setting-off-skips-center.md)). 접수 뒤 꺼지면 지금처럼 claim/preflight가 푸시만 취소한다. `pushEligible`은 타입의 enqueue 정책 스냅샷이며 개인 설정이나 최종 전송 결과가 아니다. 새 이벤트 리스너·외부 호출은 없다.
 
 ## 6. 예외 / 에러 처리
 
@@ -97,7 +97,7 @@ W2의 `NotificationType.settingGroup()`이 반환하는 `PushSettingGroup`을 �
 - [x] AC1 (N10): 보호자 GET은 네 그룹, 시니어 GET은 가정에 따른 `GENERAL` 하나를 준다. 새 보호자·행 없는 설정은 켜짐이고 `enabled=productPushEnabled`다.
 - [x] AC2 (N11): 방장의 안전 두 그룹 끄기는 `FCM_4090`/409이고 행·revision이 그대로다. 응답은 `recipientEnabled/productPushEnabled/mandatoryProductPush=true`, `canEditProductPush=false`다. 비방장은 두 그룹 켜기·끄기가 200이며 본인 행만 바뀐다.
 - [x] AC3 (N11): 응답이 `recipientEnabled`, `productPushEnabled`, `mandatoryProductPush`, `canEditProductPush`, `devicePushStatus`(`unknown` 허용), `policyRevision`을 분리한다. 다른 회원의 설정 조회·수정 API는 없다.
-- [x] AC4 (N12): 비방장의 안전 푸시를 꺼도 W3와 통합한 센터 행은 1건 생기고 해당 outbox는 claim 또는 preflight에서 취소된다. 토큰 0개여도 센터 행은 생긴다.
+- [x] AC4 (N12): ~~비방장의 안전 푸시를 꺼도 W3와 통합한 센터 행은 1건 생기고 해당 outbox는 claim 또는 preflight에서 취소된다.~~ 토큰 0개여도 센터 행은 생긴다. (2026-11-19 #1126: 접수 시점에 끈 그룹은 센터 행도 만들지 않는다. LLD-0171 AC1·AC2)
 - [x] AC5: type 설정 그룹이 레거시 카테고리보다 우선한다. S08/S09·G01·M05는 `GENERAL`, M04는 `MEDICATION_CHECK`, 심박 위급은 `SAFETY`, 안심구역 이탈은 `SAFE_ZONE`을 따른다. type NULL은 `fromLegacy(FcmCategory)` 폴백, `NONE/DATA_ONLY`는 설정 건너뛰기다. claim·preflight 모두 검증한다.
 - [x] AC6: 마이그레이션 매핑 단위 테스트는 다섯 카테고리 전부 꺼진 회원만 `GENERAL=false` 한 행, 일부 행 누락 또는 하나라도 켜진 회원은 `GENERAL` 행 없음, `MEDICINE_SCHEDULE→MEDICATION_CHECK`, `SAFE_ZONE` 삭제, 회원 간 분리를 검증한다. H2를 MySQL native ENUM DDL 검증으로 간주하지 않는다.
 - [x] AC7: 낡은 revision 요청은 `FCM_4091`/409다. 동시 PATCH는 하나의 revision만 소비한다. 실제 값이 바뀐 PATCH는 revision을 올린다.
