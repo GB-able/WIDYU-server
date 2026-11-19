@@ -24,11 +24,9 @@ import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -132,11 +130,8 @@ public class AlbumNotificationListener {
             notifyComment(event.albumAuthorId(), commenter, NotificationType.ALBUM_COMMENTED, "A03", event);
             return;
         }
-        // A04는 원댓글 작성자와 게시물 작성자(알림 문구표 A04 수신자)에게 보낸다. 같은 사람이면 한 번만 보낸다.
-        Set<Long> recipientIds = new LinkedHashSet<>(List.of(event.parentCommentAuthorId(), event.albumAuthorId()));
-        for (Long recipientId : recipientIds) {
-            notifyComment(recipientId, commenter, NotificationType.ALBUM_REPLIED, "A04", event);
-        }
+        // A04는 원댓글 작성자에게만 보낸다(알림 정책서 「내 댓글에 답글이 달렸을 때」, #1128).
+        notifyComment(event.parentCommentAuthorId(), commenter, NotificationType.ALBUM_REPLIED, "A04", event);
     }
 
     private void notifyComment(Long recipientId, Member commenter, NotificationType type, String code,
