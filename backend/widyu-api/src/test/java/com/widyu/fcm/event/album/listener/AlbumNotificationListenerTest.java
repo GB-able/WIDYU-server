@@ -191,29 +191,24 @@ class AlbumNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("남의 댓글에 답글을 달면 원댓글 작성자와 게시물 작성자가 각각 A04를 받는다")
-    void 남의_댓글에_답글을_달면_원댓글_작성자와_게시물_작성자가_A04를_받는다() {
+    @DisplayName("남의 댓글에 답글을 달면 원댓글 작성자만 A04를 받고 게시물 작성자는 받지 않는다")
+    void 남의_댓글에_답글을_달면_원댓글_작성자만_A04를_받는다() {
         // given
-        Member albumAuthor = member(1L, MemberType.SENIOR, "박순자");
         Member parentAuthor = member(2L, MemberType.SENIOR, "김영수");
         Member replier = member(3L, MemberType.GUARDIAN, "김민호");
-        given(memberRepository.findById(1L)).willReturn(Optional.of(albumAuthor));
         given(memberRepository.findById(2L)).willReturn(Optional.of(parentAuthor));
         given(memberRepository.findById(3L)).willReturn(Optional.of(replier));
-        ArgumentCaptor<Long> recipients = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<FcmSendDto> captor = ArgumentCaptor.forClass(FcmSendDto.class);
 
         // when
         listener.handleAlbumCommented(new AlbumCommentedEvent(10L, 3L, 1L, 21L, 20L, 2L));
 
         // then
-        then(fcmService).should(times(2)).sendMessageToUser(recipients.capture(), captor.capture());
-        assertThat(recipients.getAllValues()).containsExactly(2L, 1L);
-        assertThat(captor.getAllValues()).extracting(FcmSendDto::notificationType)
-                .containsOnly(NotificationType.ALBUM_REPLIED);
-        assertThat(captor.getAllValues()).extracting(FcmSendDto::title)
-                .containsOnly("김민호 님이 댓글에 답글을 달았어요!");
-        assertThat(captor.getAllValues()).extracting(FcmSendDto::relatedMemberId).containsOnly(3L);
+        then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
+        then(fcmService).should(never()).sendMessageToUser(eq(1L), any(FcmSendDto.class));
+        assertThat(captor.getValue().notificationType()).isEqualTo(NotificationType.ALBUM_REPLIED);
+        assertThat(captor.getValue().title()).isEqualTo("김민호 님이 댓글에 답글을 달았어요!");
+        assertThat(captor.getValue().relatedMemberId()).isEqualTo(3L);
     }
 
     @Test
@@ -236,20 +231,17 @@ class AlbumNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("원댓글 작성자가 자기 댓글에 답글을 달면 본인 알림은 만들지 않고 게시물 작성자에게만 보낸다")
-    void 원댓글_작성자가_자기_댓글에_답글을_달면_본인_알림이_없다() {
+    @DisplayName("원댓글 작성자가 자기 댓글에 답글을 달면 아무에게도 알림을 만들지 않는다")
+    void 원댓글_작성자가_자기_댓글에_답글을_달면_알림이_없다() {
         // given
-        Member albumAuthor = member(1L, MemberType.SENIOR, "박순자");
         Member parentAuthor = member(2L, MemberType.GUARDIAN, "김민호");
-        given(memberRepository.findById(1L)).willReturn(Optional.of(albumAuthor));
         given(memberRepository.findById(2L)).willReturn(Optional.of(parentAuthor));
 
         // when
         listener.handleAlbumCommented(new AlbumCommentedEvent(10L, 2L, 1L, 21L, 20L, 2L));
 
         // then
-        then(fcmService).should().sendMessageToUser(eq(1L), any(FcmSendDto.class));
-        then(fcmService).should(never()).sendMessageToUser(eq(2L), any(FcmSendDto.class));
+        then(fcmService).should(never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
     }
 
     @Test
