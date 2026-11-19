@@ -193,8 +193,8 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("복약 확인 설정을 끄면 센터에 남기고 푸시만 취소한다")
-    void 복약_확인_설정을_끈_보호자도_센터에_남고_푸시만_취소한다() {
+    @DisplayName("복약 확인 설정을 끈 보호자에게는 센터 행과 기기 작업을 남기지 않는다")
+    void 복약_확인_설정을_끈_보호자에게는_센터와_기기_작업을_남기지_않는다() {
         // given
         Long seniorId = memberWithToken();
         List<Long> guardians = new TransactionTemplate(transactionManager).execute(status -> {
@@ -226,20 +226,14 @@ class FcmOutboxIntegrationTest {
         }
 
         // then
-        assertThat(notifications.count()).isEqualTo(2);
-        assertThat(outbox.count()).isEqualTo(6);
-        FcmOutbox enabledRow = outbox.findAll().stream()
-                .filter(row -> row.getRecipientMember().getId().equals(guardians.getFirst()))
-                .findFirst().orElseThrow();
-        FcmOutbox disabledRow = outbox.findAll().stream()
-                .filter(row -> row.getRecipientMember().getId().equals(guardians.get(1)))
-                .findFirst().orElseThrow();
-        assertThat(transactions.claim(enabledRow.getId())).isNotNull();
-        assertThat(transactions.claim(disabledRow.getId())).isNull();
-        assertThat(notifications.findAll()).allSatisfy(row -> {
+        assertThat(notifications.findAll()).singleElement().satisfies(row -> {
+            assertThat(row.getRecipientMember().getId()).isEqualTo(guardians.getFirst());
             assertThat(row.getSeniorId()).isEqualTo(seniorId);
             assertThat(row.getDeepLink()).isEqualTo("/goal/medicine?seniorId=" + seniorId);
         });
+        assertThat(outbox.findAll()).hasSize(4).allSatisfy(row ->
+                assertThat(row.getRecipientMember().getId()).isEqualTo(guardians.getFirst()));
+        assertThat(transactions.claim(outbox.findAll().getFirst().getId())).isNotNull();
     }
 
     @Test
@@ -567,8 +561,8 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("보호자가 푸시 설정을 끄면 센터를 유지하고 기기 작업을 취소한다")
-    void 푸시_설정을_끄면_센터를_유지하고_작업을_취소한다() {
+    @DisplayName("보호자가 일반 알림을 끈 뒤 접수된 알림은 센터 행과 기기 작업을 남기지 않는다")
+    void 일반_알림을_끈_뒤_접수된_알림은_센터와_작업을_남기지_않는다() {
         // given
         Long member = guardianWithToken();
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
@@ -578,19 +572,15 @@ class FcmOutboxIntegrationTest {
         // when
         service.enqueue(member, FcmSendDto.builder().title("앨범").content("본문")
                 .notificationType(NotificationType.ALBUM_CREATED).entityId("31").build());
-        Long rowId = outbox.findAll().getFirst().getId();
-        FcmDelivery delivery = transactions.claim(rowId);
 
         // then
-        assertThat(notifications.count()).isEqualTo(1);
-        assertThat(outbox.count()).isEqualTo(1);
-        assertThat(delivery).isNull();
-        assertThat(outbox.findById(rowId).orElseThrow().getState()).isEqualTo(FcmOutbox.State.CANCELLED);
+        assertThat(notifications.count()).isZero();
+        assertThat(outbox.count()).isZero();
     }
 
     @Test
-    @DisplayName("비방장이 안심구역 푸시를 꺼도 센터 행은 남고 기기 작업만 취소한다")
-    void 비방장이_안심구역_푸시를_꺼도_센터_행은_남는다() {
+    @DisplayName("비방장이 안심구역 푸시를 끄면 센터 행과 기기 작업을 남기지 않는다")
+    void 비방장이_안심구역_푸시를_끄면_센터_행도_남기지_않는다() {
         // given
         Long guardianId = new TransactionTemplate(transactionManager).execute(status -> {
             Member guardian = members.save(Member.createMember(MemberType.GUARDIAN, "보호자", "01045678901"));
@@ -604,13 +594,10 @@ class FcmOutboxIntegrationTest {
         // when
         service.enqueue(guardianId, FcmSendDto.builder().title("안심구역").content("본문")
                 .notificationType(NotificationType.SAFE_ZONE_EXITED).seniorId(guardianId).build());
-        Long rowId = outbox.findAll().getFirst().getId();
-        FcmDelivery delivery = transactions.claim(rowId);
 
         // then
-        assertThat(notifications.count()).isEqualTo(1);
-        assertThat(delivery).isNull();
-        assertThat(outbox.findById(rowId).orElseThrow().getState()).isEqualTo(FcmOutbox.State.CANCELLED);
+        assertThat(notifications.count()).isZero();
+        assertThat(outbox.count()).isZero();
     }
 
     @Test

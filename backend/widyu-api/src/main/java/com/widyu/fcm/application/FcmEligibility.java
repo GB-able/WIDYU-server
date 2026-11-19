@@ -1,7 +1,9 @@
 package com.widyu.fcm.application;
 
-import com.widyu.fcm.FcmOutbox;
 import com.widyu.fcm.DeliveryMode;
+import com.widyu.fcm.FcmCategory;
+import com.widyu.fcm.FcmOutbox;
+import com.widyu.fcm.NotificationType;
 import com.widyu.fcm.PushSettingGroup;
 import com.widyu.global.entity.Status;
 import com.widyu.member.Member;
@@ -43,11 +45,8 @@ public class FcmEligibility {
                 || !recipientId.equals(outbox.getMemberFcmToken().getMember().getId())) {
             return false;
         }
-        PushSettingGroup group = settingGroup(outbox, recipient.getType());
-        if (group != null && group != PushSettingGroup.NONE) {
-            if (!settings.isNotificationEnabled(recipientId, group)) {
-                return false;
-            }
+        if (!settingAllows(recipientId, recipient.getType(), outbox.getNotificationType(), outbox.getFcmCategory())) {
+            return false;
         }
         Long related = outbox.getRelatedMemberId();
         if (related == null || related.equals(recipientId)) {
@@ -56,18 +55,31 @@ public class FcmEligibility {
         return sameActiveFamily(recipientId, related, outbox.getFamilyId());
     }
 
+    /**
+     * 수신자가 이 알림의 설정 그룹을 켜 두었는지. 설정을 보지 않는 알림은 true다.
+     * 발송(claim·preflight)과 접수(센터 행 생성, ADR-0046)가 같은 규칙을 쓴다.
+     */
+    public boolean settingAllows(Long recipientId, MemberType recipientType, NotificationType type,
+                                 FcmCategory category) {
+        PushSettingGroup group = settingGroup(type, category, recipientType);
+        if (group == null || group == PushSettingGroup.NONE) {
+            return true;
+        }
+        return settings.isNotificationEnabled(recipientId, group);
+    }
+
     /** null이면 개인 설정을 보지 않는다. */
-    private PushSettingGroup settingGroup(FcmOutbox outbox, MemberType recipientType) {
+    private PushSettingGroup settingGroup(NotificationType type, FcmCategory category, MemberType recipientType) {
         // 시니어가 받는 푸시는 끌 수 없다(위듀 알림 정책 2절, LLD-0095). 남아 있는 시니어 OFF 행은 보지 않는다.
         if (recipientType == MemberType.SENIOR) {
             return null;
         }
-        if (outbox.getNotificationType() == null) {
-            return PushSettingGroup.fromLegacy(outbox.getFcmCategory());
+        if (type == null) {
+            return PushSettingGroup.fromLegacy(category);
         }
-        if (outbox.getNotificationType().deliveryMode() == DeliveryMode.DATA_ONLY) {
+        if (type.deliveryMode() == DeliveryMode.DATA_ONLY) {
             return null;
         }
-        return outbox.getNotificationType().settingGroup();
+        return type.settingGroup();
     }
 }

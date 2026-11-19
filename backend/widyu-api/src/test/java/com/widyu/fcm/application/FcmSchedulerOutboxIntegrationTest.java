@@ -143,7 +143,7 @@ class FcmSchedulerOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("어르신 일정 회차를 두 번 실행하면 가족 보호자마다 H01-C 센터 행이 하나씩 남고 일반 알림을 끈 보호자는 푸시만 빠진다")
+    @DisplayName("어르신 일정 회차를 두 번 실행하면 일반 알림을 켠 보호자에게 H01-C 센터 행이 하나 남고 끈 보호자에게는 아무것도 남지 않는다")
     void 어르신_일정이_임박하면_가족_보호자마다_H01C_센터_행이_하나씩_남는다() {
         // given
         List<Long> ids = new TransactionTemplate(transactionManager).execute(status -> {
@@ -169,7 +169,7 @@ class FcmSchedulerOutboxIntegrationTest {
         healthScheduler.sendHealthScheduleReminderAt(RUN_AT);
 
         // then
-        for (Long guardianId : ids.subList(1, 3)) {
+        for (Long guardianId : ids.subList(1, 2)) {
             assertThat(notifications.findAll().stream()
                     .filter(row -> row.getRecipientMember().getId().equals(guardianId)).toList())
                     .singleElement().satisfies(row -> {
@@ -184,7 +184,8 @@ class FcmSchedulerOutboxIntegrationTest {
         assertThat(enabledRow.getTitle()).isEqualTo("수신자 님의 건강 일정이 곧 있어요.");
         assertThat(enabledRow.getBody()).isEqualTo("앱에서 일정 시간과 내용을 확인해주세요.");
         assertThat(transactions.claim(enabledRow.getId())).isNotNull();
-        assertThat(transactions.claim(guardianOutbox(ids.get(2)).getId())).isNull();
+        assertThat(notifications.findAll()).noneMatch(row -> row.getRecipientMember().getId().equals(ids.get(2)));
+        assertThat(outbox.findAll()).noneMatch(row -> row.getRecipientMember().getId().equals(ids.get(2)));
     }
 
     @Test

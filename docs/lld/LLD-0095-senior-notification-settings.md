@@ -39,7 +39,7 @@
 1. GET은 인증 본인의 회원 타입으로 표시 그룹을 고른다. 행이 없으면 켜짐이며 모든 행이 같은 현재 revision을 갖는다.
 2. PATCH는 회원 행을 잠그고 revision과 역할별 허용 그룹을 검사한다. 실제 값이 바뀔 때만 본인 설정을 저장하고 revision을 올린다.
 3. typed outbox는 타입과 수신자 역할로 설정 그룹을 정한다. 보호자는 `NotificationType.settingGroup()`을 유지한다. 시니어는 `ALBUM→ALBUM`, `TARGET/HEALTH_SCHEDULE/WALK/MEDICINE_SCHEDULE→GOAL`, `HEART_MESSAGE→HOME`, `ETC→ETC`로 분기한다. 나머지 카테고리는 설정 그룹이 없고, `NONE`·`DATA_ONLY`는 설정을 건너뛴다. type 없는 레거시 outbox도 같은 역할별 카테고리 매핑을 쓴다. 긴급 본인확인 `SAFETY_SELF_CHECK`는 기존 안전 예외를 유지해 HOME OFF에도 발송한다.
-4. claim과 preflight는 같은 자격 판정을 사용한다. OFF는 푸시만 취소하고, 센터 저장 타입의 행은 남긴다.
+4. claim과 preflight는 같은 자격 판정을 사용한다. OFF는 푸시만 취소하고, 센터 저장 타입의 행은 남긴다. (2026-11-19 #1126: 보호자가 접수 시점에 끈 그룹은 센터 행도 만들지 않는다. 시니어는 #1105부터 끌 수 없어 해당 없음. LLD-0171)
 
 ## 6. 예외 / 에러 처리
 
@@ -55,7 +55,7 @@
 - [x] AC1: 시니어 GET은 네 독립 값을, 보호자 GET은 기존 네 그룹을 반환한다.
 - [x] AC2: 시니어 PATCH는 본인 한 값과 revision만 바꾸며 잘못된 그룹·낡은 revision을 거부한다.
 - [x] AC3: 시니어 typed·legacy outbox는 해당 그룹을 claim·preflight에서 따르고, 보호자·필수 안전·data 전용 흐름은 유지한다.
-- [x] AC4: 푸시 OFF에도 센터 저장 타입의 행은 남는다.
+- [x] AC4: 푸시 OFF에도 센터 저장 타입의 행은 남는다. (#1126 이후: 접수 뒤에 끈 경우만 남는다. 접수 시점에 끈 보호자 그룹은 센터 행도 없다. LLD-0171)
 - [ ] AC5: 제안한 데이터 이행 SQL의 H2 매핑·재실행 테스트는 통과했다. 제품 확인과 운영 MySQL 검증은 남았다.
 - [ ] AC6: Swagger와 변경 모듈 지정 테스트·정적 하네스는 통과했다. 전체 하네스는 Redis 가능한 환경에서 재실행해야 한다.
 
