@@ -145,7 +145,7 @@ services:
 
   # Nginx Reverse Proxy (공통)
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.30.7-alpine
     restart: unless-stopped
     ports:
       - "${NGINX_HTTP_PORT}:80"
