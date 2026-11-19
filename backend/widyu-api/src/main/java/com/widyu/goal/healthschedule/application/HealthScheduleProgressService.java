@@ -6,6 +6,7 @@ import com.widyu.global.retry.RetryOnPointConflict;
 import com.widyu.global.util.GeoUtils;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
+import com.widyu.fcm.event.goal.dto.GoalsAchievedEvent;
 import com.widyu.healthschedule.HealthSchedule;
 import com.widyu.healthschedule.ProgressStatus;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
@@ -18,6 +19,7 @@ import com.widyu.member.application.SeniorProfileService;
 import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,7 +81,9 @@ public class HealthScheduleProgressService {
         }
 
         // COMPLETED로 변경하고 최초 1회 포인트 적립
-        completeAndReward(healthSchedule);
+        if (completeAndReward(healthSchedule)) {
+            publishGoalAchieved(healthSchedule);
+        }
     }
 
     /** 위치의 관측 시각. 순서 시각(미래로 잰 시각은 받은 시각으로 자른 값)을 쓰고, 없으면 서버가 받은 시각을 쓴다. */
@@ -106,15 +110,36 @@ public class HealthScheduleProgressService {
         List<HealthSchedule> schedules = healthScheduleRepository.findByMemberIdAndStatusAndDate(
                 memberId, ProgressStatus.UPCOMING, startOfDay, startOfNextDay);
 
+        List<HealthSchedule> rewarded = new ArrayList<>();
         for (HealthSchedule schedule : schedules) {
             if (!schedule.canCompleteAt(now)) {
                 continue;
             }
 
-            if (isArrivedAtSchedule(schedule, latitude, longitude)) {
-                completeAndReward(schedule);
+            if (isArrivedAtSchedule(schedule, latitude, longitude) && completeAndReward(schedule)) {
+                rewarded.add(schedule);
             }
         }
+        publishArrivalAchievements(memberId, rewarded);
+    }
+
+    /** 한 번의 위치 수신에서 2개 이상 보상되면 G01 여러 개 대신 G02 하나로 묶는다(알림 정책서 G02). */
+    private void publishArrivalAchievements(Long memberId, List<HealthSchedule> rewarded) {
+        if (rewarded.isEmpty()) {
+            return;
+        }
+        if (rewarded.size() == 1) {
+            publishGoalAchieved(rewarded.get(0));
+            return;
+        }
+        List<Long> scheduleIds = rewarded.stream().map(HealthSchedule::getId).toList();
+        long totalPoints = rewarded.stream().mapToLong(schedule -> schedule.getRewardPoint().longValue()).sum();
+        eventPublisher.publishEvent(GoalsAchievedEvent.forHealthSchedules(memberId, scheduleIds, totalPoints));
+    }
+
+    private void publishGoalAchieved(HealthSchedule schedule) {
+        eventPublisher.publishEvent(GoalAchievedEvent.forHealthSchedule(
+                schedule.getMember().getId(), schedule.getId(), schedule.getRewardPoint().longValue()));
     }
 
     /**
@@ -122,19 +147,21 @@ public class HealthScheduleProgressService {
      * 적립 멱등성은 {@code isReward} 가드와 {@code PointHistory.operationKey} unique 제약이 함께 보장한다.
      * 소유자가 SENIOR가 아니면(보호자 본인 일정 생성 경로) 적립 없이 완료만 처리해,
      * SeniorProfile이 없는 회원 때문에 완료까지 롤백되지 않게 한다.
+     *
+     * @return 이번 호출에서 포인트를 적립했으면 true. 달성 알림은 호출자가 묶음 여부를 보고 발행한다.
      */
-    private void completeAndReward(HealthSchedule schedule) {
+    private boolean completeAndReward(HealthSchedule schedule) {
         schedule.complete();
 
         if (schedule.getIsReward()) {
-            return;
+            return false;
         }
 
         Member owner = schedule.getMember();
         if (owner.getType() != MemberType.SENIOR) {
             log.info("건강 일정 소유자가 시니어가 아니어서 포인트를 적립하지 않습니다: healthScheduleId={}, memberId={}",
                     schedule.getId(), owner.getId());
-            return;
+            return false;
         }
 
         seniorProfileService.addGoalRewardPoints(
@@ -144,8 +171,7 @@ public class HealthScheduleProgressService {
                 VISIT_REWARD_OPERATION_KEY_PREFIX + schedule.getId()
         );
         schedule.claimReward();
-        eventPublisher.publishEvent(GoalAchievedEvent.forHealthSchedule(
-                owner.getId(), schedule.getId(), schedule.getRewardPoint().longValue()));
+        return true;
     }
 
     private void validateHealthScheduleAccess(HealthSchedule healthSchedule, Member currentMember) {

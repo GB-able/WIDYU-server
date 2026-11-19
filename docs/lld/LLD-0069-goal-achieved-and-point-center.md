@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |
-| Issue | #704, #1025, #1108 |
+| Issue | #704, #1025, #1108, #1135 |
 | 관련 ADR | ADR-0037, ADR-0029 |
 | 작성자 | Codex / feature-704 |
 | 작성일 | 2026-10-02 |
@@ -95,9 +95,17 @@ G01은 `NotificationType.GOAL_ACHIEVED`(`FcmCategory.TARGET`, `PUSH_AND_CENTER`,
 | 항목(출처) | 서버 답/제안 | 구현 가정 | 막히는 W |
 |---|---|---|---|
 | priority·channel·deepLink 문자열(문서에 없음) | LLD-W2에 제안표 수록 | 제안값 | — |
-| G02 동시 달성 묶음 | 단일 트리거가 목표 2개를 동시에 적립하는 경로가 없어 G01만 발생 | G01만 | — |
+| G02 동시 달성 묶음 | ~~단일 트리거가 목표 2개를 동시에 적립하는 경로가 없어 G01만 발생~~ → 아래 #1135 개정 | 해소 | — |
 
 2026-10-02 구현은 W2 제안값을 사용했다. 이후 [LLD-0076](LLD-0076-guardian-deeplink-paths.md)이 보호자 G01-C를 `/goal/medicine?seniorId={seniorId}`로 교체했다. 위듀 경로와 걷기·건강일정 달성의 보호자 목적 화면은 FE 확인 대기다. G02는 레지스트리에 남지만 이 범위에서 발행하지 않는다. W4의 P01/P02 필터 정정과 W5의 `GENERAL` 설정 판정은 각 작업이 통합된 뒤 검증해야 한다.
+
+**#1135 개정(2026-11-19)**: 위의 「동시 적립 경로 없음」은 틀렸다. `HealthScheduleProgressService.completeArrivedSchedules`는 위치 수신 한 번에 도착한 당일 건강 일정을 모두 완료·적립하므로, 같은 장소·같은 날 일정이 둘이면 G01이 두 번 나간다. 걷기(`WalkService.updateSteps`, 하루 한 행)와 복약(`MedicationProofTransactionService`, 인증 한 건)은 한 처리에서 한 목표만 달성한다. 그래서 「같은 시점」을 「한 번의 처리에서 2개 이상 적립」으로 정의하고 그 경로에만 G02를 적용했다.
+
+- `completeAndReward`는 적립 여부만 돌려주고 이벤트를 발행하지 않는다. 수동 완료(`completeSchedule`)는 적립되면 G01을 발행한다. 자동 완료는 적립된 일정이 1개면 G01, 2개 이상이면 `GoalsAchievedEvent` 하나를 발행한다.
+- `GoalPointNotificationListener.onGoalsAchieved`가 `GOALS_ACHIEVED_GROUPED`로 시니어에게 G02-S, 같은 가족 보호자에게 G02-C(누르면 `/goal?seniorId={seniorId}`)를 접수한다. 시니어 딥링크는 타입 템플릿 `/goal`이다.
+- eventId는 `G02:H:{가장 작은 일정 ID}:{개수}`다. 일정은 `isReward`와 포인트 operationKey로 한 번만 적립되므로 같은 묶음이 다시 만들어지지 않고, 40자 이내다.
+- 보호자 G01-C 딥링크는 목표 종류별로 바뀌었다(LLD-0076 §3 개정): 걷기 `/goal/walk`, 건강 일정 `/goal/hospital`, 복약 `/goal/medicine`, 모두 `?seniorId=`.
+- 걷기와 복약이 서로 다른 요청에서 몇 초 차이로 달성되는 경우는 묶지 않는다. 시간 창으로 묶으려면 지연 발송이 필요해 범위 밖이다.
 
 코디네이터 게이트에서 이 설계를 Approved로 확인한 뒤 구현했다. P01 생략은 `addGoalRewardPoints`로 분리했고, 앨범은 직접 차감·내역 저장만 포인트 서비스 호출로 교체했다. 동기 record 이벤트와 typed DTO를 사용하며 보호자 G01에는 `relatedMemberId=seniorId`를 지정한다. P01/P02 문구는 `type.copyCode()`를 쓰고, G01은 역할별 `G01-S`/`G01-C`를 사용한다. eventId 다섯 형식의 40자 제한을 `Long.MAX_VALUE`로 검증했다. 구현·전체 테스트 후 상태를 Review로 전환했다.
 
