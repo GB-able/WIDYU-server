@@ -72,6 +72,25 @@ class DecisionRecordRepositoryTest {
                 .isFalse();
     }
 
+    @Test
+    @DisplayName("폰 도착을 두 번 기록하면 처음 도착한 시각만 남는다")
+    void 폰_도착을_두_번_기록하면_처음_도착한_시각만_남는다() {
+        // given
+        decisionRecordRepository.save(alert());
+
+        // when
+        int first = decisionRecordRepository.markDeviceReceivedIfFirst(DECISION_ID, 1_760_000_001_200L);
+        int second = decisionRecordRepository.markDeviceReceivedIfFirst(DECISION_ID, 1_760_000_004_000L);
+
+        // then
+        // 보호자 폰이 여럿이어도 「언제 처음 폰에 닿았나」 하나만 남긴다. FCM 접수 기록과는 따로다.
+        assertThat(first).isEqualTo(1);
+        assertThat(second).isZero();
+        DecisionRecord found = decisionRecordRepository.findByDecisionId(DECISION_ID).orElseThrow();
+        assertThat(found.getAlertDeviceReceivedAtMs()).isEqualTo(1_760_000_001_200L);
+        assertThat(found.getAlertDelivered()).isFalse();
+    }
+
     private DecisionRecord alert() {
         return DecisionRecord.builder()
                 .decisionId(DECISION_ID)

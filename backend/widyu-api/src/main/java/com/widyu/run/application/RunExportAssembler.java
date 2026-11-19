@@ -187,6 +187,8 @@ public class RunExportAssembler {
         putNullableString(node, "severity", record.getSeverity());
         putNullableString(node, "trigger_path", record.getTriggerPath());
         node.put("alert_delivered", record.getAlertDelivered());
+        // alert_delivered는 FCM 접수다. 폰에 실제로 닿은 첫 시각은 앱 신호로 따로 잰다(LLD-0181).
+        putNullableLong(node, "alert_device_received_at_ms", record.getAlertDeviceReceivedAtMs());
         node.put("trigger_batch_id", record.getTriggerBatchId());
         putEvidence(node, record);
         return node;
