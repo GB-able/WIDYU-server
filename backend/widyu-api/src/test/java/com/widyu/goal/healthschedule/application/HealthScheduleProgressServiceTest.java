@@ -12,6 +12,7 @@ import static org.mockito.BDDMockito.then;
 
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.fcm.event.goal.dto.GoalAchievedEvent;
+import com.widyu.fcm.event.goal.dto.GoalsAchievedEvent;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.healthschedule.HealthSchedule;
@@ -295,6 +296,28 @@ class HealthScheduleProgressServiceTest {
         ArgumentCaptor<GoalAchievedEvent> event = ArgumentCaptor.forClass(GoalAchievedEvent.class);
         then(eventPublisher).should().publishEvent(event.capture());
         assertThat(event.getValue().eventId()).isEqualTo("G01:H:7");
+    }
+
+    @Test
+    @DisplayName("한 번의 위치 수신으로 건강 일정 두 개를 함께 완료하면 G01 대신 G02 하나를 발행한다")
+    void 한_번에_건강_일정_두_개를_완료하면_G02_하나를_발행한다() {
+        // given
+        Member senior = seniorMember();
+        HealthSchedule first = scheduleWithId(senior, LocalDateTime.now().minusMinutes(5), 12L);
+        HealthSchedule second = scheduleWithId(senior, LocalDateTime.now().minusMinutes(5), 11L);
+        given(healthScheduleRepository.findByMemberIdAndStatusAndDate(
+                eq(senior.getId()), eq(ProgressStatus.UPCOMING), beforeDateCaptor.capture(), beforeDateCaptor.capture()))
+                .willReturn(List.of(first, second));
+
+        // when
+        healthScheduleProgressService.completeArrivedSchedules(senior.getId(), 37.5, 127.0);
+
+        // then
+        assertThat(first.getIsReward()).isTrue();
+        assertThat(second.getIsReward()).isTrue();
+        ArgumentCaptor<Object> events = ArgumentCaptor.forClass(Object.class);
+        then(eventPublisher).should().publishEvent(events.capture());
+        assertThat(events.getValue()).isEqualTo(new GoalsAchievedEvent(senior.getId(), 2, 200L, "G02:H:11:2"));
     }
 
     @Test

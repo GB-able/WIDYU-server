@@ -21,6 +21,18 @@ public final class GuardianDeepLinks {
         return "/goal/medicine?seniorId=" + seniorId;
     }
 
+    public static String walkGoal(Long seniorId) {
+        return "/goal/walk?seniorId=" + seniorId;
+    }
+
+    public static String healthScheduleGoal(Long seniorId) {
+        return "/goal/hospital?seniorId=" + seniorId;
+    }
+
+    public static String goal(Long seniorId) {
+        return "/goal?seniorId=" + seniorId;
+    }
+
     public static String notification() {
         return "/notification";
     }

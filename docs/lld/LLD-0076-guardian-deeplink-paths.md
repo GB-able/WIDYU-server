@@ -5,7 +5,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review (2026-10-04 구현·검증 완료, 코디네이터 검수 대기) |
-| Issue | #730, #746(§11 위듀 앱 경로 개정) |
+| Issue | #730, #746(§11 위듀 앱 경로 개정), #1135(G01-C 목표별 경로) |
 | 관련 ADR | [ADR-0037](../adr/ADR-0037-notification-center-model.md) |
 | 선행 | LLD-0060·0064·0066·0068·0069·0071·0072 |
 | 작성자 | Codex / feature-730 |
@@ -44,7 +44,8 @@
 | 잠금 해제 A06 | `ALBUM_UNLOCKED` | 〃 | `/post?postId={albumId}` |
 | 모두 읽음 A07 | `ALBUM_ALL_VIEWED` | 〃 | `/album` |
 | 복약 +30분 미확인 M04 | `MEDICATION_PROOF_MISSING` | `MedicineScheduleNotificationListener`(enum 템플릿) | `/goal/medicine?seniorId={seniorId}` |
-| 시니어 목표 달성 G01-C | `GOAL_ACHIEVED` | `GoalPointNotificationListener` | `/goal/medicine?seniorId={seniorId}` (사용자 지정; 걷기·건강일정 달성도 같은 화면 — FE 확인 요청) |
+| 시니어 목표 달성 G01-C | `GOAL_ACHIEVED` | `GoalPointNotificationListener` | 걷기 `/goal/walk?seniorId={seniorId}`, 건강 일정 `/goal/hospital?seniorId={seniorId}`, 복약 `/goal/medicine?seniorId={seniorId}` (#1135, 위듀케어 develop `AppRoute.goal` 자식 경로) |
+| 시니어 목표 여러 개 달성 G02-C | `GOALS_ACHIEVED_GROUPED` | `GoalPointNotificationListener` | `/goal?seniorId={seniorId}` (#1135) |
 | 하트·응원 메시지(보호자 수신) | 비타입(기존 `HeartMessageService`, `/api/v1/fcm/send`) | data에 직접 | `/notification` |
 | 방장 변경 R01 | `FAMILY_LEADER_CHANGED` | `FamilyLeaderChangedNotificationListener`(enum 템플릿) | `/family-manage` |
 | 보호자 본인 건강일정 임박 H01-C-SELF | — | `HealthScheduleNotificationListener` | **분기 제거**(보호자 소유 일정은 알림 없음) |
@@ -77,7 +78,7 @@
 - [x] AC2. 앨범 보호자 작성자·업로더 대상 A01/A02/A03/A04/A05 링크는 `GuardianDeepLinks` 값과 일치하고, A06/A07도 §3 경로를 사용한다.
 - [x] AC3. A03/A04 보호자 작성자의 H2 알림센터 행 `deep_link`는 `/post?postId=<id>&commentId=<cid>`다.
 - [x] AC4. M04의 H2 알림센터 행 `deep_link`는 `/goal/medicine?seniorId=<id>`다.
-- [x] AC5. G01-C FCM `data.deepLink`는 `/goal/medicine?seniorId=<id>`다.
+- [x] AC5. G01-C FCM `data.deepLink`는 `/goal/medicine?seniorId=<id>`다. (#1135에서 목표 종류별로 개정: 걷기 `/goal/walk`, 건강 일정 `/goal/hospital`)
 - [x] AC6. 보호자 소유 건강일정은 H01 센터 행·outbox를 0건 만든다. H01-C-SELF 문구는 `NotificationCopy`에 남는다.
 - [x] AC7. 보호자 수신 하트·응원 메시지는 센터 행 `deep_link`와 FCM `data.deepLink`가 모두 `/notification`이다. 시니어 수신 값은 종전과 같다. (#746에서 시니어도 `/notification`으로 개정, §11)
 - [x] AC8. 변경된 main·test와 이 LLD에 보호자 앱 커스텀 스킴 문자열이 0건이다.
@@ -95,7 +96,7 @@
 | 항목 | 현재 구현 계약 | 후속 확인 |
 | --- | --- | --- |
 | 위듀 앱 경로 | ~~시니어 수신 링크는 현재 값 유지~~ → §11에서 교체(#746) | 해소 |
-| G01-C 목적 화면 | 걷기·건강일정 달성도 `/goal/medicine?seniorId=<id>` 사용 | FE가 목표 종류별 목적 화면을 확인 |
+| G01-C 목적 화면 | ~~걷기·건강일정 달성도 `/goal/medicine?seniorId=<id>` 사용~~ → 목표 종류별 경로(#1135) | 해소. 위듀케어 develop `custom_router.dart`의 `/goal` 자식 `medicine`, `walk`, `hospital` 기준, 실기기 이동 미확인 |
 | 심박 위급 최초 알림 `type` | 서버는 `HEART_RATE_EMERGENCY` 유지 | FE가 경고 다이얼로그 트리거 문자열 확인 |
 | 전원 소진 최종 알림 | W12 미구현 | W12에서 `FINAL_ESCALATION` 경로와 발송 계약 처리 |
 | 낙상 본인확인·댓글 ID | 낙상 본인확인은 비타입이고 댓글 ID는 센터 별도 컬럼에 저장하지 않음 | 위듀 앱 경로 작업에서 함께 처리. 현재 댓글 이동은 `deepLink`의 `commentId`로 충족 |
