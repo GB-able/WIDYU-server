@@ -37,8 +37,8 @@ class NotificationSettingServiceTest {
     @InjectMocks private NotificationSettingService service;
 
     @Test
-    @DisplayName("보호자가 설정을 조회하면 기본 켜짐인 네 그룹을 반환한다")
-    void 보호자가_설정을_조회하면_네_그룹을_반환한다() {
+    @DisplayName("보호자가 설정을 조회하면 기본 켜짐인 정책서 스위치 14개를 묶음과 순서대로 반환한다")
+    void 보호자가_설정을_조회하면_스위치_14개를_반환한다() {
         // given
         Member member = member(MemberType.GUARDIAN);
         given(memberUtil.getCurrentMember()).willReturn(member);
@@ -49,7 +49,15 @@ class NotificationSettingServiceTest {
 
         // then
         assertThat(result).extracting(NotificationSettingResponse::group)
-                .containsExactly("SAFETY", "SAFE_ZONE", "MEDICATION_CHECK", "GENERAL");
+                .containsExactly("SAFETY", "SAFE_ZONE", "SENIOR_OK_NOTICE", "MEDICATION_CHECK",
+                        "HEALTH_SCHEDULE", "GOAL_ACHIEVED", "ALBUM_NEW_POST", "ALBUM_COMMENT", "ALBUM_LIKE",
+                        "ALBUM_SENIOR_VIEWED", "ALBUM_UPLOAD_COMPLETE", "CHEER_MESSAGE", "LEADER_CHANGED",
+                        "SERVICE_NOTICE");
+        assertThat(result).extracting(NotificationSettingResponse::order)
+                .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+        assertThat(result).extracting(NotificationSettingResponse::section)
+                .containsExactly("LOCATION", "LOCATION", "LOCATION", "GOAL", "GOAL", "GOAL", "ALBUM", "ALBUM",
+                        "ALBUM", "ALBUM", "ALBUM", "MESSAGE", "ETC", "ETC");
         assertThat(result).allSatisfy(row -> {
             assertThat(row.productPushEnabled()).isTrue();
             assertThat(row.recipientEnabled()).isTrue();
@@ -290,7 +298,7 @@ class NotificationSettingServiceTest {
 
         // when / then
         assertThatThrownBy(() -> service.updateNotificationSetting(
-                new UpdateNotificationSettingRequest("GENERAL", false, 0L)))
+                new UpdateNotificationSettingRequest("ALBUM_LIKE", false, 0L)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.NOTIFICATION_POLICY_REVISION_CONFLICT);
         assertThat(member.getNotificationPolicyRevision()).isEqualTo(1L);
@@ -336,6 +344,21 @@ class NotificationSettingServiceTest {
     void 시니어가_GENERAL을_저장하면_예외가_발생한다() {
         // given
         Member member = member(MemberType.SENIOR);
+        given(memberUtil.getCurrentMember()).willReturn(member);
+        given(members.findByIdForUpdate(1L)).willReturn(Optional.of(member));
+
+        // when / then
+        assertThatThrownBy(() -> service.updateNotificationSetting(
+                new UpdateNotificationSettingRequest("GENERAL", false, 0L)))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_FCM_CATEGORY);
+    }
+
+    @Test
+    @DisplayName("보호자가 나누기 전 일반 그룹을 저장하면 카테고리 예외가 발생한다")
+    void 보호자가_GENERAL을_저장하면_예외가_발생한다() {
+        // given
+        Member member = member(MemberType.GUARDIAN);
         given(memberUtil.getCurrentMember()).willReturn(member);
         given(members.findByIdForUpdate(1L)).willReturn(Optional.of(member));
 

@@ -561,21 +561,24 @@ class FcmOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("보호자가 일반 알림을 끈 뒤 접수된 알림은 센터 행과 기기 작업을 남기지 않는다")
-    void 일반_알림을_끈_뒤_접수된_알림은_센터와_작업을_남기지_않는다() {
+    @DisplayName("보호자가 새 게시물 스위치를 끄면 새 게시물만 센터와 기기 작업에서 빠지고 좋아요는 남는다")
+    void 새_게시물_스위치를_끄면_새_게시물만_빠지고_좋아요는_남는다() {
         // given
         Long member = guardianWithToken();
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
                 settings.save(MemberNotificationSetting.create(members.findById(member).orElseThrow(),
-                        PushSettingGroup.GENERAL, false)));
+                        PushSettingGroup.ALBUM_NEW_POST, false)));
 
         // when
         service.enqueue(member, FcmSendDto.builder().title("앨범").content("본문")
                 .notificationType(NotificationType.ALBUM_CREATED).entityId("31").build());
+        service.enqueue(member, FcmSendDto.builder().title("좋아요").content("본문")
+                .notificationType(NotificationType.ALBUM_LIKED).entityId("31").build());
 
         // then
-        assertThat(notifications.count()).isZero();
-        assertThat(outbox.count()).isZero();
+        assertThat(notifications.findAll()).extracting(notification -> notification.getType())
+                .containsExactly(NotificationType.ALBUM_LIKED);
+        assertThat(outbox.count()).isEqualTo(1);
     }
 
     @Test
@@ -611,7 +614,7 @@ class FcmOutboxIntegrationTest {
         FcmDelivery delivery = transactions.claim(id);
         new TransactionTemplate(transactionManager).executeWithoutResult(status ->
                 settings.save(MemberNotificationSetting.create(members.findById(member).orElseThrow(),
-                        PushSettingGroup.GENERAL, false)));
+                        PushSettingGroup.ALBUM_NEW_POST, false)));
 
         // when
         boolean allowed = transactions.preflight(delivery);
@@ -635,7 +638,7 @@ class FcmOutboxIntegrationTest {
                 start.await();
                 try {
                     return settingService.updateNotificationSetting(
-                            new UpdateNotificationSettingRequest("GENERAL", false, 0L)).policyRevision();
+                            new UpdateNotificationSettingRequest("ALBUM_LIKE", false, 0L)).policyRevision();
                 } catch (BusinessException exception) {
                     if (exception.getErrorCode() == ErrorCode.NOTIFICATION_POLICY_REVISION_CONFLICT) {
                         return -1L;
@@ -653,7 +656,7 @@ class FcmOutboxIntegrationTest {
             // then
             assertThat(results).containsExactlyInAnyOrder(1L, -1L);
             assertThat(members.findById(member).orElseThrow().getNotificationPolicyRevision()).isEqualTo(1L);
-            assertThat(settings.findByMemberIdAndCategory(member, PushSettingGroup.GENERAL))
+            assertThat(settings.findByMemberIdAndCategory(member, PushSettingGroup.ALBUM_LIKE))
                     .hasValueSatisfying(row -> assertThat(row.isEnabled()).isFalse());
         } finally {
             executor.shutdownNow();
