@@ -507,8 +507,8 @@ class WalkServiceTest {
     }
 
     @Test
-    @DisplayName("목표가 있던 지난 날짜를 처음 연동해 달성하면 포인트는 지급하고 달성 알림은 발행하지 않는다")
-    void 목표가_있던_지난_날짜를_달성하면_포인트만_지급하고_알림은_발행하지_않는다() {
+    @DisplayName("목표 시작일 이후의 지난 날짜를 처음 연동해 달성하면 기록을 만들고 포인트와 달성 알림이 생긴다")
+    void 목표_시작일_이후_지난_날짜를_달성하면_기록과_포인트와_알림이_생긴다() {
         // given: 사흘 전 목표를 정했고 어제 기록은 아직 없다
         Member senior = member(2L, MemberType.SENIOR);
         seniorProfile(senior).updateDefaultWalkGoal(500);
@@ -528,9 +528,14 @@ class WalkServiceTest {
 
         // then
         assertThat(response.achieved()).isTrue();
+        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
+        then(walkRepository).should(times(1)).save(saved.capture());
+        assertThat(saved.getValue().getWalkDate()).isEqualTo(yesterday);
         then(seniorProfileService).should(times(1))
                 .addGoalRewardPoints(eq(2L), eq(25L), eq("걷기 목표 달성"), eq("WALK_REWARD:11"));
-        then(eventPublisher).should(never()).publishEvent(any(GoalAchievedEvent.class));
+        ArgumentCaptor<GoalAchievedEvent> event = ArgumentCaptor.forClass(GoalAchievedEvent.class);
+        then(eventPublisher).should(times(1)).publishEvent(event.capture());
+        assertThat(event.getValue().eventId()).isEqualTo("G01:W:11");
     }
 
     @Test

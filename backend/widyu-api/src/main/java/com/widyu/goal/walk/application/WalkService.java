@@ -249,13 +249,10 @@ public class WalkService {
             seniorProfileService.addGoalRewardPoints(currentMember.getId(), (long) walk.getPointRewarded(),
                     "걷기 목표 달성", "WALK_REWARD:" + walk.getId());
             walk.markRewarded();
-            // 밀린 지난 날짜는 날짜마다 알림이 몰리므로 포인트만 준다. 오늘 달성만 알린다(LLD-0182).
-            if (syncDate.equals(today)) {
-                eventPublisher.publishEvent(GoalAchievedEvent.forWalk(
-                        currentMember.getId(), walk.getId(), walk.getPointRewarded()));
-            }
-            log.info("걸음 목표 달성 - 포인트 자동 지급: memberId={}, date={}, points={}",
-                    currentMember.getId(), syncDate, walk.getPointRewarded());
+            eventPublisher.publishEvent(GoalAchievedEvent.forWalk(
+                    currentMember.getId(), walk.getId(), walk.getPointRewarded()));
+            log.info("걸음 목표 달성 - 포인트 자동 지급: memberId={}, points={}",
+                    currentMember.getId(), walk.getPointRewarded());
         }
 
         log.info("걸음 수 연동: memberId={}, date={}, actualSteps={}, achieved={}",
@@ -264,11 +261,6 @@ public class WalkService {
         return UpdateStepsResponse.of(achieved);
     }
 
-    /**
-     * 기록이 없던 날의 목표. 지난 날은 그날 뒤 첫 기록의 목표다. 목표를 바꾸는 날에는 기존 목표로 그날 기록이
-     * 생기므로(setOrUpdateGoal) 바뀌기 전 날짜는 바뀌기 전 목표를 받는다(월별 조회의 미수신 날짜와 같은 기준).
-     * 뒤에 기록이 없거나 오늘이면 기본 목표다.
-     */
     /**
      * 목표가 생긴 날. 목표를 처음 설정하면 그날 기록이 생기므로(setOrUpdateGoal) 첫 기록 날짜다.
      * 기록이 없으면 오늘부터 목표가 있던 것으로 본다(월별 조회 countMissingGoalDays와 같은 기준).
@@ -279,6 +271,11 @@ public class WalkService {
                 .orElse(today);
     }
 
+    /**
+     * 기록이 없던 날의 목표. 지난 날은 그날 뒤 첫 기록의 목표다. 목표를 바꾸는 날에는 기존 목표로 그날 기록이
+     * 생기므로(setOrUpdateGoal) 바뀌기 전 날짜는 바뀌기 전 목표를 받는다(월별 조회의 미수신 날짜와 같은 기준).
+     * 뒤에 기록이 없거나 오늘이면 기본 목표다.
+     */
     private Integer goalForNewRecord(Member member, LocalDate date, LocalDate today) {
         Integer defaultGoal = member.getSeniorProfile().getDefaultWalkGoal();
         if (!date.isBefore(today)) {
