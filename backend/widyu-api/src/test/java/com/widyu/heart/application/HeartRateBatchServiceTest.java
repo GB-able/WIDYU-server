@@ -305,7 +305,7 @@ class HeartRateBatchServiceTest {
                 null,
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true), null);
+                null);
 
         // when
         HeartRateBatchService.BatchOutcome outcome = service(withoutHeartAi).storeAndAssess(
@@ -861,7 +861,7 @@ class HeartRateBatchServiceTest {
                 new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, true),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true), null);
+                null);
     }
 
     private SensorProperties propertiesWithWearGate() {
@@ -871,7 +871,7 @@ class HeartRateBatchServiceTest {
                 new SensorProperties.HeartAi("widyu-ai-hr", "ver7", true, false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true), null);
+                null);
     }
 
     private HeartRateBatchService service() {
@@ -899,7 +899,7 @@ class HeartRateBatchServiceTest {
                 new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true), null);
+                null);
     }
 
     /** 저장 서비스는 받은 행을 그대로 돌려준다. 식별자는 서비스가 붙이므로 그대로 흘려보낸다. */

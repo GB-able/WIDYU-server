@@ -6,7 +6,6 @@ import com.widyu.fcm.application.FcmService;
 import com.widyu.fcm.dto.FcmSendDto;
 import com.widyu.fcm.dto.NotificationCopy;
 import com.widyu.global.entity.Status;
-import com.widyu.global.properties.SensorProperties;
 import com.widyu.goal.medicineschedule.application.MedicationAlarmPayload;
 import com.widyu.goal.medicineschedule.dto.response.MedicationStatus;
 import com.widyu.goal.medicineschedule.repository.MedicationProofRepository;
@@ -16,7 +15,6 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.medicine.MedicineSchedule;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
@@ -36,12 +34,10 @@ public class MedicineScheduleNotificationListener {
     private final MedicineScheduleRepository medicineScheduleRepository;
     private final MedicationProofRepository medicationProofRepository;
     private final FamilyMembershipRepository familyMembershipRepository;
-    private final SensorProperties sensorProperties;
 
     /**
-     * 매 분마다 실행하여 의약품 복용 알림 발송
-     * 앱 기기 알람이 배포될 때까지 정시 서버 푸시를 유지한다.
-     * +10분·+20분 미인증 푸시와 +30분 보호자 알림은 스위치와 무관하게 보낸다.
+     * 매 분마다 실행해 미인증 복약의 +10분·+20분 시니어 푸시와 +30분 보호자 알림을 보낸다.
+     * 정각 알림은 앱이 복약 스케줄로 등록한 기기 알람이 맡고 서버는 보내지 않는다(LLD-0068 E7, #1153).
      */
     @Scheduled(cron = "0 * * * * *")
     public void checkMedicineSchedules() {
@@ -51,52 +47,9 @@ public class MedicineScheduleNotificationListener {
     void checkMedicineSchedulesAt(LocalDateTime now) {
         LocalDateTime minute = now.truncatedTo(ChronoUnit.MINUTES);
         log.debug("의약품 복용 후속 알림 체크 시작: {}", minute);
-        if (sensorProperties.medication().onTimePush()) {
-            sendOnTimeNotification(minute);
-        }
         sendNotificationForTime(minute.minusMinutes(10), NotificationType.MEDICATION_REMINDER_10);
         sendNotificationForTime(minute.minusMinutes(20), NotificationType.MEDICATION_REMINDER_20);
         sendGuardianAlertOnly(minute.minusMinutes(30));
-    }
-
-    private void sendOnTimeNotification(LocalDateTime dueAt) {
-        LocalDate date = dueAt.toLocalDate();
-        List<MedicineSchedule> schedules = medicineScheduleRepository
-                .findByAlarmTimeAndStatusEffectiveOn(dueAt.toLocalTime(), Status.ACTIVE, date);
-
-        if (schedules.isEmpty()) {
-            return;
-        }
-
-        List<Long> scheduleIds = schedules.stream()
-                .map(MedicineSchedule::getId)
-                .toList();
-        Set<Long> verifiedScheduleIds = new HashSet<>(
-                medicationProofRepository.findVerifiedScheduleIds(scheduleIds, date)
-        );
-
-        for (MedicineSchedule schedule : schedules) {
-            if (verifiedScheduleIds.contains(schedule.getId())) {
-                continue;
-            }
-            sendLegacyOnTimeNotification(schedule, dueAt);
-        }
-    }
-
-    private void sendLegacyOnTimeNotification(MedicineSchedule schedule, LocalDateTime dueAt) {
-        Long seniorId = schedule.getMember().getId();
-        FcmSendDto dto = FcmSendDto.builder()
-                .title("약 복용하실 시간이에요!")
-                .fcmCategory(FcmCategory.MEDICINE_SCHEDULE)
-                .scheme("").image(schedule.getMember().getProfileImage())
-                .data(MedicationAlarmPayload.of(schedule.getMember().getMedicationAlarmRevision()))
-                .pushExpiresAt(proofDeadline(dueAt))
-                .build();
-
-        fcmService.sendMessageToUser(seniorId, dto);
-
-        log.info("의약품 복용 정시 알림 발송: scheduleId={}, memberId={}, alarmTime={}",
-                schedule.getId(), seniorId, schedule.getAlarmTime());
     }
 
     private void sendNotificationForTime(LocalDateTime dueAt, NotificationType type) {

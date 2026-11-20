@@ -185,7 +185,7 @@ class FallAssessmentServiceTest {
                 new SensorProperties.HeartAi("widyu-ai-hr", "ver7", false, false),
                 new SensorProperties.Incident(60, 5000L, false, 5, 90),
                 new SensorProperties.Followup(false, false),
-                new SensorProperties.Medication(true), null);
+                null);
     }
 
     private SensorBatch trigger() {

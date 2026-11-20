@@ -20,7 +20,7 @@ final class SensorConfigFixture {
 
     private static SensorProperties properties(SensorProperties.Config config) {
         return new SensorProperties(32_768, config, export(), fallAi(), heartAi(), incident(),
-                new SensorProperties.Followup(false, false), new SensorProperties.Medication(true), null);
+                new SensorProperties.Followup(false, false), null);
     }
 
     static SensorProperties.Config config() {

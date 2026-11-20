@@ -48,7 +48,7 @@ public interface MedicineScheduleDocs {
                     `revision`은 복약 스케줄 또는 오늘 복용 인증이 바뀔 때 증가합니다.
                     FCM data에 `revision`이 있고 앱이 가진 값과 다르거나, 앱이 포그라운드가 될 때 이 API를 호출하세요.
                     `revision`은 복약 일정 등록·변경·삭제·동기화(`notificationType=MEDICATION_SCHEDULE_CREATED|CHANGED|DELETED|SYNC`),
-                    복약 리마인더, 정시 복약 푸시(`notificationType=MEDICATION_ON_TIME`)에 실립니다.
+                    복약 리마인더에 실립니다.
                     `completed`의 `scheduleId:yyyy-MM-dd` 항목은 해당 일자의 로컬 알람을 건너뜁니다.
                     """
     )
