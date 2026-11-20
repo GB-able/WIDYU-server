@@ -11,7 +11,6 @@ public record SensorProperties(
         HeartAi heartAi,
         Incident incident,
         Followup followup,
-        Medication medication,
         Activity activity
 ) {
 
@@ -108,9 +107,6 @@ public record SensorProperties(
 
     /** 종료 뒤 카드와 첫 제출 보상. 각각 활성화 전 기본값 false(LLD-0073·0075). */
     public record Followup(boolean enabled, boolean rewardEnabled) {}
-
-    /** 앱 기기 알람 배포 전 정각 서버 푸시를 유지한다(LLD-0080). */
-    public record Medication(boolean onTimePush) {}
 
     /**
      * 손목 움직임 활동 상태(LLD-0138, ADR-0042 결정 6). 숫자는 연구팀 후보 값이라 규칙 문서가 오면 바꾼다.
