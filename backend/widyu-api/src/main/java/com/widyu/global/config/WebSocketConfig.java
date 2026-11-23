@@ -3,6 +3,7 @@ package com.widyu.global.config;
 import com.widyu.global.websocket.FamilyTopicOutboundInterceptor;
 import com.widyu.global.websocket.JwtChannelInterceptor;
 import com.widyu.global.websocket.JwtHandshakeInterceptor;
+import com.widyu.global.websocket.MemberWebSocketSessions;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +12,7 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -35,6 +37,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
     private final JwtChannelInterceptor jwtChannelInterceptor;
     private final FamilyTopicOutboundInterceptor familyTopicOutboundInterceptor;
+    private final MemberWebSocketSessions memberWebSocketSessions;
     private final ThreadPoolTaskExecutor websocketInboundExecutor;
     private final ThreadPoolTaskExecutor websocketOutboundExecutor;
 
@@ -81,7 +84,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             public void afterConnectionEstablished(WebSocketSession session) throws Exception {
                 session.setTextMessageSizeLimit(MESSAGE_SIZE_LIMIT);
+                // 탈퇴하면 커밋 뒤 이 연결을 닫는다(LLD-0186).
+                memberWebSocketSessions.register(session);
                 super.afterConnectionEstablished(session);
+            }
+
+            @Override
+            public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
+                memberWebSocketSessions.unregister(session);
+                super.afterConnectionClosed(session, closeStatus);
             }
         });
     }

@@ -1,11 +1,14 @@
 package com.widyu.home.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 
 import com.widyu.global.entity.Status;
+import com.widyu.global.error.BusinessException;
+import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.goal.healthschedule.repository.HealthScheduleRepository;
 import com.widyu.goal.medicineschedule.application.TodayMedicationQuery;
@@ -74,6 +77,24 @@ class GuardianHomeServiceTest {
         assertThat(cards.guardianId()).isEqualTo(GUARDIAN_ID);
         assertThat(cards.seniorId()).isEqualTo(SENIOR_ID);
         assertThat(cards.response().isOuting()).isTrue();
+    }
+
+    @Test
+    @DisplayName("탈퇴해 가족이 없는 어르신의 홈 카드를 열면 권한 예외가 발생한다")
+    void 가족이_없는_어르신의_홈_카드를_열면_권한_예외가_발생한다() {
+        // given
+        givenEmptyHomeCards();
+        seniorProfileOf(SENIOR_ID).leaveFamily();
+
+        // when & then
+        assertThatThrownBy(() -> guardianHomeService().getHomeCards(SENIOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    private SeniorProfile seniorProfileOf(Long memberId) {
+        return seniorProfileRepository.findByMemberId(memberId).orElseThrow();
     }
 
     private void givenEmptyHomeCards() {

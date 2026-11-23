@@ -100,7 +100,8 @@ public class GuardianHomeService {
             }
             SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "시니어 프로필이 없습니다."));
-            if (!familyMembershipRepository.existsByFamilyIdAndGuardianId(
+            // 탈퇴했거나 방장 보호자 탈퇴로 가족이 해체된 어르신은 가족이 없다(LLD-0186).
+            if (seniorProfile.getFamily() == null || !familyMembershipRepository.existsByFamilyIdAndGuardianId(
                     seniorProfile.getFamily().getId(), guardian.getId())) {
                 throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어에 대한 접근 권한이 없습니다.");
             }

@@ -45,6 +45,12 @@ retention:
     enabled: ${RETENTION_PURGE_ENABLED:true}
     # 매일 03:30(Asia/Seoul).
     cron: ${RETENTION_PURGE_CRON:0 30 3 * * *}
+  # 탈퇴 30일 뒤 개인 자료 삭제(LLD-0187). 바로 지우고 지운 건수를 data_purge_log에 남긴다.
+  # false면 스케줄러 빈을 만들지 않는다(긴급 정지).
+  withdrawal-purge:
+    enabled: ${RETENTION_WITHDRAWAL_PURGE_ENABLED:true}
+    # 매일 03:50(Asia/Seoul). 보관 기간 정리(03:30) 뒤.
+    cron: ${RETENTION_WITHDRAWAL_PURGE_CRON:0 50 3 * * *}
 
 # WebSocket 느린 처리 전용 실행기(LLD-0091). 스레드 수는 고정(core = max)이고 대기열이 차면 과부하 오류를 돌려준다.
 websocket:

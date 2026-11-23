@@ -86,6 +86,13 @@ public class DataPurgeLog {
                 startedAt, finishedAt);
     }
 
+    /** 탈퇴 30일 뒤 삭제(LLD-0187). 지운 건수를 {@code dry_run=false}로 남긴다. 회원 실패는 {@code errorType}에 건수를 남긴다. */
+    public static DataPurgeLog deleted(String runId, String target, LocalDateTime cutoffAt, Long deletedRows,
+                                       String errorType, LocalDateTime startedAt, LocalDateTime finishedAt) {
+        return new DataPurgeLog(runId, target, false, cutoffAt, deletedRows, null, errorType,
+                startedAt, finishedAt);
+    }
+
     public static DataPurgeLog failed(String runId, String target, LocalDateTime cutoffAt,
                                       String errorType, LocalDateTime startedAt, LocalDateTime finishedAt) {
         return new DataPurgeLog(runId, target, true, cutoffAt, null, null, errorType,

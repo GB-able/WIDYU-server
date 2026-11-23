@@ -37,6 +37,11 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     @Query("SELECT m FROM Member m WHERE m.id = :memberId")
     Optional<Member> findByIdForUpdate(@Param("memberId") Long memberId);
 
+    /** 공유 잠금. 어르신 탈퇴(쓰기 잠금)와 줄 세울 때 쓴다(LLD-0186). */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT m FROM Member m WHERE m.id = :memberId")
+    Optional<Member> findByIdForShare(@Param("memberId") Long memberId);
+
     // 빈 번호일 때만 채운다. 확인과 갱신을 한 문장으로 해 동시 요청이 먼저 채운 번호를 덮어쓰지 않는다 (LLD-0094)
     @Modifying
     @Query("UPDATE Member m SET m.phoneNumber = :phoneNumber "
@@ -73,7 +78,6 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             + "OR EXISTS (SELECT 1 FROM payment_cancel WHERE requested_by_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM study_participation WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM collection_run WHERE member_id = :memberId) "
-            + "OR EXISTS (SELECT 1 FROM member_withdrawal_request WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_access_log WHERE viewer_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_access_log WHERE senior_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_fix WHERE member_id = :memberId) "

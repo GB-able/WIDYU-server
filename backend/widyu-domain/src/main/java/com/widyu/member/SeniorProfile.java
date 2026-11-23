@@ -111,4 +111,9 @@ public class SeniorProfile extends BaseTimeEntity {
     public void updateInviteCode(String inviteCode) {
         this.inviteCode = inviteCode;
     }
+
+    /** 어르신 탈퇴. 방장 보호자 탈퇴로 가족이 해체될 때와 같은 「가족 없음」 상태가 된다(LLD-0186). */
+    public void leaveFamily() {
+        this.family = null;
+    }
 }

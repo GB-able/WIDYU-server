@@ -8,6 +8,7 @@ import com.widyu.location.access.LocationAccessLog;
 import com.widyu.location.access.LocationAccessPath;
 import com.widyu.location.access.dto.response.LocationAccessLogResponse;
 import com.widyu.location.access.repository.LocationAccessLogRepository;
+import com.widyu.global.entity.Status;
 import com.widyu.member.Member;
 import com.widyu.member.repository.MemberRepository;
 import java.time.LocalDateTime;
@@ -61,6 +62,15 @@ public class LocationAccessLogService {
         }
         // 본인이 자기 위치를 보는 것은 「타인의 위치 조회」가 아니다(ADR-0036 결정 3).
         if (viewerMemberId.equals(seniorMemberId)) {
+            return;
+        }
+
+        // 어르신 탈퇴는 회원 행을 쓰기 잠금한 채 열람 기록을 지운다. 탈퇴 전에 시작한 조회가 탈퇴 뒤에 기록을 다시
+        // 남기지 않도록 공유 잠금으로 줄 세우고, 탈퇴가 먼저 커밋했으면 기록도 통보도 남기지 않는다(LLD-0186).
+        boolean seniorActive = memberRepository.findByIdForShare(seniorMemberId)
+                .map(senior -> senior.getStatus() == Status.ACTIVE)
+                .orElse(false);
+        if (!seniorActive) {
             return;
         }
 

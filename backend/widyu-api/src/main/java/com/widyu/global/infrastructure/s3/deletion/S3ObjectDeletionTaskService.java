@@ -31,6 +31,19 @@ public class S3ObjectDeletionTaskService {
                 .map(url -> createTask(memberId, url))
                 .filter(Objects::nonNull)
                 .toList();
+        saveAndPublish(tasks);
+    }
+
+    /** 주소가 아니라 객체 키를 아는 경우(센서 원문 {@code sensor_batch.s3_key}, LLD-0187). */
+    @Transactional
+    public void scheduleKeys(Long memberId, List<String> objectKeys) {
+        saveAndPublish(objectKeys.stream()
+                .filter(key -> key != null && !key.isBlank())
+                .map(key -> S3ObjectDeletionTask.pending(memberId, key))
+                .toList());
+    }
+
+    private void saveAndPublish(List<S3ObjectDeletionTask> tasks) {
         if (tasks.isEmpty()) {
             return;
         }

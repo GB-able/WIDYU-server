@@ -379,7 +379,7 @@ public class GuardianMyPageService {
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(targetMemberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND, "가족 구성원을 찾을 수 없습니다."));
 
-        if (!seniorProfile.getFamily().getId().equals(familyId)) {
+        if (seniorProfile.getFamily() == null || !seniorProfile.getFamily().getId().equals(familyId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "해당 시니어에 접근 권한이 없습니다.");
         }
 
