@@ -78,6 +78,7 @@ FK를 가리키는 쪽부터 지운다. 조건은 이 enum에만 있다.
 - `clock_mapping`: 기기 단위 시계 매핑이라 다른 회원의 회차와 함께 쓴다. 회원 식별자가 없다.
 - 탈퇴자가 다른 사람 앨범에 남긴 좋아요, 조회, 잠금 해제 행: 개인 내용이 없고 앨범 카운터와 맞물려 있다.
 - 다른 가족 알림센터의 `fcm_notification.senior_display_name`: 받은 보호자의 자료라 그 행의 보관 기간까지 남는다.
+- 다른 어르신 사건에 탈퇴 보호자가 남긴 대응(`incident_guardian_response.guardian_member_id`, `incident.guardian_response_by`, `resolved_by`): 그 어르신의 위급 대응 기록이자 실증 라벨이다. 남는 것은 개인정보 없는 묘비 회원의 ID뿐이고, 지우거나 비우면 다른 회원의 자료가 바뀐다. 그 사건의 보관 기간(180일, LLD-0136)이 지나면 함께 지워진다.
 
 ### 4.2 `member.personal_data_purged_at` (신규, `datetime(6)` NULL)
 
