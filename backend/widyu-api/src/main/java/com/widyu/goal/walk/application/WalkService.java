@@ -223,20 +223,23 @@ public class WalkService {
         LocalDate syncDate = request.date();
         validateSyncDate(syncDate, today);
 
-        Walk walk = walkRepository.findByMemberAndWalkDateForUpdate(currentMember, syncDate)
-                .orElseGet(() -> {
-                    if (currentMember.getSeniorProfile() != null &&
-                        currentMember.getSeniorProfile().hasDefaultWalkGoal()) {
-                        Walk newWalk = Walk.createWithGoal(
-                                currentMember,
-                                syncDate,
-                                goalForNewRecord(currentMember, syncDate, today)
-                        );
-                        return walkRepository.save(newWalk);
-                    }
-                    throw new BusinessException(ErrorCode.BAD_REQUEST,
-                            "먼저 걷기 목표를 설정해주세요.");
-                });
+        Walk walk = walkRepository.findByMemberAndWalkDateForUpdate(currentMember, syncDate).orElse(null);
+        if (walk == null) {
+            if (currentMember.getSeniorProfile() == null ||
+                !currentMember.getSeniorProfile().hasDefaultWalkGoal()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "먼저 걷기 목표를 설정해주세요.");
+            }
+            // 새 기기나 재설치로 건강 앱의 최근 7일이 한꺼번에 오면 목표가 없던 날(가입 전 포함)도 섞인다.
+            // 그날은 기록, 포인트, 알림을 만들지 않고 200으로 받아 앱이 다시 보내지 않게 한다(LLD-0182).
+            if (syncDate.isBefore(goalStartDate(currentMember, today))) {
+                log.info("목표 시작 전 날짜의 걸음 수는 기록하지 않음: memberId={}, date={}",
+                        currentMember.getId(), syncDate);
+                return UpdateStepsResponse.of(false);
+            }
+            walk = walkRepository.save(Walk.createWithGoal(
+                    currentMember, syncDate, goalForNewRecord(currentMember, syncDate, today)));
+        }
 
         walk.updateActualSteps(request.steps());
 
@@ -256,6 +259,16 @@ public class WalkService {
                 currentMember.getId(), syncDate, request.steps(), achieved);
 
         return UpdateStepsResponse.of(achieved);
+    }
+
+    /**
+     * 목표가 생긴 날. 목표를 처음 설정하면 그날 기록이 생기므로(setOrUpdateGoal) 첫 기록 날짜다.
+     * 기록이 없으면 오늘부터 목표가 있던 것으로 본다(월별 조회 countMissingGoalDays와 같은 기준).
+     */
+    private LocalDate goalStartDate(Member member, LocalDate today) {
+        return walkRepository.findFirstByMemberOrderByWalkDateAsc(member)
+                .map(Walk::getWalkDate)
+                .orElse(today);
     }
 
     /**

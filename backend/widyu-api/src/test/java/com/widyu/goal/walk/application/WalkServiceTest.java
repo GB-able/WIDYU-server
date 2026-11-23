@@ -121,7 +121,7 @@ class WalkServiceTest {
 
         // then
         assertThat(profile.getDefaultWalkGoal()).isEqualTo(7000);
-        then(eventPublisher).should(never()).publishEvent(any());
+        then(eventPublisher).should(never()).publishEvent(any(GuardianGoalChangedEvent.class));
     }
 
     private Member member(Long id, MemberType type) {
@@ -457,12 +457,14 @@ class WalkServiceTest {
     @Test
     @DisplayName("목표를 오늘 바꾼 뒤 어제 걸음 수를 처음 연동하면 어제 기록은 바꾸기 전 목표로 만든다")
     void 목표를_바꾼_뒤_어제_걸음수를_처음_연동하면_바꾸기_전_목표로_기록한다() {
-        // given: 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
+        // given: 사흘 전 처음 목표를 정했고(그날 기록), 오늘 5000보 기록(목표 변경 때 생성), 내일부터 7000보
         Member senior = member(2L, MemberType.SENIOR);
         seniorProfile(senior).updateDefaultWalkGoal(7000);
         LocalDate yesterday = LocalDate.now().minusDays(1);
         given(memberUtil.getCurrentMember()).willReturn(senior);
         given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now().minusDays(3), 5000)));
         given(walkRepository.findFirstByMemberAndWalkDateAfterOrderByWalkDateAsc(senior, yesterday))
                 .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now(), 5000)));
         given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
@@ -479,6 +481,93 @@ class WalkServiceTest {
         ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
         then(walkRepository).should().save(saved.capture());
         assertThat(saved.getValue().getGoalSteps()).isEqualTo(5000);
+    }
+
+    @Test
+    @DisplayName("목표를 처음 정한 날보다 앞선 날짜를 연동하면 기록, 포인트, 알림 없이 미달성을 반환한다")
+    void 목표_시작일보다_앞선_날짜를_연동하면_기록하지_않고_미달성을_반환한다() {
+        // given: 오늘 처음 목표를 정해 오늘 기록만 있다
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(500);
+        LocalDate today = LocalDate.now();
+        LocalDate threeDaysAgo = today.minusDays(3);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, threeDaysAgo)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, today, 500)));
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(4000, threeDaysAgo));
+
+        // then
+        assertThat(response.achieved()).isFalse();
+        then(walkRepository).should(never()).save(any(Walk.class));
+        then(seniorProfileService).should(never()).addGoalRewardPoints(any(), any(), any(), any());
+        then(eventPublisher).should(never()).publishEvent(any(GoalAchievedEvent.class));
+    }
+
+    @Test
+    @DisplayName("목표 시작일 이후의 지난 날짜를 처음 연동해 달성하면 기록을 만들고 포인트와 달성 알림이 생긴다")
+    void 목표_시작일_이후_지난_날짜를_달성하면_기록과_포인트와_알림이_생긴다() {
+        // given: 사흘 전 목표를 정했고 어제 기록은 아직 없다
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(500);
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, yesterday)).willReturn(Optional.empty());
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior))
+                .willReturn(Optional.of(Walk.createWithGoal(senior, LocalDate.now().minusDays(3), 500)));
+        given(walkRepository.save(any(Walk.class))).willAnswer(invocation -> {
+            Walk saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 11L);
+            return saved;
+        });
+
+        // when
+        UpdateStepsResponse response = walkService.updateSteps(new UpdateStepsRequest(4000, yesterday));
+
+        // then
+        assertThat(response.achieved()).isTrue();
+        ArgumentCaptor<Walk> saved = ArgumentCaptor.forClass(Walk.class);
+        then(walkRepository).should(times(1)).save(saved.capture());
+        assertThat(saved.getValue().getWalkDate()).isEqualTo(yesterday);
+        then(seniorProfileService).should(times(1))
+                .addGoalRewardPoints(eq(2L), eq(25L), eq("걷기 목표 달성"), eq("WALK_REWARD:11"));
+        ArgumentCaptor<GoalAchievedEvent> event = ArgumentCaptor.forClass(GoalAchievedEvent.class);
+        then(eventPublisher).should(times(1)).publishEvent(event.capture());
+        assertThat(event.getValue().eventId()).isEqualTo("G01:W:11");
+    }
+
+    @Test
+    @DisplayName("오늘 목표를 정한 시니어의 새 기기가 최근 7일을 올리면 오늘만 포인트와 달성 알림이 한 번 생긴다")
+    void 새_기기가_최근_7일을_올리면_목표_시작일인_오늘만_포인트와_알림이_한_번_생긴다() {
+        // given: 오늘 처음 목표 500보를 정해 오늘 기록만 있다(2026-11-20 개발 서버 사례)
+        Member senior = member(2L, MemberType.SENIOR);
+        seniorProfile(senior).updateDefaultWalkGoal(500);
+        LocalDate today = LocalDate.now();
+        Walk todayWalk = Walk.createWithGoal(senior, today, 500);
+        ReflectionTestUtils.setField(todayWalk, "id", 162L);
+        given(memberUtil.getCurrentMember()).willReturn(senior);
+        given(walkRepository.findFirstByMemberOrderByWalkDateAsc(senior)).willReturn(Optional.of(todayWalk));
+        for (int daysAgo = 6; daysAgo >= 1; daysAgo--) {
+            given(walkRepository.findByMemberAndWalkDateForUpdate(senior, today.minusDays(daysAgo)))
+                    .willReturn(Optional.empty());
+        }
+        given(walkRepository.findByMemberAndWalkDateForUpdate(senior, today)).willReturn(Optional.of(todayWalk));
+
+        // when: 앱처럼 오래된 날짜부터 하루씩 보낸다
+        for (int daysAgo = 6; daysAgo >= 0; daysAgo--) {
+            walkService.updateSteps(new UpdateStepsRequest(4000, today.minusDays(daysAgo)));
+        }
+
+        // then
+        then(walkRepository).should(never()).save(any(Walk.class));
+        assertThat(todayWalk.getActualSteps()).isEqualTo(4000);
+        then(seniorProfileService).should(times(1))
+                .addGoalRewardPoints(eq(2L), eq(25L), eq("걷기 목표 달성"), eq("WALK_REWARD:162"));
+        ArgumentCaptor<GoalAchievedEvent> event = ArgumentCaptor.forClass(GoalAchievedEvent.class);
+        then(eventPublisher).should(times(1)).publishEvent(event.capture());
+        assertThat(event.getValue().eventId()).isEqualTo("G01:W:162");
     }
 
     @Test
