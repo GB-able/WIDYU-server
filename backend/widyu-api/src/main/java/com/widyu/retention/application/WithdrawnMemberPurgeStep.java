@@ -12,7 +12,10 @@ public enum WithdrawnMemberPurgeStep {
     ALBUM_COMMENT_REPLY("album_comment",
             "parent_comment_id IS NOT NULL AND album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)",
             false),
-    ALBUM_COMMENT("album_comment", "album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)", false),
+    // 답글은 앞 단계 몫이다. 원댓글로 한정해야 dry-run 건수가 실제 삭제 건수와 같다.
+    ALBUM_COMMENT("album_comment",
+            "parent_comment_id IS NULL AND album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)",
+            false),
     ALBUM_LIKE("album_like", "album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)", false),
     ALBUM_VIEW("album_view", "album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)", false),
     ALBUM_UNLOCK("album_unlock", "album_id IN (SELECT album_id FROM album WHERE member_id = :memberId)", false),

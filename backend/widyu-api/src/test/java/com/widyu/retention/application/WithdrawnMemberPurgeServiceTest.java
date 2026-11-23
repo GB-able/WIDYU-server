@@ -75,6 +75,9 @@ class WithdrawnMemberPurgeServiceTest {
         assertThat(purgedAt(fixture.due())).isNull();
         assertThat(logRows("withdrawn.album")).isEqualTo(1L);
         assertThat(logRows("withdrawn.heart_rate_event")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment_reply")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment_mask")).isEqualTo(1L);
         assertThat(dataPurgeLogRepository.findAll()).allMatch(DataPurgeLog::isDryRun);
         verify(s3ObjectDeletionTaskService, never()).schedule(eq(fixture.due().getId()), anyList());
     }

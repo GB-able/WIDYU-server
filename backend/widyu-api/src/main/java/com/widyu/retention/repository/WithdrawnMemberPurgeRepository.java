@@ -17,6 +17,10 @@ public class WithdrawnMemberPurgeRepository {
     /** 다른 가족 앨범에 단 댓글은 답글이 매달려 있어 지우지 않고 내용만 가린다(LLD-0187 5.3). */
     public static final String MASKED_COMMENT = "탈퇴한 회원의 댓글입니다.";
 
+    /** 다른 가족 앨범에 단 탈퇴자 댓글. 자기 앨범 댓글은 앨범과 함께 지우므로 빼야 dry-run 건수가 실제와 같다. */
+    private static final String OTHERS_ALBUM_COMMENTS = "member_id = :memberId AND content <> :masked"
+            + " AND album_id NOT IN (SELECT album_id FROM album WHERE member_id = :memberId)";
+
     private final NamedParameterJdbcTemplate jdbc;
 
     /** 탈퇴 시각이 컷오프보다 앞서고 아직 지우지 않은 회원. 관리자 정지는 탈퇴 시각이 없어 고르지 않는다. */
@@ -74,13 +78,13 @@ public class WithdrawnMemberPurgeRepository {
 
     public long countCommentsToMask(Long memberId) {
         return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM album_comment WHERE member_id = :memberId AND content <> :masked",
+                "SELECT COUNT(*) FROM album_comment WHERE " + OTHERS_ALBUM_COMMENTS,
                 member(memberId).addValue("masked", MASKED_COMMENT), Long.class);
     }
 
     public long maskComments(Long memberId) {
         return jdbc.update(
-                "UPDATE album_comment SET content = :masked WHERE member_id = :memberId AND content <> :masked",
+                "UPDATE album_comment SET content = :masked WHERE " + OTHERS_ALBUM_COMMENTS,
                 member(memberId).addValue("masked", MASKED_COMMENT));
     }
 
