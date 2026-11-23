@@ -80,6 +80,24 @@ class SeniorWithdrawalLocationDeletionTest {
                 .isFalse();
     }
 
+    @Test
+    @DisplayName("위치 기록을 지워도 같은 트랜잭션의 아직 반영하지 않은 변경이 버려지지 않는다")
+    void 위치_기록을_지워도_반영하지_않은_변경이_버려지지_않는다() {
+        // given
+        Member senior = entityManager.persist(Member.createMember(MemberType.SENIOR, "시니어", "01011114444"));
+        entityManager.flush();
+        senior.maskPersonalInfo();
+
+        // when
+        locationAccessLogRepository.deleteBySeniorMemberId(senior.getId());
+        locationFixRepository.deleteByMemberId(senior.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        // then
+        assertThat(entityManager.find(Member.class, senior.getId()).getName()).isEqualTo("탈퇴회원");
+    }
+
     private static StudyParticipation participation(Member member, String participationId) {
         return StudyParticipation.of("STUDY-2026", participationId, member, "IRB-v1",
                 LocalDate.of(2026, 9, 20), Map.of(), null, null, null, null);

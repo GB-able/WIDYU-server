@@ -95,11 +95,19 @@ public class AdminMemberService {
         return member.getStatus();
     }
 
+    /** 탈퇴했거나 방장 보호자 탈퇴로 가족이 해체된 어르신은 가족이 없다(LLD-0186). */
+    private static String familyCode(SeniorProfile profile) {
+        if (profile.getFamily() == null) {
+            return null;
+        }
+        return profile.getFamily().getFamilyCode();
+    }
+
     private FamilyInfo buildFamilyInfo(Member member) {
         if (member.getType() == MemberType.SENIOR) {
             return seniorProfileRepository.findByMemberId(member.getId())
                     .map(sp -> new FamilyInfo(
-                            sp.getFamily().getFamilyCode(),
+                            familyCode(sp),
                             sp.getInviteCode(),
                             sp.getAddress(),
                             sp.getPoints(),

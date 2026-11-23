@@ -21,7 +21,8 @@ public interface LocationFixRepository extends JpaRepository<LocationFix, Long> 
 
     /** 어르신 탈퇴 때 위치 원본을 바로 지운다(LLD-0186). 인덱스 {@code (member_id, ts_ms)}. */
     // ponytail: 한 문장 DELETE. 위치 원본 신규 저장이 멈춰(ADR-0045) 행 수가 더 늘지 않는다. 커지면 PK 묶음 삭제로 나눈다
-    @Modifying(clearAutomatically = true)
+    // 컨텍스트를 비우지 않는다. 같은 트랜잭션의 아직 flush하지 않은 탈퇴 처리 변경이 버려진다.
+    @Modifying
     @Query("DELETE FROM LocationFix l WHERE l.memberId = :memberId")
     int deleteByMemberId(@Param("memberId") Long memberId);
 }
