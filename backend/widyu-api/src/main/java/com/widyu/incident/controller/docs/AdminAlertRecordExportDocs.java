@@ -32,6 +32,9 @@ public interface AdminAlertRecordExportDocs {
                         마감과 같거나 늦은 괜찮아요 포함, 그때 `response`는 `OK`), `PENDING`(아직 마감 전)
                     - 보호자: `guardian_alert_queued_at_ms`(보호자 최초 알림 단계에 들어간 시각. 보호자가 없어도 찍힘),
                       `guardian_push_delivered`·`guardian_push_delivered_at_ms`(FCM 첫 전송 성공, 회차 있는 알림만), `outcome`(보호자 사후 판정)
+                    - 끝 세 칸: `prompt_displayed_at_ms`(확인 화면이 어르신 폰에 떴다고 서버가 받은 시각. 신호가 없었으면 빈칸),
+                      `decision_at_ms`(서버 판정 시각), `guardian_device_received_at_ms`(보호자 폰 도착 시각).
+                      판정 시각과 폰 도착은 회차 있는 알림만 채워집니다
 
                     관리자 접속기록에 관리자와 요청 경로가 남습니다.
                     """

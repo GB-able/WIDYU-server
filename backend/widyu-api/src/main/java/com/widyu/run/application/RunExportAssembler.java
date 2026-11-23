@@ -11,6 +11,7 @@ import com.widyu.decision.repository.DecisionRecordRepository;
 import com.widyu.global.infrastructure.s3.S3Service;
 import com.widyu.global.properties.SensorProperties;
 import com.widyu.incident.Incident;
+import com.widyu.incident.application.IncidentAlertExportService;
 import com.widyu.incident.repository.IncidentRepository;
 import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
@@ -85,6 +86,7 @@ public class RunExportAssembler {
     private static final String STREAMS_DIR = "streams";
     /** 빠진 묶음의 원인을 가리는 CSV. 스트림 파일이 아니라 manifest.files와 streams_absent에 넣지 않는다(LLD-0166 5.4). */
     static final String DIAGNOSTICS_DIR = "diagnostics";
+    static final String ALERT_RECORDS_FILE = "alert_records.csv";
     private static final long MILLIS_PER_SECOND = 1000L;
 
     private final SensorBatchRepository sensorBatchRepository;
@@ -99,6 +101,7 @@ public class RunExportAssembler {
     private final ObjectMapper objectMapper;
     private final SensorProperties sensorProperties;
     private final SensorLossDiagnostics sensorLossDiagnostics;
+    private final IncidentAlertExportService incidentAlertExportService;
 
     /** 한 (스트림, 기기)의 집계 재료. 파일을 다시 읽어도 알 수 없는 값(도착 순서)을 여기 모은다. */
     private static final class StreamAccumulator {
@@ -137,13 +140,16 @@ public class RunExportAssembler {
     /**
      * 버린 구간, 거절 기록, 빠진 번호 대조(LLD-0166 3.4). 0건이어도 머리글만 쓴다 — "찾아봤는데 없다"를 적는 자리라
      * 파일이 없으면 "안 찾았다"와 구별되지 않는다. phase는 회차 시작~끝 기준이다.
+     * 충격 기록({@code impacts.csv})과 알림 기록({@code alert_records.csv})도 같은 규칙으로 여기 둔다(LLD-0186).
      */
     private void writeDiagnostics(CollectionRun run, Path workDir) throws IOException {
         long endedAtMs = endedAtMs(run);
         List<SensorBatch> batches = sensorBatchRepository.findByRunIdOrderByMeasuredAtStartMsAsc(run.getRunId());
         Path dir = Files.createDirectories(workDir.resolve(DIAGNOSTICS_DIR));
-        for (CsvFile file : sensorLossDiagnostics.files(run.getMember().getId(), batches,
-                run.getStartedAtMs(), endedAtMs, run.getStartedAtMs(), endedAtMs)) {
+        List<CsvFile> files = new ArrayList<>(sensorLossDiagnostics.files(run.getMember().getId(), batches,
+                run.getStartedAtMs(), endedAtMs, run.getStartedAtMs(), endedAtMs));
+        files.add(sensorLossDiagnostics.impacts(batches));
+        for (CsvFile file : files) {
             try (BufferedWriter writer = Files.newBufferedWriter(dir.resolve(file.name()), StandardCharsets.UTF_8)) {
                 writer.write(file.header());
                 for (String row : file.rows()) {
@@ -151,6 +157,8 @@ public class RunExportAssembler {
                 }
             }
         }
+        Files.writeString(dir.resolve(ALERT_RECORDS_FILE), incidentAlertExportService.runCsv(run.getRunId()),
+                StandardCharsets.UTF_8);
     }
 
     /** 판정 기록은 센서 스트림이 아니므로 manifest.files에는 넣지 않는다(LLD-0051 5.3). */

@@ -43,9 +43,11 @@ class IncidentAlertRecordRepositoryTest {
         entityManager.persist(hrBatch(senior));
         DecisionRecord decision = decision(senior.getId());
         decision.markDelivered("fcm-7", FROM_MS + 2_000L);
+        ReflectionTestUtils.setField(decision, "alertDeviceReceivedAtMs", FROM_MS + 2_500L);
         entityManager.persist(decision);
         Incident incident = incident("inc-run", senior.getId(), "run-01", "dec-1", IncidentKind.HR_ANOMALY,
                 FROM_MS + 1_000L);
+        ReflectionTestUtils.setField(incident, "promptDisplayedAtMs", FROM_MS + 6_000L);
         ReflectionTestUtils.setField(incident, "response", IncidentResponseValue.OK);
         ReflectionTestUtils.setField(incident, "respondedAtMs", FROM_MS + 30_000L);
         entityManager.persistAndFlush(incident);
@@ -66,6 +68,31 @@ class IncidentAlertRecordRepositoryTest {
         assertThat(row.alertAtMs()).isEqualTo(FROM_MS + 2_000L);
         assertThat(row.response()).isEqualTo(IncidentResponseValue.OK);
         assertThat(row.respondedAtMs()).isEqualTo(FROM_MS + 30_000L);
+        assertThat(row.promptDisplayedAtMs()).isEqualTo(FROM_MS + 6_000L);
+        assertThat(row.decisionAtMs()).isEqualTo(FROM_MS + 500L);
+        assertThat(row.alertDeviceReceivedAtMs()).isEqualTo(FROM_MS + 2_500L);
+    }
+
+    @Test
+    @DisplayName("회차로 조회하면 그 회차의 알림만 시각 순으로 돌려주고 도움 요청과 다른 회차는 뺀다")
+    void 회차로_조회하면_그_회차의_알림만_돌려준다() {
+        // given
+        Member senior = persistSenior();
+        entityManager.persist(incident("inc-late", senior.getId(), "run-01", null, IncidentKind.FALL_SUSPECTED,
+                FROM_MS + 5_000L));
+        entityManager.persist(incident("inc-early", senior.getId(), "run-01", null, IncidentKind.HR_ANOMALY,
+                FROM_MS));
+        entityManager.persist(incident("inc-help", senior.getId(), "run-01", null, IncidentKind.SELF_HELP_REQUEST,
+                FROM_MS + 2_000L));
+        entityManager.persistAndFlush(incident("inc-other", senior.getId(), "run-02", null,
+                IncidentKind.HR_ANOMALY, FROM_MS + 1_000L));
+
+        // when
+        List<IncidentAlertRow> rows = incidentAlertRecordRepository.findRunAlertRecords("run-01", ALERT_KINDS);
+
+        // then
+        assertThat(rows).extracting(IncidentAlertRow::incidentRef).containsExactly("inc-early", "inc-late");
+        assertThat(rows).extracting(IncidentAlertRow::promptDisplayedAtMs).containsOnlyNulls();
     }
 
     @Test

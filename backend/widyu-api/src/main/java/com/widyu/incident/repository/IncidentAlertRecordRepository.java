@@ -23,7 +23,8 @@ public interface IncidentAlertRecordRepository extends Repository<Incident, Long
                    b.onBody, b.wearState,
                    i.respondByMs, i.response, i.respondedAtMs, i.responseVia,
                    i.state, i.initialAlertSentAtMs, d.alertDelivered, d.alertAtMs,
-                   i.outcome)
+                   i.outcome,
+                   i.promptDisplayedAtMs, d.decisionAtMs, d.alertDeviceReceivedAtMs)
               FROM Incident i
               LEFT JOIN DecisionRecord d ON d.decisionId = i.decisionId
               LEFT JOIN SensorBatch b ON b.batchId = d.triggerBatchId
@@ -34,4 +35,25 @@ public interface IncidentAlertRecordRepository extends Repository<Incident, Long
             """)
     List<IncidentAlertRow> findAlertRecords(
             @Param("fromMs") long fromMs, @Param("toMs") long toMs, @Param("kinds") List<IncidentKind> kinds);
+
+    /** 회차 내보내기의 {@code diagnostics/alert_records.csv}(LLD-0186). 칸은 기간 조회와 같다. */
+    @Query("""
+            SELECT new com.widyu.incident.repository.IncidentAlertRow(
+                   i.openedAtMs, i.incidentRef, i.memberId, i.kind, i.runId,
+                   i.detectionCount, i.decisionId, i.level,
+                   d.hrBpm, d.hrMeasuredAtMs, d.hrAccuracy, d.reason,
+                   b.onBody, b.wearState,
+                   i.respondByMs, i.response, i.respondedAtMs, i.responseVia,
+                   i.state, i.initialAlertSentAtMs, d.alertDelivered, d.alertAtMs,
+                   i.outcome,
+                   i.promptDisplayedAtMs, d.decisionAtMs, d.alertDeviceReceivedAtMs)
+              FROM Incident i
+              LEFT JOIN DecisionRecord d ON d.decisionId = i.decisionId
+              LEFT JOIN SensorBatch b ON b.batchId = d.triggerBatchId
+             WHERE i.runId = :runId
+               AND i.kind IN :kinds
+             ORDER BY i.openedAtMs, i.id
+            """)
+    List<IncidentAlertRow> findRunAlertRecords(
+            @Param("runId") String runId, @Param("kinds") List<IncidentKind> kinds);
 }

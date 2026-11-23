@@ -9,6 +9,7 @@ import com.widyu.incident.ResponseVia;
 /**
  * 알림 기록 내보내기의 한 줄(LLD-0131 3.2). 사건에 그 사건을 연 판정 기록과 판정 묶음을 left join한 값이다.
  * 회차 없는 알림은 판정 기록이 없어 {@code hrBpm}부터 묶음·FCM 도달 값이 null이다.
+ * 뒤 세 칸은 LLD-0186에서 더했다. 칸 순서를 지키려고 끝에 붙였다.
  */
 public record IncidentAlertRow(
         Long openedAtMs, String incidentRef, Long memberId, IncidentKind kind, String runId,
@@ -17,5 +18,6 @@ public record IncidentAlertRow(
         Boolean onBody, String wearState,
         Long respondByMs, IncidentResponseValue response, Long respondedAtMs, ResponseVia responseVia,
         IncidentState state, Long initialAlertSentAtMs, Boolean alertDelivered, Long alertAtMs,
-        IncidentOutcome outcome) {
+        IncidentOutcome outcome,
+        Long promptDisplayedAtMs, Long decisionAtMs, Long alertDeviceReceivedAtMs) {
 }
