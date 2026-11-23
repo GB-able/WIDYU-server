@@ -165,7 +165,7 @@
 - 기록은 `REQUIRES_NEW`이고 **호출부가 `try/catch(Exception)`으로 감싸 WARN만 남긴다**. 프록시가 커밋 시점에 던지는 예외는 서비스 메서드 안에서 잡을 수 없어 훅마다 감싼다. 기록 실패가 위치 조회를 막지 않는다
 - **통보는 열람마다 즉시**다(위치정보법 매회 즉시 통보, LLD-0130). `LOCATION_NOTICE_BATCHED` 동의는 기록만 하고 통보 방식에 쓰지 않는다. 같은 보호자 반복 조회를 합치던 쿨다운 설정(`immediate-cooldown-min`)과 그 판정·시니어 행 잠금은 지웠다. 환경변수가 남아 있어도 적용되지 않는다
 - 정기 요약 `LocationAccessDigestScheduler`의 cron(`location-access.digest-cron`)은 기본 `-`(꺼짐)다. 대신 서버 시작 1분 뒤 한 번(`flushOnStartup`) `notified_at IS NULL` 행을 시니어별 요약 1건으로 보낸다. 시니어별 `LocationAccessDigestSender` 트랜잭션이 미통보 행 선점과 FCM enqueue를 함께 처리하고, enqueue 실패 시 선점도 롤백되어 다음 시작 때 재시도한다
-- **예외: 보호자 홈의 외출 여부(`HOME_OUTING`)는 기록만 하고 알리지 않는다**(#1163). 홈을 열 때마다 어르신에게 같은 푸시가 가서 뺐다. 이 행은 `notified_at`이 비어 있고, 요약 대상 조회·선점 쿼리도 `HOME_OUTING`을 뺀다
+- **예외: 보호자 홈의 외출 여부(`HOME_OUTING`)는 기록만 하고 알리지 않는다**(LLD-0189). 홈을 열 때마다 어르신에게 같은 푸시가 가서 뺐다. 이 행은 `notified_at`이 비어 있고, 요약 대상 조회·선점 쿼리도 `HOME_OUTING`을 뺀다
 - 그 밖의 열람 기록은 저장과 같은 트랜잭션에서 `notified_at`을 채운다. 비어 있는 행은 `HOME_OUTING`과 LLD-0130 이전에 쌓인 옛 기록뿐이다
 - 통보는 알림 종류 `LOCATION_ACCESS_NOTICE`(L01)·`LOCATION_ACCESS_DIGEST`(L02)로 보낸다. 설정 그룹 NONE이라 끌 수 없고, 문구에 보호자 이름·시각·목적(가족 안부 확인)을 담는다(LLD-0179). 옛 행은 `FcmCategory.LOCATION_NOTICE`로 기타 칩에 남는다
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
