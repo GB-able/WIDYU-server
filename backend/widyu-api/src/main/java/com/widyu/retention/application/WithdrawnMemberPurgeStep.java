@@ -104,7 +104,6 @@ public enum WithdrawnMemberPurgeStep {
                     + " WHERE member_id = :memberId)"),
     STUDY_PARTICIPATION("study_participation", "member_id = :memberId"),
 
-    MEMBER_WITHDRAWAL_REQUEST("member_withdrawal_request", "member_id = :memberId"),
     SOCIAL_UNLINK_TASK("social_unlink_task", "member_id = :memberId");
 
     private final String table;

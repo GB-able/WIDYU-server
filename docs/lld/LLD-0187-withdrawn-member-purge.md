@@ -29,7 +29,7 @@
 ## 2. 범위
 
 ### In scope
-- 변경 모듈: widyu-domain(`Member.personalDataPurgedAt`, `DataPurgeLog.deleted`), widyu-api(정리 작업 서비스, 스케줄러, 대상 정의, JDBC 저장소, `S3ObjectDeletionTaskService.scheduleKeys`, 설정, Flyway V6)
+- 변경 모듈: widyu-domain(`Member.personalDataPurgedAt`, `DataPurgeLog.deleted`), widyu-api(정리 작업 서비스, 스케줄러, 대상 정의, JDBC 저장소, `S3ObjectDeletionTaskService.scheduleKeys`, 설정, Flyway V7)
 - 탈퇴 시각이 30일 지난 회원의 개인 자료 표를 지운다. 회원 행은 묘비로 남긴다.
 - 탈퇴자가 올린 앨범과 딸린 행을 지우고 S3 파일은 삭제 작업 큐로 지운다. 센서 원문과 실증 회차 내보내기 zip의 S3 객체도 같은 큐로 지운다.
 - 실증 참여 기록과 그 회원의 회차(배정, 마커, 내보내기)를 지운다.
@@ -69,7 +69,7 @@ FK를 가리키는 쪽부터 지운다. 조건은 이 enum에만 있다.
 | 어르신 프로필 | `point_history`, `senior_profile` | 주소, 생년월일, 포인트 |
 | 연구 자료 | `followup_answer`, `followup_card`, `label_annotation`, `incident_label`, `incident_response_attempt`, `incident_guardian_response`, `incident`, `decision_record`, `heart_rate_event`, `heart_rate_emergency`, `device_heartbeat`, `device_event`, `activity_window`, `sensor_dropped_range`, `sensor_batch_rejection`, `location_fix`, `sensor_batch` | 회원 자료. 실증 참가자도 지운다 |
 | 실증 회차와 참여 | `run_export`, `run_marker`, `run_device_assignment`, `collection_run`, `study_participation_consent`, `study_participation_history`, `study_participation_withdrawal_item`, `study_participation` | 4.3 |
-| 처리 기록 | `member_withdrawal_request`, `social_unlink_task` | 탈퇴 요청과 끝난 소셜 연동 해제 작업 |
+| 처리 기록 | `social_unlink_task` | 끝난 소셜 연동 해제 작업 |
 
 남기는 것: `member`(묘비), `consent_record`, `payment`와 딸린 표, `payment_order`, `admin_access_log`, 보호자가 열람자인 `location_access_log` 행(어르신이 탈퇴하면 그 어르신의 행은 LLD-0186이 탈퇴 때 이미 지웠다). 그 밖에 개인 내용이 없어 남기는 것:
 
@@ -81,7 +81,7 @@ FK를 가리키는 쪽부터 지운다. 조건은 이 enum에만 있다.
 
 ### 4.2 `member.personal_data_purged_at` (신규, `datetime(6)` NULL)
 
-개인 자료를 지운 시각. 비어 있는 탈퇴 회원만 고른다. Flyway `V6__member_personal_data_purged_at.sql`.
+개인 자료를 지운 시각. 비어 있는 탈퇴 회원만 고른다. Flyway `V7__member_personal_data_purged_at.sql`(V6은 #1157의 탈퇴 요청 표 삭제).
 
 ### 4.3 실증 회차와 참여 기록의 삭제 순서
 
@@ -138,11 +138,11 @@ ADR-0043 대안 3은 전체 센서 정리(약 81만 행)에 큐를 기각했다.
 - [x] 지운 회원은 다음 실행에서 다시 고르지 않는다.
 - [x] 회차 내보내기를 만드는 중인 탈퇴 회원은 지우지 않고 다음 실행으로 미룬다.
 - [x] 실증 참가자도 심박, 참여 기록과 이력, 회차와 기기 배정, 마커, 내보내기가 지워지고 내보내기 zip의 S3 삭제 작업이 저장된다. 기기 시계 매핑은 남는다.
-- [x] 실제 MySQL 8(일회용 컨테이너, Flyway V1~V6로 만든 스키마, `ddl-auto=validate`)에서 `WithdrawnMemberPurgeServiceTest` 5건과 `SeniorWithdrawalLocationDeletionTest` 2건을 돌려 자료가 있는 상태의 FK 삭제 순서(앨범 답글, 원댓글, 실증 참여 이력, 회차, 배정, 마커, 내보내기)와 다른 가족 앨범 댓글 가림, 내보내기 중인 회원 미루기를 확인했다. `FlywayMigrationMySqlTest`도 통과했다(2026-11-23).
+- [x] 실제 MySQL 8(일회용 컨테이너, Flyway V1~V7로 만든 스키마, `ddl-auto=validate`)에서 `WithdrawnMemberPurgeServiceTest` 5건과 `SeniorWithdrawalLocationDeletionTest` 2건을 돌려 자료가 있는 상태의 FK 삭제 순서(앨범 답글, 원댓글, 실증 참여 이력, 회차, 배정, 마커, 내보내기)와 다른 가족 앨범 댓글 가림, 내보내기 중인 회원 미루기를 확인했다. `FlywayMigrationMySqlTest`도 통과했다(2026-11-23).
 
 ## 8. 영향 범위 / 마이그레이션
 
-- **Flyway V6**: `member.personal_data_purged_at` 추가. 개발 서버 배포 때 적용된다.
+- **Flyway V7**: `member.personal_data_purged_at` 추가. 개발 서버 배포 때 적용된다.
 - **배포하면 바로 지운다.** 되돌릴 수 없다. 멈출 때는 `RETENTION_WITHDRAWAL_PURGE_ENABLED=false`로 재기동한다. 지운 건수는 `data_purge_log`의 `withdrawn.*` 행으로 본다.
 - **첫 실행**: 개발 서버의 기존 탈퇴자 중 30일이 지난 회원이 한꺼번에 대상이 된다. 하룻밤 100명씩 나눠 처리한다.
 - `backend/CLAUDE.md` retention 절, ERD를 갱신한다.

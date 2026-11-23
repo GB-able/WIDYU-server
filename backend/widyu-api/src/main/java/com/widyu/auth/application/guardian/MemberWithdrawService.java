@@ -56,7 +56,7 @@ public class MemberWithdrawService {
     public void withdrawMember(MemberWithdrawRequest request) {
         Member member = memberUtil.getCurrentMember();
         // /api/v1/auth/**는 인가 규칙 없이 열려 있다. 어르신이 부르면 가족 연결이 남은 채 계정만 가려지므로
-        // 어떤 처리보다 먼저 막는다. 어르신은 탈퇴 요청 API를 쓴다(LLD-0137).
+        // 어떤 처리보다 먼저 막는다. 어르신은 어르신 탈퇴 API를 쓴다(LLD-0186).
         if (member.getType() != MemberType.GUARDIAN) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
