@@ -57,7 +57,7 @@ public class IncidentAlertExportService {
         return csv(rows).getBytes(UTF_8);
     }
 
-    /** 회차 하나의 알림 기록. 회차 내보내기 {@code diagnostics/alert_records.csv}에 쓴다(LLD-0186). 0건이면 머리글만이다. */
+    /** 회차 하나의 알림 기록. 회차 내보내기 {@code diagnostics/alert_records.csv}에 쓴다(LLD-0188). 0건이면 머리글만이다. */
     public String runCsv(String runId) {
         return csv(incidentAlertRecordRepository.findRunAlertRecords(runId, ALERT_KINDS));
     }

@@ -140,7 +140,7 @@ public class RunExportAssembler {
     /**
      * 버린 구간, 거절 기록, 빠진 번호 대조(LLD-0166 3.4). 0건이어도 머리글만 쓴다 — "찾아봤는데 없다"를 적는 자리라
      * 파일이 없으면 "안 찾았다"와 구별되지 않는다. phase는 회차 시작~끝 기준이다.
-     * 충격 기록({@code impacts.csv})과 알림 기록({@code alert_records.csv})도 같은 규칙으로 여기 둔다(LLD-0186).
+     * 충격 기록({@code impacts.csv})과 알림 기록({@code alert_records.csv})도 같은 규칙으로 여기 둔다(LLD-0188).
      */
     private void writeDiagnostics(CollectionRun run, Path workDir) throws IOException {
         long endedAtMs = endedAtMs(run);

@@ -36,7 +36,7 @@ public interface IncidentAlertRecordRepository extends Repository<Incident, Long
     List<IncidentAlertRow> findAlertRecords(
             @Param("fromMs") long fromMs, @Param("toMs") long toMs, @Param("kinds") List<IncidentKind> kinds);
 
-    /** 회차 내보내기의 {@code diagnostics/alert_records.csv}(LLD-0186). 칸은 기간 조회와 같다. */
+    /** 회차 내보내기의 {@code diagnostics/alert_records.csv}(LLD-0188). 칸은 기간 조회와 같다. */
     @Query("""
             SELECT new com.widyu.incident.repository.IncidentAlertRow(
                    i.openedAtMs, i.incidentRef, i.memberId, i.kind, i.runId,
