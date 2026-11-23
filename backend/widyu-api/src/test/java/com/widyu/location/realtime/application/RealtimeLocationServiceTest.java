@@ -220,6 +220,23 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
+    @DisplayName("탈퇴한 어르신의 위치가 늦게 처리되면 최신 위치와 체류 상태를 만들지 않고 거절한다")
+    void 탈퇴한_어르신의_늦은_위치는_거절한다() {
+        // given
+        LocationUpdateRequest request = LocationUpdateRequest.of(1L, 37.5, 127.0, null);
+        Member member = member(1L);
+        member.markWithdrawn(LocalDateTime.now());
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
+
+        // when & then
+        assertThatThrownBy(() -> ingestService().applyRealtime(request, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+        then(seniorLocationRepository).should(never()).save(any(SeniorLocation.class));
+        assertThat(stayStateService.states).doesNotContainKey(1L);
+    }
+
+    @Test
     @DisplayName("위치를 업데이트하면 최신 위치와 이동 경로를 저장하고 보호자 topic으로 브로드캐스트한다")
     void 위치를_업데이트하면_저장하고_브로드캐스트한다() {
         // given
