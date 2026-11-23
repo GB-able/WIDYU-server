@@ -70,13 +70,13 @@ class HeartMessageServiceTest {
         assertThat(captor.getValue().relatedMemberId()).isEqualTo(1L);
         assertThat(captor.getValue().emergency()).isFalse();
         assertThat(captor.getValue().dataForEnqueue("heart-senior"))
-                .containsEntry("deepLink", "/notification")
+                .containsEntry("deepLink", "")
                 .containsEntry("notificationType", "HEART_MESSAGE_RECEIVED");
     }
 
     @Test
-    @DisplayName("보호자에게 하트 메시지를 보내면 알림센터 경로를 전달한다")
-    void 보호자에게_하트_메시지를_보내면_알림센터_경로를_전달한다() {
+    @DisplayName("보호자에게 하트 메시지를 보내면 딥링크를 비워 전달한다")
+    void 보호자에게_하트_메시지를_보내면_딥링크를_비워_전달한다() {
         // given
         Member sender = mock(Member.class);
         Member receiver = mock(Member.class);
@@ -98,7 +98,7 @@ class HeartMessageServiceTest {
         // then
         then(fcmService).should().sendMessageToUser(eq(2L), captor.capture());
         assertThat(captor.getValue().dataForEnqueue("heart-guardian"))
-                .containsEntry("deepLink", "/notification");
+                .containsEntry("deepLink", "");
     }
 
     @Test
