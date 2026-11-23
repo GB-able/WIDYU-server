@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.widyu.admin.AdminAction;
+import com.widyu.auth.application.guardian.MemberWithdrawService;
 import com.widyu.admin.application.AdminAuditLogService;
 import com.widyu.admin.application.AdminIdentityResolver;
 import com.widyu.admin.dto.response.AdminPageResponse;
@@ -50,6 +51,7 @@ class MemberWithdrawalRequestServiceTest {
     @Mock private MemberWithdrawalRequestRepository withdrawalRequestRepository;
     @Mock private AdminAuditLogService adminAuditLogService;
     @Mock private AdminIdentityResolver adminIdentityResolver;
+    @Mock private MemberWithdrawService memberWithdrawService;
 
     @InjectMocks
     private MemberWithdrawalRequestService service;
@@ -145,6 +147,7 @@ class MemberWithdrawalRequestServiceTest {
         assertThat(response.processedByAdminId()).isEqualTo(1L);
         verify(adminAuditLogService).logInCurrentTransaction(
                 AdminAction.MEMBER_WITHDRAWAL_REQUEST_PROCESSED, "MEMBER_WITHDRAWAL_REQUEST", 12L, "memberId=7");
+        verify(memberWithdrawService).withdrawSenior(7L);
     }
 
     @Test
@@ -163,6 +166,7 @@ class MemberWithdrawalRequestServiceTest {
         assertThat(response.processedByAdminId()).isEqualTo(1L);
         verify(adminAuditLogService).logInCurrentTransaction(
                 AdminAction.MEMBER_WITHDRAWAL_REQUEST_CANCELLED, "MEMBER_WITHDRAWAL_REQUEST", 12L, "memberId=7");
+        verifyNoInteractions(memberWithdrawService);
     }
 
     @Test

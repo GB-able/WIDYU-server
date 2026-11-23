@@ -33,10 +33,12 @@ public interface AdminMemberWithdrawalRequestDocs {
             @Max(value = 100, message = "size는 1 이상 100 이하여야 합니다.") int size);
 
     @Operation(
-            summary = "탈퇴 요청 처리 완료 기록",
+            summary = "탈퇴 요청 처리 완료 (어르신 탈퇴 실행)",
             description = """
-                    운영자가 어르신 계정 처리를 마친 뒤 부릅니다. **이 API는 계정을 바꾸지 않습니다.**
-                    상태를 `PROCESSED`로 바꾸고 처리 시각과 처리 관리자를 남기며 감사 로그를 함께 남깁니다.
+                    본인 확인을 마친 뒤 부릅니다. **이 API가 어르신 탈퇴를 실행하며 되돌릴 수 없습니다.**
+                    한 트랜잭션에서 상태를 `PROCESSED`로 바꾸고 처리 시각, 처리 관리자, 감사 로그를 남기며
+                    어르신을 가족에서 빼고 이름과 번호를 가린 뒤 `INACTIVE`로 바꿉니다.
+                    위치 열람 기록과 위치 원본을 바로 지웁니다. 연구 자료 삭제를 마치지 않은 실증 참가자의 위치 원본은 남깁니다(LLD-0186).
                     """
     )
     @ApiResponse(responseCode = "200", description = "기록 성공")

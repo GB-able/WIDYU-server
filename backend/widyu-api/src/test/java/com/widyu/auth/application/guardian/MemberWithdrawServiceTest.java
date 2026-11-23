@@ -31,6 +31,12 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.member.SeniorProfile;
+import com.widyu.location.access.repository.LocationAccessLogRepository;
+import com.widyu.location.raw.repository.LocationFixRepository;
+import com.widyu.study.repository.StudyParticipationRepository;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +65,9 @@ class MemberWithdrawServiceTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private S3ObjectDeletionTaskService s3ObjectDeletionTaskService;
     @Mock private EmergencyRecipientSnapshotService emergencyRecipientSnapshots;
+    @Mock private LocationAccessLogRepository locationAccessLogRepository;
+    @Mock private LocationFixRepository locationFixRepository;
+    @Mock private StudyParticipationRepository studyParticipationRepository;
 
     @InjectMocks
     private MemberWithdrawService memberWithdrawService;
@@ -360,5 +369,97 @@ class MemberWithdrawServiceTest {
         // then
         assertThat(member.getStatus()).isEqualTo(Status.INACTIVE);
         assertThat(member.getWithdrawnAt()).isNotNull();
+    }
+
+    private static Member senior(Long id) {
+        Member member = Member.createMember(MemberType.SENIOR, "김어르신", "01099998888");
+        ReflectionTestUtils.setField(member, "id", id);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        return member;
+    }
+
+    private static SeniorProfile seniorProfileInFamily(Member senior, Long familyId) {
+        Family family = Family.createFamily("ABCDEF");
+        ReflectionTestUtils.setField(family, "id", familyId);
+        return SeniorProfile.createSeniorProfile(senior, family, "서울시", "ABC1234", LocalDate.of(1950, 1, 1));
+    }
+
+    @Test
+    @DisplayName("어르신 탈퇴를 실행하면 가족에서 빠지고 위치 열람 기록과 위치 원본을 지우고 계정을 가린다")
+    void 어르신_탈퇴를_실행하면_가족에서_빠지고_위치_기록을_지우고_계정을_가린다() {
+        // given
+        Member senior = senior(7L);
+        SeniorProfile profile = seniorProfileInFamily(senior, 100L);
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.of(profile));
+        given(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(7L)).willReturn(false);
+
+        // when
+        memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(profile.getFamily()).isNull();
+        assertThat(senior.getStatus()).isEqualTo(Status.INACTIVE);
+        assertThat(senior.getWithdrawnAt()).isNotNull();
+        assertThat(senior.getName()).isEqualTo("탈퇴회원");
+        assertThat(senior.getPhoneNumber()).isNull();
+        verify(locationAccessLogRepository).deleteBySeniorMemberId(7L);
+        verify(locationFixRepository).deleteByMemberId(7L);
+        verify(refreshTokenRepository).deleteById(7L);
+        verify(medicationProofDeletionService).deleteAllByMember(senior);
+        verify(emergencyRecipientSnapshots).evictAfterCommit(100L, List.of(7L));
+        verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(7L));
+    }
+
+    @Test
+    @DisplayName("연구 자료 삭제를 마치지 않은 실증 참가자 어르신이 탈퇴하면 위치 원본은 남기고 열람 기록만 지운다")
+    void 실증_참가자_어르신이_탈퇴하면_위치_원본은_남기고_열람_기록만_지운다() {
+        // given
+        Member senior = senior(7L);
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.empty());
+        given(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(7L)).willReturn(true);
+
+        // when
+        memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        verify(locationAccessLogRepository).deleteBySeniorMemberId(7L);
+        verify(locationFixRepository, never()).deleteByMemberId(any());
+        assertThat(senior.getWithdrawnAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("보호자를 어르신 탈퇴로 처리하면 권한 예외가 발생하고 아무것도 지우지 않는다")
+    void 보호자를_어르신_탈퇴로_처리하면_권한_예외가_발생한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(guardian, "id", 1L);
+        given(memberRepository.findByIdForUpdate(1L)).willReturn(Optional.of(guardian));
+
+        // when & then
+        assertThatThrownBy(() -> memberWithdrawService.withdrawSenior(1L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+        verifyNoInteractions(locationAccessLogRepository, locationFixRepository, refreshTokenRepository);
+        assertThat(guardian.getWithdrawnAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 어르신을 다시 처리하면 아무것도 바꾸지 않는다")
+    void 이미_탈퇴한_어르신을_다시_처리하면_아무것도_바꾸지_않는다() {
+        // given
+        Member senior = senior(7L);
+        LocalDateTime withdrawnAt = LocalDateTime.of(2026, 11, 1, 9, 0);
+        senior.markWithdrawn(withdrawnAt);
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+
+        // when
+        memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(senior.getWithdrawnAt()).isEqualTo(withdrawnAt);
+        verifyNoInteractions(locationAccessLogRepository, locationFixRepository, eventPublisher);
     }
 }

@@ -4,6 +4,7 @@ import com.widyu.admin.AdminAction;
 import com.widyu.admin.application.AdminAuditLogService;
 import com.widyu.admin.application.AdminIdentityResolver;
 import com.widyu.admin.dto.response.AdminPageResponse;
+import com.widyu.auth.application.guardian.MemberWithdrawService;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.SecurityUtil;
@@ -22,7 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 어르신 탈퇴 요청과 운영자의 처리 기록. 서버는 계정을 바꾸지 않는다 → LLD-0137 */
+/** 어르신 탈퇴 요청과 운영자의 처리 기록 → LLD-0137. 처리 완료가 어르신 탈퇴를 실행한다 → LLD-0186 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -35,6 +36,7 @@ public class MemberWithdrawalRequestService {
     private final MemberWithdrawalRequestRepository withdrawalRequestRepository;
     private final AdminAuditLogService adminAuditLogService;
     private final AdminIdentityResolver adminIdentityResolver;
+    private final MemberWithdrawService memberWithdrawService;
 
     @Transactional
     public MemberWithdrawalRequestResponse request() {
@@ -69,6 +71,8 @@ public class MemberWithdrawalRequestService {
     public MemberWithdrawalRequestResponse complete(Long requestId) {
         MemberWithdrawalRequest request = findForUpdate(requestId);
         request.complete(adminIdentityResolver.resolveAdminId(), LocalDateTime.now());
+        // 같은 트랜잭션이라 탈퇴 처리 중 오류가 나면 처리 완료 기록과 감사 로그도 남지 않는다.
+        memberWithdrawService.withdrawSenior(request.getMemberId());
         audit(AdminAction.MEMBER_WITHDRAWAL_REQUEST_PROCESSED, request);
         return MemberWithdrawalRequestResponse.from(request);
     }

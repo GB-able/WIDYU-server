@@ -20,4 +20,7 @@ public interface StudyParticipationRepository extends JpaRepository<StudyPartici
     /** 같은 연구·회원의 ACTIVE 참여는 하나뿐이다(LLD-0052 5절). */
     boolean existsByStudyIdAndMemberIdAndStatus(
             String studyId, Long memberId, StudyParticipationStatus status);
+
+    /** 연구 자료 수동 삭제를 마치지 않은 실증 참가자인가(ADR-0043 결정 4). */
+    boolean existsByMemberIdAndDeletionProcessedAtIsNull(Long memberId);
 }
