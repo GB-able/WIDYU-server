@@ -80,7 +80,7 @@
 1. `IncidentAlertRecordRepository`의 기간 조회와 새 회차 조회(`findRunAlertRecords`)가 같은 SELECT 칸에 `i.promptDisplayedAtMs`, `d.decisionAtMs`, `d.alertDeviceReceivedAtMs`를 더한다. 판정 기록은 지금처럼 left join이다.
 2. `IncidentAlertExportService.runCsv(runId)`가 관리자 CSV와 같은 머리글과 행 규칙으로 문자열을 만든다. 0건이면 머리글만이다. 로그는 남기지 않는다(회차 내보내기 워커가 결과를 남긴다).
 3. `SensorLossDiagnostics.impacts(batches)`가 `trigger_kind`가 있는 묶음을 측정 시작 순으로 훑어 한 줄씩 만든다.
-   - **같은 충격은 한 줄이다.** 키는 (`device_id`, `trigger_ts_ms`)다. 내용이 달라진 재전송은 새 `batch_id`로 오므로(ADR-0030) 같은 충격이 두 묶음에 실릴 수 있다. 먼저 온 묶음을 쓴다.
+   - **같은 충격은 한 줄이다.** 키는 (`device_id`, `trigger_ts_ms`)다. 내용이 달라진 재전송은 새 `batch_id`로 오므로(ADR-0030) 같은 충격이 두 묶음에 실릴 수 있다. 먼저 저장된 묶음(`sensor_batch` PK가 작은 쪽)을 쓴다. 입력은 측정 시작 순이라 앞에 나온 묶음이 먼저 받은 묶음이라는 보장이 없다. 줄 순서는 그 충격이 처음 나온 측정 시작 순이다.
    - `trigger_ts_ms`가 없는 묶음은 합칠 기준이 없어 묶음마다 한 줄이고 시각 칸이 빈다.
 4. `RunExportAssembler.writeDiagnostics`가 기존 네 파일 뒤에 `impacts.csv`와 `alert_records.csv`를 쓴다. 0건이어도 머리글을 쓴다(LLD-0166 5.4의 진단 파일 규칙). `manifest.files[]`, `streams_absent`에는 넣지 않는다.
 
@@ -89,7 +89,7 @@
 ## 6. 예외 / 에러 처리
 
 - 새 에러 코드 없음.
-- 알림 조회가 실패하면 회차 조립 전체가 실패하고 기존 워커 재시도를 탄다(다른 진단 파일과 같다).
+- 알림 조회가 실패하면 회차 조립 전체가 실패하고 그 내보내기는 `FAILED`로 끝난다(다른 진단 파일과 같다). 워커는 `QUEUED`만 집고 `FAILED`를 자동으로 다시 시도하지 않으므로, 운영자가 같은 회차에 내보내기를 새로 요청해야 한다.
 - 로그에 심박 값, 사유, g 값을 남기지 않는다(#639, 정책 1.6.7). 이 변경은 로그를 더하지 않는다.
 
 ## 7. 인수조건 (Acceptance Criteria)
@@ -98,7 +98,7 @@
 - [x] 회차 있는 알림은 세 칸이 사건과 판정 기록 값으로 채워지고, 화면 수신 신호가 없던 알림과 회차 없는 알림은 빈칸이다.
 - [x] 회차 조회는 그 회차의 심박, 낙상 사건만 알림 시각 순으로 돌려주고 도움 요청과 다른 회차 사건은 뺀다.
 - [x] 회차 zip에 `diagnostics/alert_records.csv`와 `diagnostics/impacts.csv`가 있고 0건이면 머리글만 있다. `manifest.json`에는 들어가지 않는다.
-- [x] 충격 표시가 있는 묶음만 한 줄이 되고, 같은 기기의 같은 충격 시각이 두 묶음에 실려도 먼저 온 한 줄이다.
+- [x] 충격 표시가 있는 묶음만 한 줄이 되고, 같은 기기의 같은 충격 시각이 두 묶음에 실려도 먼저 저장된 묶음 한 줄이다. 재전송의 측정 시작이 더 일러도 마찬가지다.
 - [x] `samsung_fall_detected`는 머리글에 있고 값은 비어 있다.
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다.
 
