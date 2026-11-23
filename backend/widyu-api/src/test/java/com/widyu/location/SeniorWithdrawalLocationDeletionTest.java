@@ -10,12 +10,7 @@ import com.widyu.location.raw.LocationFix;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.member.Member;
 import com.widyu.member.MemberType;
-import com.widyu.study.StudyParticipation;
-import com.widyu.study.WithdrawalScope;
-import com.widyu.study.repository.StudyParticipationRepository;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +29,6 @@ class SeniorWithdrawalLocationDeletionTest {
 
     @Autowired private LocationAccessLogRepository locationAccessLogRepository;
     @Autowired private LocationFixRepository locationFixRepository;
-    @Autowired private StudyParticipationRepository studyParticipationRepository;
     @Autowired private TestEntityManager entityManager;
 
     @Test
@@ -62,25 +56,6 @@ class SeniorWithdrawalLocationDeletionTest {
     }
 
     @Test
-    @DisplayName("연구 자료 삭제를 마치지 않은 참여만 실증 참가자로 본다")
-    void 연구_자료_삭제를_마치지_않은_참여만_실증_참가자로_본다() {
-        // given
-        Member active = entityManager.persist(Member.createMember(MemberType.SENIOR, "시니어", "01011112222"));
-        Member processed = entityManager.persist(Member.createMember(MemberType.SENIOR, "시니어", "01011113333"));
-        entityManager.persist(participation(active, "part-active"));
-        StudyParticipation done = participation(processed, "part-done");
-        done.withdraw(WithdrawalScope.ALL, null, LocalDateTime.of(2026, 10, 1, 0, 0));
-        done.markDeletionProcessed(LocalDateTime.of(2026, 10, 2, 0, 0));
-        entityManager.persist(done);
-        entityManager.flush();
-
-        // when & then
-        assertThat(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(active.getId())).isTrue();
-        assertThat(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(processed.getId()))
-                .isFalse();
-    }
-
-    @Test
     @DisplayName("위치 기록을 지워도 같은 트랜잭션의 아직 반영하지 않은 변경이 버려지지 않는다")
     void 위치_기록을_지워도_반영하지_않은_변경이_버려지지_않는다() {
         // given
@@ -96,11 +71,6 @@ class SeniorWithdrawalLocationDeletionTest {
 
         // then
         assertThat(entityManager.find(Member.class, senior.getId()).getName()).isEqualTo("탈퇴회원");
-    }
-
-    private static StudyParticipation participation(Member member, String participationId) {
-        return StudyParticipation.of("STUDY-2026", participationId, member, "IRB-v1",
-                LocalDate.of(2026, 9, 20), Map.of(), null, null, null, null);
     }
 
     private static LocationFix locationFix(Long memberId, long seq) {

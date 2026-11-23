@@ -12,7 +12,7 @@
 - 토큰 3종: Access(단기, `Bearer`) / Refresh(Redis TTL) / Temporary(회원가입 1회용, 30분)
 - SMS 플로우: 발송 → 코드 검증 → Temporary Token → 회원가입 → JWT. Apple은 전화번호 별도 수집. → ADR-0002, LLD-0004
 - **탈퇴 시 소셜 연동 해제는 트랜잭션 밖이다**: 탈퇴 트랜잭션은 `social_unlink_task`만 저장하고 `MemberWithdrawnEvent`를 발행한다. 커밋 뒤 리스너가 호출하고 실패하면 10분마다 최대 5회 재시도하며, 끝나면 oauthId·토큰을 지운다. 같은 이벤트로 Redis 위치 키도 지운다 → LLD-0059
-- **보호자 탈퇴 API(`DELETE /api/v1/auth/guardians/withdraw`)는 보호자만 부른다**(`/api/v1/auth/**`가 `permitAll`이라 서비스가 유형을 확인한다). 탈퇴는 `member.withdrawn_at`을 채운다. 관리자 정지(`INACTIVE`)는 채우지 않으므로 탈퇴 회원은 이 칸으로 고른다. 어르신은 `POST /api/v1/members/seniors/me/withdrawal-requests`로 요청만 남긴다. 운영자가 관리자 API로 **처리 완료하면 같은 트랜잭션에서 어르신 탈퇴가 실행된다**(`MemberWithdrawService.withdrawSenior`): 가족 연결 끊기(`family_id = null`), 위치 열람 기록과 위치 원본 즉시 삭제(연구 자료 삭제를 마치지 않은 실증 참가자의 위치 원본은 남김), 그 뒤 보호자 탈퇴와 같은 계정 정리(`eraseAccount`). 취소는 기록만 한다 → LLD-0137, LLD-0186
+- **보호자 탈퇴 API(`DELETE /api/v1/auth/guardians/withdraw`)는 보호자만 부른다**(`/api/v1/auth/**`가 `permitAll`이라 서비스가 유형을 확인한다). 탈퇴는 `member.withdrawn_at`을 채운다. 관리자 정지(`INACTIVE`)는 채우지 않으므로 탈퇴 회원은 이 칸으로 고른다. 어르신은 `POST /api/v1/members/seniors/me/withdrawal-requests`로 요청만 남긴다. 운영자가 관리자 API로 **처리 완료하면 같은 트랜잭션에서 어르신 탈퇴가 실행된다**(`MemberWithdrawService.withdrawSenior`): 가족 연결 끊기(`family_id = null`), 위치 열람 기록과 위치 원본 즉시 삭제(실증 참가자도 예외 없음), 그 뒤 보호자 탈퇴와 같은 계정 정리(`eraseAccount`). 취소는 기록만 한다 → LLD-0137, LLD-0186
 
 ### `member` — 회원 (가족 도메인)
 - `Member` + `MemberType`(SENIOR/GUARDIAN), `MemberRole`(ADMIN/USER/TEMPORARY)

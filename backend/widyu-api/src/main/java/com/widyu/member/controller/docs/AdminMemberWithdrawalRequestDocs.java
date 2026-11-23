@@ -38,7 +38,7 @@ public interface AdminMemberWithdrawalRequestDocs {
                     본인 확인을 마친 뒤 부릅니다. **이 API가 어르신 탈퇴를 실행하며 되돌릴 수 없습니다.**
                     한 트랜잭션에서 상태를 `PROCESSED`로 바꾸고 처리 시각, 처리 관리자, 감사 로그를 남기며
                     어르신을 가족에서 빼고 이름과 번호를 가린 뒤 `INACTIVE`로 바꿉니다.
-                    위치 열람 기록과 위치 원본을 바로 지웁니다. 연구 자료 삭제를 마치지 않은 실증 참가자의 위치 원본은 남깁니다(LLD-0186).
+                    위치 열람 기록과 위치 원본을 바로 지웁니다. 실증 참가자도 같습니다(LLD-0186).
                     """
     )
     @ApiResponse(responseCode = "200", description = "기록 성공")

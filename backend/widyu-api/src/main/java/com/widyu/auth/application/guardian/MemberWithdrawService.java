@@ -20,7 +20,6 @@ import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
 import com.widyu.location.access.repository.LocationAccessLogRepository;
 import com.widyu.location.raw.repository.LocationFixRepository;
-import com.widyu.study.repository.StudyParticipationRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +48,6 @@ public class MemberWithdrawService {
     private final EmergencyRecipientSnapshotService emergencyRecipientSnapshots;
     private final LocationAccessLogRepository locationAccessLogRepository;
     private final LocationFixRepository locationFixRepository;
-    private final StudyParticipationRepository studyParticipationRepository;
 
     @Transactional
     public void withdrawMember(MemberWithdrawRequest request) {
@@ -93,12 +91,9 @@ public class MemberWithdrawService {
         leaveFamily(memberId);
 
         // 처리방침: 어르신이 탈퇴하면 위치정보와 위치 열람 기록은 바로 지운다(ADR-0043 결정 8, 2026-11-23 사용자 결정).
-        // 위치 원본은 연구 자료라 연구 자료 삭제를 마치지 않은 실증 참가자면 남긴다(ADR-0043 결정 4). 열람 기록은 연구 자료가 아니다.
+        // 실증 참가자도 예외 없이 지운다(2026-11-23 기획자 답변).
         int accessLogs = locationAccessLogRepository.deleteBySeniorMemberId(memberId);
-        int fixes = 0;
-        if (!studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(memberId)) {
-            fixes = locationFixRepository.deleteByMemberId(memberId);
-        }
+        int fixes = locationFixRepository.deleteByMemberId(memberId);
 
         eraseAccount(member);
 

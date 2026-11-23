@@ -34,7 +34,6 @@ import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.member.SeniorProfile;
 import com.widyu.location.access.repository.LocationAccessLogRepository;
 import com.widyu.location.raw.repository.LocationFixRepository;
-import com.widyu.study.repository.StudyParticipationRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -67,7 +66,6 @@ class MemberWithdrawServiceTest {
     @Mock private EmergencyRecipientSnapshotService emergencyRecipientSnapshots;
     @Mock private LocationAccessLogRepository locationAccessLogRepository;
     @Mock private LocationFixRepository locationFixRepository;
-    @Mock private StudyParticipationRepository studyParticipationRepository;
 
     @InjectMocks
     private MemberWithdrawService memberWithdrawService;
@@ -392,7 +390,6 @@ class MemberWithdrawServiceTest {
         SeniorProfile profile = seniorProfileInFamily(senior, 100L);
         given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
         given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.of(profile));
-        given(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(7L)).willReturn(false);
 
         // when
         memberWithdrawService.withdrawSenior(7L);
@@ -409,24 +406,6 @@ class MemberWithdrawServiceTest {
         verify(medicationProofDeletionService).deleteAllByMember(senior);
         verify(emergencyRecipientSnapshots).evictAfterCommit(100L, List.of(7L));
         verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(7L));
-    }
-
-    @Test
-    @DisplayName("연구 자료 삭제를 마치지 않은 실증 참가자 어르신이 탈퇴하면 위치 원본은 남기고 열람 기록만 지운다")
-    void 실증_참가자_어르신이_탈퇴하면_위치_원본은_남기고_열람_기록만_지운다() {
-        // given
-        Member senior = senior(7L);
-        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
-        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.empty());
-        given(studyParticipationRepository.existsByMemberIdAndDeletionProcessedAtIsNull(7L)).willReturn(true);
-
-        // when
-        memberWithdrawService.withdrawSenior(7L);
-
-        // then
-        verify(locationAccessLogRepository).deleteBySeniorMemberId(7L);
-        verify(locationFixRepository, never()).deleteByMemberId(any());
-        assertThat(senior.getWithdrawnAt()).isNotNull();
     }
 
     @Test
