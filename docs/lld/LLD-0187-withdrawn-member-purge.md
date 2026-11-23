@@ -102,7 +102,7 @@ FK는 `run_device_assignment.run_id`, `run_marker.run_id` → `collection_run.id
 
 ### 5.1 실행 (`WithdrawnMemberPurgeService.purge(now)`)
 
-1. `withdrawn_at < now - 30일`이고 `personal_data_purged_at IS NULL`인 회원을 ID 순으로 최대 100명 고른다. 관리자 정지(`INACTIVE`, 탈퇴 시각 없음)는 고르지 않는다.
+1. `withdrawn_at < now - 30일`이고 `personal_data_purged_at IS NULL`인 회원을 ID 순으로 최대 100명 고른다. 관리자 정지(`INACTIVE`, 탈퇴 시각 없음)는 고르지 않는다. 그 회원의 회차 내보내기가 대기 중(`QUEUED`)이거나 만드는 중(`RUNNING`)이면 다음 날로 미룬다. 아직 S3 키가 없어 지금 지우면 워커가 나중에 올린 zip이 남기 때문이다. 고른 뒤 정리 전에 내보내기가 새로 시작되는 틈은 막지 않는다(탈퇴 30일 뒤 내보내기는 드물다).
 2. 회원마다 트랜잭션 하나로 5.2를 한다. 예외가 나면 그 회원만 롤백하고 WARN(회원 ID, 예외 클래스)을 남긴 뒤 다음 회원으로 간다. 다음 날 다시 고른다.
 3. 성공한 회원의 건수를 단계별로 더해 4.4대로 남기고 INFO 요약을 남긴다.
 
@@ -136,8 +136,9 @@ ADR-0043 대안 3은 전체 센서 정리(약 81만 행)에 큐를 기각했다.
 - [x] 30일이 지나지 않은 탈퇴 회원의 자료와 다른 회원의 앨범은 남는다.
 - [x] 앨범 사진 주소로 S3 삭제 작업을 저장한다.
 - [x] 지운 회원은 다음 실행에서 다시 고르지 않는다.
+- [x] 회차 내보내기를 만드는 중인 탈퇴 회원은 지우지 않고 다음 실행으로 미룬다.
 - [x] 실증 참가자도 심박, 참여 기록과 이력, 회차와 기기 배정, 마커, 내보내기가 지워지고 내보내기 zip의 S3 삭제 작업이 저장된다. 기기 시계 매핑은 남는다.
-- [x] 실제 MySQL 8(일회용 컨테이너, Flyway V1~V6로 만든 스키마, `ddl-auto=validate`)에서 `WithdrawnMemberPurgeServiceTest` 4건과 `SeniorWithdrawalLocationDeletionTest` 2건을 돌려 자료가 있는 상태의 FK 삭제 순서(앨범 답글, 원댓글, 실증 참여 이력, 회차, 배정, 마커, 내보내기)와 다른 가족 앨범 댓글 가림을 확인했다. `FlywayMigrationMySqlTest`도 통과했다(2026-11-23).
+- [x] 실제 MySQL 8(일회용 컨테이너, Flyway V1~V6로 만든 스키마, `ddl-auto=validate`)에서 `WithdrawnMemberPurgeServiceTest` 5건과 `SeniorWithdrawalLocationDeletionTest` 2건을 돌려 자료가 있는 상태의 FK 삭제 순서(앨범 답글, 원댓글, 실증 참여 이력, 회차, 배정, 마커, 내보내기)와 다른 가족 앨범 댓글 가림, 내보내기 중인 회원 미루기를 확인했다. `FlywayMigrationMySqlTest`도 통과했다(2026-11-23).
 
 ## 8. 영향 범위 / 마이그레이션
 

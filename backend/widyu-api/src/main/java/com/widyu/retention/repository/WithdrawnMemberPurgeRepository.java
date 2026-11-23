@@ -23,11 +23,18 @@ public class WithdrawnMemberPurgeRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    /** 탈퇴 시각이 컷오프보다 앞서고 아직 지우지 않은 회원. 관리자 정지는 탈퇴 시각이 없어 고르지 않는다. */
+    /**
+     * 탈퇴 시각이 컷오프보다 앞서고 아직 지우지 않은 회원. 관리자 정지는 탈퇴 시각이 없어 고르지 않는다.
+     * 회차 내보내기가 대기 중이거나 만드는 중인 회원은 다음 날로 미룬다. 아직 S3 키가 없어 지금 지우면
+     * 워커가 나중에 올린 zip이 남는다(LLD-0187 5.2).
+     */
+    // ponytail: 고른 뒤 그 회원 정리 전에 내보내기가 새로 시작되는 틈은 막지 않는다. 탈퇴 30일 뒤 회차 내보내기는 드물다
     public List<Long> findDueMemberIds(LocalDateTime cutoff, int limit) {
         return jdbc.queryForList(
-                "SELECT id FROM member WHERE withdrawn_at < :cutoff AND personal_data_purged_at IS NULL"
-                        + " ORDER BY id LIMIT :limit",
+                "SELECT m.id FROM member m WHERE m.withdrawn_at < :cutoff AND m.personal_data_purged_at IS NULL"
+                        + " AND NOT EXISTS (SELECT 1 FROM run_export e JOIN collection_run r ON e.run_id = r.run_id"
+                        + " WHERE r.member_id = m.id AND e.status IN ('QUEUED', 'RUNNING'))"
+                        + " ORDER BY m.id LIMIT :limit",
                 new MapSqlParameterSource().addValue("cutoff", cutoff).addValue("limit", limit),
                 Long.class);
     }

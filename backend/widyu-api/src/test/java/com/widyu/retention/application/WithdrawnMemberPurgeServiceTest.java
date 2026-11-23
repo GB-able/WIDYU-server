@@ -134,6 +134,22 @@ class WithdrawnMemberPurgeServiceTest {
         verify(s3ObjectDeletionTaskService).scheduleKeys(fixture.due().getId(), List.of(EXPORT_KEY));
     }
 
+    @Test
+    @DisplayName("회차 내보내기를 만드는 중인 탈퇴 회원은 다음 실행으로 미룬다")
+    void 회차_내보내기를_만드는_중인_회원은_미룬다() {
+        // given
+        Fixture fixture = fixture(true);
+        jdbcTemplate.update("UPDATE run_export SET status = 'RUNNING', s3_key = NULL");
+
+        // when
+        service.purge(NOW);
+
+        // then
+        assertThat(albumsOf(fixture.due())).isEqualTo(1);
+        assertThat(rows("run_export")).isEqualTo(1);
+        assertThat(purgedAt(fixture.due())).isNull();
+    }
+
     private Fixture fixture(boolean dueIsParticipant) {
         Member due = withdrawn("01020000001", NOW.minusDays(31));
         Member recent = withdrawn("01020000002", NOW.minusDays(10));
