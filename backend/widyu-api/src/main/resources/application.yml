@@ -45,6 +45,13 @@ retention:
     enabled: ${RETENTION_PURGE_ENABLED:true}
     # 매일 03:30(Asia/Seoul).
     cron: ${RETENTION_PURGE_CRON:0 30 3 * * *}
+  # 탈퇴 30일 뒤 개인 자료 삭제(LLD-0187). dry-run이면 지우지 않고 테이블별 건수만 data_purge_log에 남긴다.
+  # 운영자가 dry-run 건수를 확인한 뒤 RETENTION_WITHDRAWAL_PURGE_DRY_RUN=false로 지운다(ADR-0043 결정 9).
+  withdrawal-purge:
+    enabled: ${RETENTION_WITHDRAWAL_PURGE_ENABLED:true}
+    dry-run: ${RETENTION_WITHDRAWAL_PURGE_DRY_RUN:true}
+    # 매일 03:50(Asia/Seoul). 보관 기간 정리(03:30) 뒤.
+    cron: ${RETENTION_WITHDRAWAL_PURGE_CRON:0 50 3 * * *}
 
 # WebSocket 느린 처리 전용 실행기(LLD-0091). 스레드 수는 고정(core = max)이고 대기열이 차면 과부하 오류를 돌려준다.
 websocket:

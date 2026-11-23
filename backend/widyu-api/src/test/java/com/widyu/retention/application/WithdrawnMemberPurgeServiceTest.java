@@ -1,0 +1,210 @@
+package com.widyu.retention.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.widyu.album.Album;
+import com.widyu.album.AlbumComment;
+import com.widyu.album.AlbumLike;
+import com.widyu.global.config.JpaAuditingConfig;
+import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
+import com.widyu.heart.HeartRateEvent;
+import com.widyu.heart.HeartRateStatus;
+import com.widyu.location.access.LocationAccessLog;
+import com.widyu.location.access.LocationAccessPath;
+import com.widyu.member.Member;
+import com.widyu.member.MemberType;
+import com.widyu.retention.DataPurgeLog;
+import com.widyu.retention.repository.DataPurgeLogRepository;
+import com.widyu.retention.repository.WithdrawnMemberPurgeRepository;
+import com.widyu.study.StudyParticipation;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+
+@DataJpaTest
+@ActiveProfiles("test")
+@Import({JpaAuditingConfig.class, WithdrawnMemberPurgeService.class, WithdrawnMemberPurgeRepository.class})
+@DisplayName("탈퇴 30일 뒤 회원 자료 삭제 테스트")
+class WithdrawnMemberPurgeServiceTest {
+
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 12, 31, 3, 50);
+    private static final String MEDIA_URL = "https://bucket.example/album/photo.jpg";
+
+    @Autowired private WithdrawnMemberPurgeService service;
+    @Autowired private WithdrawnMemberPurgeRepository repository;
+    @Autowired private DataPurgeLogRepository dataPurgeLogRepository;
+    @Autowired private TestEntityManager entityManager;
+    @Autowired private JdbcTemplate jdbcTemplate;
+    @MockBean private S3ObjectDeletionTaskService s3ObjectDeletionTaskService;
+
+    @Test
+    @DisplayName("모든 삭제 단계의 문장이 빈 테이블에서 0건을 반환한다")
+    void 모든_삭제_단계의_문장이_빈_테이블에서_0건을_반환한다() {
+        for (WithdrawnMemberPurgeStep step : WithdrawnMemberPurgeStep.values()) {
+            assertThat(repository.count(step, 1L)).as(step.name()).isZero();
+            assertThat(repository.delete(step, 1L)).as(step.name()).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("dry-run이면 아무것도 지우지 않고 테이블별 지울 건수만 남긴다")
+    void dry_run이면_아무것도_지우지_않고_건수만_남긴다() {
+        // given
+        Fixture fixture = fixture(false);
+
+        // when
+        service.purge(NOW, true);
+
+        // then
+        assertThat(rows("album")).isEqualTo(2);
+        assertThat(rows("heart_rate_event")).isEqualTo(1);
+        assertThat(purgedAt(fixture.due())).isNull();
+        assertThat(logRows("withdrawn.album")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.heart_rate_event")).isEqualTo(1L);
+        assertThat(dataPurgeLogRepository.findAll()).allMatch(DataPurgeLog::isDryRun);
+        verify(s3ObjectDeletionTaskService, never()).schedule(eq(fixture.due().getId()), anyList());
+    }
+
+    @Test
+    @DisplayName("dry-run을 끄면 30일이 지난 탈퇴 회원의 자료와 올린 앨범을 지우고 다른 회원 자료는 남긴다")
+    void 탈퇴_30일이_지난_회원의_자료와_앨범을_지운다() {
+        // given
+        Fixture fixture = fixture(false);
+
+        // when
+        service.purge(NOW, false);
+
+        // then
+        assertThat(albumsOf(fixture.due())).isZero();
+        assertThat(albumsOf(fixture.other())).isEqualTo(1);
+        assertThat(commentsOnAlbumsOf(fixture.due())).isZero();
+        assertThat(rows("album_like")).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT content FROM album_comment WHERE member_id = ?", String.class, fixture.due().getId()))
+                .isEqualTo(WithdrawnMemberPurgeRepository.MASKED_COMMENT);
+        assertThat(rowsOf("heart_rate_event", "member_id", fixture.due())).isZero();
+        assertThat(rowsOf("location_access_log", "senior_member_id", fixture.due())).isZero();
+        assertThat(rowsOf("location_access_log", "senior_member_id", fixture.recent())).isEqualTo(1);
+        assertThat(purgedAt(fixture.due())).isEqualTo(NOW);
+        assertThat(purgedAt(fixture.recent())).isNull();
+        verify(s3ObjectDeletionTaskService).schedule(fixture.due().getId(), List.of(MEDIA_URL));
+    }
+
+    @Test
+    @DisplayName("이미 지운 회원은 다음 실행에서 다시 고르지 않는다")
+    void 이미_지운_회원은_다시_고르지_않는다() {
+        // given
+        Fixture fixture = fixture(false);
+        service.purge(NOW, false);
+
+        // when
+        List<Long> due = repository.findDueMemberIds(NOW.minusDays(30), 100);
+
+        // then
+        assertThat(due).doesNotContain(fixture.due().getId());
+    }
+
+    @Test
+    @DisplayName("연구 자료 삭제를 마치지 않은 실증 참가자는 연구 자료를 남기고 제외 건수로 센다")
+    void 실증_참가자는_연구_자료를_남기고_제외_건수로_센다() {
+        // given
+        Fixture fixture = fixture(true);
+
+        // when
+        service.purge(NOW, false);
+
+        // then
+        assertThat(rowsOf("heart_rate_event", "member_id", fixture.due())).isEqualTo(1);
+        assertThat(albumsOf(fixture.due())).isZero();
+        DataPurgeLog heart = log("withdrawn.heart_rate_event");
+        assertThat(heart.getTargetRows()).isZero();
+        assertThat(heart.getExemptRows()).isEqualTo(1L);
+        verify(s3ObjectDeletionTaskService, never()).scheduleKeys(eq(fixture.due().getId()), anyList());
+    }
+
+    private Fixture fixture(boolean dueIsParticipant) {
+        Member due = withdrawn("01020000001", NOW.minusDays(31));
+        Member recent = withdrawn("01020000002", NOW.minusDays(10));
+        Member other = entityManager.persist(Member.createMember(MemberType.GUARDIAN, "가족", "01020000003"));
+
+        Album dueAlbum = entityManager.persist(
+                Album.createAlbumWithMetadata(due, "사진", List.of(MEDIA_URL), List.of(), List.of()));
+        AlbumComment otherComment = entityManager.persist(AlbumComment.createComment(dueAlbum, other, "좋아요"));
+        entityManager.persist(AlbumComment.createReply(dueAlbum, due, otherComment, "고마워"));
+        entityManager.persist(AlbumLike.createLike(dueAlbum, other));
+
+        Album otherAlbum = entityManager.persist(
+                Album.createAlbumWithMetadata(other, "가족", List.of(), List.of(), List.of()));
+        AlbumComment dueComment = entityManager.persist(AlbumComment.createComment(otherAlbum, due, "보고 싶다"));
+        entityManager.persist(AlbumComment.createReply(otherAlbum, other, dueComment, "저도요"));
+
+        entityManager.persist(HeartRateEvent.of(due, 72, NOW.minusDays(40), HeartRateStatus.NORMAL, null, null));
+        entityManager.persist(LocationAccessLog.of(other.getId(), due.getId(), LocationAccessPath.REST_LAST,
+                NOW.minusDays(40)));
+        entityManager.persist(LocationAccessLog.of(other.getId(), recent.getId(), LocationAccessPath.REST_LAST,
+                NOW.minusDays(20)));
+        if (dueIsParticipant) {
+            entityManager.persist(StudyParticipation.of("STUDY-2026", "part-due", due, "IRB-v1",
+                    LocalDate.of(2026, 9, 20), Map.of(), null, null, null, null));
+        }
+        entityManager.flush();
+        return new Fixture(due, recent, other);
+    }
+
+    private Member withdrawn(String phoneNumber, LocalDateTime withdrawnAt) {
+        Member member = Member.createMember(MemberType.SENIOR, "시니어", phoneNumber);
+        member.maskPersonalInfo();
+        member.markWithdrawn(withdrawnAt);
+        return entityManager.persist(member);
+    }
+
+    private long rows(String table) {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+    }
+
+    private long rowsOf(String table, String column, Member member) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?", Long.class, member.getId());
+    }
+
+    private long albumsOf(Member member) {
+        return rowsOf("album", "member_id", member);
+    }
+
+    private long commentsOnAlbumsOf(Member member) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM album_comment c JOIN album a ON c.album_id = a.album_id WHERE a.member_id = ?",
+                Long.class, member.getId());
+    }
+
+    private LocalDateTime purgedAt(Member member) {
+        return jdbcTemplate.queryForObject(
+                "SELECT personal_data_purged_at FROM member WHERE id = ?", LocalDateTime.class, member.getId());
+    }
+
+    private DataPurgeLog log(String target) {
+        return dataPurgeLogRepository.findAll().stream()
+                .filter(row -> row.getTarget().equals(target)).findFirst().orElseThrow();
+    }
+
+    private Long logRows(String target) {
+        return log(target).getTargetRows();
+    }
+
+    private record Fixture(Member due, Member recent, Member other) {
+    }
+}

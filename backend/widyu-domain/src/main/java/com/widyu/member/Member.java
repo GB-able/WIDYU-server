@@ -89,6 +89,10 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawn_at")
     private LocalDateTime withdrawnAt;
 
+    // 탈퇴 30일 뒤 개인 자료를 지운 시각. 채워진 회원은 정리 작업이 다시 고르지 않는다(LLD-0187).
+    @Column(name = "personal_data_purged_at")
+    private LocalDateTime personalDataPurgedAt;
+
     @Builder(access = AccessLevel.PRIVATE)
     private Member(final MemberRole role, final MemberType type, final String name, final String phoneNumber,
                    final String profileImage, final Status status) {
