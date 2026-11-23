@@ -37,6 +37,7 @@
 - [ ] 다른 경로의 열람은 이전처럼 열람마다 L01이 접수된다
 - [ ] 관련 테스트(`LocationAccessLogServiceTest`, `LocationAccessLogRepositoryTest`)가 통과한다
 
-## 5. 미결정 사항 (Open Questions)
+## 5. 법적 확인
 
-- ADR-0036은 외출 여부도 위치에서 파생된다는 이유로 통보 대상에 넣었다. 이를 통보에서 빼는 것이 위치정보법 제19조 통보 요건과 맞는지 법무 확인이 남아 있다. 확인 결과 통보가 필요하다고 하면 이 LLD의 3절 분기를 지우면 원래 동작으로 돌아간다
+- ADR-0036은 외출 여부도 위치에서 파생된다는 이유로 통보 대상에 넣었다. 홈 카드의 외출 여부 제공은 위치정보법 제19조③의 매회 통보 대상이 아니라는 확인을 2026-11-23 사용자가 전달했다. 회신 문서와 회신 기관은 저장소에 없다
+- 판단이 바뀌어 원래 동작으로 되돌릴 때는 세 곳을 함께 되돌린다. `LocationAccessLogService.record`의 `HOME_OUTING` 조기 반환, `LocationAccessLogRepository.findSeniorIdsWithUnnotified`와 `claimUnnotified`의 `path <> HOME_OUTING` 조건. 저장소 조건을 남기면 그동안 쌓인 홈 미통보 행이 요약에서 계속 빠진다. 되돌린 뒤에는 홈 행만 남은 어르신과 다른 경로 행이 섞인 어르신 모두 서버 시작 시 요약을 받는다

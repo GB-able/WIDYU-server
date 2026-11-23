@@ -56,4 +56,23 @@ class LocationAccessLogRepositoryTest {
         assertThat(locationAccessLogRepository.findById(home.getId()).orElseThrow().getNotifiedAt()).isNull();
         assertThat(locationAccessLogRepository.findById(map.getId()).orElseThrow().getNotifiedAt()).isEqualTo(now);
     }
+
+    @Test
+    @DisplayName("이미 통보한 행은 다시 선점하지 않고 처음 통보 시각을 그대로 둔다")
+    void 이미_통보한_행은_다시_선점하지_않는다() {
+        // given
+        LocalDateTime accessedAt = LocalDateTime.of(2026, 11, 23, 9, 0);
+        LocationAccessLog map = locationAccessLogRepository.saveAndFlush(
+                LocationAccessLog.of(VIEWER_ID, MAP_SENIOR_ID, LocationAccessPath.REST_LAST, accessedAt));
+        LocalDateTime firstNotifiedAt = accessedAt.plusMinutes(1);
+        locationAccessLogRepository.claimUnnotified(MAP_SENIOR_ID, firstNotifiedAt);
+
+        // when
+        int claimed = locationAccessLogRepository.claimUnnotified(MAP_SENIOR_ID, accessedAt.plusMinutes(2));
+
+        // then
+        assertThat(claimed).isZero();
+        assertThat(locationAccessLogRepository.findById(map.getId()).orElseThrow().getNotifiedAt())
+                .isEqualTo(firstNotifiedAt);
+    }
 }
