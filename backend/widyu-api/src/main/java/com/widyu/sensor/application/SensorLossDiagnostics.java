@@ -6,7 +6,10 @@ import com.widyu.sensor.SensorDroppedRange;
 import com.widyu.sensor.application.SensorWindowCsv.Window;
 import com.widyu.sensor.repository.SensorBatchRejectionRepository;
 import com.widyu.sensor.repository.SensorDroppedRangeRepository;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,9 @@ public class SensorLossDiagnostics {
     public static final String REJECTIONS_FILE = "rejections.csv";
     public static final String GAPS_FILE = "seq_gaps.csv";
     public static final String SESSIONS_FILE = "seq_sessions.csv";
+    public static final String IMPACTS_FILE = "impacts.csv";
+    static final String IMPACT_HEADER = SensorWindowCsv.line("impact_at_kst", "impact_at_ms", "member_id",
+            "device_id", "batch_id", "trigger_kind", "smv_g", "samsung_fall_detected");
 
     private final SensorDroppedRangeRepository sensorDroppedRangeRepository;
     private final SensorBatchRejectionRepository sensorBatchRejectionRepository;
@@ -77,5 +83,47 @@ public class SensorLossDiagnostics {
             }
         }
         return sessionIds;
+    }
+
+    /**
+     * 충격 한 번에 한 줄(LLD-0188). 워치가 충격 표시를 붙인 묶음({@code trigger_kind}가 있는 행)에서 읽어 새 저장이 없다.
+     * 같은 기기의 같은 충격 시각이 재전송으로 두 묶음에 실려도 먼저 저장된 묶음(PK가 작은 쪽) 한 줄만 쓴다.
+     * 입력이 측정 시작 순이라 먼저 나온 묶음이 먼저 받은 묶음이라는 보장이 없다. 충격 시각이 없는 묶음은 한 줄씩이다.
+     * {@code smv_g}는 워치가 보낸 값 그대로이고, 삼성 낙상 감지는 서버로 오지 않아 빈칸이다.
+     *
+     * @param batches 측정 시작 시각 오름차순
+     */
+    public CsvFile impacts(List<SensorBatch> batches) {
+        Map<String, SensorBatch> firstStored = new LinkedHashMap<>();
+        for (SensorBatch batch : batches) {
+            if (batch.getTriggerKind() != null) {
+                firstStored.merge(impactKey(batch), batch, SensorLossDiagnostics::storedFirst);
+            }
+        }
+        List<String> rows = new ArrayList<>();
+        for (SensorBatch batch : firstStored.values()) {
+            Long impactAtMs = batch.getTriggerTsMs();
+            String impactAtKst = null;
+            if (impactAtMs != null) {
+                impactAtKst = SensorWindowCsv.kst(impactAtMs);
+            }
+            rows.add(SensorWindowCsv.line(impactAtKst, impactAtMs, batch.getMember().getId(), batch.getDeviceId(),
+                    batch.getBatchId(), batch.getTriggerKind(), batch.getTriggerSmvG(), null));
+        }
+        return new CsvFile(IMPACTS_FILE, IMPACT_HEADER, rows);
+    }
+
+    private static SensorBatch storedFirst(SensorBatch kept, SensorBatch candidate) {
+        if (candidate.getId() < kept.getId()) {
+            return candidate;
+        }
+        return kept;
+    }
+
+    private static String impactKey(SensorBatch batch) {
+        if (batch.getTriggerTsMs() == null) {
+            return "batch:" + batch.getBatchId();
+        }
+        return batch.getDeviceId() + ":" + batch.getTriggerTsMs();
     }
 }

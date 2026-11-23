@@ -57,10 +57,32 @@ class IncidentAlertExportServiceTest {
         assertThat(lines[1]).isEqualTo("2026-11-01 00:00:01.000," + OPENED_AT_MS + ",inc-1,28,HR_ANOMALY,run-01,1,dec-1,"
                 + "EMERGENCY,185," + OPENED_AT_MS + ",HIGH,서맥,true,WORN_VALID,,,," + RESPOND_BY_MS + ",OK,OK,"
                 + (OPENED_AT_MS + 30_000L) + ",WATCH,OK_CLOSED," + OPENED_AT_MS + ",true," + (OPENED_AT_MS + 1_500L)
-                + ",FALSE_ALARM");
+                + ",FALSE_ALARM," + (OPENED_AT_MS + 5_000L) + "," + (OPENED_AT_MS - 200L) + ","
+                + (OPENED_AT_MS + 2_000L));
         assertThat(lines[2]).isEqualTo("2026-11-01 00:00:01.000," + OPENED_AT_MS + ",inc-1,28,HR_ANOMALY,run-01,1,dec-1,"
                 + "EMERGENCY,,,,,,,,,," + RESPOND_BY_MS + ",NO_RESPONSE,,,WATCH,OK_CLOSED," + OPENED_AT_MS + ",,,"
-                + "FALSE_ALARM");
+                + "FALSE_ALARM,,,");
+    }
+
+    @Test
+    @DisplayName("회차 알림 기록을 요청하면 그 회차의 알림을 같은 칸으로 내보내고 0건이면 머리글만 돌려준다")
+    void 회차_알림_기록은_같은_칸이고_0건이면_머리글만이다() {
+        // given
+        given(incidentAlertRecordRepository.findRunAlertRecords(eq("run-01"), anyList()))
+                .willReturn(List.of(row(null, null, 185, "서맥", true, null)));
+        given(incidentAlertRecordRepository.findRunAlertRecords(eq("run-empty"), anyList())).willReturn(List.of());
+
+        // when
+        String csv = incidentAlertExportService.runCsv("run-01");
+        String empty = incidentAlertExportService.runCsv("run-empty");
+
+        // then
+        String[] lines = csv.split("\n");
+        assertThat(lines).hasSize(2);
+        assertThat(lines[0]).isEqualTo(IncidentAlertExportService.HEADER.strip());
+        assertThat(lines[1]).endsWith("," + (OPENED_AT_MS + 5_000L) + "," + (OPENED_AT_MS - 200L) + ","
+                + (OPENED_AT_MS + 2_000L));
+        assertThat(empty).isEqualTo(IncidentAlertExportService.HEADER);
     }
 
     @Test
@@ -149,9 +171,15 @@ class IncidentAlertExportServiceTest {
         Long measuredAtMs = null;
         String accuracy = null;
         String wearState = null;
+        Long promptDisplayedAtMs = null;
+        Long decisionAtMs = null;
+        Long deviceReceivedAtMs = null;
         if (hasDecision) {
             measuredAtMs = OPENED_AT_MS;
             accuracy = "HIGH";
+            promptDisplayedAtMs = OPENED_AT_MS + 5_000L;
+            decisionAtMs = OPENED_AT_MS - 200L;
+            deviceReceivedAtMs = OPENED_AT_MS + 2_000L;
         }
         if (onBody != null) {
             wearState = "WORN_VALID";
@@ -160,6 +188,6 @@ class IncidentAlertExportServiceTest {
         return new IncidentAlertRow(OPENED_AT_MS, "inc-1", 28L, IncidentKind.HR_ANOMALY, "run-01", 1, "dec-1",
                 "EMERGENCY", hrBpm, measuredAtMs, accuracy, reason, onBody, wearState, RESPOND_BY_MS, response,
                 respondedAtMs, via, IncidentState.OK_CLOSED, OPENED_AT_MS, delivered, deliveredAtMs,
-                IncidentOutcome.FALSE_ALARM);
+                IncidentOutcome.FALSE_ALARM, promptDisplayedAtMs, decisionAtMs, deviceReceivedAtMs);
     }
 }

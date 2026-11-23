@@ -24,6 +24,9 @@ import com.widyu.incident.IncidentOutcome;
 import com.widyu.incident.IncidentResponseValue;
 import com.widyu.incident.IncidentState;
 import com.widyu.incident.ResponseVia;
+import com.widyu.incident.application.IncidentAlertExportService;
+import com.widyu.incident.repository.IncidentAlertRecordRepository;
+import com.widyu.incident.repository.IncidentAlertRow;
 import com.widyu.incident.repository.IncidentRepository;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import com.widyu.run.CollectionRun;
@@ -75,6 +78,7 @@ class RunExportAssemblerTest {
     @Mock private S3Service s3Service;
     @Mock private SensorDroppedRangeRepository sensorDroppedRangeRepository;
     @Mock private SensorBatchRejectionRepository sensorBatchRejectionRepository;
+    @Mock private IncidentAlertRecordRepository incidentAlertRecordRepository;
 
     @TempDir Path workDir;
 
@@ -143,7 +147,87 @@ class RunExportAssemblerTest {
         // 목록 파일은 회원과 회차 시각으로 고르므로, 이 테스트처럼 시각 조회에 없으면 머리글만 있다.
         assertThat(Files.readAllLines(diagnostics.resolve("dropped_ranges.csv"))).hasSize(1);
         assertThat(Files.readAllLines(diagnostics.resolve("rejections.csv"))).hasSize(1);
+        assertThat(Files.readAllLines(diagnostics.resolve("impacts.csv"))).hasSize(1);
+        assertThat(Files.readAllLines(diagnostics.resolve("alert_records.csv"))).hasSize(1);
         assertThat(readJson("manifest.json").get("files").toString()).doesNotContain("diagnostics");
+    }
+
+    @Test
+    @DisplayName("충격 표시가 붙은 묶음은 충격 한 번에 한 줄로 쓰고 재전송으로 같은 충격이 다시 와도 한 줄이다")
+    void 충격_묶음은_한_번에_한_줄이고_재전송은_합친다() throws IOException {
+        // given: 1번 묶음의 충격이 재전송(2번)으로 다시 왔고, 3번은 다른 충격이다
+        CollectionRun run = RunExportFixture.closedRun();
+        SensorBatch first = impactBatch(1L, STARTED_AT_MS, STARTED_AT_MS + 500L, 3.2);
+        SensorBatch resent = impactBatch(2L, STARTED_AT_MS + 10L, STARTED_AT_MS + 500L, 3.2);
+        SensorBatch other = impactBatch(3L, STARTED_AT_MS + 2_000L, STARTED_AT_MS + 2_400L, 2.1);
+        SensorBatch plain = RunExportFixture.imuBatch(4L, 4L, STARTED_AT_MS + 3_000L, STARTED_AT_MS + 4_000L, false);
+        given(sensorBatchRepository.findByRunIdOrderByMeasuredAtStartMsAsc(RUN_ID))
+                .willReturn(List.of(first, resent, other, plain));
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        List<String> lines = Files.readAllLines(workDir.resolve("diagnostics").resolve("impacts.csv"));
+        assertThat(lines).hasSize(3);
+        assertThat(lines.get(0)).isEqualTo(
+                "impact_at_kst,impact_at_ms,member_id,device_id,batch_id,trigger_kind,smv_g,samsung_fall_detected");
+        assertThat(lines.get(1)).endsWith(",%d,%d,%s,%s,impact,3.2,".formatted(
+                STARTED_AT_MS + 500L, RunExportFixture.MEMBER_ID, WATCH_DEVICE, first.getBatchId()));
+        assertThat(lines.get(2)).endsWith(",%d,%d,%s,%s,impact,2.1,".formatted(
+                STARTED_AT_MS + 2_400L, RunExportFixture.MEMBER_ID, WATCH_DEVICE, other.getBatchId()));
+    }
+
+    @Test
+    @DisplayName("같은 충격의 재전송 묶음이 측정 시작은 이르더라도 나중에 저장됐으면 먼저 저장된 묶음을 한 줄로 쓴다")
+    void 같은_충격은_먼저_저장된_묶음을_쓴다() throws IOException {
+        // given: 재전송(2번 행)이 측정 시작은 이르지만 원래 묶음(1번 행)보다 나중에 저장됐다
+        CollectionRun run = RunExportFixture.closedRun();
+        SensorBatch resent = impactBatch(2L, STARTED_AT_MS, STARTED_AT_MS + 500L, 3.0);
+        SensorBatch original = impactBatch(1L, STARTED_AT_MS + 10L, STARTED_AT_MS + 500L, 3.2);
+        given(sensorBatchRepository.findByRunIdOrderByMeasuredAtStartMsAsc(RUN_ID))
+                .willReturn(List.of(resent, original));
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        List<String> lines = Files.readAllLines(workDir.resolve("diagnostics").resolve("impacts.csv"));
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(1)).endsWith(",%s,impact,3.2,".formatted(original.getBatchId()));
+    }
+
+    @Test
+    @DisplayName("회차에 알림이 있으면 alert_records.csv에 그 회차 알림을 화면 뜬 시각, 판정 시각, 보호자 폰 도착 시각과 함께 쓴다")
+    void 회차_알림은_세_시각과_함께_알림_기록에_쓴다() throws IOException {
+        // given
+        CollectionRun run = RunExportFixture.closedRun();
+        long openedAtMs = STARTED_AT_MS + 1_000L;
+        IncidentAlertRow alert = new IncidentAlertRow(openedAtMs, "inc-1", RunExportFixture.MEMBER_ID,
+                IncidentKind.HR_ANOMALY, RUN_ID, 1, "dec-1", "EMERGENCY", 160, openedAtMs - 300L, "HIGH",
+                "tachycardia", true, "WORN_VALID", openedAtMs + 90_000L, IncidentResponseValue.OK,
+                openedAtMs + 20_000L, ResponseVia.WATCH, IncidentState.OK_CLOSED, openedAtMs, true,
+                openedAtMs + 1_500L, IncidentOutcome.FALSE_ALARM,
+                openedAtMs + 5_000L, openedAtMs - 200L, openedAtMs + 2_000L);
+        given(incidentAlertRecordRepository.findRunAlertRecords(eq(RUN_ID), any())).willReturn(List.of(alert));
+
+        // when
+        assembler().build(run, workDir);
+
+        // then
+        List<String> lines = Files.readAllLines(workDir.resolve("diagnostics").resolve("alert_records.csv"));
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(1)).contains(",inc-1,%d,HR_ANOMALY,%s,".formatted(RunExportFixture.MEMBER_ID, RUN_ID))
+                .endsWith(",FALSE_ALARM,%d,%d,%d".formatted(openedAtMs + 5_000L, openedAtMs - 200L,
+                        openedAtMs + 2_000L));
+    }
+
+    private SensorBatch impactBatch(long seq, long startMs, long impactAtMs, double smvG) {
+        SensorBatch batch = RunExportFixture.imuBatch(seq, seq, startMs, startMs + 1_000L, false);
+        ReflectionTestUtils.setField(batch, "triggerKind", "impact");
+        ReflectionTestUtils.setField(batch, "triggerTsMs", impactAtMs);
+        ReflectionTestUtils.setField(batch, "triggerSmvG", smvG);
+        return batch;
     }
 
     @Test
@@ -694,7 +778,8 @@ class RunExportAssemblerTest {
                 sensorBatchRepository, locationFixRepository, deviceHeartbeatRepository, decisionRecordRepository,
                 incidentRepository, clockMappingRepository, runDeviceAssignmentRepository, runMarkerRepository,
                 s3Service, MAPPER, RunExportFixture.properties(),
-                new SensorLossDiagnostics(sensorDroppedRangeRepository, sensorBatchRejectionRepository));
+                new SensorLossDiagnostics(sensorDroppedRangeRepository, sensorBatchRejectionRepository),
+                new IncidentAlertExportService(incidentAlertRecordRepository));
     }
 
     // ── 도우미 ─────────────────────────────────────────────────────
