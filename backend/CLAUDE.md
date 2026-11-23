@@ -193,7 +193,7 @@
 - 매일 03:30 `RetentionPurgeScheduler`가 대상 11개 테이블의 기간 지난 행을 센다. **1단계(#1015)는 아무것도 지우지 않고** 테이블별 대상 건수·참가자 제외 건수를 `data_purge_log`에 남긴다. 실제 삭제(2단계)와 S3 원문 삭제(3단계)는 다음 PR이다 → ADR-0043, LLD-0136
 - 테이블별 기준 시각 칸·보관 기간·추가 조건·참가자 제외는 `RetentionTarget` 한 곳에 둔다. 건수와 삭제가 같은 조건을 써야 하므로 다른 곳에 조건을 복제하지 않는다
 - 기준 시각 인덱스가 없다. 기준 시각이 PK와 함께 늘어나는 점을 써서 PK 이분 탐색으로 경계를 찾고 `pk < 경계` 범위만 읽는다. 새 대상 테이블도 서버가 채우는 생성 시각 칸이어야 한다
-- **탈퇴 30일 뒤 삭제**: 매일 03:50 `WithdrawnMemberPurgeScheduler`가 `withdrawn_at`이 30일 지나고 `personal_data_purged_at`이 빈 회원(하룻밤 100명)의 개인 자료를 회원마다 한 트랜잭션으로 지운다. 표와 순서는 `WithdrawnMemberPurgeStep` 한 곳이다. 탈퇴자가 올린 앨범과 딸린 행은 모두 지우고(S3는 삭제 작업 큐), 다른 가족 앨범에 단 댓글은 답글이 매달려 있어 내용만 가린다. 회원 행(묘비), 결제, 동의, 관리자 기록, 탈퇴 요청, 실증 참여는 남긴다. 연구 자료 삭제를 마치지 않은 실증 참가자의 연구 자료는 남기고 `exempt_rows`로 센다. **기본 `retention.withdrawal-purge.dry-run=true`**라 건수만 `data_purge_log`(`withdrawn.*`)에 남는다. 운영자가 확인한 뒤 끈다 → LLD-0187
+- **탈퇴 30일 뒤 삭제**: 매일 03:50 `WithdrawnMemberPurgeScheduler`가 `withdrawn_at`이 30일 지나고 `personal_data_purged_at`이 빈 회원(하룻밤 100명)의 개인 자료를 회원마다 한 트랜잭션으로 **바로 지운다**(dry-run 없음, 긴급 정지는 `retention.withdrawal-purge.enabled=false`). 표와 순서는 `WithdrawnMemberPurgeStep` 한 곳이다. 탈퇴자가 올린 앨범과 딸린 행은 모두 지우고(S3는 삭제 작업 큐), 다른 가족 앨범에 단 댓글은 답글이 매달려 있어 내용만 가린다. 실증 참가자도 연구 자료, 참여 기록, 회차(배정, 마커, 내보내기)까지 지운다. 남기는 것은 회원 행(묘비), 결제, 동의, 관리자 접속기록과 업무 기록, 보호자가 열람자인 위치 열람 기록, S3 삭제 작업 큐, 기기 시계 매핑뿐이다. 지운 건수는 `data_purge_log`(`withdrawn.*`, `dry_run=false`) → LLD-0187
 
 ## Redis 임시 데이터
 

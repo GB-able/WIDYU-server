@@ -1,9 +1,6 @@
 package com.widyu.retention.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.widyu.album.Album;
@@ -20,7 +17,16 @@ import com.widyu.member.MemberType;
 import com.widyu.retention.DataPurgeLog;
 import com.widyu.retention.repository.DataPurgeLogRepository;
 import com.widyu.retention.repository.WithdrawnMemberPurgeRepository;
+import com.widyu.run.CollectionRun;
+import com.widyu.run.CollectionRunStatus;
+import com.widyu.run.RunDeviceAssignment;
+import com.widyu.run.RunExport;
+import com.widyu.run.RunExportStatus;
+import com.widyu.run.RunMarker;
+import com.widyu.sensor.ClockMapping;
 import com.widyu.study.StudyParticipation;
+import com.widyu.study.StudyParticipationHistory;
+import com.widyu.study.StudyParticipationHistoryType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +49,7 @@ class WithdrawnMemberPurgeServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 12, 31, 3, 50);
     private static final String MEDIA_URL = "https://bucket.example/album/photo.jpg";
+    private static final String EXPORT_KEY = "exports/STUDY-2026/run-due/run_run-due.zip";
 
     @Autowired private WithdrawnMemberPurgeService service;
     @Autowired private WithdrawnMemberPurgeRepository repository;
@@ -52,44 +59,22 @@ class WithdrawnMemberPurgeServiceTest {
     @MockBean private S3ObjectDeletionTaskService s3ObjectDeletionTaskService;
 
     @Test
-    @DisplayName("모든 삭제 단계의 문장이 빈 테이블에서 0건을 반환한다")
-    void 모든_삭제_단계의_문장이_빈_테이블에서_0건을_반환한다() {
+    @DisplayName("모든 삭제 단계의 문장이 빈 테이블에서 0건을 지우고 기록 대상 이름이 칸 길이 안이다")
+    void 모든_삭제_단계의_문장이_빈_테이블에서_0건을_지운다() {
         for (WithdrawnMemberPurgeStep step : WithdrawnMemberPurgeStep.values()) {
-            assertThat(repository.count(step, 1L)).as(step.name()).isZero();
             assertThat(repository.delete(step, 1L)).as(step.name()).isZero();
+            assertThat(step.logTarget()).as(step.name()).hasSizeLessThanOrEqualTo(40);
         }
     }
 
     @Test
-    @DisplayName("dry-run이면 아무것도 지우지 않고 테이블별 지울 건수만 남긴다")
-    void dry_run이면_아무것도_지우지_않고_건수만_남긴다() {
-        // given
-        Fixture fixture = fixture(false);
-
-        // when
-        service.purge(NOW, true);
-
-        // then
-        assertThat(rows("album")).isEqualTo(2);
-        assertThat(rows("heart_rate_event")).isEqualTo(1);
-        assertThat(purgedAt(fixture.due())).isNull();
-        assertThat(logRows("withdrawn.album")).isEqualTo(1L);
-        assertThat(logRows("withdrawn.heart_rate_event")).isEqualTo(1L);
-        assertThat(logRows("withdrawn.album_comment_reply")).isEqualTo(1L);
-        assertThat(logRows("withdrawn.album_comment")).isEqualTo(1L);
-        assertThat(logRows("withdrawn.album_comment_mask")).isEqualTo(1L);
-        assertThat(dataPurgeLogRepository.findAll()).allMatch(DataPurgeLog::isDryRun);
-        verify(s3ObjectDeletionTaskService, never()).schedule(eq(fixture.due().getId()), anyList());
-    }
-
-    @Test
-    @DisplayName("dry-run을 끄면 30일이 지난 탈퇴 회원의 자료와 올린 앨범을 지우고 다른 회원 자료는 남긴다")
+    @DisplayName("30일이 지난 탈퇴 회원의 자료와 올린 앨범을 지우고 지운 건수를 남기며 다른 회원 자료는 남긴다")
     void 탈퇴_30일이_지난_회원의_자료와_앨범을_지운다() {
         // given
         Fixture fixture = fixture(false);
 
         // when
-        service.purge(NOW, false);
+        service.purge(NOW);
 
         // then
         assertThat(albumsOf(fixture.due())).isZero();
@@ -105,6 +90,12 @@ class WithdrawnMemberPurgeServiceTest {
         assertThat(purgedAt(fixture.due())).isEqualTo(NOW);
         assertThat(purgedAt(fixture.recent())).isNull();
         verify(s3ObjectDeletionTaskService).schedule(fixture.due().getId(), List.of(MEDIA_URL));
+        assertThat(logRows("withdrawn.album")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment_reply")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.album_comment_mask")).isEqualTo(1L);
+        assertThat(logRows("withdrawn.heart_rate_event")).isEqualTo(1L);
+        assertThat(dataPurgeLogRepository.findAll()).noneMatch(DataPurgeLog::isDryRun);
     }
 
     @Test
@@ -112,7 +103,7 @@ class WithdrawnMemberPurgeServiceTest {
     void 이미_지운_회원은_다시_고르지_않는다() {
         // given
         Fixture fixture = fixture(false);
-        service.purge(NOW, false);
+        service.purge(NOW);
 
         // when
         List<Long> due = repository.findDueMemberIds(NOW.minusDays(30), 100);
@@ -122,21 +113,25 @@ class WithdrawnMemberPurgeServiceTest {
     }
 
     @Test
-    @DisplayName("연구 자료 삭제를 마치지 않은 실증 참가자는 연구 자료를 남기고 제외 건수로 센다")
-    void 실증_참가자는_연구_자료를_남기고_제외_건수로_센다() {
+    @DisplayName("실증 참가자도 연구 자료, 회차, 참여 기록과 내보내기 파일을 지우고 기기 시계 매핑은 남긴다")
+    void 실증_참가자도_연구_자료와_회차와_참여_기록을_지운다() {
         // given
         Fixture fixture = fixture(true);
 
         // when
-        service.purge(NOW, false);
+        service.purge(NOW);
 
         // then
-        assertThat(rowsOf("heart_rate_event", "member_id", fixture.due())).isEqualTo(1);
-        assertThat(albumsOf(fixture.due())).isZero();
-        DataPurgeLog heart = log("withdrawn.heart_rate_event");
-        assertThat(heart.getTargetRows()).isZero();
-        assertThat(heart.getExemptRows()).isEqualTo(1L);
-        verify(s3ObjectDeletionTaskService, never()).scheduleKeys(eq(fixture.due().getId()), anyList());
+        assertThat(rowsOf("heart_rate_event", "member_id", fixture.due())).isZero();
+        assertThat(rowsOf("study_participation", "member_id", fixture.due())).isZero();
+        assertThat(rowsOf("collection_run", "member_id", fixture.due())).isZero();
+        assertThat(rows("study_participation_history")).isZero();
+        assertThat(rows("run_device_assignment")).isZero();
+        assertThat(rows("run_marker")).isZero();
+        assertThat(rows("run_export")).isZero();
+        assertThat(rows("clock_mapping")).isEqualTo(1);
+        assertThat(purgedAt(fixture.due())).isEqualTo(NOW);
+        verify(s3ObjectDeletionTaskService).scheduleKeys(fixture.due().getId(), List.of(EXPORT_KEY));
     }
 
     private Fixture fixture(boolean dueIsParticipant) {
@@ -161,11 +156,35 @@ class WithdrawnMemberPurgeServiceTest {
         entityManager.persist(LocationAccessLog.of(other.getId(), recent.getId(), LocationAccessPath.REST_LAST,
                 NOW.minusDays(20)));
         if (dueIsParticipant) {
-            entityManager.persist(StudyParticipation.of("STUDY-2026", "part-due", due, "IRB-v1",
-                    LocalDate.of(2026, 9, 20), Map.of(), null, null, null, null));
+            persistStudyRun(due);
         }
         entityManager.flush();
         return new Fixture(due, recent, other);
+    }
+
+    private void persistStudyRun(Member member) {
+        StudyParticipation participation = entityManager.persist(StudyParticipation.of("STUDY-2026", "part-due",
+                member, "IRB-v1", LocalDate.of(2026, 9, 20), Map.of(), null, null, null, null));
+        entityManager.persist(StudyParticipationHistory.snapshotOf(
+                participation, StudyParticipationHistoryType.REGISTERED));
+        CollectionRun run = entityManager.persist(CollectionRun.builder()
+                .runId("run-due").member(member).participation(participation).studyId("STUDY-2026")
+                .participationId("part-due").protocolRef("PROTO-1").consentVersion("v1").collectionMode("research")
+                .startedAtMs(1_760_000_000_000L).status(CollectionRunStatus.CLOSED).build());
+        entityManager.persist(RunDeviceAssignment.builder()
+                .assignmentId("asg-due").run(run).deviceId("watch-1").role("WATCH").wearSite("LEFT_WRIST")
+                .assignedAtMs(1_760_000_000_000L).build());
+        entityManager.persist(ClockMapping.builder()
+                .clockMappingId("cm-shared").deviceId("watch-1").bootId("boot-1").anchorElapsedNs(1L)
+                .anchorEpochMs(1_760_000_000_000L).uncertaintyMs(1.0).observedMinElapsedNs(1L).observedMaxElapsedNs(1L)
+                .firstSeenAtMs(1L).lastSeenAtMs(1L).build());
+        entityManager.persist(RunMarker.builder()
+                .markerId("mk-due").run(run).kind("START").sourceElapsedNs(1L).tsMs(1_760_000_000_000L).source("WATCH")
+                .sourceDeviceId("watch-1").clockMappingId("cm-shared").build());
+        RunExport export = RunExport.builder().exportId("exp-due").runId("run-due")
+                .status(RunExportStatus.QUEUED).requestedAtMs(1L).serverBuild("test").build();
+        export.finish(EXPORT_KEY, 10L, "0".repeat(64), 2L);
+        entityManager.persist(export);
     }
 
     private Member withdrawn(String phoneNumber, LocalDateTime withdrawnAt) {

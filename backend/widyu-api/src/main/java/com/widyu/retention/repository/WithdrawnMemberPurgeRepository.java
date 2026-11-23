@@ -17,7 +17,7 @@ public class WithdrawnMemberPurgeRepository {
     /** 다른 가족 앨범에 단 댓글은 답글이 매달려 있어 지우지 않고 내용만 가린다(LLD-0187 5.3). */
     public static final String MASKED_COMMENT = "탈퇴한 회원의 댓글입니다.";
 
-    /** 다른 가족 앨범에 단 탈퇴자 댓글. 자기 앨범 댓글은 앨범과 함께 지우므로 빼야 dry-run 건수가 실제와 같다. */
+    /** 다른 가족 앨범에 단 탈퇴자 댓글. 자기 앨범 댓글은 앨범과 함께 지운다. */
     private static final String OTHERS_ALBUM_COMMENTS = "member_id = :memberId AND content <> :masked"
             + " AND album_id NOT IN (SELECT album_id FROM album WHERE member_id = :memberId)";
 
@@ -32,22 +32,16 @@ public class WithdrawnMemberPurgeRepository {
                 Long.class);
     }
 
-    /** 연구 자료 수동 삭제를 마치지 않은 실증 참가자인가(ADR-0043 결정 4). */
-    public boolean isResearchParticipant(Long memberId) {
-        Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM study_participation"
-                        + " WHERE member_id = :memberId AND deletion_processed_at IS NULL",
-                member(memberId), Long.class);
-        return count > 0;
-    }
-
-    public long count(WithdrawnMemberPurgeStep step, Long memberId) {
-        return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM " + step.table() + " WHERE " + step.condition(), member(memberId), Long.class);
-    }
-
     public long delete(WithdrawnMemberPurgeStep step, Long memberId) {
         return jdbc.update("DELETE FROM " + step.table() + " WHERE " + step.condition(), member(memberId));
+    }
+
+    /** 실증 회차 내보내기 zip의 S3 키. 행보다 먼저 읽는다. */
+    public List<String> runExportObjectKeys(Long memberId) {
+        return jdbc.queryForList(
+                "SELECT e.s3_key FROM run_export e JOIN collection_run r ON e.run_id = r.run_id"
+                        + " WHERE r.member_id = :memberId AND e.s3_key IS NOT NULL",
+                member(memberId), String.class);
     }
 
     /** 탈퇴자가 올린 앨범의 사진, 영상, 썸네일 주소. 행을 지우기 전에 읽는다. */
@@ -74,12 +68,6 @@ public class WithdrawnMemberPurgeRepository {
         return jdbc.queryForList(
                 "SELECT s3_key FROM sensor_batch WHERE member_id = :memberId AND s3_key IS NOT NULL",
                 member(memberId), String.class);
-    }
-
-    public long countCommentsToMask(Long memberId) {
-        return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM album_comment WHERE " + OTHERS_ALBUM_COMMENTS,
-                member(memberId).addValue("masked", MASKED_COMMENT), Long.class);
     }
 
     public long maskComments(Long memberId) {
