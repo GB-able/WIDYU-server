@@ -3,7 +3,9 @@ spring:
     activate:
       on-profile: "datasource"
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${DB_NAME}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul&sslMode=${MYSQL_SSL_MODE:PREFERRED}&connectTimeout=${DB_CONNECT_TIMEOUT_MS:3000}&socketTimeout=${DB_SOCKET_TIMEOUT_MS:60000}
+    # 처리방침의 전송 구간 암호화(#1156). PREFERRED는 DB가 TLS를 안 주면 평문으로 붙으므로 기본을 REQUIRED로 둔다.
+    # REQUIRED는 암호화만 강제하고 인증서는 확인하지 않는다. 운영 RDS는 CA를 신뢰 저장소에 넣고 VERIFY_IDENTITY로 올린다.
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${DB_NAME}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul&sslMode=${MYSQL_SSL_MODE:REQUIRED}&connectTimeout=${DB_CONNECT_TIMEOUT_MS:3000}&socketTimeout=${DB_SOCKET_TIMEOUT_MS:60000}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}

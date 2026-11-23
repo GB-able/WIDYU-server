@@ -21,6 +21,8 @@ services:
       DB_NAME: ${DB_NAME}
       MYSQL_USERNAME: ${MYSQL_USERNAME}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # 평문 연결 금지(#1156). 서버 .env에서 PREFERRED로 내려 되돌릴 수 있다.
+      MYSQL_SSL_MODE: ${MYSQL_SSL_MODE:-REQUIRED}
 
       # Redis (공통)
       REDIS_HOST: ${REDIS_HOST}
