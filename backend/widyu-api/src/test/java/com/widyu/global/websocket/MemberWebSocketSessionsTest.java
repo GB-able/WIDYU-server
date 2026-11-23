@@ -51,6 +51,21 @@ class MemberWebSocketSessionsTest {
         verify(closed, never()).close(any(CloseStatus.class));
     }
 
+    @Test
+    @DisplayName("탈퇴 커밋 전에 핸드셰이크를 통과한 연결이 닫기 뒤에 등록되면 바로 닫는다")
+    void 탈퇴_뒤에_늦게_등록된_연결도_닫는다() throws Exception {
+        // given
+        MemberWebSocketSessions sessions = new MemberWebSocketSessions();
+        sessions.closeAfterWithdrawal(new MemberWithdrawnEvent(7L));
+        WebSocketSession late = session(7L);
+
+        // when
+        sessions.register(late);
+
+        // then
+        verify(late).close(any(CloseStatus.class));
+    }
+
     private static WebSocketSession session(Long memberId) {
         WebSocketSession session = mock(WebSocketSession.class);
         Map<String, Object> attributes = new HashMap<>();

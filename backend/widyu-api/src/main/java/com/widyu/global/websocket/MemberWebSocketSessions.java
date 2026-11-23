@@ -24,6 +24,12 @@ import org.springframework.web.socket.WebSocketSession;
 public class MemberWebSocketSessions {
 
     private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+    /**
+     * 연결을 닫은 탈퇴 회원. 탈퇴 커밋 전에 핸드셰이크를 통과한 연결이 닫기 뒤에 등록되면 여기서 보고 바로 닫는다.
+     * 등록은 「넣고 확인」, 닫기는 「표시하고 꺼냄」 순서라 어느 쪽이 먼저든 한쪽이 그 연결을 닫는다.
+     */
+    // ponytail: 탈퇴 회원 ID가 재시작 전까지 쌓인다. 탈퇴는 드물어 메모리가 작다
+    private final Set<Long> withdrawn = ConcurrentHashMap.newKeySet();
 
     public void register(WebSocketSession session) {
         Long memberId = memberId(session);
@@ -31,6 +37,9 @@ public class MemberWebSocketSessions {
             return;
         }
         sessions.computeIfAbsent(memberId, id -> ConcurrentHashMap.newKeySet()).add(session);
+        if (withdrawn.contains(memberId)) {
+            closeAll(memberId);
+        }
     }
 
     public void unregister(WebSocketSession session) {
@@ -49,7 +58,12 @@ public class MemberWebSocketSessions {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void closeAfterWithdrawal(MemberWithdrawnEvent event) {
-        Set<WebSocketSession> open = sessions.remove(event.memberId());
+        withdrawn.add(event.memberId());
+        closeAll(event.memberId());
+    }
+
+    private void closeAll(Long memberId) {
+        Set<WebSocketSession> open = sessions.remove(memberId);
         if (open == null) {
             return;
         }
@@ -58,10 +72,10 @@ public class MemberWebSocketSessions {
                 session.close(CloseStatus.POLICY_VIOLATION.withReason("member withdrawn"));
             } catch (Exception e) {
                 log.warn("탈퇴 회원 WebSocket 연결 닫기 실패: memberId={}, errorType={}",
-                        event.memberId(), e.getClass().getSimpleName());
+                        memberId, e.getClass().getSimpleName());
             }
         }
-        log.info("탈퇴 회원 WebSocket 연결 닫음: memberId={}, sessions={}", event.memberId(), open.size());
+        log.info("탈퇴 회원 WebSocket 연결 닫음: memberId={}, sessions={}", memberId, open.size());
     }
 
     private static Long memberId(WebSocketSession session) {

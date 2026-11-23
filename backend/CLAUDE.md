@@ -171,7 +171,7 @@
 - 통보는 알림 종류 `LOCATION_ACCESS_NOTICE`(L01)·`LOCATION_ACCESS_DIGEST`(L02)로 보낸다. 설정 그룹 NONE이라 끌 수 없고, 문구에 보호자 이름·시각·목적(가족 안부 확인)을 담는다(LLD-0179). 옛 행은 `FcmCategory.LOCATION_NOTICE`로 기타 칩에 남는다
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
 - 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132
-- 자동 삭제가 없다(ADR-0036 결정 6). 예외는 어르신 탈퇴 때 그 어르신의 행을 바로 지우는 것이다(LLD-0186, ADR-0043 결정 8)
+- 자동 삭제가 없다(ADR-0036 결정 6). 예외는 어르신 탈퇴 때 그 어르신의 행을 바로 지우는 것이다(LLD-0186, ADR-0043 결정 8). 기록 저장은 어르신 회원 행을 공유 잠금으로 읽어 탈퇴와 줄 서고, 어르신이 탈퇴했으면 기록도 통보도 남기지 않는다
 
 ### `consent` — 인앱 동의 기록
 - 서비스 동의는 앱이 항목별로 받고 서버는 **버전·시각·철회**만 기록한다(정책 1.5.10). 서면 연구 참여 동의는 `study_participation`이 담는다 → ADR-0036 결정 1·2, LLD-0055
