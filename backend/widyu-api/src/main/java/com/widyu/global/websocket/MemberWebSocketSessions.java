@@ -1,9 +1,10 @@
 package com.widyu.global.websocket;
 
 import com.widyu.auth.event.MemberWithdrawnEvent;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -23,59 +24,66 @@ import org.springframework.web.socket.WebSocketSession;
 @Component
 public class MemberWebSocketSessions {
 
-    private final Map<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
-    /**
-     * 연결을 닫은 탈퇴 회원. 탈퇴 커밋 전에 핸드셰이크를 통과한 연결이 닫기 뒤에 등록되면 여기서 보고 바로 닫는다.
-     * 등록은 「넣고 확인」, 닫기는 「표시하고 꺼냄」 순서라 어느 쪽이 먼저든 한쪽이 그 연결을 닫는다.
-     */
+    // 등록, 해제, 탈퇴 처리를 한 잠금으로 줄 세운다. 탈퇴는 드물고 등록은 연결마다 한 번이라 경합이 작다.
+    private final Map<Long, Set<WebSocketSession>> sessions = new HashMap<>();
+    /** 연결을 닫은 탈퇴 회원. 탈퇴 커밋 전에 핸드셰이크를 통과한 연결이 그 뒤에 등록되면 바로 닫는다. */
     // ponytail: 탈퇴 회원 ID가 재시작 전까지 쌓인다. 탈퇴는 드물어 메모리가 작다
-    private final Set<Long> withdrawn = ConcurrentHashMap.newKeySet();
+    private final Set<Long> withdrawn = new HashSet<>();
 
     public void register(WebSocketSession session) {
         Long memberId = memberId(session);
         if (memberId == null) {
             return;
         }
-        sessions.computeIfAbsent(memberId, id -> ConcurrentHashMap.newKeySet()).add(session);
-        if (withdrawn.contains(memberId)) {
-            closeAll(memberId);
+        synchronized (this) {
+            if (!withdrawn.contains(memberId)) {
+                sessions.computeIfAbsent(memberId, id -> new HashSet<>()).add(session);
+                return;
+            }
         }
+        close(memberId, session);
     }
 
-    public void unregister(WebSocketSession session) {
+    public synchronized void unregister(WebSocketSession session) {
         Long memberId = memberId(session);
         if (memberId == null) {
             return;
         }
-        sessions.computeIfPresent(memberId, (id, set) -> {
-            set.remove(session);
-            if (set.isEmpty()) {
-                return null;
-            }
-            return set;
-        });
+        Set<WebSocketSession> open = sessions.get(memberId);
+        if (open == null) {
+            return;
+        }
+        open.remove(session);
+        if (open.isEmpty()) {
+            sessions.remove(memberId);
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void closeAfterWithdrawal(MemberWithdrawnEvent event) {
-        withdrawn.add(event.memberId());
-        closeAll(event.memberId());
-    }
-
-    private void closeAll(Long memberId) {
-        Set<WebSocketSession> open = sessions.remove(memberId);
+        Long memberId = event.memberId();
+        Set<WebSocketSession> open;
+        synchronized (this) {
+            withdrawn.add(memberId);
+            open = sessions.remove(memberId);
+        }
         if (open == null) {
             return;
         }
+        // 닫기는 잠금 밖에서 한다. 닫힘 콜백이 같은 잠금으로 해제를 부른다.
         for (WebSocketSession session : open) {
-            try {
-                session.close(CloseStatus.POLICY_VIOLATION.withReason("member withdrawn"));
-            } catch (Exception e) {
-                log.warn("탈퇴 회원 WebSocket 연결 닫기 실패: memberId={}, errorType={}",
-                        memberId, e.getClass().getSimpleName());
-            }
+            close(memberId, session);
         }
         log.info("탈퇴 회원 WebSocket 연결 닫음: memberId={}, sessions={}", memberId, open.size());
+    }
+
+    private static void close(Long memberId, WebSocketSession session) {
+        try {
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("member withdrawn"));
+        } catch (Exception e) {
+            log.warn("탈퇴 회원 WebSocket 연결 닫기 실패: memberId={}, errorType={}",
+                    memberId, e.getClass().getSimpleName());
+        }
     }
 
     private static Long memberId(WebSocketSession session) {
