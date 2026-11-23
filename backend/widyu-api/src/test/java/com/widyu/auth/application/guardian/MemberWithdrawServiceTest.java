@@ -22,6 +22,8 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.global.util.SecurityUtil;
+import com.widyu.auth.event.SeniorWithdrawnEvent;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
@@ -59,6 +61,7 @@ class MemberWithdrawServiceTest {
     @Mock private FamilyRepository familyRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberUtil memberUtil;
+    @Mock private SecurityUtil securityUtil;
     @Mock private MedicationProofDeletionService medicationProofDeletionService;
     @Mock private SocialUnlinkService socialUnlinkService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -383,16 +386,24 @@ class MemberWithdrawServiceTest {
     }
 
     @Test
-    @DisplayName("어르신 탈퇴를 실행하면 가족에서 빠지고 위치 열람 기록과 위치 원본을 지우고 계정을 가린다")
-    void 어르신_탈퇴를_실행하면_가족에서_빠지고_위치_기록을_지우고_계정을_가린다() {
+    @DisplayName("어르신이 탈퇴하면 가족 보호자 알림을 접수하고 가족에서 빠지고 위치 기록을 지우고 계정을 가린다")
+    void 어르신이_탈퇴하면_보호자_알림을_접수하고_가족에서_빠지고_위치_기록을_지우고_계정을_가린다() {
         // given
         Member senior = senior(7L);
         SeniorProfile profile = seniorProfileInFamily(senior, 100L);
+        Member guardianA = Member.createMember(MemberType.GUARDIAN, "딸", "01011112222");
+        ReflectionTestUtils.setField(guardianA, "id", 21L);
+        Member guardianB = Member.createMember(MemberType.GUARDIAN, "아들", "01011113333");
+        ReflectionTestUtils.setField(guardianB, "id", 22L);
+        given(securityUtil.getCurrentMemberId()).willReturn(7L);
         given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
         given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.of(profile));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(100L)).willReturn(List.of(
+                FamilyMembership.createMembership(profile.getFamily(), guardianA),
+                FamilyMembership.createMembership(profile.getFamily(), guardianB)));
 
         // when
-        memberWithdrawService.withdrawSenior(7L);
+        memberWithdrawService.withdrawSenior();
 
         // then
         assertThat(profile.getFamily()).isNull();
@@ -406,6 +417,8 @@ class MemberWithdrawServiceTest {
         verify(medicationProofDeletionService).deleteAllByMember(senior);
         verify(emergencyRecipientSnapshots).evictAfterCommit(100L, List.of(7L));
         verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(7L));
+        // 이름을 가리기 전의 이름으로 알림을 접수한다.
+        verify(eventPublisher).publishEvent(SeniorWithdrawnEvent.of(7L, "김어르신", List.of(21L, 22L)));
     }
 
     @Test
@@ -414,10 +427,11 @@ class MemberWithdrawServiceTest {
         // given
         Member guardian = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
         ReflectionTestUtils.setField(guardian, "id", 1L);
+        given(securityUtil.getCurrentMemberId()).willReturn(1L);
         given(memberRepository.findByIdForUpdate(1L)).willReturn(Optional.of(guardian));
 
         // when & then
-        assertThatThrownBy(() -> memberWithdrawService.withdrawSenior(1L))
+        assertThatThrownBy(() -> memberWithdrawService.withdrawSenior())
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.FORBIDDEN);
@@ -426,16 +440,17 @@ class MemberWithdrawServiceTest {
     }
 
     @Test
-    @DisplayName("이미 탈퇴한 어르신을 다시 처리하면 아무것도 바꾸지 않는다")
-    void 이미_탈퇴한_어르신을_다시_처리하면_아무것도_바꾸지_않는다() {
+    @DisplayName("같은 어르신이 탈퇴를 두 번 눌러 두 번째 요청이 잠금 뒤에 오면 아무것도 바꾸지 않는다")
+    void 탈퇴를_두_번_누르면_두_번째는_아무것도_바꾸지_않는다() {
         // given
         Member senior = senior(7L);
         LocalDateTime withdrawnAt = LocalDateTime.of(2026, 11, 1, 9, 0);
         senior.markWithdrawn(withdrawnAt);
+        given(securityUtil.getCurrentMemberId()).willReturn(7L);
         given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
 
         // when
-        memberWithdrawService.withdrawSenior(7L);
+        memberWithdrawService.withdrawSenior();
 
         // then
         assertThat(senior.getWithdrawnAt()).isEqualTo(withdrawnAt);

@@ -1,10 +1,12 @@
 # LLD-0137: 어르신 탈퇴 요청과 탈퇴 시각 기록
 
+> **2026-11-23 일부 대체:** 어르신 탈퇴가 운영자 처리에서 본인 즉시 탈퇴로 바뀌었다(기획 결정, LLD-0186). 탈퇴 요청 API, 관리자 목록·처리 완료·취소 API, `member_withdrawal_request` 표는 지웠다(Flyway V6). 앱에 탈퇴 메뉴가 없어 요청 API를 부른 클라이언트가 없었다(`apiDocs/product/as-built` 위듀 내정보: 「탈퇴 메뉴 없음」). `member.withdrawn_at`, 보호자 탈퇴 API의 보호자 전용 확인은 그대로다. `AdminAction`의 처리 완료·취소 값은 옛 감사 로그 행을 읽도록 값만 남겼다.
+
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Review |
+| 상태 | 일부 대체됨 (LLD-0186) |
 | Issue | #1017 |
 | 관련 ADR | ADR-0043(보관 기간과 탈퇴 삭제, 별도 PR) |
 | 작성자 | Claude |

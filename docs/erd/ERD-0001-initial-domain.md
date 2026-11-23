@@ -745,15 +745,6 @@ erDiagram
         String last_error_type
     }
 
-    MemberWithdrawalRequest {
-        Long id PK
-        Long member_id "FK 없음"
-        MemberWithdrawalRequestStatus status
-        LocalDateTime requested_at
-        LocalDateTime processed_at
-        Long processed_by_admin_id
-    }
-
     Member ||--o{ LocalAccount : "1:1"
     Member ||--o{ SocialAccount : "1:N"
     Member ||--o{ FamilyMembership : "보호자"
@@ -799,7 +790,6 @@ erDiagram
     Member ||--o{ StudyParticipation : "실증 참여 (재식별 키)"
     Member ||--o{ S3ObjectDeletionTask : "S3 파일 삭제 작업 (복약 인증·프로필 사진)"
     Member ||..o{ SocialUnlinkTask : "탈퇴 시 소셜 연동 해제 작업 (member_id, FK 없음)"
-    Member ||..o{ MemberWithdrawalRequest : "어르신 탈퇴 요청 (member_id, FK 없음)"
 
     Family ||--o{ FamilyMembership : "보호자 구성"
     Family |o--o{ SeniorProfile : "시니어 구성"
@@ -869,7 +859,6 @@ erDiagram
 | `StudyParticipationHistoryType` | `REGISTERED`, `RETENTION_CHANGED`, `WITHDRAWN`, `DELETION_PROCESSED` |
 | `SensorIngestChannel` | `WS`, `REST` (VARCHAR 매핑, `sensor_batch.ingest_channel`·`sensor_batch_rejection.ingest_channel`) |
 | `AdminAction` | `ADMIN_LOGIN`, `MEMBER_STATUS_CHANGE`, `FCM_TEST_SEND`, `COLLECTION_RUN_OPEN`, `COLLECTION_RUN_CLOSE`, `STUDY_PARTICIPATION_REGISTER`, `STUDY_PARTICIPATION_PERIOD_CHANGE`, `STUDY_PARTICIPATION_WITHDRAW`, `STUDY_PARTICIPATION_DELETION_PROCESSED`, `MEMBER_WITHDRAWAL_REQUEST_PROCESSED`, `MEMBER_WITHDRAWAL_REQUEST_CANCELLED` |
-| `MemberWithdrawalRequestStatus` | `REQUESTED`, `PROCESSED`, `CANCELLED` |
 
 ## 주요 인덱스
 
@@ -980,6 +969,7 @@ erDiagram
 | 날짜 | 테이블 | 변경 내용 | DDL |
 |------|--------|-----------|-----|
 | 2026-11-13 | `senior_stay_state` | 신규 테이블 (LLD-0141). 체류, 안전구역 판정 상태와 30분 알림 묶음. `alert_state` VARCHAR. 배포 때 서버가 예전 Redis 체류 키를 한 번 옮긴다(`location.stay-state.import-legacy-redis`) | `scripts/mysql/create_senior_stay_state.sql` |
+| 2026-11-23 | `member_withdrawal_request` | 표 삭제 (LLD-0186). 어르신 탈퇴가 본인 즉시 탈퇴로 바뀌어 운영자 처리 요청을 기록하지 않는다 | `db/migration/V6__drop_member_withdrawal_request.sql` |
 | 2026-11-14 | 전체 73개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다. `senior_stay_state`도 V1에 들어 있다 | `db/migration/V1__baseline.sql` |
 | 2026-11-17 | `sensor_dropped_range` | `dropped_stream VARCHAR(20) NOT NULL` 추가 (LLD-0166). 버린 묶음의 데이터 종류, 기존 행은 `imu_watch`로 채우고 기본값을 지운다 | `db/migration/V3__sensor_dropped_range_stream.sql` |
 | 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 17개 테이블(`incident`, `study_participation`, `senior_stay_state` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 31개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |

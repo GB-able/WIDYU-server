@@ -3,6 +3,7 @@ package com.widyu.auth.application.guardian;
 import com.widyu.auth.application.guardian.unlink.SocialUnlinkService;
 import com.widyu.auth.dto.request.MemberWithdrawRequest;
 import com.widyu.auth.event.MemberWithdrawnEvent;
+import com.widyu.auth.event.SeniorWithdrawnEvent;
 import com.widyu.auth.repository.RefreshTokenRepository;
 import com.widyu.fcm.application.degraded.EmergencyRecipientSnapshotService;
 import com.widyu.goal.medicineschedule.application.MedicationProofDeletionService;
@@ -18,6 +19,7 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.global.util.SecurityUtil;
 import com.widyu.location.access.repository.LocationAccessLogRepository;
 import com.widyu.location.raw.repository.LocationFixRepository;
 import java.time.LocalDateTime;
@@ -41,6 +43,7 @@ public class MemberWithdrawService {
     private final FamilyRepository familyRepository;
     private final SeniorProfileRepository seniorProfileRepository;
     private final MemberUtil memberUtil;
+    private final SecurityUtil securityUtil;
     private final MedicationProofDeletionService medicationProofDeletionService;
     private final S3ObjectDeletionTaskService s3ObjectDeletionTaskService;
     private final SocialUnlinkService socialUnlinkService;
@@ -72,11 +75,14 @@ public class MemberWithdrawService {
     }
 
     /**
-     * 운영자가 어르신 탈퇴 요청을 처리 완료할 때 같은 트랜잭션에서 부른다(LLD-0186).
-     * 가족에서 빠지고, 위치 열람 기록과 위치 원본을 바로 지운 뒤 보호자 탈퇴와 같은 계정 정리를 한다.
+     * 어르신 본인이 앱에서 탈퇴하면 바로 실행한다. 유예 기간이 없다(2026-11-23 기획 결정, LLD-0186).
+     * 가족 보호자에게 알림을 접수하고 가족에서 빠진 뒤, 위치 열람 기록과 위치 원본을 지우고 보호자 탈퇴와 같은
+     * 계정 정리를 한다. 커밋 뒤 열린 실시간 연결을 닫는다({@code MemberWebSocketSessions}).
      */
     @Transactional
-    public void withdrawSenior(Long memberId) {
+    public void withdrawSenior() {
+        // 잠금을 트랜잭션의 첫 읽기로 둔다. 같은 어르신이 두 번 눌러도 두 번째는 탈퇴 시각을 보고 끝난다.
+        Long memberId = securityUtil.getCurrentMemberId();
         Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         if (member.getType() != MemberType.SENIOR) {
@@ -88,7 +94,7 @@ public class MemberWithdrawService {
 
         log.info("어르신 탈퇴 시작: memberId={}", memberId);
 
-        leaveFamily(memberId);
+        leaveFamily(member);
 
         // 처리방침: 어르신이 탈퇴하면 위치정보와 위치 열람 기록은 바로 지운다(ADR-0043 결정 8, 2026-11-23 사용자 결정).
         // 실증 참가자도 예외 없이 지운다(2026-11-23 기획자 답변).
@@ -130,14 +136,20 @@ public class MemberWithdrawService {
     /**
      * 어르신을 가족에서 뺀다. 방장 보호자 탈퇴로 가족이 해체될 때와 같은 「가족 없음」 상태다.
      * 가족 보호자는 가족 확인({@code FamilyAccessService})에서 걸려 더는 이 어르신을 보지 못한다.
+     * 연결을 끊고 이름을 가리기 전에 보호자 목록과 이름을 잡아 탈퇴 알림(D01)을 접수한다.
      */
-    private void leaveFamily(Long memberId) {
+    private void leaveFamily(Member senior) {
+        Long memberId = senior.getId();
         Optional<SeniorProfile> profileOpt = seniorProfileRepository.findByMemberId(memberId);
         if (profileOpt.isEmpty() || profileOpt.get().getFamily() == null) {
             return;
         }
         SeniorProfile profile = profileOpt.get();
         Long familyId = profile.getFamily().getId();
+        List<Long> guardianIds = familyMembershipRepository.findAllByFamilyIdWithGuardian(familyId).stream()
+                .map(membership -> membership.getGuardian().getId())
+                .toList();
+        eventPublisher.publishEvent(SeniorWithdrawnEvent.of(memberId, senior.getName(), guardianIds));
         profile.leaveFamily();
         // DB 장애 중 저하 경로가 탈퇴한 어르신의 수신자 스냅샷을 쓰지 않게 커밋 뒤 지운다(LLD-0087 5.2).
         emergencyRecipientSnapshots.evictAfterCommit(familyId, List.of(memberId));

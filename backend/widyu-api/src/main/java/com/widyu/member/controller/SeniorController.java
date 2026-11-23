@@ -1,16 +1,15 @@
 package com.widyu.member.controller;
 
 import com.widyu.album.dto.response.UnlockedAlbumIdsResponse;
+import com.widyu.auth.application.guardian.MemberWithdrawService;
 import com.widyu.member.controller.docs.SeniorDocs;
-import com.widyu.member.application.MemberWithdrawalRequestService;
 import com.widyu.member.application.SeniorProfileService;
-import com.widyu.member.dto.response.MemberWithdrawalRequestResponse;
 import com.widyu.member.dto.response.SeniorPointsResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SeniorController implements SeniorDocs {
 
     private final SeniorProfileService seniorProfileService;
-    private final MemberWithdrawalRequestService withdrawalRequestService;
+    private final MemberWithdrawService memberWithdrawService;
 
     @Override
     @GetMapping("/points")
@@ -44,11 +43,12 @@ public class SeniorController implements SeniorDocs {
     }
 
     @Override
-    @PostMapping("/me/withdrawal-requests")
-    public ApiResponseTemplate<MemberWithdrawalRequestResponse> requestWithdrawal() {
+    @DeleteMapping("/me")
+    public ApiResponseTemplate<Void> withdraw() {
+        memberWithdrawService.withdrawSenior();
         return ApiResponseTemplate.ok()
                 .code("SENIOR_2003")
-                .message("탈퇴 요청 접수 성공")
-                .body(withdrawalRequestService.request());
+                .message("탈퇴가 완료되었습니다")
+                .body(null);
     }
 }

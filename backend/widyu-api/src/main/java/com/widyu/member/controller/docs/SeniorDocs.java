@@ -1,7 +1,6 @@
 package com.widyu.member.controller.docs;
 
 import com.widyu.album.dto.response.UnlockedAlbumIdsResponse;
-import com.widyu.member.dto.response.MemberWithdrawalRequestResponse;
 import com.widyu.member.dto.response.SeniorPointsResponse;
 import com.widyu.global.response.ApiResponseTemplate;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,7 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "Senior", description = "시니어 회원 전용 API - 포인트 조회, 해금 앨범 ID 조회, 탈퇴 요청")
+@Tag(name = "Senior", description = "시니어 회원 전용 API - 포인트 조회, 해금 앨범 ID 조회, 탈퇴")
 public interface SeniorDocs {
 
     @Operation(
@@ -34,19 +33,21 @@ public interface SeniorDocs {
     ApiResponseTemplate<UnlockedAlbumIdsResponse> getUnlockedAlbums();
 
     @Operation(
-            summary = "탈퇴 요청",
+            summary = "어르신 본인 탈퇴 (즉시, 되돌릴 수 없음)",
             description = """
-                    어르신이 앱 설정의 「탈퇴 요청」을 누르면 부릅니다. 요청 본문은 없습니다.
-                    서버는 요청만 기록하고 계정은 바로 바뀌지 않습니다. 운영자가 확인해 `dueAt`(요청 시각 + 10일)
-                    안에 처리합니다.
+                    로그인된 어르신 앱에서 탈퇴를 확정하면 부릅니다. 요청 본문은 없습니다. 유예 기간 없이 바로 처리합니다.
+                    앱은 부르기 전에 확인 화면 두 번을 보여 줍니다(「탈퇴하면 알림이 멈추고 가족이 더 이상 볼 수 없어요.
+                    되돌릴 수 없어요」 → 큰 「탈퇴할게요」 버튼).
 
-                    처리를 기다리는 요청이 이미 있으면 새로 만들지 않고 그 요청을 돌려줍니다.
-                    여러 번 눌러도 요청은 하나입니다.
+                    한 트랜잭션에서 가족 보호자 모두에게 「○○ 님이 위듀를 탈퇴하셔서 안부 알림이 멈췄어요」 알림을 접수하고,
+                    가족 연결을 끊고, 위치 열람 기록과 위치 원본을 지우고, 이름과 번호를 가린 뒤 `INACTIVE`로 바꿉니다.
+                    커밋 뒤 이 어르신의 실시간 연결(STOMP)을 닫습니다. 이후 이 회원의 토큰으로 오는 요청과 재연결은
+                    비활성 회원으로 거절됩니다. 나머지 개인 자료는 30일 뒤 지웁니다(LLD-0186).
                     """
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "접수 성공 또는 기존 열린 요청 반환"),
-            @ApiResponse(responseCode = "403", description = "시니어 회원만 요청 가능 (AUTH_4030)")
+            @ApiResponse(responseCode = "200", description = "탈퇴 완료 (SENIOR_2003, body 없음)"),
+            @ApiResponse(responseCode = "403", description = "시니어 회원만 가능 (AUTH_4030)")
     })
-    ApiResponseTemplate<MemberWithdrawalRequestResponse> requestWithdrawal();
+    ApiResponseTemplate<Void> withdraw();
 }

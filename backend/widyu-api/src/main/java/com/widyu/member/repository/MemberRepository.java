@@ -73,7 +73,6 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
             + "OR EXISTS (SELECT 1 FROM payment_cancel WHERE requested_by_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM study_participation WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM collection_run WHERE member_id = :memberId) "
-            + "OR EXISTS (SELECT 1 FROM member_withdrawal_request WHERE member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_access_log WHERE viewer_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_access_log WHERE senior_member_id = :memberId) "
             + "OR EXISTS (SELECT 1 FROM location_fix WHERE member_id = :memberId) "
