@@ -98,6 +98,7 @@ public enum WithdrawnMemberPurgeStep {
     STUDY_PARTICIPATION_HISTORY("study_participation_history",
             "study_participation_id IN (SELECT study_participation_id FROM study_participation"
                     + " WHERE member_id = :memberId)"),
+    // 기록 대상 이름은 표 이름이 아니라 상수 이름에서 만든다: withdrawn.study_withdrawal_item(31자).
     STUDY_WITHDRAWAL_ITEM("study_participation_withdrawal_item",
             "study_participation_id IN (SELECT study_participation_id FROM study_participation"
                     + " WHERE member_id = :memberId)"),
@@ -122,7 +123,10 @@ public enum WithdrawnMemberPurgeStep {
         return condition;
     }
 
-    /** {@code data_purge_log.target}(40자)에 남기는 이름. 같은 표를 두 단계로 지우는 댓글도 갈린다. */
+    /**
+     * {@code data_purge_log.target}(40자)에 남기는 이름. 표 이름이 아니라 상수 이름에서 만든다.
+     * 같은 표를 두 단계로 지우는 댓글도 갈린다. 길이는 테스트가 모든 상수를 확인한다.
+     */
     public String logTarget() {
         return "withdrawn." + name().toLowerCase();
     }
