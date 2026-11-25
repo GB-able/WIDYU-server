@@ -58,6 +58,8 @@ HTTP API는 바뀌지 않는다. 바뀌는 계약은 FCM HTTP v1 `message.data`�
 
 > 2026-11-18 추가(#1099): 보호자 위급 알림(`HEART_RATE_EMERGENCY`, `SELF_HELP_REQUESTED`의 1차 `INITIAL_ALERT`, 2차 `SECOND_ALERT`, DB 장애 저하 경로)의 data에 `seniorName`(시니어 회원 이름)을 싣는다. 앱 위급 화면이 이 키로 누구의 위급인지 표시한다. 전화번호는 싣지 않으며 이름은 로그에 남기지 않는다. 저하 경로는 스냅샷에 이름이 없으면 키를 생략한다.
 
+> 2026-11-25 추가(#1167): 모든 푸시(outbox, 직접 전송, DB 장애 저하 경로)의 data에 `sentAt`을 싣는다. `FcmHttpTransport`가 FCM에 보내는 순간의 한국 시각을 알림 목록 `occurredAt`과 같은 `yyyy-MM-dd'T'HH:mm:ss` 형식으로 넣고, 발신자가 같은 키를 넣어도 덮어쓴다. 재시도면 다시 보내는 시각이다. 타입도 data도 없던 레거시 메시지에도 `data`가 생긴다.
+
 앱이 받던 `type` 값이 바뀌는 알림:
 
 | 알림 | 변경 전 `type` | 변경 후 `notificationType` |
