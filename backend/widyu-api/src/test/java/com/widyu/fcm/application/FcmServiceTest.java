@@ -77,7 +77,7 @@ class FcmServiceTest {
         assertThat(dto.dataForEnqueue("cheer-event")).isEqualTo(Map.of(
                 "eventId", "cheer-event",
                 "notificationType", "CHEER_MESSAGE_RECEIVED",
-                "deepLink", "/notification",
+                "deepLink", "",
                 "actorDisplayName", "김보호",
                 "inAppTitle", "김보호 님이 응원메시지를 보냈어요!",
                 "inAppBody", preview));

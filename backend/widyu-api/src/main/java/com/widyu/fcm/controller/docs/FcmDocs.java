@@ -230,7 +230,7 @@ public interface FcmDocs {
 
                     **잠금화면(FCM notification)**: 원문을 싣지 않습니다. 제목 '{보낸 사람 이름} 님이 응원메시지를 보냈어요!', 부제목 '앱에서 응원메시지를 확인해주세요.', 발신자 프로필 이미지.
 
-                    **앱 안 문구(FCM data)**: `notificationType=CHEER_MESSAGE_RECEIVED`, `deepLink=/notification`, `notificationId`, `eventId`, `actorDisplayName`, `inAppTitle`(잠금화면 제목과 같음), `inAppBody`(메시지 미리보기: 40자 이하는 그대로, 넘으면 앞 39자 + '…').
+                    **앱 안 문구(FCM data)**: `notificationType=CHEER_MESSAGE_RECEIVED`, `deepLink`(빈 문자열, 이동할 화면 없음), `notificationId`, `eventId`, `actorDisplayName`, `inAppTitle`(잠금화면 제목과 같음), `inAppBody`(메시지 미리보기: 40자 이하는 그대로, 넘으면 앞 39자 + '…').
 
                     **알림센터**: 메시지 탭에 `type=CHEER_MESSAGE_RECEIVED`, 본문은 미리보기로 저장되고 90일 뒤 만료됩니다. 원문은 서버에 저장하지 않습니다.
                     """

@@ -80,7 +80,7 @@
 - [x] AC4. M04의 H2 알림센터 행 `deep_link`는 `/goal/medicine?seniorId=<id>`다.
 - [x] AC5. G01-C FCM `data.deepLink`는 `/goal/medicine?seniorId=<id>`다. (#1135에서 목표 종류별로 개정: 걷기 `/goal/walk`, 건강 일정 `/goal/hospital`)
 - [x] AC6. 보호자 소유 건강일정은 H01 센터 행·outbox를 0건 만든다. H01-C-SELF 문구는 `NotificationCopy`에 남는다.
-- [x] AC7. 보호자 수신 하트·응원 메시지는 센터 행 `deep_link`와 FCM `data.deepLink`가 모두 `/notification`이다. 시니어 수신 값은 종전과 같다. (#746에서 시니어도 `/notification`으로 개정, §11)
+- [x] AC7. 보호자 수신 하트·응원 메시지는 센터 행 `deep_link`와 FCM `data.deepLink`가 모두 `/notification`이다. (2026-11-23 #1165로 개정: 둘 다 빈 문자열) 시니어 수신 값은 종전과 같다. (#746에서 시니어도 `/notification`으로 개정, §11)
 - [x] AC8. 변경된 main·test와 이 LLD에 보호자 앱 커스텀 스킴 문자열이 0건이다.
 - [x] AC9. 위듀(시니어) 수신 타입의 `deepLink` 값은 변경 전과 동일하다. (#746에서 §11로 대체)
 - [x] AC10. `bash scripts/harness/verify.sh`가 통과한다. H2 통합 검증은 AC3·AC4·AC7의 센터 저장값을 확인한다.
@@ -125,7 +125,7 @@
 | 목표 달성 G01-S(G02 미발행) | `GOAL_ACHIEVED`·`GOALS_ACHIEVED_GROUPED` | `/goal` | 타입 이름 |
 | 포인트 획득·사용 P01/P02 | `POINT_EARNED`·`POINT_USED` | `/my/point` | 타입 이름 |
 | 다른 가족이 방장이 됨 R02(#1127) | `FAMILY_LEADER_CHANGED` | `/my/management`(리스너 명시값) | 타입 이름 |
-| 하트·응원 메시지(비타입, 두 역할) | — | `/notification` | `HEART_MESSAGE_RECEIVED`·`CHEER_MESSAGE_RECEIVED`(data에 직접) |
+| 하트·응원 메시지(비타입, 두 역할) | — | 없음(빈 문자열, #1165. 이전 `/notification`) | `HEART_MESSAGE_RECEIVED`·`CHEER_MESSAGE_RECEIVED`(data에 직접) |
 
 - 경로는 모두 `NotificationType` 템플릿 한 곳에 둔다. 포인트 리스너가 넘기던 명시 링크 `widyu://points`를 지워 템플릿이 적용되게 한다. 심박 본인확인은 `scheme`을 넘기지 않아 `deepLink`가 빈 문자열이다. 사건은 `data.entityId=incident_ref`로 찾는다.
 - 비타입 하트·응원 메시지는 수신자 역할과 관계없이 같은 data(`deepLink`·`type`)를 싣는다. 값은 `HEART_MESSAGE_RECEIVED`·`CHEER_MESSAGE_RECEIVED` 상수의 템플릿과 이름이다. 두 메시지는 여전히 비타입 발송이라 전달 방식·센터 저장은 바뀌지 않는다.
@@ -136,7 +136,7 @@
 
 - [x] AC11. 시니어가 받는 위 타입의 FCM `data.deepLink`와 센터 행 `deep_link`가 표의 경로이고, `NotificationType`과 main 코드에 `widyu://`는 낙상 비타입 `scheme` 상수 하나만 남는다.
 - [x] AC12. 심박 본인확인 FCM의 `data.notificationType`은 `SAFETY_SELF_CHECK`이고 `data.type`은 없다(2026-10-27 [LLD-0109](LLD-0109-fcm-data-contract-slim.md) 이전에는 `data.type=EMERGENCY_CONFIRM_REQUEST`). `data.deepLink`는 빈 문자열이다. 낙상 본인확인 data도 `notificationType=SAFETY_SELF_CHECK`다. 안심구역 본인확인은 LLD-0078에 따라 발송하지 않는다.
-- [x] AC13. 하트·응원 메시지는 수신자 역할과 관계없이 `data.deepLink=/notification`이고 `data.notificationType`이 각 타입 이름이다(#900 이전 키는 `data.type`).
+- [x] AC13. 하트·응원 메시지는 수신자 역할과 관계없이 `data.deepLink=/notification`이고 (2026-11-23 #1165로 개정: 메시지 탭 알림은 딥링크를 싣지 않아 빈 문자열이다) `data.notificationType`이 각 타입 이름이다(#900 이전 키는 `data.type`).
 - [x] AC14. 보호자 수신 경로(§3)는 바뀌지 않는다. M08/M05/M09의 타입 값은 #900에서 `data.notificationType`=`MEDICATION_SCHEDULE_CREATED`/`CHANGED`/`DELETED`로 바뀌었다([LLD-0109](LLD-0109-fcm-data-contract-slim.md)).
 
 > 2026-10-27 갱신([LLD-0109](LLD-0109-fcm-data-contract-slim.md)): §4 표와 AC13·AC14의 `data.type`은 `data.notificationType`(enum 이름)으로 바뀌었다. 하트·응원은 같은 값, M08/M05/M09는 각 enum 이름이다.

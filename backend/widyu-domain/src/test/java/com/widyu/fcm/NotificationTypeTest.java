@@ -106,6 +106,20 @@ class NotificationTypeTest {
     }
 
     @Test
+    @DisplayName("메시지 탭 알림 타입을 조회하면 딥링크 없이 반환한다")
+    void 메시지_탭_알림_타입은_딥링크가_없다() {
+        // given / when
+        List<NotificationType> messageTypes = Arrays.stream(NotificationType.values())
+                .filter(type -> "MESSAGE".equals(type.centerFilter()))
+                .toList();
+
+        // then
+        assertThat(messageTypes).containsExactlyInAnyOrder(
+                NotificationType.HEART_MESSAGE_RECEIVED, NotificationType.CHEER_MESSAGE_RECEIVED);
+        assertThat(messageTypes).allSatisfy(type -> assertThat(type.deepLinkTemplate()).isNull());
+    }
+
+    @Test
     @DisplayName("레지스트리의 딥링크 템플릿을 조회하면 커스텀 스킴 없이 앱 내부 경로만 반환한다")
     void 레지스트리의_딥링크_템플릿을_조회하면_앱_내부_경로만_반환한다() {
         // given / when
