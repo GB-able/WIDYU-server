@@ -103,12 +103,27 @@ class LocationAccessLogServiceTest {
         given(memberRepository.findById(VIEWER_ID)).willReturn(Optional.empty());
 
         // when
-        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.REST_TRAIL);
 
         // then
         ArgumentCaptor<FcmSendDto> sent = ArgumentCaptor.forClass(FcmSendDto.class);
         then(fcmService).should().sendMessageToUser(eq(SENIOR_ID), sent.capture());
         assertThat(sent.getValue().title()).isEqualTo("보호자 님이 내 위치를 확인했어요.");
+    }
+
+    @Test
+    @DisplayName("보호자가 홈 화면의 외출 여부를 보면 기록만 남기고 시니어에게 알리지 않는다")
+    void 홈_외출_여부_열람은_기록만_남기고_알리지_않는다() {
+        // given
+        givenSaveReturnsArgument();
+
+        // when
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
+
+        // then
+        assertThat(savedLog().getPath()).isEqualTo(LocationAccessPath.HOME_OUTING);
+        assertThat(savedLog().getNotifiedAt()).isNull();
+        then(fcmService).should(never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
     }
 
     @Test
