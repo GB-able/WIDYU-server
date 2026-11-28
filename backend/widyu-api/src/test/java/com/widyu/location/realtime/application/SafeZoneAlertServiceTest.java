@@ -59,7 +59,7 @@ class SafeZoneAlertServiceTest {
         // then
         then(eventPublisher).should(times(1)).publishEvent(any(SafeZoneExitEvent.class));
         assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.RETURNED);
-        assertThat(state.getAlertUntil()).isEqualTo(NOW.plusMinutes(30));
+        assertThat(state.getAlertUntil()).isEqualTo(NOW.plusMinutes(35));
     }
 
     @Test
@@ -93,20 +93,54 @@ class SafeZoneAlertServiceTest {
     }
 
     @Test
-    @DisplayName("묶음이 끝난 뒤 돌아오면 Z02를 만들지 않고, 그 뒤 이탈하면 새 묶음을 열어 Z01을 다시 발행한다")
-    void 묶음이_끝나면_복귀는_조용하고_다음_이탈은_다시_알린다() {
+    @DisplayName("이탈 알림 뒤 30분이 지나 돌아오면 Z02를 한 번 발행하고 그때부터 30분 묶음을 연다")
+    void 묶음이_끝난_뒤_돌아와도_Z02를_발행한다() {
         // given
         SeniorStayState state = state();
         safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, NOW);
 
         // when
-        safeZoneAlertService.handleSafeZoneTransition(state, null, "HOME", NOW.plusMinutes(31));
-        safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, NOW.plusMinutes(40));
+        safeZoneAlertService.handleSafeZoneTransition(state, null, "HOME", NOW.plusHours(12));
 
         // then
-        then(eventPublisher).should(never()).publishEvent(any(SafeZoneEnterEvent.class));
+        then(eventPublisher).should(times(1)).publishEvent(any(SafeZoneEnterEvent.class));
+        assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.RETURNED);
+        assertThat(state.getAlertUntil()).isEqualTo(NOW.plusHours(12).plusMinutes(30));
+    }
+
+    @Test
+    @DisplayName("늦게 돌아온 직후 경계에서 위치가 밖으로 튀었다 돌아와도 Z01과 Z02를 더 발행하지 않는다")
+    void 늦은_귀가_직후_경계_흔들림은_알리지_않는다() {
+        // given
+        SeniorStayState state = state();
+        LocalDateTime returnedAt = NOW.plusHours(12);
+        safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, NOW);
+        safeZoneAlertService.handleSafeZoneTransition(state, null, "HOME", returnedAt);
+
+        // when
+        safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, returnedAt.plusSeconds(30));
+        safeZoneAlertService.handleSafeZoneTransition(state, null, "HOME", returnedAt.plusSeconds(42));
+
+        // then
+        then(eventPublisher).should(times(1)).publishEvent(any(SafeZoneExitEvent.class));
+        then(eventPublisher).should(times(1)).publishEvent(any(SafeZoneEnterEvent.class));
+    }
+
+    @Test
+    @DisplayName("돌아옴 알림 뒤 30분이 지나 나가면 새 묶음을 열어 Z01을 다시 발행한다")
+    void 돌아옴_묶음이_끝나면_다음_이탈은_다시_알린다() {
+        // given
+        SeniorStayState state = state();
+        safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, NOW);
+        safeZoneAlertService.handleSafeZoneTransition(state, null, "HOME", NOW.plusMinutes(10));
+
+        // when
+        safeZoneAlertService.handleSafeZoneTransition(state, "HOME", null, NOW.plusMinutes(41));
+
+        // then
         then(eventPublisher).should(times(2)).publishEvent(any(SafeZoneExitEvent.class));
-        assertThat(state.getAlertUntil()).isEqualTo(NOW.plusMinutes(70));
+        assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.EXITED);
+        assertThat(state.getAlertUntil()).isEqualTo(NOW.plusMinutes(71));
     }
 
     @Test
