@@ -93,15 +93,17 @@ public class SeniorStayState extends BaseTimeEntity {
 
     /**
      * 안전구역 밖으로 나가거나 돌아왔을 때 보낼 알림을 정하고 묶음 상태를 바꾼다. 규칙은 이전 Redis 표식과 같다(ADR-0039).
-     * 이탈은 묶음이 없거나 끝났을 때만 알리고 30분 묶음을 연다. 복귀는 묶음 안에서 이탈 알림만 보낸 상태일 때 한 번 알린다.
+     * 이탈은 묶음이 없거나 끝났을 때만 알리고 30분 묶음을 연다. 복귀는 이탈 알림만 보낸 상태면 묶음이 끝났어도 한 번 알리고,
+     * 그때부터 다시 30분 묶음을 연다. 귀가 직후 경계에서 위치가 흔들려도 이탈, 복귀를 또 알리지 않는다(LLD-0190).
      */
     public SafeZoneTransition applySafeZoneTransition(String previousType, String currentType, LocalDateTime now,
                                                       Duration window) {
         if (currentType != null) {
-            if (previousType != null || alertState != SafeZoneAlertState.EXITED || !isAlertWindowOpen(now)) {
+            if (previousType != null || alertState != SafeZoneAlertState.EXITED) {
                 return SafeZoneTransition.NONE;
             }
             alertState = SafeZoneAlertState.RETURNED;
+            alertUntil = now.plus(window);
             return SafeZoneTransition.RETURN_ALERT;
         }
         if (previousType == null || isAlertWindowOpen(now)) {
