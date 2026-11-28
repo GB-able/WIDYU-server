@@ -85,6 +85,7 @@ class StayStateOutboxAtomicityTest {
     private static final double HOME_LNG = 126.9780;
     private static final double NEAR_HOME_LAT = 37.5666; // 약 11m, 같은 체류
     private static final double AWAY_LAT = 37.5765; // 약 1.1km, 안심구역(75m) 밖
+    private static final double FURTHER_AWAY_LAT = 37.5775; // AWAY_LAT에서 약 110m 더, 역시 밖
     private static final AtomicInteger SEQ = new AtomicInteger();
 
     @MockBean private FcmTransport transport;
@@ -139,6 +140,26 @@ class StayStateOutboxAtomicityTest {
         SeniorStayState state = stayStateRepository.findById(seniorId).orElseThrow();
         assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.RETURNED);
         assertThat(queryService.getOutingStatus(seniorId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("집에서 나간 뒤 밖에서 30m 넘게 움직여도 체류 시작은 나간 시각이고 그 시각이 상태 행에 저장된다")
+    void 밖에서_움직여도_나간_시각이_저장되고_유지된다() {
+        // given
+        Long seniorId = seniorWithGuardianAndHome();
+        ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
+        LocationUpdateResponse left = ingestService.applyRealtime(request(seniorId, AWAY_LAT), seniorId);
+
+        // when
+        LocationUpdateResponse walking =
+                ingestService.applyRealtime(request(seniorId, FURTHER_AWAY_LAT), seniorId);
+
+        // then
+        assertThat(walking.stayStartTime()).isEqualTo(left.stayStartTime());
+        SeniorStayState state = stayStateRepository.findById(seniorId).orElseThrow();
+        assertThat(state.getLatitude()).isEqualTo(FURTHER_AWAY_LAT);
+        assertThat(state.getZoneChangedAt()).isEqualTo(left.stayStartTime());
+        assertThat(state.getStayStartedAt()).isAfterOrEqualTo(state.getZoneChangedAt());
     }
 
     @Test

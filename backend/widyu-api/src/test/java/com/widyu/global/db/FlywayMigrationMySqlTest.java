@@ -107,6 +107,21 @@ class FlywayMigrationMySqlTest {
         assertThat(column).containsExactly("NO:none");
     }
 
+    @Test
+    @DisplayName("버전 파일을 모두 적용하면 체류 상태의 구역 상태가 바뀐 시각 칸은 기본값이 지금인 NOT NULL이다")
+    void 버전_파일을_모두_적용하면_구역_상태가_바뀐_시각_칸은_기본값이_지금인_NOT_NULL이다() {
+        // given: 기존 행은 stay_started_at으로 채우고, 이전 버전 INSERT를 받도록 기본값을 지금으로 둔다(LLD-0191 8절)
+
+        // when
+        List<String> column = jdbc.queryForList(
+                "SELECT CONCAT(is_nullable, ':', COALESCE(column_default, 'none')) FROM information_schema.columns "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'senior_stay_state' "
+                        + "AND column_name = 'zone_changed_at'", String.class);
+
+        // then
+        assertThat(column).containsExactly("NO:CURRENT_TIMESTAMP(6)");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({DataSourceAutoConfiguration.class, FlywayAutoConfiguration.class,
             HibernateJpaAutoConfiguration.class, JdbcTemplateAutoConfiguration.class})

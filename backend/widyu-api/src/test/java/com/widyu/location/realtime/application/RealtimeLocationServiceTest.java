@@ -338,6 +338,70 @@ class RealtimeLocationServiceTest {
     }
 
     @Test
+    @DisplayName("집을 등록한 시니어가 밖에서 30m 넘게 움직이면 방송의 체류 시작은 집을 나간 시각 그대로이고 체류 시간이 이어서 늘어난다")
+    void 밖에서_움직여도_방송의_체류_시간은_나간_시각부터_센다() {
+        // given
+        Member member = member(1L);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of(home(member)));
+        LocalDateTime leftHomeAt = LocalDateTime.now().minusHours(3);
+        SeniorStayState outside = SeniorStayState.start(1L, 37.6, 127.0, leftHomeAt, null, null);
+        stayStateService.states.put(1L, outside);
+
+        // when
+        LocationUpdateResponse response =
+                ingestService().applyRealtime(LocationUpdateRequest.of(1L, 37.61, 127.0, null), 1L);
+
+        // then
+        assertThat(outside.getStayStartedAt()).isAfter(leftHomeAt);
+        assertThat(response.stayStartTime()).isEqualTo(leftHomeAt);
+        assertThat(response.stayDurationMinutes()).isBetween(179L, 180L);
+        assertThat(response.locationType()).isNull();
+    }
+
+    @Test
+    @DisplayName("안심구역을 하나도 등록하지 않은 시니어가 30m 넘게 움직이면 예전처럼 체류 시작을 지금으로 바꿔 체류 시간이 0분이다")
+    void 안심구역이_없으면_움직일_때마다_체류_시간을_새로_센다() {
+        // given
+        Member member = member(1L);
+        given(seniorProfileRepository.findByMemberId(1L)).willReturn(Optional.of(seniorProfile(10L, member)));
+        given(redisTemplate.opsForList()).willReturn(listOperations);
+        given(parentLocationRepository.findAllByMember(member)).willReturn(java.util.List.of());
+        stayStateService.states.put(1L,
+                SeniorStayState.start(1L, 37.6, 127.0, LocalDateTime.now().minusHours(3), null, null));
+
+        // when
+        LocationUpdateResponse response =
+                ingestService().applyRealtime(LocationUpdateRequest.of(1L, 37.61, 127.0, null), 1L);
+
+        // then
+        assertThat(response.stayStartTime()).isEqualTo(stayStateService.states.get(1L).getStayStartedAt());
+        assertThat(response.stayDurationMinutes()).isZero();
+    }
+
+    @Test
+    @DisplayName("집 구역 안에서 30m 넘게 움직인 뒤 마지막 위치를 조회하면 체류 시작은 집에 들어온 시각이다")
+    void 집_안에서_움직인_뒤_조회해도_들어온_시각부터_센다() {
+        // given
+        LocalDateTime enteredHomeAt = LocalDateTime.now().minusHours(2);
+        SeniorStayState state = SeniorStayState.start(2L, 37.5, 127.0, enteredHomeAt, "HOME", "집");
+        state.moveTo(37.5004, 127.0, LocalDateTime.now().minusMinutes(5), "HOME", "집", true);
+        stayStateService.states.put(2L, state);
+        SeniorProfile seniorProfile = seniorProfile(10L, member(2L));
+        given(seniorProfileRepository.findByMemberId(2L)).willReturn(Optional.of(seniorProfile));
+        given(familyMembershipRepository.existsByGuardianIdAndSeniorProfileId(1L, 10L)).willReturn(true);
+        given(seniorLocationRepository.findBySeniorId(2L)).willReturn(Optional.empty());
+
+        // when
+        LocationUpdateResponse response = queryService.getLastLocation(2L, 1L);
+
+        // then
+        assertThat(response.stayStartTime()).isEqualTo(enteredHomeAt);
+        assertThat(response.stayDurationMinutes()).isBetween(119L, 120L);
+    }
+
+    @Test
     @DisplayName("오래된 최신 위치를 조회하면 TTL이 남아 있어도 측정 시각과 경과 초로 오래됐음을 알리고 updatedAt과 구분한다")
     void 오래된_최신_위치는_측정_시각과_경과로_알린다() {
         // given
@@ -801,6 +865,13 @@ class RealtimeLocationServiceTest {
         // 타입 정보가 저장되지 않아 원래 타입이 아니라 Map으로 돌아온다(LLD-0097의 원인).
         assertThat(restored).isInstanceOf(LinkedHashMap.class);
         return restored;
+    }
+
+    /** 37.5, 127.0의 집 안심구역(75m). 37.6 근처 좌표는 구역 밖이다. */
+    private static com.widyu.parentlocation.ParentLocation home(Member member) {
+        return com.widyu.parentlocation.ParentLocation.builder()
+                .member(member).locationType(com.widyu.parentlocation.LocationType.HOME).placeAddress("서울")
+                .latitude(37.5).longitude(127.0).name("집").status(com.widyu.global.entity.Status.ACTIVE).build();
     }
 
     private Member member(Long id) {
