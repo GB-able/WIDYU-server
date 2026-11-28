@@ -57,6 +57,7 @@ class LegacyStayStateImporterTest {
         then(stayStateService).should().create(saved.capture());
         assertThat(saved.getValue().getLocationType()).isEqualTo("HOME");
         assertThat(saved.getValue().getStayStartedAt()).isEqualTo(LocalDateTime.of(2026, 11, 13, 9, 0));
+        assertThat(saved.getValue().getZoneChangedAt()).isEqualTo(LocalDateTime.of(2026, 11, 13, 9, 0));
         assertThat(saved.getValue().getAlertState()).isEqualTo(SafeZoneAlertState.EXITED);
         assertThat(saved.getValue().getAlertUntil()).isEqualTo(NOW.plusSeconds(600));
     }

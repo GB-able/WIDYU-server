@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -20,6 +21,7 @@ import org.hibernate.type.SqlTypes;
  * 알림 Outbox와 함께 커밋되거나 함께 롤백된다. 이전에는 Redis 체류 키와 알림 표식 키였다.
  *
  * <p>좌표와 시작 시각은 체류가 시작된 지점이다. 같은 자리(30m 안) 위치는 이 행을 바꾸지 않는다.
+ * 보호자에게 보이는 체류 시간은 {@link #zoneChangedAt}부터 센다(LLD-0191).
  */
 @Getter
 @Entity
@@ -47,6 +49,13 @@ public class SeniorStayState extends BaseTimeEntity {
     @Column(name = "location_name", length = 255)
     private String locationName;
 
+    /**
+     * 안전구역 상태(어느 안전구역 안, 또는 밖)가 마지막으로 바뀐 시각. 같은 구역 안이나 밖에서 30m 넘게 움직여도 그대로다.
+     * 보호자 카드의 「N시간 N분 동안 휴식/활동 중」은 이 시각부터 센다(LLD-0191).
+     */
+    @Column(name = "zone_changed_at", nullable = false)
+    private LocalDateTime zoneChangedAt;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "alert_state", length = 16)
@@ -65,6 +74,7 @@ public class SeniorStayState extends BaseTimeEntity {
         this.stayStartedAt = stayStartedAt;
         this.locationType = locationType;
         this.locationName = locationName;
+        this.zoneChangedAt = stayStartedAt;
         this.alertState = alertState;
         this.alertUntil = alertUntil;
     }
@@ -74,7 +84,7 @@ public class SeniorStayState extends BaseTimeEntity {
         return new SeniorStayState(memberId, latitude, longitude, now, locationType, locationName, null, null);
     }
 
-    /** 기존 Redis 상태를 옮겨 올 때만 쓴다(LLD-0141 8절). */
+    /** 기존 Redis 상태를 옮겨 올 때만 쓴다(LLD-0141 8절). 구역 상태가 바뀐 시각은 모르므로 체류 시작으로 둔다(LLD-0191). */
     public static SeniorStayState imported(Long memberId, Double latitude, Double longitude,
                                            LocalDateTime stayStartedAt, String locationType, String locationName,
                                            SafeZoneAlertState alertState, LocalDateTime alertUntil) {
@@ -82,8 +92,18 @@ public class SeniorStayState extends BaseTimeEntity {
                 alertState, alertUntil);
     }
 
-    /** 새 체류 지점으로 옮긴다. 안전구역 알림 판정은 {@link #applySafeZoneTransition}이 따로 한다. */
-    public void moveTo(Double latitude, Double longitude, LocalDateTime now, String locationType, String locationName) {
+    /**
+     * 새 체류 지점으로 옮긴다. 안전구역 알림 판정은 {@link #applySafeZoneTransition}이 따로 한다.
+     *
+     * <p>구역 상태가 바뀐 시각은 안전구역 종류나 이름이 바뀔 때만 지금으로 바꾼다. 안전구역을 하나도 등록하지 않았으면 구역
+     * 상태가 바뀌지 않아 시간이 끝없이 늘어나므로 예전처럼 30m 이동마다 새로 센다(LLD-0191).
+     */
+    public void moveTo(Double latitude, Double longitude, LocalDateTime now, String locationType, String locationName,
+                       boolean safeZonesRegistered) {
+        if (!safeZonesRegistered || !Objects.equals(this.locationType, locationType)
+                || !Objects.equals(this.locationName, locationName)) {
+            this.zoneChangedAt = now;
+        }
         this.latitude = latitude;
         this.longitude = longitude;
         this.stayStartedAt = now;

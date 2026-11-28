@@ -66,7 +66,7 @@ public class LocationJudgeService {
                 seniorMember.getProfileImage(),
                 request.resolvedLatitude(),
                 request.resolvedLongitude(),
-                stayInfo.startTime(),
+                stayInfo.zoneChangedAt(),
                 stayInfo.locationType(),
                 stayInfo.locationName(),
                 LocationFreshness.of(request.tsMs(), receivedAtMs, LocationSource.LATEST, System.currentTimeMillis())
@@ -78,6 +78,7 @@ public class LocationJudgeService {
      * - 체류 지점에서 30m 이내면 기존 체류를 유지하고 상태 행을 쓰지도 잠그지도 않는다.
      * - 30m 넘게 움직였으면 행을 잠그고 최신 값으로 다시 판정한 뒤 새 체류로 바꾼다.
      * - 안전구역(HOME, OTHER) 75m 반경 내면 해당 타입, 아니면 null.
+     * - 응답의 체류 시간은 안전구역 상태가 바뀐 시각부터 센다. 같은 구역 안이나 밖의 이동으로는 새로 세지 않는다(LLD-0191).
      * - 안전구역 이탈, 복귀 알림은 상태 행의 30분 묶음으로 정하고, 알림 Outbox는 같은 트랜잭션에 들어간다.
      *
      * <p>같은 회원의 처리는 JVM 순서 잠금이 한 번에 하나씩 보내고, DB 행 잠금은 상태를 바꾸는 순간의 마지막 방어선이다.
@@ -95,7 +96,8 @@ public class LocationJudgeService {
             return StayInfo.from(locked);
         }
 
-        ParentLocation matchedZone = findSafeZone(member, newLat, newLng);
+        List<ParentLocation> safeZones = parentLocationRepository.findAllByMember(member);
+        ParentLocation matchedZone = findSafeZone(safeZones, newLat, newLng);
         String locationType = locationTypeOf(matchedZone);
         String locationName = locationNameOf(matchedZone);
         // DATETIME(6)에 저장되는 정밀도로 자른다. Linux의 now()는 나노초까지 있어, 자르지 않으면 이 응답의 체류 시작 시각과
@@ -108,7 +110,7 @@ public class LocationJudgeService {
                     SeniorStayState.start(memberId, newLat, newLng, now, locationType, locationName));
         } else {
             previousLocationType = locked.getLocationType();
-            locked.moveTo(newLat, newLng, now, locationType, locationName);
+            locked.moveTo(newLat, newLng, now, locationType, locationName, !safeZones.isEmpty());
         }
         safeZoneAlertService.handleSafeZoneTransition(locked, previousLocationType, locationType, now);
         log.debug("새로운 위치로 이동 - memberId: {}, 위치 타입: {}", memberId, locationType);
@@ -121,8 +123,7 @@ public class LocationJudgeService {
     }
 
     /** 등록된 안전구역(HOME, OTHER) 중 75m 반경 안에 든 첫 구역. 없으면 null. */
-    private ParentLocation findSafeZone(Member member, Double lat, Double lng) {
-        List<ParentLocation> safeZones = parentLocationRepository.findAllByMember(member);
+    private static ParentLocation findSafeZone(List<ParentLocation> safeZones, Double lat, Double lng) {
         for (ParentLocation safeZone : safeZones) {
             if (GeoUtils.isWithinRadius(
                     lat, lng, safeZone.getLatitude(), safeZone.getLongitude(), SAFE_ZONE_RADIUS_METERS)) {

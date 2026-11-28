@@ -114,12 +114,13 @@ public class LocationQueryService {
         Member seniorMember = seniorProfile.getMember();
 
         // 체류 시작 시각과 위치 종류는 체류 상태(MySQL)에서 읽는다. 없으면 비운다(지금 시각으로 채우지 않는다).
+        // 체류 시작 시각은 안전구역 상태가 바뀐 시각이다(LLD-0191).
         LocalDateTime stayStartTime = null;
         String locationType = null;
         String locationName = null;
         StayInfo stayInfo = getStayInfo(memberId);
         if (stayInfo != null) {
-            stayStartTime = stayInfo.startTime();
+            stayStartTime = stayInfo.zoneChangedAt();
             locationType = stayInfo.locationType();
             locationName = stayInfo.locationName();
         }
