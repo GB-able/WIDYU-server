@@ -53,6 +53,9 @@ services:
       OAUTH_APPLE_KEY_ID: ${OAUTH_APPLE_KEY_ID}
       OAUTH_APPLE_PRIVATE_KEY: ${OAUTH_APPLE_PRIVATE_KEY}
       OAUTH_APPLE_REDIRECT_URI: ${OAUTH_APPLE_REDIRECT_URI}
+      # 안드로이드 Apple 로그인 콜백 intent의 package, scheme (application-oauth.yml callback)
+      OAUTH_ANDROID_PACKAGE: ${OAUTH_ANDROID_PACKAGE}
+      OAUTH_ANDROID_SCHEME_APPLE: ${OAUTH_ANDROID_SCHEME_APPLE}
 
       # AWS S3 (공통)
       AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
@@ -99,6 +102,10 @@ services:
 
       # AI Server (공통)
       AI_SERVER_URL: ${AI_SERVER_URL:-http://widyu-ai:5000}
+
+      # 위급 후속 설문과 응답 보상 (LLD-0180). .env에 없으면 꺼진다.
+      SENSOR_FOLLOWUP_ENABLED: ${SENSOR_FOLLOWUP_ENABLED:-false}
+      SENSOR_FOLLOWUP_REWARD_ENABLED: ${SENSOR_FOLLOWUP_REWARD_ENABLED:-false}
 
     volumes:
       - app_logs:/app/logs
