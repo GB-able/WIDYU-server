@@ -25,8 +25,12 @@ public interface LocationAccessLogRepository extends JpaRepository<LocationAcces
     List<LocationAccessLog> findBySeniorMemberIdAndAccessedAtBetweenOrderByAccessedAtAscIdAsc(
             Long seniorMemberId, LocalDateTime from, LocalDateTime to);
 
-    /** 다이제스트 대상 시니어. 즉시 통보 FCM 등록이 실패해 롤백되지 않은 채 남은 옛 행 등(LLD-0130 5.3). */
-    @Query("select distinct l.seniorMemberId from LocationAccessLog l where l.notifiedAt is null")
+    /**
+     * 다이제스트 대상 시니어. 즉시 통보 FCM 등록이 실패해 롤백되지 않은 채 남은 옛 행 등(LLD-0130 5.3).
+     * 홈 외출 여부 행은 일부러 알리지 않으므로 뺀다(LLD-0189).
+     */
+    @Query("select distinct l.seniorMemberId from LocationAccessLog l where l.notifiedAt is null"
+            + " and l.path <> com.widyu.location.access.LocationAccessPath.HOME_OUTING")
     List<Long> findSeniorIdsWithUnnotified();
 
     /**
@@ -41,7 +45,8 @@ public interface LocationAccessLogRepository extends JpaRepository<LocationAcces
      */
     @Modifying(clearAutomatically = true)
     @Query("update LocationAccessLog l set l.notifiedAt = :now"
-            + " where l.seniorMemberId = :seniorMemberId and l.notifiedAt is null")
+            + " where l.seniorMemberId = :seniorMemberId and l.notifiedAt is null"
+            + " and l.path <> com.widyu.location.access.LocationAccessPath.HOME_OUTING")
     int claimUnnotified(
             @Param("seniorMemberId") Long seniorMemberId, @Param("now") LocalDateTime now);
 

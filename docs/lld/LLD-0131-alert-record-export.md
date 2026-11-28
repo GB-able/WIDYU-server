@@ -2,6 +2,8 @@
 
 > Low-Level Design. 이 문서는 해당 기능 구현과 PR 본문의 **오라클(ground truth)** 이다.
 
+> **2026-11-23:** CSV 끝에 `prompt_displayed_at_ms`(확인 화면이 뜬 시각), `decision_at_ms`(서버 판정 시각), `guardian_device_received_at_ms`(보호자 폰 도착)를 더했다. 같은 칸을 회차 내보내기 `diagnostics/alert_records.csv`로도 쓴다(LLD-0188).
+
 | 항목 | 값 |
 | --- | --- |
 | 상태 | Review |

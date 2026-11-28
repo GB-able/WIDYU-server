@@ -24,6 +24,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -44,6 +45,9 @@ public class FcmHttpTransport implements FcmTransport {
     static final String QUIET_CHANNEL = "widyu_quiet_channel";
     // 앱 번들에 든 iOS Critical Alerts 음원이다.
     static final String CRITICAL_SOUND = "safety_alert.caf";
+    // 알림 목록 occurredAt과 같은 한국 시각 형식이다.
+    private static final DateTimeFormatter SENT_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .withZone(ZoneId.of("Asia/Seoul"));
 
     private final URI endpoint;
     private final ObjectMapper mapper;
@@ -155,9 +159,9 @@ public class FcmHttpTransport implements FcmTransport {
         if (deliveryId != null && FcmDeliveryReceiptService.tracksDeviceReceipt(type)) {
             data.put("deliveryId", deliveryId.toString());
         }
-        if (type != null || !data.isEmpty()) {
-            message.data(data);
-        }
+        // 재시도면 다시 보내는 시각으로 바뀐다(#1167).
+        data.put("sentAt", SENT_AT.format(clock.instant()));
+        message.data(data);
         if (expiresAt != null) {
             Instant now = clock.instant();
             if (!expiresAt.isAfter(now)) {

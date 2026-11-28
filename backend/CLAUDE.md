@@ -114,7 +114,7 @@
 - **119는 서버가 신고하지 않는다**. 보호자가 신고 시각을 입력하고 서버는 그 사실만 적는다
 - 응답 DTO에 bpm·판정 사유·좌표를 싣지 않고 로그에는 식별자와 건수만 남긴다
 - 내보내기 `streams/incidents.jsonl`(기기 무관, 형식서 §3.7). 0건이면 파일을 만들지 않고 `streams_absent`에 `NO_DATA_IN_THIS_RUN`으로 신고한다
-- **알림 기록 CSV**: 관리자 `GET /api/v1/admin/alert-records?from=&to=`(한국 시간, 최대 31일)가 심박·낙상 사건 한 건을 한 줄로, 그 사건을 연 판정 기록의 근거(심박·사유)와 판정 묶음의 착용 값을 left join해 내보낸다. 회차 없는 알림은 근거 칸이 빈다. 로그에는 행 수만 → LLD-0131
+- **알림 기록 CSV**: 관리자 `GET /api/v1/admin/alert-records?from=&to=`(한국 시간, 최대 31일)가 심박·낙상 사건 한 건을 한 줄로, 그 사건을 연 판정 기록의 근거(심박·사유)와 판정 묶음의 착용 값을 left join해 내보낸다. 회차 없는 알림은 근거 칸이 빈다. 끝 세 칸은 확인 화면이 뜬 시각(`prompt_displayed_at_ms`), 서버 판정 시각, 보호자 폰 도착 시각이다. 같은 칸을 회차 zip `diagnostics/alert_records.csv`로도 쓴다(`IncidentAlertExportService.runCsv`). 로그에는 행 수만 → LLD-0131, LLD-0188
 
 ### `study` — 실증 참여 기록 (연구 동의·보관 정책의 정본)
 
@@ -137,7 +137,7 @@
 - `run_id`·`assignment_id`는 서버 발급(`run-`/`asg-` + UUID hex). 사람이 읽는 회차 번호는 `protocol_ref`
 - 인시던트(본인확인·SOS·사후 판정)는 이 도메인이 아니라 `incident` 절과 LLD-0054다
 - **내보내기(B9)**: 닫힌 회차를 `run_<run_id>.zip` 하나로 꺼낸다. `POST/GET /api/v1/admin/collection-runs/{runId}/exports`로 요청·조회하고, `@Async`가 아니라 `run_export` 큐 + `@Scheduled` 워커가 조립한다(재시작해도 큐가 남는다) → ADR-0032, LLD-0050
-- zip 구성은 형식서(`EXPORT_FORMAT.md`)가 정본이다: `manifest.json`·`run.json`·`clock_mappings.json`·`quality.json`·`streams/<스트림>_<기기>.jsonl`·기기 무관인 `streams/incidents.jsonl`. 형식서 밖으로 서버가 더한 것은 `_server.ingest_channel`과 `diagnostics/`(버린 구간, 거절 기록, 빠진 번호 대조 `seq_gaps.csv`, 세션별 누락률 `seq_sessions.csv`, 0건이어도 머리글)다. 빠진 번호는 버림, 거절 기록을 시각이 아니라 세션으로 대조한다(기간 내보내기도 같다) → LLD-0166 원문에 `_server{}` 봉투를 붙여 재직렬화하며, **집계(줄 수·샘플 수·시각 범위·해시)는 쓴 파일을 다시 읽어 센다**. 보존 정보가 없는 회차는 `retention.data_policy: "UNDECIDED"`로 싣는다
+- zip 구성은 형식서(`EXPORT_FORMAT.md`)가 정본이다: `manifest.json`·`run.json`·`clock_mappings.json`·`quality.json`·`streams/<스트림>_<기기>.jsonl`·기기 무관인 `streams/incidents.jsonl`. 형식서 밖으로 서버가 더한 것은 `_server.ingest_channel`과 `diagnostics/`(버린 구간, 거절 기록, 빠진 번호 대조 `seq_gaps.csv`, 세션별 누락률 `seq_sessions.csv`, 알림 기록 `alert_records.csv`, 충격 한 번에 한 줄인 `impacts.csv`, 0건이어도 머리글)다. 충격 기록은 새 저장 없이 `sensor_batch.trigger_*` 칸에서 만들고 같은 기기의 같은 충격 시각은 한 줄이다. 삼성 낙상 감지는 서버로 오지 않아 빈칸이다(LLD-0188). 빠진 번호는 버림, 거절 기록을 시각이 아니라 세션으로 대조한다(기간 내보내기도 같다) → LLD-0166 원문에 `_server{}` 봉투를 붙여 재직렬화하며, **집계(줄 수·샘플 수·시각 범위·해시)는 쓴 파일을 다시 읽어 센다**. 보존 정보가 없는 회차는 `retention.data_policy: "UNDECIDED"`로 싣는다
 
 ### `device` — 기기 상태 하트비트
 
@@ -167,7 +167,8 @@
 - 기록은 `REQUIRES_NEW`이고 **호출부가 `try/catch(Exception)`으로 감싸 WARN만 남긴다**. 프록시가 커밋 시점에 던지는 예외는 서비스 메서드 안에서 잡을 수 없어 훅마다 감싼다. 기록 실패가 위치 조회를 막지 않는다
 - **통보는 열람마다 즉시**다(위치정보법 매회 즉시 통보, LLD-0130). `LOCATION_NOTICE_BATCHED` 동의는 기록만 하고 통보 방식에 쓰지 않는다. 같은 보호자 반복 조회를 합치던 쿨다운 설정(`immediate-cooldown-min`)과 그 판정·시니어 행 잠금은 지웠다. 환경변수가 남아 있어도 적용되지 않는다
 - 정기 요약 `LocationAccessDigestScheduler`의 cron(`location-access.digest-cron`)은 기본 `-`(꺼짐)다. 대신 서버 시작 1분 뒤 한 번(`flushOnStartup`) `notified_at IS NULL` 행을 시니어별 요약 1건으로 보낸다. 시니어별 `LocationAccessDigestSender` 트랜잭션이 미통보 행 선점과 FCM enqueue를 함께 처리하고, enqueue 실패 시 선점도 롤백되어 다음 시작 때 재시도한다
-- 열람 기록은 저장과 같은 트랜잭션에서 `notified_at`을 채운다. 비어 있는 행은 LLD-0130 이전에 쌓인 옛 기록뿐이다
+- **예외: 보호자 홈의 외출 여부(`HOME_OUTING`)는 기록만 하고 알리지 않는다**(LLD-0189). 홈을 열 때마다 어르신에게 같은 푸시가 가서 뺐다. 이 행은 `notified_at`이 비어 있고, 요약 대상 조회·선점 쿼리도 `HOME_OUTING`을 뺀다
+- 그 밖의 열람 기록은 저장과 같은 트랜잭션에서 `notified_at`을 채운다. 비어 있는 행은 `HOME_OUTING`과 LLD-0130 이전에 쌓인 옛 기록뿐이다
 - 통보는 알림 종류 `LOCATION_ACCESS_NOTICE`(L01)·`LOCATION_ACCESS_DIGEST`(L02)로 보낸다. 설정 그룹 NONE이라 끌 수 없고, 문구에 보호자 이름·시각·목적(가족 안부 확인)을 담는다(LLD-0179). 옛 행은 `FcmCategory.LOCATION_NOTICE`로 기타 칩에 남는다
 - 시니어 조회는 `GET /api/v1/location/access-logs/mine?from=&to=&page=&size=`(기본 최근 30일). **응답·로그에 좌표를 남기지 않는다**(LLD-0029). 응답의 `viewerName`은 같은 가족 보호자 이름이라 본인에게 공개한다
 - 운영자 내보내기는 `GET /api/v1/admin/members/{memberId}/location-access-exports?from=&to=`(한국 시간, 최대 1년, 오류 `LOCATION_4001`) CSV다. 어르신 본인에게 보내는 자료라 보호자 이름을 넣고, 이름은 수식 방지 처리한다. 읽기라 접속기록만 남고 `admin_audit_log`는 남기지 않는다 → LLD-0132

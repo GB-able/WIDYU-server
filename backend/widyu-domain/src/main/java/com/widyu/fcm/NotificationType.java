@@ -23,8 +23,8 @@ public enum NotificationType {
     GOALS_ACHIEVED_GROUPED(FcmCategory.TARGET, "GOAL", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.GOAL_ACHIEVED, "BANNER", "/goal", "G02-S/C"),
     POINT_EARNED(FcmCategory.TARGET, "ETC", DeliveryMode.CENTER_ONLY, NotificationPriority.PASSIVE, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "NONE", "/my/point", "P01"),
     POINT_USED(FcmCategory.TARGET, "ETC", DeliveryMode.CENTER_ONLY, NotificationPriority.PASSIVE, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "NONE", "/my/point", "P02"),
-    HEART_MESSAGE_RECEIVED(FcmCategory.HEART_MESSAGE, "MESSAGE", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.CHEER_MESSAGE, "BANNER", "/notification", "X01-OS/INAPP"),
-    CHEER_MESSAGE_RECEIVED(FcmCategory.HEART_MESSAGE, "MESSAGE", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.CHEER_MESSAGE, "BANNER", "/notification", "X02-OS/INAPP"),
+    HEART_MESSAGE_RECEIVED(FcmCategory.HEART_MESSAGE, "MESSAGE", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.CHEER_MESSAGE, "BANNER", null, "X01-OS/INAPP"),
+    CHEER_MESSAGE_RECEIVED(FcmCategory.HEART_MESSAGE, "MESSAGE", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.CHEER_MESSAGE, "BANNER", null, "X02-OS/INAPP"),
     SAFETY_SELF_CHECK(FcmCategory.INCIDENT_SELF_CHECK, null, DeliveryMode.PUSH_ONLY, NotificationPriority.CRITICAL, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "S01"),
     HEART_RATE_EMERGENCY(FcmCategory.HEART_MESSAGE, "LOCATION", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.CRITICAL, RetentionClass.HEART_EMERGENCY_180D, PushSettingGroup.SAFETY, "MODAL", "/location?seniorId={seniorId}", "S01/S03/S04/S06"),
     SELF_HELP_REQUESTED(FcmCategory.HEART_MESSAGE, "LOCATION", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.CRITICAL, RetentionClass.HEART_EMERGENCY_180D, PushSettingGroup.SAFETY, "MODAL", "/location?seniorId={seniorId}", "K01"),
@@ -44,8 +44,8 @@ public enum NotificationType {
     // 위치정보법 제3자 제공 통보라 끌 수 없다(NONE). 조용히(apns 5)는 도달이 늦을 수 있어 보통으로 둔다(LLD-0179).
     LOCATION_ACCESS_NOTICE(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L01"),
     LOCATION_ACCESS_DIGEST(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L02"),
-    // 앱에 설문 카드 경로가 없어 딥링크는 비운다. 어르신 스위치는 켜짐 고정이다(LLD-0180).
-    FOLLOWUP_SURVEY_REQUESTED(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.ETC, "BANNER", null, "F01"),
+    // 누르면 위듀 앱 설문 화면(/survey)으로 간다. 앱이 GET /followups/current로 카드를 다시 읽는다. 어르신 스위치는 켜짐 고정이다(LLD-0180).
+    FOLLOWUP_SURVEY_REQUESTED(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.ETC, "BANNER", "/survey", "F01"),
     // 어르신 본인 탈퇴로 안부 알림(심박, 위치)이 멈췄음을 가족 보호자 모두에게 알린다. 안전 알림이 끊긴 사실이라
     // 끌 수 없다(NONE). 어르신 화면이 없어졌으므로 딥링크는 비운다(LLD-0186).
     SENIOR_WITHDRAWN(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "D01");

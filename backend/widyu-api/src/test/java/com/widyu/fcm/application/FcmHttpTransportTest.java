@@ -524,6 +524,32 @@ class FcmHttpTransportTest {
     }
 
     @Test
+    @DisplayName("푸시를 보내면 타입 유무와 관계없이 보내는 순간의 한국 시각을 data sentAt에 넣는다")
+    void 푸시를_보내면_보낸_시각을_data에_넣는다() throws Exception {
+        // given
+        Instant start = Instant.parse("2026-11-25T03:04:05Z");
+        ObjectMapper mapper = new ObjectMapper();
+        List<JsonNode> bodies = new CopyOnWriteArrayList<>();
+        HttpServer server = payloadServer(mapper, bodies);
+        FcmHttpTransport transport = new FcmHttpTransport(endpoint(server), mapper, () -> "loopback-access-token",
+                Duration.ofSeconds(2), Clock.fixed(start, ZoneOffset.UTC));
+        FcmSendDto typed = FcmSendDto.builder().title("새 게시물").content("새 소식이 있어요.")
+                .notificationType(NotificationType.ALBUM_CREATED).data(Map.of("sentAt", "앱이 보낸 값")).build();
+        FcmSendDto untyped = FcmSendDto.builder().title("응원").content("힘내세요.").build();
+        try {
+            // when
+            assertThat(transport.send("token", typed, () -> true).success()).isTrue();
+            assertThat(transport.send("token", untyped, () -> true).success()).isTrue();
+            // then
+            assertThat(bodies).extracting(body -> body.at("/message/data/sentAt").asText())
+                    .containsExactly("2026-11-25T12:04:05", "2026-11-25T12:04:05");
+        } finally {
+            transport.close();
+            server.stop(0);
+        }
+    }
+
+    @Test
     @DisplayName("발송 직전 자격이 없으면 FCM 네트워크를 호출하지 않는다")
     void 발송_직전_자격_거부는_네트워크를_차단한다() throws Exception {
         // given

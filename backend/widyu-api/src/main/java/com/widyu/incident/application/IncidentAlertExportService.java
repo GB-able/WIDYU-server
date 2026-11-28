@@ -33,7 +33,8 @@ public class IncidentAlertExportService {
             "detection_count", "decision_id", "severity", "hr_bpm", "hr_measured_at_ms", "hr_accuracy", "ai_reason",
             "on_body", "wear_state", "baseline_bpm", "held_seconds", "activity_state", "respond_by_ms",
             "senior_response", "response", "responded_at_ms", "response_via", "state", "guardian_alert_queued_at_ms",
-            "guardian_push_delivered", "guardian_push_delivered_at_ms", "outcome");
+            "guardian_push_delivered", "guardian_push_delivered_at_ms", "outcome",
+            "prompt_displayed_at_ms", "decision_at_ms", "guardian_device_received_at_ms");
 
     private static final long MAX_RANGE_MS = Duration.ofDays(31).toMillis();
     /** 서버 판정이 울린 알림만. 어르신이 직접 누른 도움 요청과 옛 안심구역 값은 뺀다(LLD-0131 3.1). */
@@ -52,14 +53,22 @@ public class IncidentAlertExportService {
             throw new BusinessException(ErrorCode.SENSOR_EXPORT_RANGE_INVALID);
         }
         List<IncidentAlertRow> rows = incidentAlertRecordRepository.findAlertRecords(fromMs, toMs, ALERT_KINDS);
+        log.info("알림 기록 내보내기: rows={}", rows.size());
+        return csv(rows).getBytes(UTF_8);
+    }
 
+    /** 회차 하나의 알림 기록. 회차 내보내기 {@code diagnostics/alert_records.csv}에 쓴다(LLD-0188). 0건이면 머리글만이다. */
+    public String runCsv(String runId) {
+        return csv(incidentAlertRecordRepository.findRunAlertRecords(runId, ALERT_KINDS));
+    }
+
+    private static String csv(List<IncidentAlertRow> rows) {
         long nowMs = System.currentTimeMillis();
         StringBuilder csv = new StringBuilder(HEADER);
         for (IncidentAlertRow row : rows) {
             csv.append(row(row, nowMs));
         }
-        log.info("알림 기록 내보내기: rows={}", rows.size());
-        return csv.toString().getBytes(UTF_8);
+        return csv.toString();
     }
 
     static String row(IncidentAlertRow row, long nowMs) {
@@ -68,7 +77,8 @@ public class IncidentAlertExportService {
                 row.hrBpm(), row.hrMeasuredAtMs(), row.hrAccuracy(), row.reason(), row.onBody(), row.wearState(),
                 NOT_RECORDED_YET, NOT_RECORDED_YET, NOT_RECORDED_YET, row.respondByMs(), seniorResponse(row, nowMs),
                 row.response(), row.respondedAtMs(), row.responseVia(), row.state(), row.initialAlertSentAtMs(),
-                row.alertDelivered(), row.alertAtMs(), row.outcome());
+                row.alertDelivered(), row.alertAtMs(), row.outcome(),
+                row.promptDisplayedAtMs(), row.decisionAtMs(), row.alertDeviceReceivedAtMs());
     }
 
     /**

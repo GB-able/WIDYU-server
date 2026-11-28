@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>열람마다 바로 알린다. 위치정보법은 제3자 제공 시 매회 즉시 통보를 요구하고, 하루 한 번 묶음은
  * 동의가 있어도 허용되지 않아 「모아서 받기」 동의는 알림 방식 결정에 쓰지 않는다(LLD-0130).
+ * 단, 보호자 홈의 외출 여부({@code HOME_OUTING})는 기록만 하고 알리지 않는다(LLD-0189).
  *
  * <p>기록은 {@code REQUIRES_NEW}로 쓴다. 위치 조회 트랜잭션이 뒤에서 무슨 일을 하든
  * 「봤다」는 사실은 남아야 하고, 반대로 기록이 깨져도 조회는 성공해야 한다. 후자는
@@ -77,6 +78,11 @@ public class LocationAccessLogService {
         LocalDateTime now = LocalDateTime.now();
         LocationAccessLog accessLog = locationAccessLogRepository.save(
                 LocationAccessLog.of(viewerMemberId, seniorMemberId, path, now));
+        // 홈 화면은 열 때마다 불려 어르신에게 같은 푸시가 쏟아진다. 좌표가 아닌 외출 여부라 기록만 남긴다(LLD-0189).
+        // notified_at은 비워 두되 정기 요약 대상에서도 빠진다(LocationAccessLogRepository).
+        if (path == LocationAccessPath.HOME_OUTING) {
+            return;
+        }
         notifyImmediately(accessLog, now);
     }
 

@@ -46,7 +46,7 @@ FCM 전송 본문(응원, 변경 뒤):
 | `notification` | `body` | 「앱에서 응원메시지를 확인해주세요.」 |
 | `notification` | `image` | 보낸 사람 프로필 이미지(기존) |
 | `data` | `notificationType` | `CHEER_MESSAGE_RECEIVED`(기존) |
-| `data` | `deepLink` | `/notification`(기존) |
+| `data` | `deepLink` | 빈 문자열(#1165, 이전 `/notification`) |
 | `data` | `notificationId` | 센터 행 id(기존) |
 | `data` | `eventId` | UUID(추가) |
 | `data` | `actorDisplayName` | 보낸 사람 이름(추가) |
