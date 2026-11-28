@@ -32,6 +32,7 @@ class ControllerFamilyAccessTest {
             // SecurityConfig:68 — /api/v1/admin/** 은 hasRole("ADMIN")으로 차단된다
             "AdminMemberController#getMemberDetail",
             "AdminMemberController#changeStatus",
+            "AdminMemberController#withdrawSenior",
             "AdminConsentController#getConsentHistory",
             "AdminSensorExportController#export",
             "AdminLocationAccessExportController#export",

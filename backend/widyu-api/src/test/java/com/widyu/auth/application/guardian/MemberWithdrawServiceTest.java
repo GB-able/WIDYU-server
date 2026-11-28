@@ -456,4 +456,40 @@ class MemberWithdrawServiceTest {
         assertThat(senior.getWithdrawnAt()).isEqualTo(withdrawnAt);
         verifyNoInteractions(locationAccessLogRepository, locationFixRepository, eventPublisher);
     }
+
+    @Test
+    @DisplayName("운영자가 정지한 어르신도 회원 ID로 탈퇴를 실행하면 탈퇴 처리되고 true를 돌려준다")
+    void 정지된_어르신도_회원_ID로_탈퇴하면_탈퇴_처리된다() {
+        // given
+        Member senior = senior(7L);
+        senior.withdraw();
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.empty());
+
+        // when
+        boolean withdrawn = memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isTrue();
+        assertThat(senior.getWithdrawnAt()).isNotNull();
+        assertThat(senior.getName()).isEqualTo("탈퇴회원");
+        verify(locationFixRepository).deleteByMemberId(7L);
+        verifyNoInteractions(securityUtil);
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 어르신을 회원 ID로 다시 탈퇴시키면 false를 돌려주고 아무것도 바꾸지 않는다")
+    void 이미_탈퇴한_어르신을_회원_ID로_다시_탈퇴시키면_false를_돌려준다() {
+        // given
+        Member senior = senior(7L);
+        senior.markWithdrawn(LocalDateTime.of(2026, 11, 1, 9, 0));
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+
+        // when
+        boolean withdrawn = memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isFalse();
+        verifyNoInteractions(locationFixRepository, eventPublisher);
+    }
 }

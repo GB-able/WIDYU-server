@@ -6,6 +6,7 @@ import com.widyu.admin.dto.response.AdminMemberDetailFullResponse.FamilyInfo;
 import com.widyu.admin.dto.response.AdminMemberDetailFullResponse.RecentAlbum;
 import com.widyu.admin.dto.response.AdminMemberDetailFullResponse.RecentPayment;
 import com.widyu.album.repository.AlbumRepository;
+import com.widyu.auth.application.guardian.MemberWithdrawService;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
@@ -37,6 +38,7 @@ public class AdminMemberService {
     private final PaymentRepository paymentRepository;
     private final HeartRateEmergencyRepository heartRateEmergencyRepository;
     private final AdminAuditLogService adminAuditLogService;
+    private final MemberWithdrawService memberWithdrawService;
 
     @Transactional(readOnly = true)
     public AdminMemberDetailFullResponse getMemberDetail(Long memberId) {
@@ -93,6 +95,20 @@ public class AdminMemberService {
                 member.getName() + " " + before + " → " + member.getStatus()
         );
         return member.getStatus();
+    }
+
+    /**
+     * 앱을 못 쓰는 어르신이 메일로 탈퇴를 요청하면 운영자가 본인 확인 뒤 부른다. 본인 탈퇴와 같은 처리를 실행하고
+     * 같은 트랜잭션에 감사 로그를 남긴다. 탈퇴가 롤백되면 기록도 남지 않는다. 이미 탈퇴했으면 기록 없이 {@code false}.
+     */
+    @Transactional
+    public boolean withdrawSenior(Long memberId) {
+        boolean withdrawn = memberWithdrawService.withdrawSenior(memberId);
+        if (withdrawn) {
+            adminAuditLogService.logInCurrentTransaction(
+                    AdminAction.SENIOR_WITHDRAWN_BY_ADMIN, "MEMBER", memberId, "memberId=" + memberId);
+        }
+        return withdrawn;
     }
 
     /** 탈퇴했거나 방장 보호자 탈퇴로 가족이 해체된 어르신은 가족이 없다(LLD-0186). */

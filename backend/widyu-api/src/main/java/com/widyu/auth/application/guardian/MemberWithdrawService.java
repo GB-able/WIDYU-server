@@ -81,15 +81,23 @@ public class MemberWithdrawService {
      */
     @Transactional
     public void withdrawSenior() {
+        withdrawSenior(securityUtil.getCurrentMemberId());
+    }
+
+    /**
+     * 회원 ID로 어르신 탈퇴를 실행한다. 본인 탈퇴와 운영자 탈퇴(앱을 못 써 메일로 요청한 경우, 본인 확인은 기획 담당)가
+     * 같은 처리를 쓴다. 이미 탈퇴했으면 아무것도 하지 않고 {@code false}를 돌려준다.
+     */
+    @Transactional
+    public boolean withdrawSenior(Long memberId) {
         // 잠금을 트랜잭션의 첫 읽기로 둔다. 같은 어르신이 두 번 눌러도 두 번째는 탈퇴 시각을 보고 끝난다.
-        Long memberId = securityUtil.getCurrentMemberId();
         Member member = memberRepository.findByIdForUpdate(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         if (member.getType() != MemberType.SENIOR) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (member.getWithdrawnAt() != null) {
-            return;
+            return false;
         }
 
         log.info("어르신 탈퇴 시작: memberId={}", memberId);
@@ -104,6 +112,7 @@ public class MemberWithdrawService {
         eraseAccount(member);
 
         log.info("어르신 탈퇴 완료: memberId={}, accessLogs={}, locationFixes={}", memberId, accessLogs, fixes);
+        return true;
     }
 
     /** 보호자와 어르신 탈퇴가 함께 쓰는 계정 정리. 가족 처리는 호출자가 먼저 한다. */
