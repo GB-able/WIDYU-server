@@ -11,6 +11,9 @@ public enum AdminAction {
     STUDY_PARTICIPATION_PERIOD_CHANGE,
     STUDY_PARTICIPATION_WITHDRAW,
     STUDY_PARTICIPATION_DELETION_PROCESSED,
+    // 어르신 탈퇴 요청의 운영자 처리 기록. 본인 즉시 탈퇴(LLD-0186)로 더 쓰지 않지만 옛 감사 로그 행을 읽도록 값만 둔다.
     MEMBER_WITHDRAWAL_REQUEST_PROCESSED,
     MEMBER_WITHDRAWAL_REQUEST_CANCELLED,
+    // 앱을 못 쓰는 어르신이 메일로 요청해 운영자가 본인 탈퇴와 같은 처리를 실행한 기록(LLD-0186 3.3).
+    SENIOR_WITHDRAWN_BY_ADMIN,
 }

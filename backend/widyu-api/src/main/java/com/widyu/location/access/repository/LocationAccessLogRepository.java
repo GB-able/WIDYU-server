@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * 추가 전용 테이블이라 조회와 {@code notified_at} 갱신만 정의한다(LLD-0056 4절).
+ * 예외는 어르신 탈퇴 때의 삭제 하나다(LLD-0186).
  */
 @Repository
 public interface LocationAccessLogRepository extends JpaRepository<LocationAccessLog, Long> {
@@ -52,4 +53,12 @@ public interface LocationAccessLogRepository extends JpaRepository<LocationAcces
     /** 방금 선점한 행. 통보 문구의 조회자 수·횟수를 여기서 센다. */
     List<LocationAccessLog> findBySeniorMemberIdAndNotifiedAt(
             Long seniorMemberId, LocalDateTime notifiedAt);
+
+    /**
+     * 어르신 탈퇴 때 그 어르신의 열람 기록을 바로 지운다(LLD-0186, ADR-0043 결정 8).
+     * 컨텍스트를 비우지 않는다. 같은 트랜잭션의 아직 flush하지 않은 탈퇴 처리 변경이 버려진다.
+     */
+    @Modifying
+    @Query("delete from LocationAccessLog l where l.seniorMemberId = :seniorMemberId")
+    int deleteBySeniorMemberId(@Param("seniorMemberId") Long seniorMemberId);
 }

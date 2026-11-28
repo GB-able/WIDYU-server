@@ -45,7 +45,10 @@ public enum NotificationType {
     LOCATION_ACCESS_NOTICE(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L01"),
     LOCATION_ACCESS_DIGEST(FcmCategory.LOCATION_NOTICE, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "L02"),
     // 누르면 위듀 앱 설문 화면(/survey)으로 간다. 앱이 GET /followups/current로 카드를 다시 읽는다. 어르신 스위치는 켜짐 고정이다(LLD-0180).
-    FOLLOWUP_SURVEY_REQUESTED(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.ETC, "BANNER", "/survey", "F01");
+    FOLLOWUP_SURVEY_REQUESTED(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.ETC, "BANNER", "/survey", "F01"),
+    // 어르신 본인 탈퇴로 안부 알림(심박, 위치)이 멈췄음을 가족 보호자 모두에게 알린다. 안전 알림이 끊긴 사실이라
+    // 끌 수 없다(NONE). 어르신 화면이 없어졌으므로 딥링크는 비운다(LLD-0186).
+    SENIOR_WITHDRAWN(FcmCategory.ETC, "ETC", DeliveryMode.PUSH_AND_CENTER, NotificationPriority.INTERACTION, RetentionClass.ROUTINE_90D, PushSettingGroup.NONE, "BANNER", null, "D01");
 
     private final FcmCategory fcmCategory;
     private final String centerFilter;

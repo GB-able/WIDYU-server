@@ -71,6 +71,39 @@ class LocationAccessLogServiceTest {
     }
 
     @Test
+    @DisplayName("어르신이 이미 탈퇴했으면 보호자 조회를 기록하지도 통보하지도 않는다")
+    void 탈퇴한_어르신이면_기록하지_않는다() {
+        // given
+        Member withdrawn = senior();
+        withdrawn.markWithdrawn(LocalDateTime.now());
+        given(memberRepository.findByIdForShare(SENIOR_ID)).willReturn(Optional.of(withdrawn));
+
+        // when
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.REST_LAST);
+
+        // then
+        then(locationAccessLogRepository).should(never()).save(any(LocationAccessLog.class));
+        then(fcmService).should(never()).sendMessageToUser(anyLong(), any(FcmSendDto.class));
+    }
+
+    @Test
+    @DisplayName("관리자가 정지만 한 어르신을 보호자가 조회하면 열람 기록을 남긴다")
+    void 정지된_어르신을_조회하면_기록을_남긴다() {
+        // given
+        Member suspended = senior();
+        suspended.withdraw();
+        given(memberRepository.findByIdForShare(SENIOR_ID)).willReturn(Optional.of(suspended));
+        given(locationAccessLogRepository.save(any(LocationAccessLog.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
+
+        // then
+        assertThat(savedLog().getSeniorMemberId()).isEqualTo(SENIOR_ID);
+    }
+
+    @Test
     @DisplayName("즉시 통보 시니어를 보호자가 처음 조회하면 FCM 한 건을 보내고 통보 시각을 남긴다")
     void 즉시_모드_첫_조회는_FCM을_보내고_통보_시각을_남긴다() {
         // given
@@ -209,6 +242,7 @@ class LocationAccessLogServiceTest {
     }
 
     private void givenSaveReturnsArgument() {
+        given(memberRepository.findByIdForShare(SENIOR_ID)).willReturn(Optional.of(senior()));
         given(locationAccessLogRepository.save(any(LocationAccessLog.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
     }
@@ -224,6 +258,12 @@ class LocationAccessLogServiceTest {
                 LocationAccessLog.of(VIEWER_ID, SENIOR_ID, path, LocalDateTime.now());
         ReflectionTestUtils.setField(accessLog, "id", 912L);
         return accessLog;
+    }
+
+    private Member senior() {
+        Member member = Member.createMember(MemberType.SENIOR, "부모님", "01033334444");
+        ReflectionTestUtils.setField(member, "id", SENIOR_ID);
+        return member;
     }
 
     private Member guardian() {

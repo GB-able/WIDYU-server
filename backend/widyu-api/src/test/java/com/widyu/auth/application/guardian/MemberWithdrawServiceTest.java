@@ -22,6 +22,8 @@ import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.infrastructure.s3.deletion.S3ObjectDeletionTaskService;
 import com.widyu.global.util.MemberUtil;
+import com.widyu.global.util.SecurityUtil;
+import com.widyu.auth.event.SeniorWithdrawnEvent;
 import com.widyu.member.Family;
 import com.widyu.member.FamilyMembership;
 import com.widyu.member.Member;
@@ -31,6 +33,11 @@ import com.widyu.member.repository.FamilyMembershipRepository;
 import com.widyu.member.repository.FamilyRepository;
 import com.widyu.member.repository.MemberRepository;
 import com.widyu.member.repository.SeniorProfileRepository;
+import com.widyu.member.SeniorProfile;
+import com.widyu.location.access.repository.LocationAccessLogRepository;
+import com.widyu.location.raw.repository.LocationFixRepository;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -54,11 +61,14 @@ class MemberWithdrawServiceTest {
     @Mock private FamilyRepository familyRepository;
     @Mock private SeniorProfileRepository seniorProfileRepository;
     @Mock private MemberUtil memberUtil;
+    @Mock private SecurityUtil securityUtil;
     @Mock private MedicationProofDeletionService medicationProofDeletionService;
     @Mock private SocialUnlinkService socialUnlinkService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private S3ObjectDeletionTaskService s3ObjectDeletionTaskService;
     @Mock private EmergencyRecipientSnapshotService emergencyRecipientSnapshots;
+    @Mock private LocationAccessLogRepository locationAccessLogRepository;
+    @Mock private LocationFixRepository locationFixRepository;
 
     @InjectMocks
     private MemberWithdrawService memberWithdrawService;
@@ -360,5 +370,126 @@ class MemberWithdrawServiceTest {
         // then
         assertThat(member.getStatus()).isEqualTo(Status.INACTIVE);
         assertThat(member.getWithdrawnAt()).isNotNull();
+    }
+
+    private static Member senior(Long id) {
+        Member member = Member.createMember(MemberType.SENIOR, "김어르신", "01099998888");
+        ReflectionTestUtils.setField(member, "id", id);
+        ReflectionTestUtils.setField(member, "socialAccounts", new ArrayList<>());
+        return member;
+    }
+
+    private static SeniorProfile seniorProfileInFamily(Member senior, Long familyId) {
+        Family family = Family.createFamily("ABCDEF");
+        ReflectionTestUtils.setField(family, "id", familyId);
+        return SeniorProfile.createSeniorProfile(senior, family, "서울시", "ABC1234", LocalDate.of(1950, 1, 1));
+    }
+
+    @Test
+    @DisplayName("어르신이 탈퇴하면 가족 보호자 알림을 접수하고 가족에서 빠지고 위치 기록을 지우고 계정을 가린다")
+    void 어르신이_탈퇴하면_보호자_알림을_접수하고_가족에서_빠지고_위치_기록을_지우고_계정을_가린다() {
+        // given
+        Member senior = senior(7L);
+        SeniorProfile profile = seniorProfileInFamily(senior, 100L);
+        Member guardianA = Member.createMember(MemberType.GUARDIAN, "딸", "01011112222");
+        ReflectionTestUtils.setField(guardianA, "id", 21L);
+        Member guardianB = Member.createMember(MemberType.GUARDIAN, "아들", "01011113333");
+        ReflectionTestUtils.setField(guardianB, "id", 22L);
+        given(securityUtil.getCurrentMemberId()).willReturn(7L);
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.of(profile));
+        given(familyMembershipRepository.findAllByFamilyIdWithGuardian(100L)).willReturn(List.of(
+                FamilyMembership.createMembership(profile.getFamily(), guardianA),
+                FamilyMembership.createMembership(profile.getFamily(), guardianB)));
+
+        // when
+        memberWithdrawService.withdrawSenior();
+
+        // then
+        assertThat(profile.getFamily()).isNull();
+        assertThat(senior.getStatus()).isEqualTo(Status.INACTIVE);
+        assertThat(senior.getWithdrawnAt()).isNotNull();
+        assertThat(senior.getName()).isEqualTo("탈퇴회원");
+        assertThat(senior.getPhoneNumber()).isNull();
+        verify(locationAccessLogRepository).deleteBySeniorMemberId(7L);
+        verify(locationFixRepository).deleteByMemberId(7L);
+        verify(refreshTokenRepository).deleteById(7L);
+        verify(medicationProofDeletionService).deleteAllByMember(senior);
+        verify(emergencyRecipientSnapshots).evictAfterCommit(100L, List.of(7L));
+        verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(7L));
+        // 이름을 가리기 전의 이름으로 알림을 접수한다.
+        verify(eventPublisher).publishEvent(SeniorWithdrawnEvent.of(7L, "김어르신", List.of(21L, 22L)));
+    }
+
+    @Test
+    @DisplayName("보호자를 어르신 탈퇴로 처리하면 권한 예외가 발생하고 아무것도 지우지 않는다")
+    void 보호자를_어르신_탈퇴로_처리하면_권한_예외가_발생한다() {
+        // given
+        Member guardian = Member.createMember(MemberType.GUARDIAN, "홍길동", "01012345678");
+        ReflectionTestUtils.setField(guardian, "id", 1L);
+        given(securityUtil.getCurrentMemberId()).willReturn(1L);
+        given(memberRepository.findByIdForUpdate(1L)).willReturn(Optional.of(guardian));
+
+        // when & then
+        assertThatThrownBy(() -> memberWithdrawService.withdrawSenior())
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+        verifyNoInteractions(locationAccessLogRepository, locationFixRepository, refreshTokenRepository);
+        assertThat(guardian.getWithdrawnAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("같은 어르신이 탈퇴를 두 번 눌러 두 번째 요청이 잠금 뒤에 오면 아무것도 바꾸지 않는다")
+    void 탈퇴를_두_번_누르면_두_번째는_아무것도_바꾸지_않는다() {
+        // given
+        Member senior = senior(7L);
+        LocalDateTime withdrawnAt = LocalDateTime.of(2026, 11, 1, 9, 0);
+        senior.markWithdrawn(withdrawnAt);
+        given(securityUtil.getCurrentMemberId()).willReturn(7L);
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+
+        // when
+        memberWithdrawService.withdrawSenior();
+
+        // then
+        assertThat(senior.getWithdrawnAt()).isEqualTo(withdrawnAt);
+        verifyNoInteractions(locationAccessLogRepository, locationFixRepository, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("운영자가 정지한 어르신도 회원 ID로 탈퇴를 실행하면 탈퇴 처리되고 true를 돌려준다")
+    void 정지된_어르신도_회원_ID로_탈퇴하면_탈퇴_처리된다() {
+        // given
+        Member senior = senior(7L);
+        senior.withdraw();
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+        given(seniorProfileRepository.findByMemberId(7L)).willReturn(Optional.empty());
+
+        // when
+        boolean withdrawn = memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isTrue();
+        assertThat(senior.getWithdrawnAt()).isNotNull();
+        assertThat(senior.getName()).isEqualTo("탈퇴회원");
+        verify(locationFixRepository).deleteByMemberId(7L);
+        verifyNoInteractions(securityUtil);
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 어르신을 회원 ID로 다시 탈퇴시키면 false를 돌려주고 아무것도 바꾸지 않는다")
+    void 이미_탈퇴한_어르신을_회원_ID로_다시_탈퇴시키면_false를_돌려준다() {
+        // given
+        Member senior = senior(7L);
+        senior.markWithdrawn(LocalDateTime.of(2026, 11, 1, 9, 0));
+        given(memberRepository.findByIdForUpdate(7L)).willReturn(Optional.of(senior));
+
+        // when
+        boolean withdrawn = memberWithdrawService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isFalse();
+        verifyNoInteractions(locationFixRepository, eventPublisher);
     }
 }

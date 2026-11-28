@@ -1,9 +1,14 @@
 package com.widyu.admin.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.widyu.admin.AdminAction;
 import com.widyu.album.repository.AlbumRepository;
+import com.widyu.auth.application.guardian.MemberWithdrawService;
 import com.widyu.fcm.repository.MemberFcmTokenRepository;
 import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
@@ -35,6 +40,7 @@ class AdminMemberServiceTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private HeartRateEmergencyRepository heartRateEmergencyRepository;
     @Mock private AdminAuditLogService adminAuditLogService;
+    @Mock private MemberWithdrawService memberWithdrawService;
 
     @InjectMocks
     private AdminMemberService adminMemberService;
@@ -64,5 +70,34 @@ class AdminMemberServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN)
                 .hasMessageContaining("ACTIVE 또는 INACTIVE만 허용됩니다.");
+    }
+
+    @Test
+    @DisplayName("운영자가 어르신 탈퇴를 실행하면 본인 탈퇴와 같은 처리를 하고 감사 로그를 남긴다")
+    void 운영자가_어르신_탈퇴를_실행하면_감사_로그를_남긴다() {
+        // given
+        given(memberWithdrawService.withdrawSenior(7L)).willReturn(true);
+
+        // when
+        boolean withdrawn = adminMemberService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isTrue();
+        verify(adminAuditLogService).logInCurrentTransaction(
+                AdminAction.SENIOR_WITHDRAWN_BY_ADMIN, "MEMBER", 7L, "memberId=7");
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 어르신을 운영자가 다시 탈퇴시키면 감사 로그를 남기지 않는다")
+    void 이미_탈퇴한_어르신을_운영자가_다시_탈퇴시키면_감사_로그를_남기지_않는다() {
+        // given
+        given(memberWithdrawService.withdrawSenior(7L)).willReturn(false);
+
+        // when
+        boolean withdrawn = adminMemberService.withdrawSenior(7L);
+
+        // then
+        assertThat(withdrawn).isFalse();
+        verifyNoInteractions(adminAuditLogService);
     }
 }

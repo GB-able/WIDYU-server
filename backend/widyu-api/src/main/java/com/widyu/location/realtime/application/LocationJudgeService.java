@@ -1,5 +1,6 @@
 package com.widyu.location.realtime.application;
 
+import com.widyu.global.entity.Status;
 import com.widyu.global.error.BusinessException;
 import com.widyu.global.error.ErrorCode;
 import com.widyu.global.util.GeoUtils;
@@ -57,6 +58,11 @@ public class LocationJudgeService {
         SeniorProfile seniorProfile = seniorProfileRepository.findByMemberId(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "존재하지 않는 시니어입니다."));
         Member seniorMember = seniorProfile.getMember();
+        // 탈퇴 커밋 뒤 우편함에 남아 있던 위치는 체류 상태와 최신 위치를 다시 만들지 않게 거절한다(LLD-0186).
+        // 커밋과 겹쳐 이미 판정을 지난 위치가 남기는 값은 4분마다 도는 비활성 회원 정리(refreshLocationTtl)가 지운다.
+        if (seniorMember.getStatus() != Status.ACTIVE) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "탈퇴했거나 이용이 정지된 시니어입니다.");
+        }
 
         StayInfo stayInfo = decideStay(request.resolvedLatitude(), request.resolvedLongitude(), seniorMember);
 

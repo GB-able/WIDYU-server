@@ -10,6 +10,7 @@ import com.widyu.global.response.ApiResponseTemplate;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,5 +56,18 @@ public class AdminMemberController {
                 .code("200")
                 .message("상태 변경 성공")
                 .body(updated.name());
+    }
+
+    /** 메일로 받은 어르신 탈퇴 요청을 운영자가 실행한다. 본인 확인은 먼저 끝낸다(LLD-0186 3.3). */
+    @DeleteMapping("/members/seniors/{memberId}")
+    public ApiResponseTemplate<String> withdrawSenior(@PathVariable Long memberId) {
+        String result = "ALREADY_WITHDRAWN";
+        if (adminMemberService.withdrawSenior(memberId)) {
+            result = "WITHDRAWN";
+        }
+        return ApiResponseTemplate.ok()
+                .code("200")
+                .message("어르신 탈퇴 처리 성공")
+                .body(result);
     }
 }
