@@ -36,6 +36,7 @@ import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.LocationType;
 import com.widyu.parentlocation.ParentLocation;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -56,6 +57,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
@@ -76,7 +78,9 @@ import software.amazon.awssdk.services.s3.S3Client;
         "coolsms.from-phone-number=01000000000",
         "coolsms.verification-code-length=6",
         "coolsms.verification-code-ttl=300",
-        "coolsms.message-template=인증번호: {code}"
+        "coolsms.message-template=인증번호: {code}",
+        // 기존 시나리오는 즉시 이탈을 본다. 확정 지연은 아래 시험이 판정 빈의 값을 바꿔 본다(LLD-0192).
+        "location.safe-zone.exit-confirm-sec=0"
 })
 @DisplayName("체류 상태와 알림 Outbox 원자성")
 class StayStateOutboxAtomicityTest {
@@ -160,6 +164,45 @@ class StayStateOutboxAtomicityTest {
         assertThat(state.getLatitude()).isEqualTo(FURTHER_AWAY_LAT);
         assertThat(state.getZoneChangedAt()).isEqualTo(left.stayStartTime());
         assertThat(state.getStayStartedAt()).isAfterOrEqualTo(state.getZoneChangedAt());
+    }
+
+    @Test
+    @DisplayName("이탈 확정 시간 안에 밖으로 찍혔다 돌아오면 상태 행은 HOME 그대로이고 알림이 없으며, 확정 시간이 지나도록 밖이면 이탈 알림이 한 번 저장된다")
+    void 이탈_확정_대기는_상태_행에_남고_확정_시간이_지나야_알린다() {
+        // given
+        Object judgeTarget = AopTestUtils.getUltimateTargetObject(judgeService);
+        ReflectionTestUtils.setField(judgeTarget, "exitConfirmSec", 60L);
+        try {
+            Long seniorId = seniorWithGuardianAndHome();
+            ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
+
+            // when: 한 번 튀었다 돌아온다
+            LocationUpdateResponse spike = ingestService.applyRealtime(request(seniorId, AWAY_LAT), seniorId);
+            LocalDateTime pendingSince = stayStateRepository.findById(seniorId).orElseThrow().getPendingExitSince();
+            ingestService.applyRealtime(request(seniorId, HOME_LAT), seniorId);
+
+            // then
+            assertThat(spike.locationType()).isEqualTo("HOME");
+            assertThat(pendingSince).isNotNull();
+            assertThat(stayStateRepository.findById(seniorId).orElseThrow().getPendingExitSince()).isNull();
+            assertThat(alerts(seniorId, "SAFE_ZONE_EXITED")).isZero();
+
+            // when: 다시 나가 확정 시간이 지나도록 밖이다
+            ingestService.applyRealtime(request(seniorId, AWAY_LAT), seniorId);
+            jdbc.update("UPDATE senior_stay_state SET pending_exit_since = ? WHERE member_id = ?",
+                    LocalDateTime.now().minusSeconds(61), seniorId);
+            LocationUpdateResponse confirmed = ingestService.applyRealtime(request(seniorId, AWAY_LAT), seniorId);
+
+            // then
+            assertThat(confirmed.locationType()).isNull();
+            assertThat(alerts(seniorId, "SAFE_ZONE_EXITED")).isEqualTo(1);
+            assertThat(alerts(seniorId, "SAFE_ZONE_ENTERED")).isZero();
+            SeniorStayState state = stayStateRepository.findById(seniorId).orElseThrow();
+            assertThat(state.getPendingExitSince()).isNull();
+            assertThat(state.getAlertState()).isEqualTo(SafeZoneAlertState.EXITED);
+        } finally {
+            ReflectionTestUtils.setField(judgeTarget, "exitConfirmSec", 0L);
+        }
     }
 
     @Test

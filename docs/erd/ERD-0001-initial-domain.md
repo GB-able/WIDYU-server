@@ -966,7 +966,7 @@ erDiagram
 - 이동 경로 `location:trail:{seniorId}` List(최대 900점), 점마다 측정 시각을 담고 조회 때 최근 15분만 돌려준다
 
 ### 체류, 안전구역 판정 상태 (SeniorStayState)
-- 테이블 `senior_stay_state`, PK `member_id`(회원당 1행). 체류 시작 지점 좌표와 시각, 안전구역 종류와 이름, 안전구역 상태가 바뀐 시각(`zone_changed_at`, 보호자 체류 시간 기준, LLD-0191), 30분 알림 묶음(`alert_state` VARCHAR `EXITED`/`RETURNED`, `alert_until`)
+- 테이블 `senior_stay_state`, PK `member_id`(회원당 1행). 체류 시작 지점 좌표와 시각, 안전구역 종류와 이름, 안전구역 상태가 바뀐 시각(`zone_changed_at`, 보호자 체류 시간 기준, LLD-0191), 30분 알림 묶음(`alert_state` VARCHAR `EXITED`/`RETURNED`, `alert_until`), 이탈 확정 대기 시작 시각(`pending_exit_since`, LLD-0192)
 - 위치 처리 트랜잭션 안에서 알림 Outbox와 함께 커밋, 롤백된다. 같은 자리(30m 안) 위치는 쓰지 않고, 바뀔 때만 행을 잠근다(LLD-0141, ADR-0044)
 - 예전 Redis `location:stay:{id}`, `safezone:alert:{id}`를 대체한다. 탈퇴, 비활성 회원 정리 때 지운다
 
@@ -981,6 +981,7 @@ erDiagram
 |------|--------|-----------|-----|
 | 2026-11-13 | `senior_stay_state` | 신규 테이블 (LLD-0141). 체류, 안전구역 판정 상태와 30분 알림 묶음. `alert_state` VARCHAR. 배포 때 서버가 예전 Redis 체류 키를 한 번 옮긴다(`location.stay-state.import-legacy-redis`) | `scripts/mysql/create_senior_stay_state.sql` |
 | 2026-11-14 | 전체 73개 테이블 | Flyway 기준 스키마. 개발 서버 덤프를 V1로 고정하고 이후 변경은 버전 파일로만 한다 (LLD-0154). 개발 서버는 V1을 적용된 것으로 표시하고, 빈 DB는 V1부터 적용한다. `senior_stay_state`도 V1에 들어 있다 | `db/migration/V1__baseline.sql` |
+| 2026-11-28 | `senior_stay_state` | `pending_exit_since DATETIME(6) NULL` 추가 (LLD-0192). 안심구역 안에서 밖으로 처음 찍힌 시각, 기존 행 NULL | `db/migration/V9__senior_stay_state_pending_exit.sql` |
 | 2026-11-28 | `senior_stay_state` | `zone_changed_at DATETIME(6) NOT NULL` 추가 (LLD-0191). 안심구역 상태가 바뀐 시각, 기존 행은 `stay_started_at`으로 채우고 기본값은 지금(이전 버전 롤백 때 INSERT 호환) | `db/migration/V8__senior_stay_state_zone_changed_at.sql` |
 | 2026-11-17 | `sensor_dropped_range` | `dropped_stream VARCHAR(20) NOT NULL` 추가 (LLD-0166). 버린 묶음의 데이터 종류, 기존 행은 `imu_watch`로 채우고 기본값을 지운다 | `db/migration/V3__sensor_dropped_range_stream.sql` |
 | 2026-11-14 | ENUM 18개 테이블(`member`, `payment`, `fcm_outbox` 등), CHECK 17개 테이블(`incident`, `study_participation`, `senior_stay_state` 등) | native ENUM 컬럼 23개를 VARCHAR로 바꾸고, enum 값 CHECK 제약 31개를 지운다 (LLD-0155). 이후 enum 값 추가에 스키마 변경이 필요 없다 | `db/migration/V2__enum_columns_to_varchar.sql` |
