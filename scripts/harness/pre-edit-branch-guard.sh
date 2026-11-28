@@ -13,7 +13,7 @@ STATE_DIR="$ROOT_DIR/.claude/state"
 
 input=$(cat)
 
-# on-file-edit.sh 와 같은 방식 — python3 1회로 두 값을 NUL 구분해 뽑는다.
+# python3 1회로 두 값을 NUL 구분해 뽑는다.
 # 개행 구분은 경로에 개행이 든 경우 잘려 나가 가드가 조용히 건너뛰어진다.
 {
   IFS= read -r -d '' file_path

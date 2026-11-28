@@ -20,7 +20,7 @@
 #   VERDICT: APPROVE | BLOCKER
 #   BLOCKERS:        (BLOCKER일 때만)
 #   - <파일:라인> 문제 → 수정 방향
-#   SUGGESTIONS:     (있을 때만, on-stop.sh 가 Claude에 전달하지 않고 저장만 함)
+#   SUGGESTIONS:     (있을 때만)
 #   - <제안 내용>
 #
 # 수동으로도 실행 가능: bash scripts/harness/codex-review.sh [--base <ref>]
@@ -82,7 +82,7 @@ if [[ -n "$BASE_SHA" ]]; then
   COMMITTED="$(git diff --no-renames --name-only "$BASE_SHA" HEAD 2>/dev/null || true)"
 fi
 
-# on-stop.sh 의 _changed_java 와 동일한 NUL 기반 감지. 줄 파싱을 남겨두면
+# NUL 기반 감지. 줄 파싱을 남겨두면
 # 공백이 든 경로에서 변경을 못 보고 NO_JAVA_CHANGES 로 그냥 승인해 버린다.
 CHANGED=$( { git status --porcelain -z --untracked-files=all 2>/dev/null \
   | python3 -c "

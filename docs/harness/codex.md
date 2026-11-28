@@ -98,14 +98,14 @@ python3 scripts/harness/test-pre-edit-branch-guard.py
 | skills 심링크 | 공통 원본 .agents/skills 유지. Claude가 필요하면 install-hooks.sh 실행 |
 | RESUME.md·checkpoint ref | 과거 Claude 세션용. 새 Codex 작업의 근거로 자동 주입하지 않음 |
 | audit/·state/·stdin-samples/·suggestions/ | Claude 로그·테스트 입력·검수 산출물로 유지. 개인 데이터 원문을 공유 문서로 옮기지 않음 |
-| .codex-review-off | 기존 Claude Stop의 중첩 Codex 리뷰 비활성 표시. 새 Codex 검사와 무관 |
+| .codex-review-off | 옛 Claude Stop 검수의 비활성 표시. Claude Stop 검수는 LLD-0193로 제거되어 쓰이지 않는다 |
 | issue | 기존 작업 확인 후 최신 develop 기준 별도 worktree 지원, 원본 GitHub 저장소 명시 |
 | implement | 기존 LLD·ERD 확인, 구현·테스트 규칙을 유지하고 Codex 기본 구현·검증 절차를 추가 |
 | review | 기존 체크리스트와 보고 형식을 유지하고 작성 에이전트 중립성, staged/untracked/커밋 범위를 추가 |
 | commit | 요청 범위에서 실행, 하네스 변경 파일 포함, 기존 staged 사용자 변경 보존 |
 | pr | LLD 또는 N/A 사유, 실제 diff·검증 증거, fork head/base 및 기존 PR 갱신 |
 
-Claude는 기존 CLAUDE.md 상세 지침을 그대로 읽는다. 필요하면 `bash scripts/harness/install-hooks.sh`로 스킬 링크를 준비한다. Claude Stop은 기존 정적 검사·컴파일·선택적 Codex 리뷰를 수행하며 전체 모듈 테스트 완료를 보장하지 않는다. Codex 기본 경로에서는 이 Stop 스크립트나 codex-review.sh를 자동 호출하지 않는다. 개인 Codex 재개 기록은 gitignore된 `.codex/RESUME.md`를 사용할 수 있다.
+Claude는 CLAUDE.md 지침을 읽는다. 필요하면 `bash scripts/harness/install-hooks.sh`로 스킬 링크를 준비한다. Claude 훅은 브랜치 가드, 위험 명령 가드, 감사 로그뿐이다. 편집 정적 검사, 종료 검수(정적·컴파일·Codex), push·PR 게이트는 #1173 실험 뒤 걷어냈다(LLD-0193). 규칙 검사는 CI가, 의미 검수는 필요할 때 `codex-review.sh --base`로 직접 한다. Codex 기본 경로에서는 이 Stop 스크립트나 codex-review.sh를 자동 호출하지 않는다. 개인 Codex 재개 기록은 gitignore된 `.codex/RESUME.md`를 사용할 수 있다.
 
 ## 참고한 문서와 공개 사례
 
