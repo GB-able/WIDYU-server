@@ -112,6 +112,31 @@ class SafeZoneExitConfirmTest {
     }
 
     @Test
+    @DisplayName("확정 대기 중에는 구역 상태가 바뀐 시각(체류 시간 기준)이 그대로이고, 이탈을 확정하면 확정 시각으로 바뀐다")
+    void 확정_대기_중_구역_시각은_그대로이고_확정하면_바뀐다() {
+        // given
+        LocationUpdateResponse atHome = send(HOME_LAT);
+        LocalDateTime zoneChangedAtHome = state().getZoneChangedAt();
+
+        // when
+        LocationUpdateResponse spike = send(AWAY_LAT);
+
+        // then: 응답의 체류 시작도 구역 상태 시각이다(LLD-0191)
+        assertThat(state().getZoneChangedAt()).isEqualTo(zoneChangedAtHome);
+        assertThat(spike.stayStartTime()).isEqualTo(atHome.stayStartTime());
+
+        // when
+        ageExitHold();
+        LocalDateTime beforeConfirm = LocalDateTime.now().minusNanos(1_000);
+        LocationUpdateResponse confirmed = send(AWAY_LAT);
+
+        // then
+        assertThat(state().getZoneChangedAt()).isAfter(beforeConfirm);
+        assertThat(state().getZoneChangedAt()).isEqualTo(state().getStayStartedAt());
+        assertThat(confirmed.stayStartTime()).isEqualTo(state().getZoneChangedAt());
+    }
+
+    @Test
     @DisplayName("확정 대기 중 체류 지점 30m 안의 밖 위치가 와도 같은 자리 지름길을 타지 않고 이탈을 확정한다")
     void 확정_대기_중_같은_자리_위치도_이탈을_확정한다() {
         // given
