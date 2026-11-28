@@ -87,6 +87,23 @@ class LocationAccessLogServiceTest {
     }
 
     @Test
+    @DisplayName("관리자가 정지만 한 어르신을 보호자가 조회하면 열람 기록을 남긴다")
+    void 정지된_어르신을_조회하면_기록을_남긴다() {
+        // given
+        Member suspended = senior();
+        suspended.withdraw();
+        given(memberRepository.findByIdForShare(SENIOR_ID)).willReturn(Optional.of(suspended));
+        given(locationAccessLogRepository.save(any(LocationAccessLog.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        locationAccessLogService.record(VIEWER_ID, SENIOR_ID, LocationAccessPath.HOME_OUTING);
+
+        // then
+        assertThat(savedLog().getSeniorMemberId()).isEqualTo(SENIOR_ID);
+    }
+
+    @Test
     @DisplayName("즉시 통보 시니어를 보호자가 처음 조회하면 FCM 한 건을 보내고 통보 시각을 남긴다")
     void 즉시_모드_첫_조회는_FCM을_보내고_통보_시각을_남긴다() {
         // given
