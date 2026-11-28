@@ -193,7 +193,7 @@ lines.append(f"")
 # 지표 2
 lines.append(f"### 2. 정적 규칙 위반율")
 if violation_rate is None:
-    lines.append(f"N/A — `java_rule_check` 이벤트 미수집 (on-file-edit.sh 연동 확인 필요)")
+    lines.append(f"N/A — `java_rule_check` 이벤트 미수집 (편집 정적 검사 훅은 LLD-0193로 제거됨, CI 결과를 본다)")
 else:
     lines.append(f"| 항목 | 값 |")
     lines.append(f"|---|---|")
@@ -260,7 +260,7 @@ hints: list[str] = []
 if rc_rate is not None and rc_rate > 30:
     hints.append(f"- RC율 {rc_rate:.0f}% — 해당 도메인 CLAUDE.md/스킬 보강 검토")
 if violation_rate is not None and violation_rate == 0.0 and n_rule >= 10:
-    hints.append(f"- 정적 위반율 0% — on-file-edit 훅 축소 여부 검토 (비용 절감)")
+    hints.append(f"- 정적 위반율 0% — CI 정적 검사 결과와 함께 본다")
 if n_workflow_risk > 0:
     hints.append(f"- workflow_risk {n_workflow_risk}건 — 트랜스크립트 확인 후 훅 경고→차단 승격 여부 결정")
 if n_dangerous > 0:
