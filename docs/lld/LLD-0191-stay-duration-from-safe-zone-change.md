@@ -48,7 +48,7 @@
 | --- | --- | --- |
 | `zone_changed_at` | DATETIME(6) NOT NULL | 안심구역 상태(어느 안심구역 안, 또는 밖)가 마지막으로 바뀐 서버 시각 |
 
-`db/migration/V8__senior_stay_state_zone_changed_at.sql`: NULL 허용으로 추가 → 기존 행을 `stay_started_at`으로 채움 → NOT NULL. 기본값은 두지 않는다.
+`db/migration/V8__senior_stay_state_zone_changed_at.sql`: NULL 허용으로 추가 → 기존 행을 `stay_started_at`으로 채움 → NOT NULL, 기본값 `CURRENT_TIMESTAMP(6)`. 기본값은 이 칸을 모르는 이전 버전으로 되돌렸을 때 첫 행 INSERT가 실패하지 않게 하려는 것이다(8절). 새 버전은 늘 값을 넣는다.
 
 `StayInfo`(widyu-api DTO)에 `zoneChangedAt`을 더한다. 예전 Redis 체류 값을 읽을 때(`LegacyStayStateImporter`)는 이 칸이 없어 null이고, 가져오기는 쓰지 않는다.
 
@@ -81,7 +81,7 @@
 - [x] AC6. REST 마지막 위치의 `stayStartTime`은 집 안 이동 뒤에도 들어온 시각이다(`RealtimeLocationServiceTest`)
 - [x] AC7. 실제 Spring 트랜잭션에서 나간 뒤 밖에서 움직여도 응답 체류 시작이 같고, 그 시각이 상태 행 `zone_changed_at`에 저장된다(`StayStateOutboxAtomicityTest`, H2)
 - [x] AC8. 예전 Redis 상태를 가져오면 `zone_changed_at = stay_started_at`이다(`SeniorStayStateZoneTest`, `LegacyStayStateImporterTest`)
-- [x] AC9. 빈 MySQL에 버전 파일을 모두 적용하면 엔티티 검증을 통과하고 `zone_changed_at`은 기본값 없는 NOT NULL이다(`FlywayMigrationMySqlTest`). V5까지 적용된 DB의 기존 행은 V8 뒤 `stay_started_at`과 같은 값이다(수동 확인, PR 본문)
+- [x] AC9. 빈 MySQL에 버전 파일을 모두 적용하면 엔티티 검증을 통과하고 `zone_changed_at`은 기본값이 `CURRENT_TIMESTAMP(6)`인 NOT NULL이다(`FlywayMigrationMySqlTest`). V5까지 적용된 DB의 기존 행은 V8 뒤 `stay_started_at`과 같은 값이다(수동 확인, PR 본문)
 - [x] AC10. 이탈, 복귀 알림과 같은 자리 무쓰기 규칙이 그대로다(`SafeZoneAlertServiceTest`, `StayStateOutboxAtomicityTest`, `RealtimeLocationServiceTest`)
 - [x] `./gradlew :backend:widyu-api:test`가 통과한다
 
@@ -89,7 +89,7 @@
 
 - **배포:** Flyway가 기동 때 V8을 적용한다(dev, prod `ddl-auto: validate`). 기존 행은 `stay_started_at`으로 채워 배포 직후 화면 값은 지금과 같고, 다음 구역 상태 변화부터 새 기준으로 센다. 밖에서 걷던 시니어는 다음 30m 이동 때도 배포 시점의 값이 유지되므로 「나간 지」보다 짧게 보일 수 있다(배포 전 마지막 이동 시각부터 센다)
 - **버전 번호:** 열린 PR #1160(V6), #1162(V7)보다 이 PR이 먼저 머지되면 그쪽이 V9 이후로 번호를 올려야 한다. 낮은 번호가 나중에 오면 Flyway가 적용하지 않은 버전으로 보고 기동을 멈춘다(LLD-0154)
-- **롤백:** 이전 버전은 `zone_changed_at`을 모르며, NOT NULL에 기본값이 없어 이전 버전이 새 행을 INSERT하면 실패한다. 이전 버전으로 되돌릴 때는 `ALTER TABLE senior_stay_state DROP COLUMN zone_changed_at`을 먼저 실행한다(Flyway 기록 V8 행도 지운다)
+- **롤백:** 개발 배포는 새 앱 기동이 실패하면 DB를 그대로 두고 이전 이미지로 되돌린다. 이전 버전은 `zone_changed_at`을 모르지만, 기본값이 지금이라 첫 행 INSERT가 성공하고 그 값은 새 버전의 첫 행 규칙(`= now`)과 같다. 이전 버전이 도는 동안에는 이 칸을 갱신하지 않으므로, 다시 새 버전을 올리면 그 사이 구역 상태가 바뀐 시니어는 다음 구역 상태 변화 전까지 체류 시간이 길게 보인다. Hibernate `validate`는 엔티티에 없는 칸을 문제 삼지 않아 이전 버전 기동에는 영향이 없다. 기본값은 DB 세션 시간대의 지금이다. 개발 MySQL은 `TZ=Asia/Seoul`로 앱(`-Duser.timezone=Asia/Seoul`)과 같다
 - **같은 클래스 병렬 작업:** #1179(경계 튐 확정 지연)가 `LocationJudgeService`, `SeniorStayState`를 함께 고친다. 나중에 머지되는 쪽이 충돌을 해소한다
 - `backend/CLAUDE.md` location 절, ERD 갱신
 
