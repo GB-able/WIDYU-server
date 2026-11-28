@@ -15,11 +15,13 @@ import com.widyu.member.Member;
 import com.widyu.member.SeniorProfile;
 import com.widyu.member.repository.SeniorProfileRepository;
 import com.widyu.parentlocation.ParentLocation;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,13 @@ public class LocationJudgeService {
     private final ParentLocationRepository parentLocationRepository;
     private final SeniorStayStateService stayStateService;
     private final SafeZoneAlertService safeZoneAlertService;
+
+    /**
+     * 안심구역 안에 있던 어르신이 밖으로 찍힌 뒤 이탈로 확정하기까지 기다리는 시간(LLD-0192). 이보다 짧은 GPS 튐은 알리지
+     * 않는다. 0이면 기다리지 않는다.
+     */
+    @Value("${location.safe-zone.exit-confirm-sec:60}")
+    private long exitConfirmSec;
 
     /** 실시간에 반영하지 않은 위치도 시니어가 보낸 것인지 확인한다. 짧은 읽기 트랜잭션에서 끝낸다(LLD-0143). */
     @Transactional(readOnly = true)
@@ -80,19 +89,21 @@ public class LocationJudgeService {
      * - 안전구역(HOME, OTHER) 75m 반경 내면 해당 타입, 아니면 null.
      * - 응답의 체류 시간은 안전구역 상태가 바뀐 시각부터 센다. 같은 구역 안이나 밖의 이동으로는 새로 세지 않는다(LLD-0191).
      * - 안전구역 이탈, 복귀 알림은 상태 행의 30분 묶음으로 정하고, 알림 Outbox는 같은 트랜잭션에 들어간다.
+     * - 안전구역 안에서 밖으로 찍히면 바로 옮기지 않고 {@link #exitConfirmSec} 동안 계속 밖일 때 이탈로 확정한다. 그 전에
+     *   다시 안으로 찍히면 아무 알림 없이 확정 대기만 지운다(LLD-0192).
      *
      * <p>같은 회원의 처리는 JVM 순서 잠금이 한 번에 하나씩 보내고, DB 행 잠금은 상태를 바꾸는 순간의 마지막 방어선이다.
      */
     private StayInfo decideStay(Double newLat, Double newLng, Member member) {
         Long memberId = member.getId();
         SeniorStayState current = stayStateService.find(memberId).orElse(null);
-        if (isSameStay(current, newLat, newLng)) {
+        if (isSettledSameStay(current, newLat, newLng)) {
             log.debug("같은 위치 유지 - memberId: {}", memberId);
             return StayInfo.from(current);
         }
 
         SeniorStayState locked = stayStateService.lockForChange(memberId).orElse(null);
-        if (isSameStay(locked, newLat, newLng)) {
+        if (isSettledSameStay(locked, newLat, newLng)) {
             return StayInfo.from(locked);
         }
 
@@ -110,11 +121,26 @@ public class LocationJudgeService {
                     SeniorStayState.start(memberId, newLat, newLng, now, locationType, locationName));
         } else {
             previousLocationType = locked.getLocationType();
+            boolean leavingZone = previousLocationType != null && locationType == null;
+            if (leavingZone && locked.holdExit(now, Duration.ofSeconds(exitConfirmSec))) {
+                log.debug("안심구역 이탈 확정 대기 - memberId: {}", memberId);
+                return StayInfo.from(locked);
+            }
+            if (!leavingZone && isSameStay(locked, newLat, newLng)) {
+                // 이탈 확정 대기 중 다시 안심구역 안 같은 자리로 찍혔다. 대기만 지우고 체류는 그대로 둔다.
+                locked.cancelExitHold();
+                return StayInfo.from(locked);
+            }
             locked.moveTo(newLat, newLng, now, locationType, locationName, !safeZones.isEmpty());
         }
         safeZoneAlertService.handleSafeZoneTransition(locked, previousLocationType, locationType, now);
         log.debug("새로운 위치로 이동 - memberId: {}, 위치 타입: {}", memberId, locationType);
         return StayInfo.from(locked);
+    }
+
+    /** 같은 자리이고 이탈 확정을 기다리지 않으면 판정 없이 끝낸다. 확정 대기 중에는 같은 자리여도 확정 검사를 해야 한다. */
+    private static boolean isSettledSameStay(SeniorStayState state, Double newLat, Double newLng) {
+        return isSameStay(state, newLat, newLng) && state.getPendingExitSince() == null;
     }
 
     private static boolean isSameStay(SeniorStayState state, Double newLat, Double newLng) {

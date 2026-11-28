@@ -20,8 +20,10 @@ import org.hibernate.type.SqlTypes;
  * 시니어 한 명의 체류와 안전구역 판정 상태(LLD-0141, ADR-0044). 판정의 권위 있는 저장소이며, 같은 DB 트랜잭션에서
  * 알림 Outbox와 함께 커밋되거나 함께 롤백된다. 이전에는 Redis 체류 키와 알림 표식 키였다.
  *
- * <p>좌표와 시작 시각은 체류가 시작된 지점이다. 같은 자리(30m 안) 위치는 이 행을 바꾸지 않는다.
- * 보호자에게 보이는 체류 시간은 {@link #zoneChangedAt}부터 센다(LLD-0191).
+ * <p>좌표와 시작 시각은 체류가 시작된 지점이다. 같은 자리(30m 안) 위치는 이 행을 바꾸지 않는다. 단 이탈 확정을 기다리는
+ * 중({@link #pendingExitSince})에는 같은 자리 위치도 판정을 탄다(LLD-0192).
+ * 보호자에게 보이는 체류 시간은 {@link #zoneChangedAt}부터 센다(LLD-0191). 이탈 확정 대기 중에는 구역 상태를 바꾸지 않으므로
+ * 이 시각도 그대로이고, 이탈을 확정할 때 {@link #moveTo}가 바꾼다(LLD-0192).
  */
 @Getter
 @Entity
@@ -64,6 +66,13 @@ public class SeniorStayState extends BaseTimeEntity {
     /** 알림 묶음이 끝나는 시각. 이 시각이 지나면 {@link #alertState}는 없는 것과 같다. */
     @Column(name = "alert_until")
     private LocalDateTime alertUntil;
+
+    /**
+     * 안전구역 안 상태에서 위치가 밖으로 처음 찍힌 시각(LLD-0192). 이탈 확정을 기다리는 중이면 값이 있고, 그동안 체류 지점,
+     * 안전구역, 알림 묶음은 바꾸지 않는다. 이탈을 확정하거나 다시 안으로 찍히면 지운다.
+     */
+    @Column(name = "pending_exit_since")
+    private LocalDateTime pendingExitSince;
 
     private SeniorStayState(Long memberId, Double latitude, Double longitude, LocalDateTime stayStartedAt,
                             String locationType, String locationName,
@@ -109,6 +118,24 @@ public class SeniorStayState extends BaseTimeEntity {
         this.stayStartedAt = now;
         this.locationType = locationType;
         this.locationName = locationName;
+        this.pendingExitSince = null;
+    }
+
+    /**
+     * 안전구역 안 상태에서 밖으로 찍힌 위치를 아직 이탈로 보지 않을지 정한다(LLD-0192). 밖으로 처음 찍힌 시각을 남기고,
+     * 그때부터 {@code confirm}이 지나지 않았으면 true다. 이 동안 체류 지점, 안전구역, 알림 묶음은 그대로다.
+     * false면 호출자가 {@link #moveTo}로 이탈을 확정한다. {@code confirm}이 0이면 늘 false(즉시 이탈)다.
+     */
+    public boolean holdExit(LocalDateTime now, Duration confirm) {
+        if (pendingExitSince == null) {
+            pendingExitSince = now;
+        }
+        return now.isBefore(pendingExitSince.plus(confirm));
+    }
+
+    /** 이탈 확정 전에 다시 안전구역 안으로 찍혔다. 알림 없이 확정 대기만 지운다(LLD-0192). */
+    public void cancelExitHold() {
+        this.pendingExitSince = null;
     }
 
     /**
