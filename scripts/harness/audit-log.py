@@ -160,10 +160,24 @@ def tag_bash(cmd_raw: str) -> list[str]:
 _PROTECTED_BRANCHES = {"develop", "main", "master"}
 
 
-def current_branch() -> str:
+def file_branch(file_path: str) -> str:
+    """편집한 파일이 속한 작업 트리의 브랜치. Git 제외 파일과 저장소 밖 파일은 빈 문자열.
+
+    원본 체크아웃(ROOT)의 브랜치를 읽으면 다른 worktree 파일 편집이 develop 편집으로
+    잘못 태깅된다(#1173: 11월 경고 139건 중 94건).
+    """
+    directory = Path(file_path).parent
+    while not directory.exists() and directory != directory.parent:
+        directory = directory.parent
     try:
+        ignored = subprocess.run(
+            ["git", "-C", str(directory), "check-ignore", "-q", file_path],
+            capture_output=True, timeout=3,
+        )
+        if ignored.returncode == 0:
+            return ""
         r = subprocess.run(
-            ["git", "-C", str(ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-C", str(directory), "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True, text=True, timeout=3,
         )
         return r.stdout.strip()
@@ -173,7 +187,7 @@ def current_branch() -> str:
 
 def tag_file(file_path: str) -> list[str]:
     tags: list[str] = []
-    branch = current_branch()
+    branch = file_branch(file_path)
     if branch in _PROTECTED_BRANCHES:
         tags.append("workflow_risk")
         if "/src/main/" in file_path:
